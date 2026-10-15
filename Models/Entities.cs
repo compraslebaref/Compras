@@ -68,6 +68,7 @@ public class Producto
         ? $"1 {UnidadCompra} = {FactorConversion:0.##} {UnidadAlmacen}"
         : $"1 {UnidadAlmacen}";
     public string CodigoEfectivo => string.IsNullOrWhiteSpace(CodigoBarras) ? CodigoInterno : CodigoBarras;
+    public bool Seleccionado { get; set; }
     public override string ToString() => $"{CodigoInterno} - {Nombre}";
 }
 

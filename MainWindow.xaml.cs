@@ -343,6 +343,10 @@ public partial class MainWindow : FluentWindow
         string? filtro = TxtBuscarCatalogo?.Text;
         int? catId = (CboFiltroCategoria?.SelectedItem as Categoria)?.Id;
         var lista = DatabaseService.ObtenerProductos(filtro, catId);
+        foreach (var item in lista)
+        {
+            item.Seleccionado = _productoEnEdicion.Id > 0 && item.Id == _productoEnEdicion.Id;
+        }
         IcCatalogoVisual.ItemsSource = lista;
     }
 
@@ -366,10 +370,20 @@ public partial class MainWindow : FluentWindow
         if (sender is FrameworkElement fe && fe.Tag is Producto p)
         {
             AgregarAlCarritoTienda(p, 1m);
+            e.Handled = true;
         }
     }
 
     private void BtnEditarProductoCatalogo_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is Producto p)
+        {
+            CargarProductoEnEditor(p);
+            e.Handled = true;
+        }
+    }
+
+    private void CardProductoCatalogo_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.Tag is Producto p)
         {
@@ -397,6 +411,7 @@ public partial class MainWindow : FluentWindow
 
         ImgPreviewProducto.Source = ImageStandardizerService.CargarImagenSegura(p.ImagenRuta);
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(p.CodigoEfectivo);
+        RefrescarCatalogoVisual();
     }
 
     private void LimpiarEditorProducto()
@@ -416,6 +431,7 @@ public partial class MainWindow : FluentWindow
         ChkProdEsHerramienta.IsChecked = false;
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(sig);
+        RefrescarCatalogoVisual();
     }
 
     private void BtnNuevoProducto_Click(object sender, RoutedEventArgs e) => LimpiarEditorProducto();

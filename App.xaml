@@ -9,6 +9,121 @@
                 <ui:ThemesDictionary Theme="Light" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- Colores de selección persistentes incluso al pasar el foco al formulario derecho -->
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#CBE4FF" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#CBE4FF" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#002B5C" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#002B5C" />
+
+            <!-- Estilo global para filas de tablas (DataGridRow) -->
+            <Style TargetType="DataGridRow">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="1.5" />
+                <Setter Property="Margin" Value="0,1" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Style.Triggers>
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True" />
+                            <Condition Property="IsSelected" Value="False" />
+                        </MultiTrigger.Conditions>
+                        <Setter Property="Background" Value="#EDF5FF" />
+                        <Setter Property="BorderBrush" Value="#90C8F6" />
+                    </MultiTrigger>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="#CBE4FF" />
+                        <Setter Property="BorderBrush" Value="#0078D4" />
+                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Estilo global para celdas de tablas (DataGridCell) -->
+            <Style TargetType="DataGridCell">
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="DataGridCell">
+                            <Border x:Name="CellBorder"
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    BorderThickness="0"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter VerticalAlignment="Center" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="#CBE4FF" />
+                        <Setter Property="Foreground" Value="#002B5C" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Estilo para elementos de listas desplegables (ComboBoxItem) -->
+            <Style TargetType="ComboBoxItem">
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Style.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True">
+                        <Setter Property="Background" Value="#EDF5FF" />
+                        <Setter Property="Foreground" Value="#002B5C" />
+                    </Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="#CBE4FF" />
+                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Estilo global para sub-pestañas (TabItem en Almacén y Directorios) -->
+            <Style TargetType="TabItem">
+                <Setter Property="Padding" Value="14,8" />
+                <Setter Property="Margin" Value="0,0,6,6" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TabItem">
+                            <Border x:Name="TabBorder"
+                                    Padding="{TemplateBinding Padding}"
+                                    Margin="{TemplateBinding Margin}"
+                                    CornerRadius="6"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                    BorderThickness="1">
+                                <ContentPresenter x:Name="ContentSite"
+                                                  ContentSource="Header"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsMouseOver" Value="True" />
+                                        <Condition Property="IsSelected" Value="False" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="TabBorder" Property="Background" Value="#EDF5FF" />
+                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#90C8F6" />
+                                </MultiTrigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="TabBorder" Property="Background" Value="#0078D4" />
+                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#005A9E" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
