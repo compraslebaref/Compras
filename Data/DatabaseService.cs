@@ -263,6 +263,11 @@ CREATE TABLE IF NOT EXISTS FacturaConceptos (
     IvaConcepto REAL NOT NULL DEFAULT 0,
     ProductoIdVinculado INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS ConfiguracionSistema (
+    Clave TEXT PRIMARY KEY,
+    Valor TEXT NOT NULL DEFAULT ''
+);
 ";
         cmd.ExecuteNonQuery();
 
@@ -272,16 +277,31 @@ CREATE TABLE IF NOT EXISTS FacturaConceptos (
     private static void SeedInitialDataIfEmpty(SqliteConnection conn)
     {
         using var check = conn.CreateCommand();
-        check.CommandText = "SELECT COUNT(*) FROM Departamentos";
+        check.CommandText = @"
+SELECT
+    (SELECT COUNT(*) FROM ConfiguracionSistema WHERE Clave = 'SeedInicialAplicado') +
+    (SELECT COUNT(*) FROM Departamentos) +
+    (SELECT COUNT(*) FROM Productos) +
+    (SELECT COUNT(*) FROM HerramientasActivos) +
+    (SELECT COUNT(*) FROM Proveedores) +
+    (SELECT COUNT(*) FROM Proyectos);";
         var count = Convert.ToInt32(check.ExecuteScalar());
-        if (count > 0) return;
+        if (count > 0)
+        {
+            using var markCmd = conn.CreateCommand();
+            markCmd.CommandText = "INSERT OR IGNORE INTO ConfiguracionSistema (Clave, Valor) VALUES ('SeedInicialAplicado', '1');";
+            markCmd.ExecuteNonQuery();
+            return;
+        }
 
         using var tx = conn.BeginTransaction();
         using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
 
         cmd.CommandText = @"
-INSERT INTO Departamentos (Codigo, Nombre) VALUES
+INSERT OR IGNORE INTO ConfiguracionSistema (Clave, Valor) VALUES ('SeedInicialAplicado', '1');
+
+INSERT OR IGNORE INTO Departamentos (Codigo, Nombre) VALUES
 ('ING-MEC', 'Ingeniería Mecánica'),
 ('ING-ELE', 'Ingeniería Eléctrica y Control'),
 ('ING-AUT', 'Ingeniería de Automatización'),
@@ -800,10 +820,10 @@ SELECT last_insert_rowid();";
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-SELECT h.Id, h.ProductoId, p.Nombre, h.CodigoIndividual, h.NumeroSerie, h.MarcaModelo,
+SELECT h.Id, h.ProductoId, COALESCE(p.Nombre, 'Herramienta'), h.CodigoIndividual, h.NumeroSerie, h.MarcaModelo,
        h.Estado, h.Ubicacion, h.EncargadoActual, h.ProyectoActual, h.NotasEstado
 FROM HerramientasActivos h
-JOIN Productos p ON p.Id = h.ProductoId
+LEFT JOIN Productos p ON p.Id = h.ProductoId
 ORDER BY h.CodigoIndividual";
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -886,12 +906,12 @@ VALUES ($pid, $ci, $ns, $mm, $est, $ubi, '', '', $not)";
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-SELECT s.Id, s.Folio, s.Fecha, s.DepartamentoId, d.Nombre, s.EncargadoId, e.Nombre,
-       s.ProyectoId, pr.Codigo || ' - ' || pr.Nombre, s.Origen, s.Estatus, s.Notas
+SELECT s.Id, s.Folio, s.Fecha, s.DepartamentoId, COALESCE(d.Nombre, 'Sin depto'), s.EncargadoId, COALESCE(e.Nombre, 'Sin encargado'),
+       s.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Sin proyecto'), s.Origen, s.Estatus, s.Notas
 FROM Solicitudes s
-JOIN Departamentos d ON d.Id = s.DepartamentoId
-JOIN Encargados e ON e.Id = s.EncargadoId
-JOIN Proyectos pr ON pr.Id = s.ProyectoId
+LEFT JOIN Departamentos d ON d.Id = s.DepartamentoId
+LEFT JOIN Encargados e ON e.Id = s.EncargadoId
+LEFT JOIN Proyectos pr ON pr.Id = s.ProyectoId
 ORDER BY s.Id DESC";
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -917,9 +937,9 @@ ORDER BY s.Id DESC";
         {
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
-SELECT sp.Id, sp.SolicitudId, sp.ProductoId, p.CodigoInterno, p.Nombre, p.UnidadCompra, sp.CantidadSolicitada, p.StockActual, sp.NotasPartida
+SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto eliminado'), COALESCE(p.UnidadCompra, 'Pza'), sp.CantidadSolicitada, COALESCE(p.StockActual, 0), sp.NotasPartida
 FROM SolicitudPartidas sp
-JOIN Productos p ON p.Id = sp.ProductoId
+LEFT JOIN Productos p ON p.Id = sp.ProductoId
 WHERE sp.SolicitudId = $sid";
             pCmd.Parameters.AddWithValue("$sid", sol.Id);
             using var pr = pCmd.ExecuteReader();
@@ -994,12 +1014,12 @@ VALUES ($sid, $pid, $cant, $not)";
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
 SELECT oc.Id, oc.Folio, oc.Fecha, oc.SolicitudId, COALESCE(s.Folio, ''), oc.CotizacionFolio,
-       oc.ProveedorId, pv.RazonSocial, pv.NombreComercial, pv.Rfc,
-       oc.ProyectoId, pr.Codigo || ' - ' || pr.Nombre, oc.DepartamentoNombre, oc.EncargadoNombre,
+       oc.ProveedorId, COALESCE(pv.RazonSocial, 'Proveedor'), COALESCE(pv.NombreComercial, 'Proveedor'), COALESCE(pv.Rfc, ''),
+       oc.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Sin proyecto'), oc.DepartamentoNombre, oc.EncargadoNombre,
        oc.TiempoEntregaDias, oc.CostoEnvioConIva, oc.Subtotal, oc.Iva, oc.TotalConIva, oc.Estatus, oc.Notas
 FROM OrdenesCompra oc
-JOIN Proveedores pv ON pv.Id = oc.ProveedorId
-JOIN Proyectos pr ON pr.Id = oc.ProyectoId
+LEFT JOIN Proveedores pv ON pv.Id = oc.ProveedorId
+LEFT JOIN Proyectos pr ON pr.Id = oc.ProyectoId
 LEFT JOIN Solicitudes s ON s.Id = oc.SolicitudId
 ORDER BY oc.Id DESC";
         using var r = cmd.ExecuteReader();
@@ -1036,11 +1056,11 @@ ORDER BY oc.Id DESC";
         {
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
-SELECT ocp.Id, ocp.OrdenCompraId, ocp.ProductoId, p.CodigoInterno, p.Nombre,
-       p.UnidadCompra, p.UnidadAlmacen, p.FactorConversion,
+SELECT ocp.Id, ocp.OrdenCompraId, ocp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto'),
+       COALESCE(p.UnidadCompra, 'Pza'), COALESCE(p.UnidadAlmacen, 'Pza'), COALESCE(p.FactorConversion, 1),
        ocp.CantidadPedida, ocp.CantidadRecibida, ocp.PrecioUnitarioSinIva
 FROM OrdenCompraPartidas ocp
-JOIN Productos p ON p.Id = ocp.ProductoId
+LEFT JOIN Productos p ON p.Id = ocp.ProductoId
 WHERE ocp.OrdenCompraId = $ocid";
             pCmd.Parameters.AddWithValue("$ocid", oc.Id);
             using var pr = pCmd.ExecuteReader();
@@ -1380,12 +1400,12 @@ VALUES ($sid, $pid, $cant, $ua, $costo)";
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-SELECT s.Id, s.Folio, s.Fecha, s.DepartamentoId, d.Nombre, s.EncargadoId, e.Nombre,
-       s.ProyectoId, pr.Codigo || ' - ' || pr.Nombre, s.CostoTotalEstimado, s.Notas
+SELECT s.Id, s.Folio, s.Fecha, s.DepartamentoId, COALESCE(d.Nombre, 'Sin depto'), s.EncargadoId, COALESCE(e.Nombre, 'Sin encargado'),
+       s.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Sin proyecto'), s.CostoTotalEstimado, s.Notas
 FROM SalidasAlmacen s
-JOIN Departamentos d ON d.Id = s.DepartamentoId
-JOIN Encargados e ON e.Id = s.EncargadoId
-JOIN Proyectos pr ON pr.Id = s.ProyectoId
+LEFT JOIN Departamentos d ON d.Id = s.DepartamentoId
+LEFT JOIN Encargados e ON e.Id = s.EncargadoId
+LEFT JOIN Proyectos pr ON pr.Id = s.ProyectoId
 ORDER BY s.Id DESC";
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -1410,10 +1430,10 @@ ORDER BY s.Id DESC";
         {
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
-SELECT sp.Id, sp.SalidaAlmacenId, sp.ProductoId, p.CodigoInterno, p.Nombre,
+SELECT sp.Id, sp.SalidaAlmacenId, sp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto'),
        sp.CantidadEntregada, sp.UnidadAlmacen, sp.CostoUnitarioAlmacen
 FROM SalidaPartidas sp
-JOIN Productos p ON p.Id = sp.ProductoId
+LEFT JOIN Productos p ON p.Id = sp.ProductoId
 WHERE sp.SalidaAlmacenId = $sid";
             pCmd.Parameters.AddWithValue("$sid", sal.Id);
             using var pr = pCmd.ExecuteReader();
@@ -1562,12 +1582,12 @@ WHERE Id = $hid";
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-SELECT p.Id, p.Folio, p.FechaSalida, p.FechaDevolucion, p.DepartamentoId, d.Nombre,
-       p.EncargadoId, e.Nombre, p.ProyectoId, pr.Codigo || ' - ' || pr.Nombre, p.Estatus, p.Notas
+SELECT p.Id, p.Folio, p.FechaSalida, p.FechaDevolucion, p.DepartamentoId, COALESCE(d.Nombre, 'Sin depto'),
+       p.EncargadoId, COALESCE(e.Nombre, 'Sin encargado'), p.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Sin proyecto'), p.Estatus, p.Notas
 FROM PrestamosHerramienta p
-JOIN Departamentos d ON d.Id = p.DepartamentoId
-JOIN Encargados e ON e.Id = p.EncargadoId
-JOIN Proyectos pr ON pr.Id = p.ProyectoId
+LEFT JOIN Departamentos d ON d.Id = p.DepartamentoId
+LEFT JOIN Encargados e ON e.Id = p.EncargadoId
+LEFT JOIN Proyectos pr ON pr.Id = p.ProyectoId
 ORDER BY p.Id DESC";
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -1593,11 +1613,11 @@ ORDER BY p.Id DESC";
         {
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
-SELECT pp.Id, pp.PrestamoHerramientaId, pp.HerramientaActivoId, h.CodigoIndividual,
-       pr.Nombre, h.MarcaModelo, h.NumeroSerie, pp.EstadoSalida, pp.EstadoDevolucion, pp.FechaDevuelto, pp.Observaciones
+SELECT pp.Id, pp.PrestamoHerramientaId, pp.HerramientaActivoId, COALESCE(h.CodigoIndividual, 'HER'),
+       COALESCE(pr.Nombre, 'Herramienta'), COALESCE(h.MarcaModelo, ''), COALESCE(h.NumeroSerie, ''), pp.EstadoSalida, pp.EstadoDevolucion, pp.FechaDevuelto, pp.Observaciones
 FROM PrestamoPartidas pp
-JOIN HerramientasActivos h ON h.Id = pp.HerramientaActivoId
-JOIN Productos pr ON pr.Id = h.ProductoId
+LEFT JOIN HerramientasActivos h ON h.Id = pp.HerramientaActivoId
+LEFT JOIN Productos pr ON pr.Id = h.ProductoId
 WHERE pp.PrestamoHerramientaId = $pid";
             pCmd.Parameters.AddWithValue("$pid", pre.Id);
             using var r2 = pCmd.ExecuteReader();
