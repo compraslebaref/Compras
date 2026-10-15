@@ -1650,14 +1650,112 @@ WHERE pp.PrestamoHerramientaId = $pid";
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-SELECT ProductoId FROM ProductoProveedorMapa
-WHERE EmisorRfc = $rfc AND (ClaveProveedor = $clave OR DescripcionProveedor = $desc)
+SELECT m.ProductoId
+FROM ProductoProveedorMapa m
+INNER JOIN Productos p ON p.Id = m.ProductoId
+WHERE m.EmisorRfc = $rfc
+  AND ((m.ClaveProveedor <> '' AND m.ClaveProveedor = $clave)
+       OR (m.DescripcionProveedor <> '' AND m.DescripcionProveedor = $desc))
 LIMIT 1";
-        cmd.Parameters.AddWithValue("$rfc", emisorRfc.Trim().ToUpperInvariant());
-        cmd.Parameters.AddWithValue("$clave", noIdentificacion.Trim());
-        cmd.Parameters.AddWithValue("$desc", descripcion.Trim());
+        cmd.Parameters.AddWithValue("$rfc", (emisorRfc ?? string.Empty).Trim().ToUpperInvariant());
+        cmd.Parameters.AddWithValue("$clave", (noIdentificacion ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$desc", (descripcion ?? string.Empty).Trim());
         var res = cmd.ExecuteScalar();
         return res == null || res == DBNull.Value ? null : Convert.ToInt32(res);
+    }
+
+    public static Producto? BuscarProductoExistenteParaConceptoXml(string emisorRfc, string noIdentificacion, string descripcion)
+    {
+        var todosProductos = ObtenerProductos();
+        string noId = (noIdentificacion ?? string.Empty).Trim();
+        string desc = (descripcion ?? string.Empty).Trim();
+
+        int? prodIdMapa = BuscarProductoVinculadoXml(emisorRfc, noId, desc);
+        if (prodIdMapa.HasValue)
+        {
+            var porMapa = todosProductos.FirstOrDefault(p => p.Id == prodIdMapa.Value);
+            if (porMapa != null)
+                return porMapa;
+        }
+
+        if (!string.IsNullOrWhiteSpace(noId))
+        {
+            var porCodigo = todosProductos.FirstOrDefault(p =>
+                p.CodigoInterno.Equals(noId, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(p.CodigoBarras) && p.CodigoBarras.Equals(noId, StringComparison.OrdinalIgnoreCase)));
+            if (porCodigo != null)
+                return porCodigo;
+        }
+
+        if (!string.IsNullOrWhiteSpace(desc))
+        {
+            var porNombreExacto = todosProductos.FirstOrDefault(p =>
+                p.Nombre.Equals(desc, StringComparison.OrdinalIgnoreCase));
+            if (porNombreExacto != null)
+                return porNombreExacto;
+
+            var porCoincidencia = todosProductos.FirstOrDefault(p =>
+                (p.Nombre.Length >= 4 && desc.Contains(p.Nombre, StringComparison.OrdinalIgnoreCase)) ||
+                (desc.Length >= 4 && p.Nombre.Contains(desc, StringComparison.OrdinalIgnoreCase)));
+            if (porCoincidencia != null)
+                return porCoincidencia;
+        }
+
+        return null;
+    }
+
+    public static Producto CrearProductoDesdeConceptoXml(string emisorRfc, string serieFolio, FacturaConcepto c)
+    {
+        var categorias = ObtenerCategorias();
+        int categoriaId;
+        if (categorias.Count == 0)
+        {
+            GuardarCategoria("General");
+            categorias = ObtenerCategorias();
+        }
+        categoriaId = categorias.First().Id;
+
+        string nuevoCodigo = GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
+        string noId = (c.NoIdentificacion ?? string.Empty).Trim();
+        var existentes = ObtenerProductos();
+        bool codigoBarrasDisponible = !string.IsNullOrWhiteSpace(noId) &&
+            !existentes.Any(p => p.CodigoInterno.Equals(noId, StringComparison.OrdinalIgnoreCase) ||
+                                 p.CodigoBarras.Equals(noId, StringComparison.OrdinalIgnoreCase));
+
+        string codigoBarras = codigoBarrasDisponible ? noId : nuevoCodigo;
+        string nombre = string.IsNullOrWhiteSpace(c.Descripcion)
+            ? $"Producto Factura {nuevoCodigo}"
+            : c.Descripcion.Trim();
+        string unidad = string.IsNullOrWhiteSpace(c.Unidad) ? "PZA" : c.Unidad.Trim();
+        decimal costoUnitarioConIva = c.Cantidad > 0m && (c.Importe + c.IvaConcepto) > 0m
+            ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
+            : Math.Round(c.ValorUnitario * 1.16m, 2);
+
+        var nuevoProd = new Producto
+        {
+            CodigoInterno = nuevoCodigo,
+            CodigoBarras = codigoBarras,
+            Nombre = nombre,
+            Descripcion = $"Clave SAT: {c.ClaveProdServ} | ID Prov: {noId} | Creado desde Factura {serieFolio}",
+            CategoriaId = categoriaId,
+            UnidadCompra = unidad,
+            UnidadAlmacen = unidad,
+            FactorConversion = 1m,
+            StockActual = 0m,
+            StockMinimo = 5m,
+            UltimoCostoCompra = costoUnitarioConIva,
+            Ubicacion = "Almacén General",
+            EsHerramienta = false
+        };
+
+        int nuevoId = GuardarProducto(nuevoProd);
+        nuevoProd.Id = nuevoId;
+
+        GuardarMapaProductoProveedor(emisorRfc, noId, nombre, nuevoId, c.ValorUnitario);
+
+        c.ProductoIdVinculado = nuevoId;
+        c.ProductoVinculadoNombre = $"✔ Creado: [{nuevoProd.CodigoInterno}] {nuevoProd.Nombre}";
+        return nuevoProd;
     }
 
     public static void GuardarMapaProductoProveedor(string emisorRfc, string clave, string descripcion, int productoId, decimal ultimoPrecioSinIva)
@@ -1666,18 +1764,18 @@ LIMIT 1";
         conn.Open();
         using var del = conn.CreateCommand();
         del.CommandText = "DELETE FROM ProductoProveedorMapa WHERE EmisorRfc = $rfc AND (ClaveProveedor = $c AND DescripcionProveedor = $d)";
-        del.Parameters.AddWithValue("$rfc", emisorRfc.Trim().ToUpperInvariant());
-        del.Parameters.AddWithValue("$c", clave.Trim());
-        del.Parameters.AddWithValue("$d", descripcion.Trim());
+        del.Parameters.AddWithValue("$rfc", (emisorRfc ?? string.Empty).Trim().ToUpperInvariant());
+        del.Parameters.AddWithValue("$c", (clave ?? string.Empty).Trim());
+        del.Parameters.AddWithValue("$d", (descripcion ?? string.Empty).Trim());
         del.ExecuteNonQuery();
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO ProductoProveedorMapa (EmisorRfc, ClaveProveedor, DescripcionProveedor, ProductoId, UltimoPrecioSinIva)
 VALUES ($rfc, $c, $d, $pid, $p)";
-        cmd.Parameters.AddWithValue("$rfc", emisorRfc.Trim().ToUpperInvariant());
-        cmd.Parameters.AddWithValue("$c", clave.Trim());
-        cmd.Parameters.AddWithValue("$d", descripcion.Trim());
+        cmd.Parameters.AddWithValue("$rfc", (emisorRfc ?? string.Empty).Trim().ToUpperInvariant());
+        cmd.Parameters.AddWithValue("$c", (clave ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$d", (descripcion ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$pid", productoId);
         cmd.Parameters.AddWithValue("$p", (double)ultimoPrecioSinIva);
         cmd.ExecuteNonQuery();
@@ -1688,7 +1786,7 @@ VALUES ($rfc, $c, $d, $pid, $p)";
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
-        // Verificar si el proveedor ya existe por RFC; si no, darlo de alta automáticamente
+        // 1. Verificar si el proveedor ya existe por RFC; si no, darlo de alta automáticamente
         using (var chkProv = conn.CreateCommand())
         {
             chkProv.CommandText = "SELECT COUNT(*) FROM Proveedores WHERE Rfc = $rfc";
@@ -1702,6 +1800,31 @@ VALUES ($rfc, $c, $d, $pid, $p)";
                     NombreComercial = factura.EmisorNombre,
                     Notas = "Registrado automáticamente desde Factura XML CFDI"
                 });
+            }
+        }
+
+        // 2. Comprobar cada concepto de la factura: si ya está registrado se vincula; si no corresponde a ninguno existente, se crea automáticamente
+        var catalogoActual = ObtenerProductos().ToDictionary(p => p.Id);
+        foreach (var c in factura.Conceptos)
+        {
+            if (c.ProductoIdVinculado.HasValue && catalogoActual.ContainsKey(c.ProductoIdVinculado.Value))
+            {
+                GuardarMapaProductoProveedor(factura.EmisorRfc, c.NoIdentificacion, c.Descripcion, c.ProductoIdVinculado.Value, c.ValorUnitario);
+            }
+            else
+            {
+                var existente = BuscarProductoExistenteParaConceptoXml(factura.EmisorRfc, c.NoIdentificacion, c.Descripcion);
+                if (existente != null)
+                {
+                    c.ProductoIdVinculado = existente.Id;
+                    c.ProductoVinculadoNombre = $"✔ Registrado: [{existente.CodigoInterno}] {existente.Nombre}";
+                    GuardarMapaProductoProveedor(factura.EmisorRfc, c.NoIdentificacion, c.Descripcion, existente.Id, c.ValorUnitario);
+                }
+                else
+                {
+                    var nuevo = CrearProductoDesdeConceptoXml(factura.EmisorRfc, factura.SerieFolio, c);
+                    catalogoActual[nuevo.Id] = nuevo;
+                }
             }
         }
 
@@ -1749,7 +1872,9 @@ VALUES ($fid, $cps, $nid, $desc, $uni, $cant, $vu, $imp, $iva, $pid)";
 
             if (c.ProductoIdVinculado.HasValue && c.ProductoIdVinculado.Value > 0)
             {
-                decimal costoConIva = Math.Round(c.ValorUnitario * 1.16m, 2);
+                decimal costoConIva = c.Cantidad > 0m && (c.Importe + c.IvaConcepto) > 0m
+                    ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
+                    : Math.Round(c.ValorUnitario * 1.16m, 2);
                 using var upP = conn.CreateCommand();
                 upP.Transaction = tx;
                 upP.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid";
@@ -1797,7 +1922,7 @@ ORDER BY Id DESC";
             });
         }
 
-        var productosDict = ObtenerProductos().ToDictionary(p => p.Id, p => p.Nombre);
+        var productosDict = ObtenerProductos().ToDictionary(p => p.Id, p => $"✔ [{p.CodigoInterno}] {p.Nombre}");
         foreach (var f in list)
         {
             using var cCmd = conn.CreateCommand();

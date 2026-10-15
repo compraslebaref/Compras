@@ -59,7 +59,6 @@ public static class XmlCfdiService
             RutaArchivoXml = rutaXml
         };
 
-        var todosProductos = DatabaseService.ObtenerProductos();
         var conceptosNodos = root.Descendants().Where(e => e.Name.LocalName.Equals("Concepto", StringComparison.OrdinalIgnoreCase));
 
         foreach (var cNodo in conceptosNodos)
@@ -83,19 +82,8 @@ public static class XmlCfdiService
                 ivaConcepto = Math.Round(importe * 0.16m, 2);
             }
 
-            // Buscar vinculación previa por RFC + Clave/Descripción o coincidencia directa en catálogo
-            int? prodId = DatabaseService.BuscarProductoVinculadoXml(emisorRfc, noId, desc);
-            if (!prodId.HasValue)
-            {
-                var match = todosProductos.FirstOrDefault(p =>
-                    (!string.IsNullOrWhiteSpace(noId) && (p.CodigoInterno.Equals(noId, StringComparison.OrdinalIgnoreCase) || p.CodigoBarras.Equals(noId, StringComparison.OrdinalIgnoreCase))) ||
-                    desc.Contains(p.Nombre, StringComparison.OrdinalIgnoreCase) ||
-                    p.Nombre.Contains(desc, StringComparison.OrdinalIgnoreCase));
-                if (match != null)
-                    prodId = match.Id;
-            }
-
-            var prodObj = prodId.HasValue ? todosProductos.FirstOrDefault(p => p.Id == prodId.Value) : null;
+            // Comprobar si el producto ya está registrado en el catálogo (por vínculo previo, código o nombre)
+            var prodExistente = DatabaseService.BuscarProductoExistenteParaConceptoXml(emisorRfc, noId, desc);
 
             factura.Conceptos.Add(new FacturaConcepto
             {
@@ -107,8 +95,10 @@ public static class XmlCfdiService
                 ValorUnitario = valorUnitario,
                 Importe = importe,
                 IvaConcepto = ivaConcepto,
-                ProductoIdVinculado = prodId,
-                ProductoVinculadoNombre = prodObj?.Nombre ?? "Sin vincular (clic para asociar)"
+                ProductoIdVinculado = prodExistente?.Id,
+                ProductoVinculadoNombre = prodExistente != null
+                    ? $"✔ Registrado: [{prodExistente.CodigoInterno}] {prodExistente.Nombre}"
+                    : "➕ No registrado (se creará al guardar)"
             });
         }
 
@@ -121,12 +111,12 @@ public static class XmlCfdiService
     public static string GenerarFacturaXmlDemoEnCarpeta()
     {
         string demoPath = Path.Combine(DatabaseService.XmlFolder, "CFDI40_Demo_TorniMax_OC2026_0001.xml");
-        if (!File.Exists(demoPath))
+        if (!File.Exists(demoPath) || !File.ReadAllText(demoPath).Contains("PROV-998"))
         {
             string xml = @"<?xml version=""1.0"" encoding=""utf-8""?>
 <cfdi:Comprobante xmlns:cfdi=""http://www.sat.gob.mx/cfd/4"" xmlns:tfd=""http://www.sat.gob.mx/TimbreFiscalDigital""
     Version=""4.0"" Serie=""FAC"" Folio=""8842"" Fecha=""2026-10-14T09:15:00""
-    SubTotal=""3405.17"" Moneda=""MXN"" Total=""3950.00"" TipoDeComprobante=""I"" Exportacion=""01"" MetodoPago=""PUE"" FormaPago=""03"" LugarExpedicion=""06000"">
+    SubTotal=""3855.17"" Moneda=""MXN"" Total=""4472.00"" TipoDeComprobante=""I"" Exportacion=""01"" MetodoPago=""PUE"" FormaPago=""03"" LugarExpedicion=""06000"">
   <cfdi:Emisor Rfc=""MAY150510KL4"" Nombre=""Mayorista de Tornillería y Herramientas S.A. de C.V."" RegimenFiscal=""601"" />
   <cfdi:Receptor Rfc=""EMP180101AA1"" Nombre=""DEPARTAMENTO DE COMPRAS E INGENIERIA S.A. DE C.V."" DomicilioFiscalReceptor=""06000"" RegimenFiscalReceptor=""601"" UsoCFDI=""G01"" />
   <cfdi:Conceptos>
@@ -144,10 +134,17 @@ public static class XmlCfdiService
         </cfdi:Traslados>
       </cfdi:Impuestos>
     </cfdi:Concepto>
+    <cfdi:Concepto ClaveProdServ=""46181504"" NoIdentificacion=""PROV-998"" Cantidad=""10"" ClaveUnidad=""PR"" Unidad=""Par"" Descripcion=""Guante de Nitrilo Industrial Anticorte"" ValorUnitario=""45.00"" Importe=""450.00"" ObjetoImp=""02"">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Base=""450.00"" Impuesto=""002"" TipoFactor=""Tasa"" TasaOCuota=""0.160000"" Importe=""72.00"" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
   </cfdi:Conceptos>
-  <cfdi:Impuestos TotalImpuestosTrasladados=""544.83"">
+  <cfdi:Impuestos TotalImpuestosTrasladados=""616.83"">
     <cfdi:Traslados>
-      <cfdi:Traslado Base=""3405.17"" Impuesto=""002"" TipoFactor=""Tasa"" TasaOCuota=""0.160000"" Importe=""544.83"" />
+      <cfdi:Traslado Base=""3855.17"" Impuesto=""002"" TipoFactor=""Tasa"" TasaOCuota=""0.160000"" Importe=""616.83"" />
     </cfdi:Traslados>
   </cfdi:Impuestos>
   <cfdi:Complemento>

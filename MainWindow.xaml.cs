@@ -1163,13 +1163,21 @@ public partial class MainWindow : FluentWindow
         try
         {
             _facturaXmlEnPantalla = XmlCfdiService.LeerArchivoCfdiXml(rutaXml);
-            TxtXmlResumenActual.Text = $"UUID: {_facturaXmlEnPantalla.Uuid} | Emisor: {_facturaXmlEnPantalla.EmisorNombre} ({_facturaXmlEnPantalla.EmisorRfc}) | Subtotal: ${_facturaXmlEnPantalla.Subtotal:N2} | IVA: ${_facturaXmlEnPantalla.Iva:N2} | Total: ${_facturaXmlEnPantalla.Total:N2}";
+            ActualizarResumenFacturaXml();
             DgXmlConceptosActual.ItemsSource = _facturaXmlEnPantalla.Conceptos;
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, $"Error al leer el archivo XML:\n{ex.Message}", "Error XML", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void ActualizarResumenFacturaXml()
+    {
+        if (_facturaXmlEnPantalla == null) return;
+        int registrados = _facturaXmlEnPantalla.Conceptos.Count(c => c.ProductoIdVinculado.HasValue);
+        int nuevos = _facturaXmlEnPantalla.Conceptos.Count - registrados;
+        TxtXmlResumenActual.Text = $"UUID: {_facturaXmlEnPantalla.Uuid} | Emisor: {_facturaXmlEnPantalla.EmisorNombre} | Total: ${_facturaXmlEnPantalla.Total:N2} ({registrados} registrados, {nuevos} por crear)";
     }
 
     private void BtnVincularConceptoXmlConProducto_Click(object sender, RoutedEventArgs e)
@@ -1183,9 +1191,75 @@ public partial class MainWindow : FluentWindow
         }
 
         concepto.ProductoIdVinculado = prod.Id;
-        concepto.ProductoVinculadoNombre = prod.Nombre;
+        concepto.ProductoVinculadoNombre = $"✔ Registrado: [{prod.CodigoInterno}] {prod.Nombre}";
         DatabaseService.GuardarMapaProductoProveedor(_facturaXmlEnPantalla.EmisorRfc, concepto.NoIdentificacion, concepto.Descripcion, prod.Id, concepto.ValorUnitario);
         DgXmlConceptosActual.Items.Refresh();
+        ActualizarResumenFacturaXml();
+    }
+
+    private void BtnMarcarConceptoComoNuevo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_facturaXmlEnPantalla == null || DgXmlConceptosActual.SelectedItem is not FacturaConcepto concepto)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un concepto en la tabla para marcarlo como producto nuevo.", "Seleccione concepto", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        concepto.ProductoIdVinculado = null;
+        concepto.ProductoVinculadoNombre = "➕ No registrado (se creará al guardar)";
+        DgXmlConceptosActual.Items.Refresh();
+        ActualizarResumenFacturaXml();
+    }
+
+    private void BtnCrearProductoDesdeConceptoXml_Click(object sender, RoutedEventArgs e)
+    {
+        if (_facturaXmlEnPantalla == null)
+        {
+            System.Windows.MessageBox.Show(this, "Primero cargue una factura XML.", "Sin factura", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var conceptosACrear = new List<FacturaConcepto>();
+        if (DgXmlConceptosActual.SelectedItem is FacturaConcepto seleccionado && !seleccionado.ProductoIdVinculado.HasValue)
+        {
+            conceptosACrear.Add(seleccionado);
+        }
+        else
+        {
+            conceptosACrear.AddRange(_facturaXmlEnPantalla.Conceptos.Where(c => !c.ProductoIdVinculado.HasValue));
+        }
+
+        if (conceptosACrear.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Todos los conceptos ya están vinculados a productos registrados en el catálogo.\nSi desea crear uno nuevo a partir de un concepto ya vinculado, selecciónelo y haga clic en 'Marcar como Nuevo'.", "Productos ya registrados", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var creados = new List<Producto>();
+        foreach (var c in conceptosACrear)
+        {
+            var prod = DatabaseService.CrearProductoDesdeConceptoXml(_facturaXmlEnPantalla.EmisorRfc, _facturaXmlEnPantalla.SerieFolio, c);
+            creados.Add(prod);
+        }
+
+        CargarCombosBase();
+        RefrescarCatalogoVisual();
+        DgXmlConceptosActual.Items.Refresh();
+        ActualizarResumenFacturaXml();
+
+        string listaNombres = string.Join("\n", creados.Select(p => $"• [{p.CodigoInterno}] {p.Nombre} ({p.UltimoCostoCompra:C2})"));
+        System.Windows.MessageBox.Show(this,
+            $"Se dieron de alta {creados.Count} producto(s) nuevos en el Catálogo:\n\n{listaNombres}",
+            "Productos Creados en Catálogo", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void DgFacturasRegistradas_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgFacturasRegistradas.SelectedItem is FacturaXml fac && _facturaXmlEnPantalla == null)
+        {
+            DgXmlConceptosActual.ItemsSource = fac.Conceptos;
+            TxtXmlResumenActual.Text = $"Factura Registrada — UUID: {fac.Uuid} | Emisor: {fac.EmisorNombre} | Total: ${fac.Total:N2}";
+        }
     }
 
     private void BtnGuardarFacturaXml_Click(object sender, RoutedEventArgs e)
@@ -1208,21 +1282,24 @@ public partial class MainWindow : FluentWindow
             _facturaXmlEnPantalla.OrdenCompraFolio = oc.Folio;
         }
 
-        foreach (var c in _facturaXmlEnPantalla.Conceptos.Where(x => x.ProductoIdVinculado.HasValue))
-        {
-            DatabaseService.GuardarMapaProductoProveedor(
-                _facturaXmlEnPantalla.EmisorRfc,
-                c.NoIdentificacion,
-                c.Descripcion,
-                c.ProductoIdVinculado!.Value,
-                c.ValorUnitario);
-        }
+        int productosAntes = DatabaseService.ObtenerProductos().Count;
+        var facturaGuardada = DatabaseService.GuardarFacturaXml(_facturaXmlEnPantalla);
+        int productosDespues = DatabaseService.ObtenerProductos().Count;
+        int nuevosCreados = Math.Max(0, productosDespues - productosAntes);
 
-        DatabaseService.GuardarFacturaXml(_facturaXmlEnPantalla);
         _facturaXmlEnPantalla = null;
-        DgXmlConceptosActual.ItemsSource = null;
-        TxtXmlResumenActual.Text = "Factura XML registrada y vinculada exitosamente.";
+        DgXmlConceptosActual.ItemsSource = facturaGuardada.Conceptos;
+        TxtXmlResumenActual.Text = nuevosCreados > 0
+            ? $"Factura registrada exitosamente. Se crearon {nuevosCreados} producto(s) nuevos en el catálogo automáticamente."
+            : "Factura registrada exitosamente. Todos los productos ya estaban en el catálogo y actualizaron su costo.";
         CargarTodoElSistema();
+
+        if (nuevosCreados > 0)
+        {
+            System.Windows.MessageBox.Show(this,
+                $"Factura {facturaGuardada.SerieFolio} registrada.\n\nSe detectaron {nuevosCreados} concepto(s) que no correspondían a ningún producto existente y se crearon automáticamente en el Catálogo.",
+                "Factura y Nuevos Productos Registrados", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     // ==================== TAB 7: ANÁLISIS Y CATÁLOGOS BASE ====================
