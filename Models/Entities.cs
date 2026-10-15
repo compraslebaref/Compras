@@ -204,7 +204,7 @@ public class OrdenCompra
     public string Estatus { get; set; } = "Emitida"; // Emitida, Recibida Parcialmente, Recibida Completa, Cancelada
     public string Notas { get; set; } = string.Empty;
     public List<OrdenCompraPartida> Partidas { get; set; } = new();
-    public override string ToString() => $"{Folio} - {ProveedorNombre} ({Estatus}) - ${TotalConIva:N2}";
+    public override string ToString() => Id == 0 ? Folio : $"{Folio} - {ProveedorNombre} ({Estatus}) - ${TotalConIva:N2}";
 }
 
 public class OrdenCompraPartida
@@ -334,6 +334,8 @@ public class FacturaXml
     public decimal Total { get; set; }
     public int? OrdenCompraId { get; set; }
     public string OrdenCompraFolio { get; set; } = string.Empty;
+    public int? ProyectoId { get; set; }
+    public string ProyectoNombre { get; set; } = string.Empty;
     public string RutaArchivoXml { get; set; } = string.Empty;
     public List<FacturaConcepto> Conceptos { get; set; } = new();
 }

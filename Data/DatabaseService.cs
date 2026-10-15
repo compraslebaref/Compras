@@ -272,6 +272,8 @@ CREATE TABLE IF NOT EXISTS ConfiguracionSistema (
         cmd.ExecuteNonQuery();
 
         SeedInitialDataIfEmpty(conn);
+        conn.Close();
+        SincronizarFacturasYOrdenesExistentes();
     }
 
     private static void SeedInitialDataIfEmpty(SqliteConnection conn)
@@ -397,7 +399,16 @@ INSERT INTO PrestamoPartidas (PrestamoHerramientaId, HerramientaActivoId, Estado
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM {tabla}";
         int next = Convert.ToInt32(cmd.ExecuteScalar()) + 1;
-        return $"{prefijo}-{DateTime.Now:yyyy}-{next:D4}";
+        while (true)
+        {
+            string candidate = $"{prefijo}-{DateTime.Now:yyyy}-{next:D4}";
+            using var chk = conn.CreateCommand();
+            chk.CommandText = $"SELECT COUNT(*) FROM {tabla} WHERE Folio = $f";
+            chk.Parameters.AddWithValue("$f", candidate);
+            if (Convert.ToInt32(chk.ExecuteScalar()) == 0)
+                return candidate;
+            next++;
+        }
     }
 
     public static string GenerarSiguienteCodigoProducto(string prefijo, string tabla, string campo)
@@ -1644,8 +1655,44 @@ WHERE pp.PrestamoHerramientaId = $pid";
 
     // ==================== FACTURAS XML (CFDI 4.0) ====================
 
+    public static int ObtenerProyectoStockGeneralId()
+    {
+        var proyectos = ObtenerProyectos();
+        var stock = proyectos.FirstOrDefault(p => p.EsStockGeneral) ?? proyectos.FirstOrDefault();
+        if (stock != null)
+            return stock.Id;
+
+        GuardarProyecto("STOCK-ALM", "Reposición de Stock General de Almacén", "Almacén Interno", "Activo");
+        return ObtenerProyectos().First().Id;
+    }
+
+    public static int AsegurarProveedorPorRfc(string emisorRfc, string emisorNombre)
+    {
+        string rfcNorm = (emisorRfc ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(rfcNorm))
+            rfcNorm = "XAXX010101000";
+
+        var provExistente = ObtenerProveedores().FirstOrDefault(p => p.Rfc.Trim().Equals(rfcNorm, StringComparison.OrdinalIgnoreCase));
+        if (provExistente != null)
+            return provExistente.Id;
+
+        GuardarProveedor(new Proveedor
+        {
+            Rfc = rfcNorm,
+            RazonSocial = string.IsNullOrWhiteSpace(emisorNombre) ? rfcNorm : emisorNombre.Trim(),
+            NombreComercial = string.IsNullOrWhiteSpace(emisorNombre) ? rfcNorm : emisorNombre.Trim(),
+            Notas = "Registrado automáticamente desde Factura XML CFDI"
+        });
+
+        return ObtenerProveedores().First(p => p.Rfc.Trim().Equals(rfcNorm, StringComparison.OrdinalIgnoreCase)).Id;
+    }
+
     public static int? BuscarProductoVinculadoXml(string emisorRfc, string noIdentificacion, string descripcion)
     {
+        string rfc = (emisorRfc ?? string.Empty).Trim().ToUpperInvariant();
+        string clave = (noIdentificacion ?? string.Empty).Trim();
+        string desc = (descripcion ?? string.Empty).Trim();
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
@@ -1654,12 +1701,12 @@ SELECT m.ProductoId
 FROM ProductoProveedorMapa m
 INNER JOIN Productos p ON p.Id = m.ProductoId
 WHERE m.EmisorRfc = $rfc
-  AND ((m.ClaveProveedor <> '' AND m.ClaveProveedor = $clave)
+  AND ((LENGTH(m.ClaveProveedor) >= 4 AND m.ClaveProveedor = $clave)
        OR (m.DescripcionProveedor <> '' AND m.DescripcionProveedor = $desc))
 LIMIT 1";
-        cmd.Parameters.AddWithValue("$rfc", (emisorRfc ?? string.Empty).Trim().ToUpperInvariant());
-        cmd.Parameters.AddWithValue("$clave", (noIdentificacion ?? string.Empty).Trim());
-        cmd.Parameters.AddWithValue("$desc", (descripcion ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$rfc", rfc);
+        cmd.Parameters.AddWithValue("$clave", clave);
+        cmd.Parameters.AddWithValue("$desc", desc);
         var res = cmd.ExecuteScalar();
         return res == null || res == DBNull.Value ? null : Convert.ToInt32(res);
     }
@@ -1678,11 +1725,12 @@ LIMIT 1";
                 return porMapa;
         }
 
-        if (!string.IsNullOrWhiteSpace(noId))
+        // Solo usar NoIdentificacion como código único si tiene al menos 4 caracteres (evitar números de partida como "1" o "2")
+        if (noId.Length >= 4)
         {
             var porCodigo = todosProductos.FirstOrDefault(p =>
                 p.CodigoInterno.Equals(noId, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrWhiteSpace(p.CodigoBarras) && p.CodigoBarras.Equals(noId, StringComparison.OrdinalIgnoreCase)));
+                (!string.IsNullOrWhiteSpace(p.CodigoBarras) && p.CodigoBarras.Length >= 4 && p.CodigoBarras.Equals(noId, StringComparison.OrdinalIgnoreCase)));
             if (porCodigo != null)
                 return porCodigo;
         }
@@ -1695,8 +1743,8 @@ LIMIT 1";
                 return porNombreExacto;
 
             var porCoincidencia = todosProductos.FirstOrDefault(p =>
-                (p.Nombre.Length >= 4 && desc.Contains(p.Nombre, StringComparison.OrdinalIgnoreCase)) ||
-                (desc.Length >= 4 && p.Nombre.Contains(desc, StringComparison.OrdinalIgnoreCase)));
+                (p.Nombre.Length >= 6 && desc.Contains(p.Nombre, StringComparison.OrdinalIgnoreCase)) ||
+                (desc.Length >= 6 && p.Nombre.Contains(desc, StringComparison.OrdinalIgnoreCase)));
             if (porCoincidencia != null)
                 return porCoincidencia;
         }
@@ -1718,7 +1766,7 @@ LIMIT 1";
         string nuevoCodigo = GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
         string noId = (c.NoIdentificacion ?? string.Empty).Trim();
         var existentes = ObtenerProductos();
-        bool codigoBarrasDisponible = !string.IsNullOrWhiteSpace(noId) &&
+        bool codigoBarrasDisponible = noId.Length >= 4 &&
             !existentes.Any(p => p.CodigoInterno.Equals(noId, StringComparison.OrdinalIgnoreCase) ||
                                  p.CodigoBarras.Equals(noId, StringComparison.OrdinalIgnoreCase));
 
@@ -1781,29 +1829,193 @@ VALUES ($rfc, $c, $d, $pid, $p)";
         cmd.ExecuteNonQuery();
     }
 
-    public static FacturaXml GuardarFacturaXml(FacturaXml factura)
+    private static decimal CalcularPrecioUnitarioSinIvaParaOc(FacturaConcepto c)
     {
+        decimal cant = c.Cantidad > 0m ? c.Cantidad : 1m;
+        decimal totalConceptoConIva = c.Importe + c.IvaConcepto;
+        if (totalConceptoConIva > 0m)
+        {
+            //OrdenCompraPartida calcula ImporteConIva = Round(Round(Cantidad * PrecioSinIva, 2) * 1.16, 2)
+            return Math.Round((totalConceptoConIva / 1.16m) / cant, 4);
+        }
+        return c.ValorUnitario;
+    }
+
+    public static void SincronizarOrdenCompraConSusFacturas(int ordenCompraId, int? proyectoIdPreferido = null)
+    {
+        if (ordenCompraId <= 0) return;
+
+        var facturasDeEstaOc = ObtenerFacturasXml().Where(f => f.OrdenCompraId == ordenCompraId).OrderBy(f => f.Id).ToList();
+        if (facturasDeEstaOc.Count == 0) return;
+
+        var primeraFac = facturasDeEstaOc.First();
+        int provId = AsegurarProveedorPorRfc(primeraFac.EmisorRfc, primeraFac.EmisorNombre);
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
-        // 1. Verificar si el proveedor ya existe por RFC; si no, darlo de alta automáticamente
-        using (var chkProv = conn.CreateCommand())
+        // Conservar cantidades ya recibidas en almacén por ProductoId
+        var recibidasPorProducto = new Dictionary<int, decimal>();
+        using (var qRec = conn.CreateCommand())
         {
-            chkProv.CommandText = "SELECT COUNT(*) FROM Proveedores WHERE Rfc = $rfc";
-            chkProv.Parameters.AddWithValue("$rfc", factura.EmisorRfc.Trim().ToUpperInvariant());
-            if (Convert.ToInt32(chkProv.ExecuteScalar()) == 0)
+            qRec.CommandText = "SELECT ProductoId, SUM(CantidadRecibida) FROM OrdenCompraPartidas WHERE OrdenCompraId = $ocid GROUP BY ProductoId";
+            qRec.Parameters.AddWithValue("$ocid", ordenCompraId);
+            using var r = qRec.ExecuteReader();
+            while (r.Read())
             {
-                GuardarProveedor(new Proveedor
-                {
-                    Rfc = factura.EmisorRfc,
-                    RazonSocial = factura.EmisorNombre,
-                    NombreComercial = factura.EmisorNombre,
-                    Notas = "Registrado automáticamente desde Factura XML CFDI"
-                });
+                recibidasPorProducto[r.GetInt32(0)] = Convert.ToDecimal(r.GetDouble(1));
             }
         }
 
-        // 2. Comprobar cada concepto de la factura: si ya está registrado se vincula; si no corresponde a ninguno existente, se crea automáticamente
+        using var tx = conn.BeginTransaction();
+
+        decimal subtotalSum = facturasDeEstaOc.Sum(f => Math.Max(0m, f.Subtotal - f.Descuento));
+        decimal ivaSum = facturasDeEstaOc.Sum(f => f.Iva);
+        decimal totalSum = facturasDeEstaOc.Sum(f => f.Total);
+        string foliosFacturas = string.Join(", ", facturasDeEstaOc.Select(f => string.IsNullOrWhiteSpace(f.SerieFolio) ? f.Uuid[..Math.Min(8, f.Uuid.Length)] : f.SerieFolio));
+
+        using (var upOc = conn.CreateCommand())
+        {
+            upOc.Transaction = tx;
+            if (proyectoIdPreferido.HasValue && proyectoIdPreferido.Value > 0)
+            {
+                upOc.CommandText = @"
+UPDATE OrdenesCompra
+SET ProveedorId = $pvid,
+    ProyectoId = $prid,
+    Subtotal = $sub,
+    Iva = $iva,
+    TotalConIva = $tot,
+    Notas = $not
+WHERE Id = $ocid";
+                upOc.Parameters.AddWithValue("$prid", proyectoIdPreferido.Value);
+            }
+            else
+            {
+                upOc.CommandText = @"
+UPDATE OrdenesCompra
+SET ProveedorId = $pvid,
+    Subtotal = $sub,
+    Iva = $iva,
+    TotalConIva = $tot,
+    Notas = $not
+WHERE Id = $ocid";
+            }
+            upOc.Parameters.AddWithValue("$pvid", provId);
+            upOc.Parameters.AddWithValue("$sub", (double)subtotalSum);
+            upOc.Parameters.AddWithValue("$iva", (double)ivaSum);
+            upOc.Parameters.AddWithValue("$tot", (double)totalSum);
+            upOc.Parameters.AddWithValue("$not", $"Asociada a Factura(s) XML: {foliosFacturas}");
+            upOc.Parameters.AddWithValue("$ocid", ordenCompraId);
+            upOc.ExecuteNonQuery();
+        }
+
+        using (var delPart = conn.CreateCommand())
+        {
+            delPart.Transaction = tx;
+            delPart.CommandText = "DELETE FROM OrdenCompraPartidas WHERE OrdenCompraId = $ocid";
+            delPart.Parameters.AddWithValue("$ocid", ordenCompraId);
+            delPart.ExecuteNonQuery();
+        }
+
+        foreach (var fac in facturasDeEstaOc)
+        {
+            foreach (var c in fac.Conceptos.Where(x => x.ProductoIdVinculado.HasValue && x.ProductoIdVinculado.Value > 0))
+            {
+                int prodId = c.ProductoIdVinculado!.Value;
+                decimal cantPedida = c.Cantidad > 0m ? c.Cantidad : 1m;
+                decimal cantRecibida = 0m;
+                if (recibidasPorProducto.TryGetValue(prodId, out decimal disp) && disp > 0m)
+                {
+                    cantRecibida = Math.Min(cantPedida, disp);
+                    recibidasPorProducto[prodId] = Math.Max(0m, disp - cantRecibida);
+                }
+
+                decimal precioSinIva = CalcularPrecioUnitarioSinIvaParaOc(c);
+
+                using var insPart = conn.CreateCommand();
+                insPart.Transaction = tx;
+                insPart.CommandText = @"
+INSERT INTO OrdenCompraPartidas (OrdenCompraId, ProductoId, CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva)
+VALUES ($ocid, $pid, $cant, $rec, $precio)";
+                insPart.Parameters.AddWithValue("$ocid", ordenCompraId);
+                insPart.Parameters.AddWithValue("$pid", prodId);
+                insPart.Parameters.AddWithValue("$cant", (double)cantPedida);
+                insPart.Parameters.AddWithValue("$rec", (double)cantRecibida);
+                insPart.Parameters.AddWithValue("$precio", (double)precioSinIva);
+                insPart.ExecuteNonQuery();
+            }
+        }
+
+        tx.Commit();
+    }
+
+    public static (int ocId, string ocFolio) CrearOrdenCompraDesdeFactura(FacturaXml factura, int proveedorId, int proyectoId)
+    {
+        string folioOc = GenerarSiguienteFolio("OC", "OrdenesCompra");
+        string fecha = string.IsNullOrWhiteSpace(factura.FechaTimbrado)
+            ? DateTime.Now.ToString("yyyy-MM-dd HH:mm")
+            : factura.FechaTimbrado;
+
+        var prov = ObtenerProveedores().FirstOrDefault(p => p.Id == proveedorId);
+        int dias = prov?.DiasEntregaPromedio ?? 3;
+        decimal subtotal = Math.Max(0m, factura.Subtotal - factura.Descuento);
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+INSERT INTO OrdenesCompra (Folio, Fecha, SolicitudId, CotizacionFolio, ProveedorId, ProyectoId, DepartamentoNombre, EncargadoNombre, TiempoEntregaDias, CostoEnvioConIva, Subtotal, Iva, TotalConIva, Estatus, Notas)
+VALUES ($fol, $fec, 0, '', $pvid, $prid, 'Compras / Almacén', 'Facturación XML', $dias, 0, $sub, $iva, $tot, 'Emitida', $not);
+SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("$fol", folioOc);
+        cmd.Parameters.AddWithValue("$fec", fecha);
+        cmd.Parameters.AddWithValue("$pvid", proveedorId);
+        cmd.Parameters.AddWithValue("$prid", proyectoId);
+        cmd.Parameters.AddWithValue("$dias", dias);
+        cmd.Parameters.AddWithValue("$sub", (double)subtotal);
+        cmd.Parameters.AddWithValue("$iva", (double)factura.Iva);
+        cmd.Parameters.AddWithValue("$tot", (double)factura.Total);
+        cmd.Parameters.AddWithValue("$not", $"Generada desde Factura XML {factura.SerieFolio} ({factura.Uuid})");
+        int ocId = Convert.ToInt32(cmd.ExecuteScalar());
+
+        foreach (var c in factura.Conceptos.Where(x => x.ProductoIdVinculado.HasValue && x.ProductoIdVinculado.Value > 0))
+        {
+            decimal cantPedida = c.Cantidad > 0m ? c.Cantidad : 1m;
+            decimal precioSinIva = CalcularPrecioUnitarioSinIvaParaOc(c);
+
+            using var pCmd = conn.CreateCommand();
+            pCmd.Transaction = tx;
+            pCmd.CommandText = @"
+INSERT INTO OrdenCompraPartidas (OrdenCompraId, ProductoId, CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva)
+VALUES ($ocid, $pid, $cant, 0, $precio)";
+            pCmd.Parameters.AddWithValue("$ocid", ocId);
+            pCmd.Parameters.AddWithValue("$pid", c.ProductoIdVinculado!.Value);
+            pCmd.Parameters.AddWithValue("$cant", (double)cantPedida);
+            pCmd.Parameters.AddWithValue("$precio", (double)precioSinIva);
+            pCmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return (ocId, folioOc);
+    }
+
+    public static FacturaXml GuardarFacturaXml(FacturaXml factura)
+    {
+        // 1. Asegurar que el proveedor exista por RFC
+        int proveedorId = AsegurarProveedorPorRfc(factura.EmisorRfc, factura.EmisorNombre);
+        int proyectoId = factura.ProyectoId.HasValue && factura.ProyectoId.Value > 0
+            ? factura.ProyectoId.Value
+            : ObtenerProyectoStockGeneralId();
+
+        // 2. Filtrar conceptos vacíos de Addenda y comprobar cada concepto de la factura
+        factura.Conceptos = factura.Conceptos
+            .Where(c => !string.IsNullOrWhiteSpace(c.Descripcion) || !string.IsNullOrWhiteSpace(c.ClaveProdServ) || c.Importe > 0m || c.ValorUnitario > 0m)
+            .ToList();
+
         var catalogoActual = ObtenerProductos().ToDictionary(p => p.Id);
         foreach (var c in factura.Conceptos)
         {
@@ -1828,64 +2040,336 @@ VALUES ($rfc, $c, $d, $pid, $p)";
             }
         }
 
-        using var tx = conn.BeginTransaction();
-        using var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = @"
+        // 3. Verificar si tiene una Orden de Compra existente válida del mismo proveedor; de lo contrario, crear una nueva OC automáticamente
+        var ocsActuales = ObtenerOrdenesCompra();
+        OrdenCompra? ocExistenteValida = null;
+        if (factura.OrdenCompraId.HasValue && factura.OrdenCompraId.Value > 0)
+        {
+            ocExistenteValida = ocsActuales.FirstOrDefault(o => o.Id == factura.OrdenCompraId.Value && o.ProveedorId == proveedorId);
+        }
+
+        bool seCreoNuevaOc = false;
+        if (ocExistenteValida == null)
+        {
+            var (nuevaOcId, nuevoFolioOc) = CrearOrdenCompraDesdeFactura(factura, proveedorId, proyectoId);
+            factura.OrdenCompraId = nuevaOcId;
+            factura.OrdenCompraFolio = nuevoFolioOc;
+            seCreoNuevaOc = true;
+        }
+        else
+        {
+            factura.OrdenCompraId = ocExistenteValida.Id;
+            factura.OrdenCompraFolio = ocExistenteValida.Folio;
+        }
+
+        using (var conn = new SqliteConnection(ConnectionString))
+        {
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
 INSERT INTO FacturasXml (Uuid, SerieFolio, FechaTimbrado, EmisorRfc, EmisorNombre, Moneda, TipoCambio, Subtotal, Descuento, Iva, Total, OrdenCompraId, OrdenCompraFolio, RutaArchivoXml)
 VALUES ($uuid, $sf, $fec, $rfc, $nom, $mon, $tc, $sub, $desc, $iva, $tot, $ocid, $ocfol, $ruta);
 SELECT last_insert_rowid();";
-        cmd.Parameters.AddWithValue("$uuid", factura.Uuid.Trim().ToUpperInvariant());
-        cmd.Parameters.AddWithValue("$sf", factura.SerieFolio);
-        cmd.Parameters.AddWithValue("$fec", factura.FechaTimbrado);
-        cmd.Parameters.AddWithValue("$rfc", factura.EmisorRfc.Trim().ToUpperInvariant());
-        cmd.Parameters.AddWithValue("$nom", factura.EmisorNombre.Trim());
-        cmd.Parameters.AddWithValue("$mon", factura.Moneda);
-        cmd.Parameters.AddWithValue("$tc", (double)factura.TipoCambio);
-        cmd.Parameters.AddWithValue("$sub", (double)factura.Subtotal);
-        cmd.Parameters.AddWithValue("$desc", (double)factura.Descuento);
-        cmd.Parameters.AddWithValue("$iva", (double)factura.Iva);
-        cmd.Parameters.AddWithValue("$tot", (double)factura.Total);
-        cmd.Parameters.AddWithValue("$ocid", factura.OrdenCompraId.HasValue ? factura.OrdenCompraId.Value : DBNull.Value);
-        cmd.Parameters.AddWithValue("$ocfol", factura.OrdenCompraFolio ?? string.Empty);
-        cmd.Parameters.AddWithValue("$ruta", factura.RutaArchivoXml ?? string.Empty);
-        int facId = Convert.ToInt32(cmd.ExecuteScalar());
+            cmd.Parameters.AddWithValue("$uuid", factura.Uuid.Trim().ToUpperInvariant());
+            cmd.Parameters.AddWithValue("$sf", factura.SerieFolio);
+            cmd.Parameters.AddWithValue("$fec", factura.FechaTimbrado);
+            cmd.Parameters.AddWithValue("$rfc", factura.EmisorRfc.Trim().ToUpperInvariant());
+            cmd.Parameters.AddWithValue("$nom", factura.EmisorNombre.Trim());
+            cmd.Parameters.AddWithValue("$mon", factura.Moneda);
+            cmd.Parameters.AddWithValue("$tc", (double)factura.TipoCambio);
+            cmd.Parameters.AddWithValue("$sub", (double)factura.Subtotal);
+            cmd.Parameters.AddWithValue("$desc", (double)factura.Descuento);
+            cmd.Parameters.AddWithValue("$iva", (double)factura.Iva);
+            cmd.Parameters.AddWithValue("$tot", (double)factura.Total);
+            cmd.Parameters.AddWithValue("$ocid", factura.OrdenCompraId.HasValue ? factura.OrdenCompraId.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("$ocfol", factura.OrdenCompraFolio ?? string.Empty);
+            cmd.Parameters.AddWithValue("$ruta", factura.RutaArchivoXml ?? string.Empty);
+            int facId = Convert.ToInt32(cmd.ExecuteScalar());
 
-        foreach (var c in factura.Conceptos)
-        {
-            using var cCmd = conn.CreateCommand();
-            cCmd.Transaction = tx;
-            cCmd.CommandText = @"
+            foreach (var c in factura.Conceptos)
+            {
+                using var cCmd = conn.CreateCommand();
+                cCmd.Transaction = tx;
+                cCmd.CommandText = @"
 INSERT INTO FacturaConceptos (FacturaXmlId, ClaveProdServ, NoIdentificacion, Descripcion, Unidad, Cantidad, ValorUnitario, Importe, IvaConcepto, ProductoIdVinculado)
 VALUES ($fid, $cps, $nid, $desc, $uni, $cant, $vu, $imp, $iva, $pid)";
-            cCmd.Parameters.AddWithValue("$fid", facId);
-            cCmd.Parameters.AddWithValue("$cps", c.ClaveProdServ);
-            cCmd.Parameters.AddWithValue("$nid", c.NoIdentificacion);
-            cCmd.Parameters.AddWithValue("$desc", c.Descripcion);
-            cCmd.Parameters.AddWithValue("$uni", c.Unidad);
-            cCmd.Parameters.AddWithValue("$cant", (double)c.Cantidad);
-            cCmd.Parameters.AddWithValue("$vu", (double)c.ValorUnitario);
-            cCmd.Parameters.AddWithValue("$imp", (double)c.Importe);
-            cCmd.Parameters.AddWithValue("$iva", (double)c.IvaConcepto);
-            cCmd.Parameters.AddWithValue("$pid", c.ProductoIdVinculado.HasValue ? c.ProductoIdVinculado.Value : DBNull.Value);
-            cCmd.ExecuteNonQuery();
+                cCmd.Parameters.AddWithValue("$fid", facId);
+                cCmd.Parameters.AddWithValue("$cps", c.ClaveProdServ);
+                cCmd.Parameters.AddWithValue("$nid", c.NoIdentificacion);
+                cCmd.Parameters.AddWithValue("$desc", c.Descripcion);
+                cCmd.Parameters.AddWithValue("$uni", c.Unidad);
+                cCmd.Parameters.AddWithValue("$cant", (double)c.Cantidad);
+                cCmd.Parameters.AddWithValue("$vu", (double)c.ValorUnitario);
+                cCmd.Parameters.AddWithValue("$imp", (double)c.Importe);
+                cCmd.Parameters.AddWithValue("$iva", (double)c.IvaConcepto);
+                cCmd.Parameters.AddWithValue("$pid", c.ProductoIdVinculado.HasValue ? c.ProductoIdVinculado.Value : DBNull.Value);
+                cCmd.ExecuteNonQuery();
 
-            if (c.ProductoIdVinculado.HasValue && c.ProductoIdVinculado.Value > 0)
+                if (c.ProductoIdVinculado.HasValue && c.ProductoIdVinculado.Value > 0)
+                {
+                    decimal costoConIva = c.Cantidad > 0m && (c.Importe + c.IvaConcepto) > 0m
+                        ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
+                        : Math.Round(c.ValorUnitario * 1.16m, 2);
+                    using var upP = conn.CreateCommand();
+                    upP.Transaction = tx;
+                    upP.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid";
+                    upP.Parameters.AddWithValue("$costo", (double)costoConIva);
+                    upP.Parameters.AddWithValue("$pid", c.ProductoIdVinculado.Value);
+                    upP.ExecuteNonQuery();
+                }
+            }
+
+            tx.Commit();
+            factura.Id = facId;
+        }
+
+        if (!seCreoNuevaOc && factura.OrdenCompraId.HasValue)
+        {
+            SincronizarOrdenCompraConSusFacturas(factura.OrdenCompraId.Value, proyectoId);
+        }
+
+        return ObtenerFacturasXml().First(f => f.Id == factura.Id);
+    }
+
+    public static void SincronizarFacturasYOrdenesExistentes()
+    {
+        using (var conn = new SqliteConnection(ConnectionString))
+        {
+            conn.Open();
+
+            // 1. Limpiar conceptos vacíos generados por nodos Addenda ($0.00 y sin descripción)
+            using (var delEmpty = conn.CreateCommand())
             {
-                decimal costoConIva = c.Cantidad > 0m && (c.Importe + c.IvaConcepto) > 0m
-                    ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
-                    : Math.Round(c.ValorUnitario * 1.16m, 2);
-                using var upP = conn.CreateCommand();
-                upP.Transaction = tx;
-                upP.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid";
-                upP.Parameters.AddWithValue("$costo", (double)costoConIva);
-                upP.Parameters.AddWithValue("$pid", c.ProductoIdVinculado.Value);
-                upP.ExecuteNonQuery();
+                delEmpty.CommandText = "DELETE FROM FacturaConceptos WHERE TRIM(Descripcion) = '' AND Importe <= 0 AND ValorUnitario <= 0";
+                delEmpty.ExecuteNonQuery();
+            }
+
+            // 2. Limpiar productos temporales $0.00 sin nombre real que hayan quedado huérfanos
+            using (var delOrphanProd = conn.CreateCommand())
+            {
+                delOrphanProd.CommandText = @"
+DELETE FROM Productos
+WHERE Nombre LIKE 'Producto Factura PRD-%'
+  AND UltimoCostoCompra <= 0
+  AND Id NOT IN (SELECT COALESCE(ProductoIdVinculado, 0) FROM FacturaConceptos)";
+                delOrphanProd.ExecuteNonQuery();
+            }
+
+            // 3. Evitar que números de línea cortos ('1', '2') se usen como Código de Barras global
+            using (var fixBarcodes = conn.CreateCommand())
+            {
+                fixBarcodes.CommandText = "UPDATE Productos SET CodigoBarras = CodigoInterno WHERE LENGTH(TRIM(CodigoBarras)) < 4";
+                fixBarcodes.ExecuteNonQuery();
+            }
+
+            // 4. Limpiar Órdenes de Compra demo huérfanas cuyo proveedor fue eliminado del directorio
+            using (var delOrphanOcs = conn.CreateCommand())
+            {
+                delOrphanOcs.CommandText = @"
+DELETE FROM OrdenCompraPartidas WHERE OrdenCompraId IN (
+    SELECT Id FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores)
+);
+UPDATE FacturasXml SET OrdenCompraId = NULL, OrdenCompraFolio = '' WHERE OrdenCompraId IN (
+    SELECT Id FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores)
+);
+DELETE FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores);";
+                delOrphanOcs.ExecuteNonQuery();
             }
         }
 
-        tx.Commit();
-        return ObtenerFacturasXml().First(f => f.Id == facId);
+        int defaultProyectoId = ObtenerProyectoStockGeneralId();
+        var proyectosIds = ObtenerProyectos().Select(p => p.Id).ToHashSet();
+        var facturas = ObtenerFacturasXml().OrderBy(f => f.Id).ToList();
+        var catalogo = ObtenerProductos().ToDictionary(p => p.Id);
+
+        foreach (var fac in facturas)
+        {
+            int provId = AsegurarProveedorPorRfc(fac.EmisorRfc, fac.EmisorNombre);
+
+            foreach (var c in fac.Conceptos)
+            {
+                bool requiereRevinculacion = !c.ProductoIdVinculado.HasValue || !catalogo.ContainsKey(c.ProductoIdVinculado.Value);
+
+                // Si fue vinculado por un NoIdentificacion corto (ej. "1") a un producto con nombre totalmente distinto, corregir
+                if (!requiereRevinculacion && c.NoIdentificacion.Trim().Length < 4 && catalogo.TryGetValue(c.ProductoIdVinculado!.Value, out var prodActual))
+                {
+                    string desc = c.Descripcion.Trim();
+                    if (!string.IsNullOrWhiteSpace(desc) &&
+                        !prodActual.Nombre.Equals(desc, StringComparison.OrdinalIgnoreCase) &&
+                        !desc.Contains(prodActual.Nombre, StringComparison.OrdinalIgnoreCase) &&
+                        !prodActual.Nombre.Contains(desc, StringComparison.OrdinalIgnoreCase))
+                    {
+                        requiereRevinculacion = true;
+                        using var connDelMap = new SqliteConnection(ConnectionString);
+                        connDelMap.Open();
+                        using var delMap = connDelMap.CreateCommand();
+                        delMap.CommandText = "DELETE FROM ProductoProveedorMapa WHERE EmisorRfc = $rfc AND DescripcionProveedor = $desc";
+                        delMap.Parameters.AddWithValue("$rfc", fac.EmisorRfc.Trim().ToUpperInvariant());
+                        delMap.Parameters.AddWithValue("$desc", desc);
+                        delMap.ExecuteNonQuery();
+                    }
+                }
+
+                if (requiereRevinculacion)
+                {
+                    var existente = BuscarProductoExistenteParaConceptoXml(fac.EmisorRfc, c.NoIdentificacion, c.Descripcion);
+                    if (existente != null)
+                    {
+                        c.ProductoIdVinculado = existente.Id;
+                        GuardarMapaProductoProveedor(fac.EmisorRfc, c.NoIdentificacion, c.Descripcion, existente.Id, c.ValorUnitario);
+                    }
+                    else
+                    {
+                        var nuevo = CrearProductoDesdeConceptoXml(fac.EmisorRfc, fac.SerieFolio, c);
+                        catalogo[nuevo.Id] = nuevo;
+                        c.ProductoIdVinculado = nuevo.Id;
+                    }
+
+                    using var connUp = new SqliteConnection(ConnectionString);
+                    connUp.Open();
+                    using var upC = connUp.CreateCommand();
+                    upC.CommandText = "UPDATE FacturaConceptos SET ProductoIdVinculado = $pid WHERE Id = $cid";
+                    upC.Parameters.AddWithValue("$pid", c.ProductoIdVinculado.Value);
+                    upC.Parameters.AddWithValue("$cid", c.Id);
+                    upC.ExecuteNonQuery();
+                }
+
+                if (c.ProductoIdVinculado.HasValue && c.ProductoIdVinculado.Value > 0)
+                {
+                    decimal costoConIva = c.Cantidad > 0m && (c.Importe + c.IvaConcepto) > 0m
+                        ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
+                        : Math.Round(c.ValorUnitario * 1.16m, 2);
+                    using var connP = new SqliteConnection(ConnectionString);
+                    connP.Open();
+                    using var upP = connP.CreateCommand();
+                    upP.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid";
+                    upP.Parameters.AddWithValue("$costo", (double)costoConIva);
+                    upP.Parameters.AddWithValue("$pid", c.ProductoIdVinculado.Value);
+                    upP.ExecuteNonQuery();
+                }
+            }
+
+            // Verificar si la factura tiene una Orden de Compra válida de su mismo proveedor
+            var ocs = ObtenerOrdenesCompra();
+            var ocActual = fac.OrdenCompraId.HasValue
+                ? ocs.FirstOrDefault(o => o.Id == fac.OrdenCompraId.Value && o.ProveedorId == provId)
+                : null;
+
+            if (ocActual == null)
+            {
+                var (nuevaOcId, nuevoFolio) = CrearOrdenCompraDesdeFactura(fac, provId, defaultProyectoId);
+                using var connOc = new SqliteConnection(ConnectionString);
+                connOc.Open();
+                using var upFac = connOc.CreateCommand();
+                upFac.CommandText = "UPDATE FacturasXml SET OrdenCompraId = $ocid, OrdenCompraFolio = $fol WHERE Id = $fid";
+                upFac.Parameters.AddWithValue("$ocid", nuevaOcId);
+                upFac.Parameters.AddWithValue("$fol", nuevoFolio);
+                upFac.Parameters.AddWithValue("$fid", fac.Id);
+                upFac.ExecuteNonQuery();
+            }
+            else
+            {
+                int proyId = proyectosIds.Contains(ocActual.ProyectoId) ? ocActual.ProyectoId : defaultProyectoId;
+                SincronizarOrdenCompraConSusFacturas(ocActual.Id, proyId);
+            }
+        }
+    }
+
+    public static void ActualizarConceptoFacturaRegistrada(int facturaId, int conceptoId, int nuevoProductoId)
+    {
+        using (var conn = new SqliteConnection(ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE FacturaConceptos SET ProductoIdVinculado = $pid WHERE Id = $cid AND FacturaXmlId = $fid";
+            cmd.Parameters.AddWithValue("$pid", nuevoProductoId);
+            cmd.Parameters.AddWithValue("$cid", conceptoId);
+            cmd.Parameters.AddWithValue("$fid", facturaId);
+            cmd.ExecuteNonQuery();
+        }
+
+        var fac = ObtenerFacturasXml().FirstOrDefault(f => f.Id == facturaId);
+        if (fac != null)
+        {
+            var concepto = fac.Conceptos.FirstOrDefault(c => c.Id == conceptoId);
+            if (concepto != null)
+            {
+                GuardarMapaProductoProveedor(fac.EmisorRfc, concepto.NoIdentificacion, concepto.Descripcion, nuevoProductoId, concepto.ValorUnitario);
+                decimal costoConIva = concepto.Cantidad > 0m && (concepto.Importe + concepto.IvaConcepto) > 0m
+                    ? Math.Round((concepto.Importe + concepto.IvaConcepto) / concepto.Cantidad, 2)
+                    : Math.Round(concepto.ValorUnitario * 1.16m, 2);
+
+                using var conn = new SqliteConnection(ConnectionString);
+                conn.Open();
+                using var upP = conn.CreateCommand();
+                upP.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid";
+                upP.Parameters.AddWithValue("$costo", (double)costoConIva);
+                upP.Parameters.AddWithValue("$pid", nuevoProductoId);
+                upP.ExecuteNonQuery();
+            }
+
+            if (fac.OrdenCompraId.HasValue && fac.OrdenCompraId.Value > 0)
+            {
+                SincronizarOrdenCompraConSusFacturas(fac.OrdenCompraId.Value);
+            }
+        }
+    }
+
+    public static void ActualizarProyectoYOrdenFacturaRegistrada(int facturaId, int proyectoId, int? ordenCompraId)
+    {
+        var fac = ObtenerFacturasXml().FirstOrDefault(f => f.Id == facturaId);
+        if (fac == null) return;
+
+        int provId = AsegurarProveedorPorRfc(fac.EmisorRfc, fac.EmisorNombre);
+        int? ocAnteriorId = fac.OrdenCompraId;
+
+        if (!ordenCompraId.HasValue || ordenCompraId.Value <= 0)
+        {
+            // Si ya tenía una OC propia para esta sola factura, solo actualizar su proyecto y partidas
+            var facturasMismaOc = ocAnteriorId.HasValue
+                ? ObtenerFacturasXml().Where(f => f.OrdenCompraId == ocAnteriorId.Value).ToList()
+                : new List<FacturaXml>();
+
+            if (ocAnteriorId.HasValue && facturasMismaOc.Count == 1)
+            {
+                SincronizarOrdenCompraConSusFacturas(ocAnteriorId.Value, proyectoId);
+                return;
+            }
+
+            var (nuevaOcId, nuevoFolio) = CrearOrdenCompraDesdeFactura(fac, provId, proyectoId);
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var up = conn.CreateCommand();
+            up.CommandText = "UPDATE FacturasXml SET OrdenCompraId = $ocid, OrdenCompraFolio = $fol WHERE Id = $fid";
+            up.Parameters.AddWithValue("$ocid", nuevaOcId);
+            up.Parameters.AddWithValue("$fol", nuevoFolio);
+            up.Parameters.AddWithValue("$fid", facturaId);
+            up.ExecuteNonQuery();
+
+            if (ocAnteriorId.HasValue && ocAnteriorId.Value > 0)
+                SincronizarOrdenCompraConSusFacturas(ocAnteriorId.Value);
+        }
+        else
+        {
+            var ocDestino = ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == ordenCompraId.Value);
+            if (ocDestino != null)
+            {
+                using var conn = new SqliteConnection(ConnectionString);
+                conn.Open();
+                using var up = conn.CreateCommand();
+                up.CommandText = "UPDATE FacturasXml SET OrdenCompraId = $ocid, OrdenCompraFolio = $fol WHERE Id = $fid";
+                up.Parameters.AddWithValue("$ocid", ocDestino.Id);
+                up.Parameters.AddWithValue("$fol", ocDestino.Folio);
+                up.Parameters.AddWithValue("$fid", facturaId);
+                up.ExecuteNonQuery();
+
+                SincronizarOrdenCompraConSusFacturas(ocDestino.Id, proyectoId);
+                if (ocAnteriorId.HasValue && ocAnteriorId.Value > 0 && ocAnteriorId.Value != ocDestino.Id)
+                    SincronizarOrdenCompraConSusFacturas(ocAnteriorId.Value);
+            }
+        }
     }
 
     public static List<FacturaXml> ObtenerFacturasXml()
@@ -1895,10 +2379,13 @@ VALUES ($fid, $cps, $nid, $desc, $uni, $cant, $vu, $imp, $iva, $pid)";
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-SELECT Id, Uuid, SerieFolio, FechaTimbrado, EmisorRfc, EmisorNombre, Moneda, TipoCambio,
-       Subtotal, Descuento, Iva, Total, OrdenCompraId, OrdenCompraFolio, RutaArchivoXml
-FROM FacturasXml
-ORDER BY Id DESC";
+SELECT f.Id, f.Uuid, f.SerieFolio, f.FechaTimbrado, f.EmisorRfc, f.EmisorNombre, f.Moneda, f.TipoCambio,
+       f.Subtotal, f.Descuento, f.Iva, f.Total, f.OrdenCompraId, f.OrdenCompraFolio, f.RutaArchivoXml,
+       oc.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Stock General')
+FROM FacturasXml f
+LEFT JOIN OrdenesCompra oc ON oc.Id = f.OrdenCompraId
+LEFT JOIN Proyectos pr ON pr.Id = oc.ProyectoId
+ORDER BY f.Id DESC";
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
@@ -1918,7 +2405,9 @@ ORDER BY Id DESC";
                 Total = Convert.ToDecimal(r.GetDouble(11)),
                 OrdenCompraId = r.IsDBNull(12) ? null : r.GetInt32(12),
                 OrdenCompraFolio = r.GetString(13),
-                RutaArchivoXml = r.GetString(14)
+                RutaArchivoXml = r.GetString(14),
+                ProyectoId = r.IsDBNull(15) ? null : r.GetInt32(15),
+                ProyectoNombre = r.GetString(16)
             });
         }
 
@@ -1957,27 +2446,71 @@ WHERE FacturaXmlId = $fid";
 
     public static void EliminarFacturaXml(int facturaId)
     {
-        using var conn = new SqliteConnection(ConnectionString);
-        conn.Open();
-        using var tx = conn.BeginTransaction();
+        var fac = ObtenerFacturasXml().FirstOrDefault(f => f.Id == facturaId);
+        int? ocId = fac?.OrdenCompraId;
 
-        using (var delConceptos = conn.CreateCommand())
+        using (var conn = new SqliteConnection(ConnectionString))
         {
-            delConceptos.Transaction = tx;
-            delConceptos.CommandText = "DELETE FROM FacturaConceptos WHERE FacturaXmlId = $id";
-            delConceptos.Parameters.AddWithValue("$id", facturaId);
-            delConceptos.ExecuteNonQuery();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            using (var delConceptos = conn.CreateCommand())
+            {
+                delConceptos.Transaction = tx;
+                delConceptos.CommandText = "DELETE FROM FacturaConceptos WHERE FacturaXmlId = $id";
+                delConceptos.Parameters.AddWithValue("$id", facturaId);
+                delConceptos.ExecuteNonQuery();
+            }
+
+            using (var delFac = conn.CreateCommand())
+            {
+                delFac.Transaction = tx;
+                delFac.CommandText = "DELETE FROM FacturasXml WHERE Id = $id";
+                delFac.Parameters.AddWithValue("$id", facturaId);
+                delFac.ExecuteNonQuery();
+            }
+
+            tx.Commit();
         }
 
-        using (var delFac = conn.CreateCommand())
+        // Si la factura tenía una Orden de Compra asociada, actualizarla o eliminarla si quedó sin facturas ni recepciones
+        if (ocId.HasValue && ocId.Value > 0)
         {
-            delFac.Transaction = tx;
-            delFac.CommandText = "DELETE FROM FacturasXml WHERE Id = $id";
-            delFac.Parameters.AddWithValue("$id", facturaId);
-            delFac.ExecuteNonQuery();
-        }
+            var restantes = ObtenerFacturasXml().Where(f => f.OrdenCompraId == ocId.Value).ToList();
+            if (restantes.Count > 0)
+            {
+                SincronizarOrdenCompraConSusFacturas(ocId.Value);
+            }
+            else
+            {
+                using var conn = new SqliteConnection(ConnectionString);
+                conn.Open();
+                using var chkEnt = conn.CreateCommand();
+                chkEnt.CommandText = "SELECT COUNT(*) FROM EntradasAlmacen WHERE OrdenCompraId = $ocid";
+                chkEnt.Parameters.AddWithValue("$ocid", ocId.Value);
+                int numEntradas = Convert.ToInt32(chkEnt.ExecuteScalar());
 
-        tx.Commit();
+                if (numEntradas == 0)
+                {
+                    using var tx = conn.BeginTransaction();
+                    using (var delPart = conn.CreateCommand())
+                    {
+                        delPart.Transaction = tx;
+                        delPart.CommandText = "DELETE FROM OrdenCompraPartidas WHERE OrdenCompraId = $ocid";
+                        delPart.Parameters.AddWithValue("$ocid", ocId.Value);
+                        delPart.ExecuteNonQuery();
+                    }
+                    using (var delOc = conn.CreateCommand())
+                    {
+                        delOc.Transaction = tx;
+                        delOc.CommandText = "DELETE FROM OrdenesCompra WHERE Id = $ocid";
+                        delOc.Parameters.AddWithValue("$ocid", ocId.Value);
+                        delOc.ExecuteNonQuery();
+                    }
+                    tx.Commit();
+                }
+            }
+        }
     }
 
     public static string CrearRespaldoBaseDatos()

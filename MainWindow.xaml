@@ -954,7 +954,8 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="260" />
+                                    <ColumnDefinition Width="210" />
+                                    <ColumnDefinition Width="250" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
@@ -965,14 +966,19 @@
                                     <TextBlock x:Name="TxtXmlResumenActual" Text="Seleccione un archivo XML para cargar sus conceptos." FontSize="12" Opacity="0.78" />
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" Margin="8,0,8,0">
-                                    <TextBlock Text="Orden de Compra" FontSize="11" />
-                                    <ComboBox x:Name="CboXmlOrdenCompra" />
+                                <StackPanel Grid.Column="1" Margin="8,0,4,0">
+                                    <TextBlock Text="Proyecto Destino" FontSize="11" FontWeight="SemiBold" />
+                                    <ComboBox x:Name="CboXmlProyecto" SelectionChanged="CboXmlProyecto_SelectionChanged" ToolTip="Proyecto al que se asigna la compra (por defecto Stock General)" />
                                 </StackPanel>
 
-                                <ui:Button Grid.Column="2" Margin="0,0,8,0" Content="Subir XML" Click="BtnSubirArchivoXml_Click" />
-                                <ui:Button Grid.Column="3" Margin="0,0,8,0" Content="XML Demo" Click="BtnCargarXmlDemo_Click" />
-                                <ui:Button Grid.Column="4" Appearance="Primary" Content="Guardar Factura" Click="BtnGuardarFacturaXml_Click" />
+                                <StackPanel Grid.Column="2" Margin="4,0,8,0">
+                                    <TextBlock Text="Orden de Compra" FontSize="11" FontWeight="SemiBold" />
+                                    <ComboBox x:Name="CboXmlOrdenCompra" SelectionChanged="CboXmlOrdenCompra_SelectionChanged" ToolTip="Asociar a una OC existente del proveedor o crear una nueva automáticamente" />
+                                </StackPanel>
+
+                                <ui:Button Grid.Column="3" Margin="0,0,8,0" Content="Subir XML" Click="BtnSubirArchivoXml_Click" />
+                                <ui:Button Grid.Column="4" Margin="0,0,8,0" Content="XML Demo" Click="BtnCargarXmlDemo_Click" />
+                                <ui:Button Grid.Column="5" Appearance="Primary" Content="Guardar Factura" Click="BtnGuardarFacturaXml_Click" />
                             </Grid>
                         </Border>
 
@@ -1017,12 +1023,13 @@
                                 </DockPanel>
                                 <DataGrid x:Name="DgFacturasRegistradas" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="DgFacturasRegistradas_SelectionChanged">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="240" />
+                                        <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="210" />
                                         <DataGridTextColumn Header="Folio" Binding="{Binding SerieFolio}" Width="95" />
-                                        <DataGridTextColumn Header="Fecha" Binding="{Binding FechaTimbrado}" Width="135" />
+                                        <DataGridTextColumn Header="Fecha" Binding="{Binding FechaTimbrado}" Width="130" />
                                         <DataGridTextColumn Header="RFC" Binding="{Binding EmisorRfc}" Width="115" />
                                         <DataGridTextColumn Header="Proveedor" Binding="{Binding EmisorNombre}" Width="*" />
-                                        <DataGridTextColumn Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="120" />
+                                        <DataGridTextColumn Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="115" />
+                                        <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="155" />
                                         <DataGridTextColumn Header="Subtotal" Binding="{Binding Subtotal, StringFormat={}{0:C2}}" Width="95" />
                                         <DataGridTextColumn Header="IVA" Binding="{Binding Iva, StringFormat={}{0:C2}}" Width="85" />
                                         <DataGridTextColumn Header="Total" Binding="{Binding Total, StringFormat={}{0:C2}}" Width="100" />

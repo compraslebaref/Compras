@@ -59,7 +59,9 @@ public static class XmlCfdiService
             RutaArchivoXml = rutaXml
         };
 
-        var conceptosNodos = root.Descendants().Where(e => e.Name.LocalName.Equals("Concepto", StringComparison.OrdinalIgnoreCase));
+        var conceptosNodos = root.Descendants()
+            .Where(e => e.Name.LocalName.Equals("Concepto", StringComparison.OrdinalIgnoreCase) &&
+                        e.Ancestors().All(a => !a.Name.LocalName.Equals("Addenda", StringComparison.OrdinalIgnoreCase)));
 
         foreach (var cNodo in conceptosNodos)
         {
@@ -70,6 +72,9 @@ public static class XmlCfdiService
             decimal cantidad = ObtenerDecimal(cNodo, "Cantidad", 1m);
             decimal valorUnitario = ObtenerDecimal(cNodo, "ValorUnitario", 0m);
             decimal importe = ObtenerDecimal(cNodo, "Importe", 0m);
+
+            if (string.IsNullOrWhiteSpace(desc) && string.IsNullOrWhiteSpace(claveSat) && importe <= 0m && valorUnitario <= 0m)
+                continue;
 
             decimal ivaConcepto = 0m;
             var traslados = cNodo.Descendants().Where(x => x.Name.LocalName.Equals("Traslado", StringComparison.OrdinalIgnoreCase));

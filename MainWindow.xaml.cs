@@ -34,6 +34,7 @@ public partial class MainWindow : FluentWindow
     private readonly ObservableCollection<CotizacionRenglonComparativo> _renglonesComparativa = new();
     private readonly ObservableCollection<SalidaPartida> _partidasSalidaPos = new();
     private FacturaXml? _facturaXmlEnPantalla;
+    private bool _actualizandoCombosXml = false;
 
     public class PrestamoVistaFila
     {
@@ -86,6 +87,7 @@ public partial class MainWindow : FluentWindow
 
     private void CargarTodoElSistema()
     {
+        DatabaseService.SincronizarFacturasYOrdenesExistentes();
         CargarCombosBase();
         RefrescarDashboard();
         RefrescarCatalogoVisual();
@@ -1131,12 +1133,43 @@ public partial class MainWindow : FluentWindow
 
     private void RefrescarFacturasXml()
     {
-        var ocs = DatabaseService.ObtenerOrdenesCompra();
-        CboXmlOrdenCompra.ItemsSource = ocs;
-        if (CboXmlOrdenCompra.SelectedIndex < 0 && ocs.Count > 0)
-            CboXmlOrdenCompra.SelectedIndex = 0;
+        _actualizandoCombosXml = true;
+        try
+        {
+            var proyectos = DatabaseService.ObtenerProyectos();
+            int? proyIdPrevio = (CboXmlProyecto.SelectedItem as Proyecto)?.Id;
+            CboXmlProyecto.ItemsSource = proyectos;
+            var proyDefault = proyectos.FirstOrDefault(p => proyIdPrevio.HasValue && p.Id == proyIdPrevio.Value)
+                ?? proyectos.FirstOrDefault(p => p.EsStockGeneral)
+                ?? proyectos.FirstOrDefault();
+            CboXmlProyecto.SelectedItem = proyDefault;
 
-        DgFacturasRegistradas.ItemsSource = DatabaseService.ObtenerFacturasXml();
+            var ocs = new List<OrdenCompra>
+            {
+                new() { Id = 0, Folio = "➕ Crear nueva OC automáticamente" }
+            };
+            ocs.AddRange(DatabaseService.ObtenerOrdenesCompra());
+            CboXmlOrdenCompra.ItemsSource = ocs;
+            if (CboXmlOrdenCompra.SelectedIndex < 0)
+                CboXmlOrdenCompra.SelectedIndex = 0;
+
+            int? facIdSeleccionada = (DgFacturasRegistradas.SelectedItem as FacturaXml)?.Id;
+            var facturas = DatabaseService.ObtenerFacturasXml();
+            DgFacturasRegistradas.ItemsSource = facturas;
+            if (facIdSeleccionada.HasValue && _facturaXmlEnPantalla == null)
+            {
+                var reSel = facturas.FirstOrDefault(f => f.Id == facIdSeleccionada.Value);
+                if (reSel != null)
+                {
+                    DgFacturasRegistradas.SelectedItem = reSel;
+                    DgXmlConceptosActual.ItemsSource = reSel.Conceptos;
+                }
+            }
+        }
+        finally
+        {
+            _actualizandoCombosXml = false;
+        }
     }
 
     private void BtnSubirArchivoXml_Click(object sender, RoutedEventArgs e)
@@ -1163,6 +1196,42 @@ public partial class MainWindow : FluentWindow
         try
         {
             _facturaXmlEnPantalla = XmlCfdiService.LeerArchivoCfdiXml(rutaXml);
+
+            _actualizandoCombosXml = true;
+            try
+            {
+                DgFacturasRegistradas.SelectedItem = null;
+
+                // Seleccionar proyecto Stock General por defecto al cargar nueva factura
+                if (CboXmlProyecto.ItemsSource is IEnumerable<Proyecto> proys)
+                {
+                    var stock = proys.FirstOrDefault(p => p.EsStockGeneral) ?? proys.FirstOrDefault();
+                    if (stock != null)
+                        CboXmlProyecto.SelectedItem = stock;
+                }
+
+                // Buscar si ya existe una OC emitida sin factura de ese mismo proveedor; si no, seleccionar "Crear nueva OC automáticamente"
+                if (CboXmlOrdenCompra.ItemsSource is IEnumerable<OrdenCompra> listaOcs)
+                {
+                    var idsConFactura = DatabaseService.ObtenerFacturasXml()
+                        .Where(f => f.OrdenCompraId.HasValue)
+                        .Select(f => f.OrdenCompraId!.Value)
+                        .ToHashSet();
+
+                    var ocMismoProv = listaOcs.FirstOrDefault(o =>
+                        o.Id > 0 &&
+                        o.ProveedorRfc.Equals(_facturaXmlEnPantalla.EmisorRfc, StringComparison.OrdinalIgnoreCase) &&
+                        o.Estatus == "Emitida" &&
+                        !idsConFactura.Contains(o.Id));
+
+                    CboXmlOrdenCompra.SelectedItem = ocMismoProv ?? listaOcs.FirstOrDefault(o => o.Id == 0);
+                }
+            }
+            finally
+            {
+                _actualizandoCombosXml = false;
+            }
+
             ActualizarResumenFacturaXml();
             DgXmlConceptosActual.ItemsSource = _facturaXmlEnPantalla.Conceptos;
         }
@@ -1180,42 +1249,93 @@ public partial class MainWindow : FluentWindow
         TxtXmlResumenActual.Text = $"UUID: {_facturaXmlEnPantalla.Uuid} | Emisor: {_facturaXmlEnPantalla.EmisorNombre} | Total: ${_facturaXmlEnPantalla.Total:N2} ({registrados} registrados, {nuevos} por crear)";
     }
 
+    private void CboXmlProyecto_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_actualizandoCombosXml) return;
+        if (_facturaXmlEnPantalla == null && DgFacturasRegistradas.SelectedItem is FacturaXml facReg && CboXmlProyecto.SelectedItem is Proyecto proy)
+        {
+            DatabaseService.ActualizarProyectoYOrdenFacturaRegistrada(facReg.Id, proy.Id, facReg.OrdenCompraId);
+            CargarTodoElSistema();
+        }
+    }
+
+    private void CboXmlOrdenCompra_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_actualizandoCombosXml) return;
+        if (_facturaXmlEnPantalla == null && DgFacturasRegistradas.SelectedItem is FacturaXml facReg && CboXmlOrdenCompra.SelectedItem is OrdenCompra ocSel)
+        {
+            int proyId = (CboXmlProyecto.SelectedItem as Proyecto)?.Id ?? facReg.ProyectoId ?? DatabaseService.ObtenerProyectoStockGeneralId();
+            int? nuevaOcId = ocSel.Id > 0 ? ocSel.Id : null;
+            if (nuevaOcId != facReg.OrdenCompraId)
+            {
+                DatabaseService.ActualizarProyectoYOrdenFacturaRegistrada(facReg.Id, proyId, nuevaOcId);
+                CargarTodoElSistema();
+            }
+        }
+    }
+
     private void BtnVincularConceptoXmlConProducto_Click(object sender, RoutedEventArgs e)
     {
-        if (_facturaXmlEnPantalla == null ||
-            DgXmlConceptosActual.SelectedItem is not FacturaConcepto concepto ||
+        if (DgXmlConceptosActual.SelectedItem is not FacturaConcepto concepto ||
             CboXmlVincularProducto.SelectedItem is not Producto prod)
         {
             System.Windows.MessageBox.Show(this, "Seleccione un concepto en la tabla y el producto de su catálogo con el que desea relacionarlo.", "Vincular concepto", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        concepto.ProductoIdVinculado = prod.Id;
-        concepto.ProductoVinculadoNombre = $"✔ Registrado: [{prod.CodigoInterno}] {prod.Nombre}";
-        DatabaseService.GuardarMapaProductoProveedor(_facturaXmlEnPantalla.EmisorRfc, concepto.NoIdentificacion, concepto.Descripcion, prod.Id, concepto.ValorUnitario);
-        DgXmlConceptosActual.Items.Refresh();
-        ActualizarResumenFacturaXml();
+        if (_facturaXmlEnPantalla != null)
+        {
+            concepto.ProductoIdVinculado = prod.Id;
+            concepto.ProductoVinculadoNombre = $"✔ Registrado: [{prod.CodigoInterno}] {prod.Nombre}";
+            DatabaseService.GuardarMapaProductoProveedor(_facturaXmlEnPantalla.EmisorRfc, concepto.NoIdentificacion, concepto.Descripcion, prod.Id, concepto.ValorUnitario);
+            DgXmlConceptosActual.Items.Refresh();
+            ActualizarResumenFacturaXml();
+            return;
+        }
+
+        if (DgFacturasRegistradas.SelectedItem is FacturaXml facRegistrada)
+        {
+            DatabaseService.ActualizarConceptoFacturaRegistrada(facRegistrada.Id, concepto.Id, prod.Id);
+            CargarTodoElSistema();
+            TxtXmlResumenActual.Text = $"Concepto '{concepto.Descripcion}' vinculado a [{prod.CodigoInterno}] {prod.Nombre} y actualizado en Análisis.";
+            return;
+        }
+
+        System.Windows.MessageBox.Show(this, "Cargue un archivo XML o seleccione una factura registrada en la tabla inferior.", "Vincular concepto", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void BtnMarcarConceptoComoNuevo_Click(object sender, RoutedEventArgs e)
     {
-        if (_facturaXmlEnPantalla == null || DgXmlConceptosActual.SelectedItem is not FacturaConcepto concepto)
+        if (DgXmlConceptosActual.SelectedItem is not FacturaConcepto concepto)
         {
             System.Windows.MessageBox.Show(this, "Seleccione un concepto en la tabla para marcarlo como producto nuevo.", "Seleccione concepto", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        concepto.ProductoIdVinculado = null;
-        concepto.ProductoVinculadoNombre = "➕ No registrado (se creará al guardar)";
-        DgXmlConceptosActual.Items.Refresh();
-        ActualizarResumenFacturaXml();
+        if (_facturaXmlEnPantalla != null)
+        {
+            concepto.ProductoIdVinculado = null;
+            concepto.ProductoVinculadoNombre = "➕ No registrado (se creará al guardar)";
+            DgXmlConceptosActual.Items.Refresh();
+            ActualizarResumenFacturaXml();
+            return;
+        }
+
+        if (DgFacturasRegistradas.SelectedItem is FacturaXml)
+        {
+            concepto.ProductoIdVinculado = null;
+            concepto.ProductoVinculadoNombre = "➕ Listo para crear como nuevo (haga clic en 'Crear Nuevos en Catálogo')";
+            DgXmlConceptosActual.Items.Refresh();
+            return;
+        }
     }
 
     private void BtnCrearProductoDesdeConceptoXml_Click(object sender, RoutedEventArgs e)
     {
-        if (_facturaXmlEnPantalla == null)
+        var facturaActiva = _facturaXmlEnPantalla ?? (DgFacturasRegistradas.SelectedItem as FacturaXml);
+        if (facturaActiva == null)
         {
-            System.Windows.MessageBox.Show(this, "Primero cargue una factura XML.", "Sin factura", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(this, "Primero cargue una factura XML o seleccione una factura registrada.", "Sin factura", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -1226,7 +1346,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            conceptosACrear.AddRange(_facturaXmlEnPantalla.Conceptos.Where(c => !c.ProductoIdVinculado.HasValue));
+            conceptosACrear.AddRange(facturaActiva.Conceptos.Where(c => !c.ProductoIdVinculado.HasValue));
         }
 
         if (conceptosACrear.Count == 0)
@@ -1238,14 +1358,25 @@ public partial class MainWindow : FluentWindow
         var creados = new List<Producto>();
         foreach (var c in conceptosACrear)
         {
-            var prod = DatabaseService.CrearProductoDesdeConceptoXml(_facturaXmlEnPantalla.EmisorRfc, _facturaXmlEnPantalla.SerieFolio, c);
+            var prod = DatabaseService.CrearProductoDesdeConceptoXml(facturaActiva.EmisorRfc, facturaActiva.SerieFolio, c);
             creados.Add(prod);
+            if (_facturaXmlEnPantalla == null && facturaActiva.Id > 0 && c.Id > 0)
+            {
+                DatabaseService.ActualizarConceptoFacturaRegistrada(facturaActiva.Id, c.Id, prod.Id);
+            }
         }
 
-        CargarCombosBase();
-        RefrescarCatalogoVisual();
-        DgXmlConceptosActual.Items.Refresh();
-        ActualizarResumenFacturaXml();
+        if (_facturaXmlEnPantalla == null)
+        {
+            CargarTodoElSistema();
+        }
+        else
+        {
+            CargarCombosBase();
+            RefrescarCatalogoVisual();
+            DgXmlConceptosActual.Items.Refresh();
+            ActualizarResumenFacturaXml();
+        }
 
         string listaNombres = string.Join("\n", creados.Select(p => $"• [{p.CodigoInterno}] {p.Nombre} ({p.UltimoCostoCompra:C2})"));
         System.Windows.MessageBox.Show(this,
@@ -1257,8 +1388,32 @@ public partial class MainWindow : FluentWindow
     {
         if (DgFacturasRegistradas.SelectedItem is FacturaXml fac && _facturaXmlEnPantalla == null)
         {
+            _actualizandoCombosXml = true;
+            try
+            {
+                if (CboXmlProyecto.ItemsSource is IEnumerable<Proyecto> proys && fac.ProyectoId.HasValue)
+                {
+                    var matchProy = proys.FirstOrDefault(p => p.Id == fac.ProyectoId.Value);
+                    if (matchProy != null)
+                        CboXmlProyecto.SelectedItem = matchProy;
+                }
+
+                if (CboXmlOrdenCompra.ItemsSource is IEnumerable<OrdenCompra> ocs)
+                {
+                    var matchOc = fac.OrdenCompraId.HasValue
+                        ? ocs.FirstOrDefault(o => o.Id == fac.OrdenCompraId.Value)
+                        : ocs.FirstOrDefault(o => o.Id == 0);
+                    if (matchOc != null)
+                        CboXmlOrdenCompra.SelectedItem = matchOc;
+                }
+            }
+            finally
+            {
+                _actualizandoCombosXml = false;
+            }
+
             DgXmlConceptosActual.ItemsSource = fac.Conceptos;
-            TxtXmlResumenActual.Text = $"Factura Registrada — Folio: {fac.SerieFolio} | UUID: {fac.Uuid} | Emisor: {fac.EmisorNombre} | Total: ${fac.Total:N2}";
+            TxtXmlResumenActual.Text = $"Factura Registrada — Folio: {fac.SerieFolio} | OC: {fac.OrdenCompraFolio} | Emisor: {fac.EmisorNombre} | Total: ${fac.Total:N2}";
         }
     }
 
@@ -1323,10 +1478,20 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (CboXmlOrdenCompra.SelectedItem is OrdenCompra oc)
+        if (CboXmlProyecto.SelectedItem is Proyecto proySel)
+        {
+            _facturaXmlEnPantalla.ProyectoId = proySel.Id;
+        }
+
+        if (CboXmlOrdenCompra.SelectedItem is OrdenCompra oc && oc.Id > 0)
         {
             _facturaXmlEnPantalla.OrdenCompraId = oc.Id;
             _facturaXmlEnPantalla.OrdenCompraFolio = oc.Folio;
+        }
+        else
+        {
+            _facturaXmlEnPantalla.OrdenCompraId = null;
+            _facturaXmlEnPantalla.OrdenCompraFolio = string.Empty;
         }
 
         int productosAntes = DatabaseService.ObtenerProductos().Count;
@@ -1337,15 +1502,15 @@ public partial class MainWindow : FluentWindow
         _facturaXmlEnPantalla = null;
         DgXmlConceptosActual.ItemsSource = facturaGuardada.Conceptos;
         TxtXmlResumenActual.Text = nuevosCreados > 0
-            ? $"Factura registrada exitosamente. Se crearon {nuevosCreados} producto(s) nuevos en el catálogo automáticamente."
-            : "Factura registrada exitosamente. Todos los productos ya estaban en el catálogo y actualizaron su costo.";
+            ? $"Factura registrada exitosamente (OC: {facturaGuardada.OrdenCompraFolio}). Se crearon {nuevosCreados} producto(s) nuevos en el catálogo."
+            : $"Factura registrada exitosamente (OC: {facturaGuardada.OrdenCompraFolio}). Costos y análisis actualizados.";
         CargarTodoElSistema();
 
         if (nuevosCreados > 0)
         {
             System.Windows.MessageBox.Show(this,
-                $"Factura {facturaGuardada.SerieFolio} registrada.\n\nSe detectaron {nuevosCreados} concepto(s) que no correspondían a ningún producto existente y se crearon automáticamente en el Catálogo.",
-                "Factura y Nuevos Productos Registrados", MessageBoxButton.OK, MessageBoxImage.Information);
+                $"Factura {facturaGuardada.SerieFolio} registrada y asociada a la Orden de Compra {facturaGuardada.OrdenCompraFolio}.\n\nSe detectaron {nuevosCreados} concepto(s) nuevos y se crearon automáticamente en el Catálogo.",
+                "Factura, OC y Nuevos Productos Registrados", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -1376,14 +1541,19 @@ public partial class MainWindow : FluentWindow
         // 2. Frecuencia de Compra por Producto
         var todasPartidasOc = ocs.SelectMany(o => o.Partidas).ToList();
         var prodStats = todasPartidasOc
-            .GroupBy(p => new { p.ProductoId, p.ProductoCodigo, p.ProductoNombre, p.UnidadCompra })
-            .Select(g => new
+            .GroupBy(p => p.ProductoId)
+            .Select(g =>
             {
-                Codigo = g.Key.ProductoCodigo,
-                Producto = g.Key.ProductoNombre,
-                Frecuencia = $"{g.Count()} OCs",
-                CantidadTotal = $"{g.Sum(x => x.CantidadPedida):0.##} {g.Key.UnidadCompra}",
-                ImporteTotal = g.Sum(x => x.ImporteConIva)
+                var primero = g.First();
+                int numOcs = g.Select(x => x.OrdenCompraId).Distinct().Count();
+                return new
+                {
+                    Codigo = primero.ProductoCodigo,
+                    Producto = primero.ProductoNombre,
+                    Frecuencia = $"{numOcs} OC{(numOcs == 1 ? "" : "s")}",
+                    CantidadTotal = $"{g.Sum(x => x.CantidadPedida):0.##} {primero.UnidadCompra}",
+                    ImporteTotal = g.Sum(x => x.ImporteConIva)
+                };
             })
             .OrderByDescending(x => x.ImporteTotal)
             .ToList();
@@ -1404,7 +1574,7 @@ public partial class MainWindow : FluentWindow
                 TotalCompras = ocsProy.Sum(o => o.TotalConIva),
                 TotalSalidas = salProy.Sum(s => s.CostoTotalEstimado)
             };
-        }).ToList();
+        }).OrderByDescending(x => x.TotalCompras).ToList();
         DgAnalisisProyectos.ItemsSource = proyStats;
     }
 
