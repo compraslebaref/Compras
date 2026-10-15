@@ -110,16 +110,16 @@ public static class BarcodePrintService
 
         var hoja = ConstruirHojaCartaDocumento(
             tituloDocumento: "ORDEN DE COMPRA",
-            subtitulo: "Departamento de Compras e Ingeniería — Documento Oficial",
+            subtitulo: "Lebaref | Departamento de Compras",
             folioCodigoBarras: oc.Folio,
             fecha: oc.Fecha,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Descripción del Producto", "Cantidad (Mayoreo)", "P.U. s/IVA", "P.U. c/IVA", "Total c/IVA" },
+            encabezadosTabla: new[] { "#", "Código", "Descripción", "Cantidad", "P.U. s/IVA", "P.U. c/IVA", "Total" },
             filasTabla: filas,
             totales: totales,
             notas: oc.Notas,
             firmaIzquierda: "Autorizó Compras",
-            firmaDerecha: "Confirmación Proveedor / Recepción Almacén");
+            firmaDerecha: "Recepción Almacén / Proveedor");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Orden de Compra {oc.Folio}", hoja);
     }
@@ -138,26 +138,26 @@ public static class BarcodePrintService
 
         var metadatos = new List<(string etiq, string val)>
         {
-            ("Orden de Compra Origen:", string.IsNullOrWhiteSpace(ent.OrdenCompraFolio) ? "Entrada Directa" : ent.OrdenCompraFolio),
+            ("Orden de Compra:", string.IsNullOrWhiteSpace(ent.OrdenCompraFolio) ? "Entrada Directa" : ent.OrdenCompraFolio),
             ("Proveedor:", ent.ProveedorNombre),
             ("Proyecto:", ent.ProyectoNombre),
-            ("Tipo de Recepción:", ent.TipoEntrada)
+            ("Tipo:", ent.TipoEntrada)
         };
 
         var hoja = ConstruirHojaCartaDocumento(
-            tituloDocumento: "VALE DE ENTRADA A ALMACÉN",
-            subtitulo: "Control de Recepción de Materiales y Conversión a Inventario",
+            tituloDocumento: "VALE DE ENTRADA",
+            subtitulo: "Lebaref | Departamento de Compras",
             folioCodigoBarras: ent.Folio,
             fecha: ent.Fecha,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Producto", "Recibido (Compra)", "Conversión", "Sumado a Stock (Menudeo)" },
+            encabezadosTabla: new[] { "#", "Código", "Producto", "Recibido", "Conversión", "Ingreso a Almacén" },
             filasTabla: filas,
-            totales: new List<(string, string)> { ("Total Partidas Recibidas:", ent.Partidas.Count.ToString()) },
+            totales: new List<(string, string)> { ("Total Partidas:", ent.Partidas.Count.ToString()) },
             notas: ent.Notas,
-            firmaIzquierda: "Recibió en Almacén",
-            firmaDerecha: "Entregó Proveedor / Transportista");
+            firmaIzquierda: "Recibió Almacén",
+            firmaDerecha: "Entregó");
 
-        AbrirVentanaVistaPreviaCarta(owner, $"Entrada de Almacén {ent.Folio}", hoja);
+        AbrirVentanaVistaPreviaCarta(owner, $"Vale de Entrada {ent.Folio}", hoja);
     }
 
     public static void MostrarVistaPreviaEImprimirSalida(Window owner, SalidaAlmacen sal)
@@ -174,24 +174,23 @@ public static class BarcodePrintService
 
         var metadatos = new List<(string etiq, string val)>
         {
-            ("Departamento Solicitante:", sal.DepartamentoNombre),
-            ("Encargado que Recibe:", sal.EncargadoNombre),
-            ("Proyecto Asignado:", sal.ProyectoNombre),
-            ("Modalidad:", "Entrega de Material / Insumos (Consumo)")
+            ("Departamento:", sal.DepartamentoNombre),
+            ("Recibe:", sal.EncargadoNombre),
+            ("Proyecto:", sal.ProyectoNombre)
         };
 
         var hoja = ConstruirHojaCartaDocumento(
-            tituloDocumento: "VALE DE ENTREGA DE MATERIALES E INSUMOS",
-            subtitulo: "Salida de Almacén con Cargo a Proyecto / Ingeniería",
+            tituloDocumento: "VALE DE ENTREGA DE MATERIAL",
+            subtitulo: "Lebaref | Departamento de Compras",
             folioCodigoBarras: sal.Folio,
             fecha: sal.Fecha,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Descripción del Material / Insumo", "Cantidad Entregada", "Costo Unit.", "Importe" },
+            encabezadosTabla: new[] { "#", "Código", "Descripción", "Cantidad", "Costo Unit.", "Importe" },
             filasTabla: filas,
-            totales: new List<(string, string)> { ("Costo Total Cargado a Proyecto:", $"${sal.CostoTotalEstimado:N2}") },
+            totales: new List<(string, string)> { ("Total:", $"${sal.CostoTotalEstimado:N2}") },
             notas: sal.Notas,
             firmaIzquierda: "Entregó Almacén",
-            firmaDerecha: $"Recibió de Conformidad: {sal.EncargadoNombre}");
+            firmaDerecha: $"Recibió: {sal.EncargadoNombre}");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Salida {sal.Folio}", hoja);
     }
@@ -212,24 +211,23 @@ public static class BarcodePrintService
         var metadatos = new List<(string etiq, string val)>
         {
             ("Departamento:", pre.DepartamentoNombre),
-            ("Responsable del Resguardo:", pre.EncargadoNombre),
+            ("Responsable:", pre.EncargadoNombre),
             ("Proyecto:", pre.ProyectoNombre),
-            ("Estatus del Préstamo:", pre.Estatus),
-            ("Instrucción Escáner:", $"Escanee el código {pre.Folio} al devolver la herramienta para registrar su estado.")
+            ("Estatus:", pre.Estatus)
         };
 
         var hoja = ConstruirHojaCartaDocumento(
-            tituloDocumento: "VALE DE PRÉSTAMO / RESGUARDO DE HERRAMIENTA",
-            subtitulo: "Control Individual de Herramientas y Estado Físico",
+            tituloDocumento: "VALE DE PRÉSTAMO DE HERRAMIENTA",
+            subtitulo: "Lebaref | Departamento de Compras",
             folioCodigoBarras: pre.Folio,
             fecha: pre.FechaSalida,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Cód. Herramienta", "Herramienta", "Marca / Modelo", "Núm. Serie", "Estado Salida", "Estado Retorno" },
+            encabezadosTabla: new[] { "#", "Código", "Herramienta", "Marca / Modelo", "Núm. Serie", "Estado Salida", "Estado Retorno" },
             filasTabla: filas,
-            totales: new List<(string, string)> { ("Total Herramientas en Resguardo:", pre.Partidas.Count.ToString()) },
+            totales: new List<(string, string)> { ("Total Herramientas:", pre.Partidas.Count.ToString()) },
             notas: pre.Notas,
-            firmaIzquierda: $"Recibí Herramienta en Buen Estado: {pre.EncargadoNombre}",
-            firmaDerecha: "Firma de Devolución en Almacén (Fecha y Estado)");
+            firmaIzquierda: $"Recibió: {pre.EncargadoNombre}",
+            firmaDerecha: "Devolución en Almacén");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Préstamo {pre.Folio}", hoja);
     }
@@ -254,15 +252,15 @@ public static class BarcodePrintService
         var hStack = new StackPanel();
         hStack.Children.Add(new TextBlock
         {
-            Text = "CATÁLOGO ESCANEABLE EN HOJA CARTA (PRODUCTOS Y HERRAMIENTAS)",
+            Text = "CATÁLOGO DE CÓDIGOS DE BARRAS",
             FontSize = 18,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
         });
         hStack.Children.Add(new TextBlock
         {
-            Text = "Imprima esta hoja en tamaño Carta normal para escanear códigos rápidamente con la pistola Datamax S30W en escritorio o anaquel.",
-            FontSize = 11,
+            Text = "Lebaref | Departamento de Compras",
+            FontSize = 11.5,
             Foreground = Brushes.DimGray,
             Margin = new Thickness(0, 3, 0, 0)
         });
@@ -592,7 +590,7 @@ public static class BarcodePrintService
 
         page.Children.Add(new TextBlock
         {
-            Text = $"Documento generado localmente por Sistema de Compras y Almacén — Folio escaneable: {folioCodigoBarras}",
+            Text = $"Lebaref | Departamento de Compras — Folio: {folioCodigoBarras}",
             FontSize = 9.5,
             Foreground = Brushes.Gray,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -606,7 +604,7 @@ public static class BarcodePrintService
     {
         var win = new Window
         {
-            Title = $"Vista Previa de Impresión (Hoja Carta) — {tituloVentana}",
+            Title = $"Lebaref | {tituloVentana}",
             Width = 880,
             Height = 760,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -624,7 +622,7 @@ public static class BarcodePrintService
         var topStack = new DockPanel();
         var lblInfo = new TextBlock
         {
-            Text = $"📄 {tituloVentana} — Formato Tamaño Carta con Código de Barras Code 128",
+            Text = tituloVentana,
             Foreground = Brushes.White,
             FontWeight = FontWeights.SemiBold,
             FontSize = 14,
@@ -635,8 +633,8 @@ public static class BarcodePrintService
 
         var btnPrint = new Button
         {
-            Content = "🖨️ Mandar a Impresora (Hoja Carta)",
-            Padding = new Thickness(16, 7, 16, 7),
+            Content = "Imprimir",
+            Padding = new Thickness(18, 7, 18, 7),
             FontWeight = FontWeights.Bold,
             Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
             Foreground = Brushes.White,

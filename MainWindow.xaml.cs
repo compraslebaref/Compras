@@ -349,7 +349,7 @@ public partial class MainWindow : FluentWindow
             _carritoTienda.Add((p, cantidad));
 
         decimal totalItems = _carritoTienda.Sum(x => x.cantidad);
-        TxtStatusCarrito.Text = $"🛒 Carrito actual: {totalItems:0.##} art. ({_carritoTienda.Count} SKUs)";
+        TxtStatusCarrito.Text = $"Carrito: {totalItems:0.##} art. ({_carritoTienda.Count} SKUs)";
     }
 
     private void BtnAgregarProductoCarrito_Click(object sender, RoutedEventArgs e)
@@ -477,7 +477,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_carritoTienda.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Primero agregue productos al carrito haciendo clic en '🛒 Agregar' en las tarjetas del catálogo.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(this, "Primero agregue productos al carrito haciendo clic en 'Agregar' en las tarjetas del catálogo.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -498,7 +498,7 @@ public partial class MainWindow : FluentWindow
                 });
         }
         _carritoTienda.Clear();
-        TxtStatusCarrito.Text = "🛒 Carrito actual: 0 artículos";
+        TxtStatusCarrito.Text = "Carrito: 0 artículos";
         DgPartidasNuevaSolicitud.Items.Refresh();
         CambiarSeccion(2);
     }
@@ -507,7 +507,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_carritoTienda.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Primero agregue productos al carrito haciendo clic en '🛒 Agregar'.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(this, "Primero agregue productos al carrito haciendo clic en 'Agregar'.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -516,7 +516,7 @@ public partial class MainWindow : FluentWindow
             AgregarProductoAValeSalidaPos(prod, cant);
         }
         _carritoTienda.Clear();
-        TxtStatusCarrito.Text = "🛒 Carrito actual: 0 artículos";
+        TxtStatusCarrito.Text = "Carrito: 0 artículos";
         CambiarSeccion(5);
     }
 
@@ -808,9 +808,9 @@ public partial class MainWindow : FluentWindow
         decimal tot2 = Math.Round(sub2 * 1.16m + flete2, 2);
         decimal tot3 = Math.Round(sub3 * 1.16m + flete3, 2);
 
-        TxtResumenProv1.Text = $"Subtotal: ${sub1:N2} | Total c/IVA+Flete: ${tot1:N2}";
-        TxtResumenProv2.Text = $"Subtotal: ${sub2:N2} | Total c/IVA+Flete: ${tot2:N2}";
-        TxtResumenProv3.Text = $"Subtotal: ${sub3:N2} | Total c/IVA+Flete: ${tot3:N2}";
+        TxtResumenProv1.Text = $"Subtotal: ${sub1:N2} | Total: ${tot1:N2}";
+        TxtResumenProv2.Text = $"Subtotal: ${sub2:N2} | Total: ${tot2:N2}";
+        TxtResumenProv3.Text = $"Subtotal: ${sub3:N2} | Total: ${tot3:N2}";
     }
 
     private void BtnSeleccionarMejorPrecioPorPartida_Click(object sender, RoutedEventArgs e)
@@ -868,7 +868,7 @@ public partial class MainWindow : FluentWindow
     {
         if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
         {
-            TxtTituloRecepcionOc.Text = $"Recepción de {oc.Folio} — {oc.ProveedorNombre} ({oc.Estatus})";
+            TxtTituloRecepcionOc.Text = $"Recepción — {oc.Folio}";
             DgPartidasRecepcionOc.ItemsSource = oc.Partidas;
         }
     }
