@@ -1955,6 +1955,31 @@ WHERE FacturaXmlId = $fid";
         return list;
     }
 
+    public static void EliminarFacturaXml(int facturaId)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using (var delConceptos = conn.CreateCommand())
+        {
+            delConceptos.Transaction = tx;
+            delConceptos.CommandText = "DELETE FROM FacturaConceptos WHERE FacturaXmlId = $id";
+            delConceptos.Parameters.AddWithValue("$id", facturaId);
+            delConceptos.ExecuteNonQuery();
+        }
+
+        using (var delFac = conn.CreateCommand())
+        {
+            delFac.Transaction = tx;
+            delFac.CommandText = "DELETE FROM FacturasXml WHERE Id = $id";
+            delFac.Parameters.AddWithValue("$id", facturaId);
+            delFac.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
     public static string CrearRespaldoBaseDatos()
     {
         string dest = Path.Combine(BackupsFolder, $"respaldo_compras_{DateTime.Now:yyyyMMdd_HHmmss}.db");

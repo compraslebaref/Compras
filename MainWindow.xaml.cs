@@ -1258,8 +1258,55 @@ public partial class MainWindow : FluentWindow
         if (DgFacturasRegistradas.SelectedItem is FacturaXml fac && _facturaXmlEnPantalla == null)
         {
             DgXmlConceptosActual.ItemsSource = fac.Conceptos;
-            TxtXmlResumenActual.Text = $"Factura Registrada — UUID: {fac.Uuid} | Emisor: {fac.EmisorNombre} | Total: ${fac.Total:N2}";
+            TxtXmlResumenActual.Text = $"Factura Registrada — Folio: {fac.SerieFolio} | UUID: {fac.Uuid} | Emisor: {fac.EmisorNombre} | Total: ${fac.Total:N2}";
         }
+    }
+
+    private void BtnEliminarFacturaXml_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgFacturasRegistradas.SelectedItem is FacturaXml fac)
+        {
+            var resp = System.Windows.MessageBox.Show(this,
+                $"¿Desea eliminar la factura {fac.SerieFolio} (UUID: {fac.Uuid}) del proveedor '{fac.EmisorNombre}' por {fac.Total:C2}?",
+                "Confirmar eliminación de factura",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (resp != System.Windows.MessageBoxResult.Yes)
+                return;
+
+            DatabaseService.EliminarFacturaXml(fac.Id);
+            if (_facturaXmlEnPantalla == null)
+            {
+                DgXmlConceptosActual.ItemsSource = null;
+                TxtXmlResumenActual.Text = "Factura eliminada correctamente.";
+            }
+            CargarTodoElSistema();
+            return;
+        }
+
+        if (_facturaXmlEnPantalla != null)
+        {
+            var resp = System.Windows.MessageBox.Show(this,
+                "¿Desea descartar y limpiar la factura XML que está cargada actualmente en pantalla?",
+                "Limpiar factura en pantalla",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (resp == System.Windows.MessageBoxResult.Yes)
+            {
+                _facturaXmlEnPantalla = null;
+                DgXmlConceptosActual.ItemsSource = null;
+                TxtXmlResumenActual.Text = "Seleccione un archivo XML para cargar sus conceptos.";
+            }
+            return;
+        }
+
+        System.Windows.MessageBox.Show(this,
+            "Seleccione una factura en la tabla 'Facturas Registradas' para eliminarla.",
+            "Factura no seleccionada",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     private void BtnGuardarFacturaXml_Click(object sender, RoutedEventArgs e)
