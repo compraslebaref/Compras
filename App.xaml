@@ -19,6 +19,7 @@
             <!-- Estilo global para filas de tablas (DataGridRow) -->
             <Style TargetType="DataGridRow">
                 <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="1.5" />
                 <Setter Property="Margin" Value="0,1" />
@@ -31,6 +32,7 @@
                         </MultiTrigger.Conditions>
                         <Setter Property="Background" Value="#EDF5FF" />
                         <Setter Property="BorderBrush" Value="#90C8F6" />
+                        <Setter Property="Foreground" Value="#002B5C" />
                     </MultiTrigger>
                     <Trigger Property="IsSelected" Value="True">
                         <Setter Property="Background" Value="#CBE4FF" />
@@ -44,6 +46,7 @@
             <!-- Estilo global para celdas de tablas (DataGridCell) -->
             <Style TargetType="DataGridCell">
                 <Setter Property="Padding" Value="8,6" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Setter Property="Template">
@@ -52,6 +55,7 @@
                             <Border x:Name="CellBorder"
                                     Padding="{TemplateBinding Padding}"
                                     Background="{TemplateBinding Background}"
+                                    TextElement.Foreground="{TemplateBinding Foreground}"
                                     BorderThickness="0"
                                     SnapsToDevicePixels="True">
                                 <ContentPresenter VerticalAlignment="Center" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
@@ -70,9 +74,14 @@
             <!-- Estilo para elementos de listas desplegables (ComboBoxItem) -->
             <Style TargetType="ComboBoxItem">
                 <Setter Property="Padding" Value="8,6" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Style.Triggers>
                     <Trigger Property="IsHighlighted" Value="True">
+                        <Setter Property="Background" Value="#EDF5FF" />
+                        <Setter Property="Foreground" Value="#002B5C" />
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
                         <Setter Property="Background" Value="#EDF5FF" />
                         <Setter Property="Foreground" Value="#002B5C" />
                     </Trigger>
@@ -84,12 +93,13 @@
                 </Style.Triggers>
             </Style>
 
-            <!-- Estilo global para sub-pestañas (TabItem en Almacén y Directorios) -->
+            <!-- Estilo global para sub-pestañas (TabItem en Directorios) -->
             <Style TargetType="TabItem">
                 <Setter Property="Padding" Value="14,8" />
                 <Setter Property="Margin" Value="0,0,6,6" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TabItem">
@@ -99,7 +109,8 @@
                                     CornerRadius="6"
                                     Background="{DynamicResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                    BorderThickness="1">
+                                    BorderThickness="1"
+                                    TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                                 <ContentPresenter x:Name="ContentSite"
                                                   ContentSource="Header"
                                                   HorizontalAlignment="Center"
@@ -113,11 +124,12 @@
                                     </MultiTrigger.Conditions>
                                     <Setter TargetName="TabBorder" Property="Background" Value="#EDF5FF" />
                                     <Setter TargetName="TabBorder" Property="BorderBrush" Value="#90C8F6" />
+                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="#002B5C" />
                                 </MultiTrigger>
                                 <Trigger Property="IsSelected" Value="True">
                                     <Setter TargetName="TabBorder" Property="Background" Value="#0078D4" />
                                     <Setter TargetName="TabBorder" Property="BorderBrush" Value="#005A9E" />
-                                    <Setter Property="Foreground" Value="White" />
+                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="White" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

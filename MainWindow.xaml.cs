@@ -170,7 +170,7 @@ public partial class MainWindow : FluentWindow
     private void BtnCambiarTema_Click(object sender, RoutedEventArgs e)
     {
         _temaOscuro = !_temaOscuro;
-        ApplicationThemeManager.Apply(_temaOscuro ? ApplicationTheme.Dark : ApplicationTheme.Light);
+        ApplicationThemeManager.Apply(_temaOscuro ? ApplicationTheme.Dark : ApplicationTheme.Light, WindowBackdropType.Mica, false);
     }
 
     private void BtnIrRecepciones_Click(object sender, RoutedEventArgs e) => CambiarSeccion(4);

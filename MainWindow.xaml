@@ -8,6 +8,8 @@
                  MinWidth="1180"
                  MinHeight="740"
                  WindowStartupLocation="CenterScreen"
+                 Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                 Background="{DynamicResource ApplicationBackgroundBrush}"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round">
@@ -287,15 +289,18 @@
                                                         <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
                                                         <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
                                                         <Setter Property="BorderThickness" Value="1.5" />
+                                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                                         <Style.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                 <Setter Property="Background" Value="#EDF5FF" />
                                                                 <Setter Property="BorderBrush" Value="#60A5FA" />
+                                                                <Setter Property="TextElement.Foreground" Value="#002B5C" />
                                                             </Trigger>
                                                             <DataTrigger Binding="{Binding Seleccionado}" Value="True">
                                                                 <Setter Property="Background" Value="#CBE4FF" />
                                                                 <Setter Property="BorderBrush" Value="#0078D4" />
                                                                 <Setter Property="BorderThickness" Value="2.5" />
+                                                                <Setter Property="TextElement.Foreground" Value="#002B5C" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
