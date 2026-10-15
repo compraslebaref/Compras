@@ -393,41 +393,41 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="Código Interno" FontSize="11.5" />
-                                            <TextBox x:Name="TxtProdCodigoInterno" FontFamily="Consolas" />
+                                            <TextBlock Text="Código Interno" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdCodigoInterno" FontFamily="Consolas" PlaceholderText="Ej. PRD-0011" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
-                                            <TextBlock Text="Código de Barras" FontSize="11.5" />
-                                            <TextBox x:Name="TxtProdCodigoBarras" FontFamily="Consolas" />
+                                            <TextBlock Text="Código de Barras" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdCodigoBarras" FontFamily="Consolas" PlaceholderText="Ej. 750100010001" />
                                         </StackPanel>
                                     </Grid>
 
-                                    <TextBlock Text="Nombre" FontSize="11.5" />
-                                    <TextBox x:Name="TxtProdNombre" Margin="0,0,0,6" />
+                                    <TextBlock Text="Nombre del Producto" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                    <ui:TextBox x:Name="TxtProdNombre" Margin="0,0,0,6" PlaceholderText="Ej. Tornillo Hexagonal Inox 1/4 x 1 pulg" />
 
-                                    <TextBlock Text="Categoría" FontSize="11.5" />
+                                    <TextBlock Text="Categoría" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                     <ComboBox x:Name="CboProdCategoria" Margin="0,0,0,6" />
 
                                     <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,2,0,8">
                                         <StackPanel>
-                                            <TextBlock Text="Unidades y Conversión" FontWeight="SemiBold" FontSize="11.5" Margin="0,0,0,6" />
+                                            <TextBlock Text="Unidades y Conversión (Mayoreo a Menudeo)" FontWeight="SemiBold" FontSize="11.5" Margin="0,0,0,6" />
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="75" />
+                                                    <ColumnDefinition Width="85" />
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                                    <TextBlock Text="Compra" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtProdUnidadCompra" Text="Caja (100 pzas)" />
+                                                    <TextBlock Text="Unidad Compra" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtProdUnidadCompra" Text="Caja (100 pzas)" PlaceholderText="Ej. Caja, Rollo" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Margin="4,0,4,0">
-                                                    <TextBlock Text="Entrega" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtProdUnidadAlmacen" Text="Pieza" />
+                                                    <TextBlock Text="Unidad Entrega" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtProdUnidadAlmacen" Text="Pieza" PlaceholderText="Ej. Pieza, Metro" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                                    <TextBlock Text="Factor" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtProdFactor" Text="100" />
+                                                    <TextBlock Text="Piezas x Compra" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtProdFactor" Text="100" PlaceholderText="Ej. 100" />
                                                 </StackPanel>
                                             </Grid>
                                         </StackPanel>
@@ -440,16 +440,16 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="Existencia" FontSize="11" />
-                                            <TextBox x:Name="TxtProdStock" Text="0" />
+                                            <TextBlock Text="Existencia Actual" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdStock" Text="0" PlaceholderText="Ej. 0" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,4,0">
-                                            <TextBlock Text="Mínimo" FontSize="11" />
-                                            <TextBox x:Name="TxtProdStockMin" Text="5" />
+                                            <TextBlock Text="Stock Mínimo" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdStockMin" Text="5" PlaceholderText="Ej. 5" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                            <TextBlock Text="Último Costo" FontSize="11" />
-                                            <TextBox x:Name="TxtProdCosto" Text="0.00" />
+                                            <TextBlock Text="Costo ($ c/IVA)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdCosto" Text="0.00" PlaceholderText="Ej. 290.00" />
                                         </StackPanel>
                                     </Grid>
 
@@ -459,8 +459,8 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Ubicación" FontSize="11" />
-                                            <TextBox x:Name="TxtProdUbicacion" Text="A-01" />
+                                            <TextBlock Text="Ubicación en Almacén" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdUbicacion" Text="A-01" PlaceholderText="Ej. Estante A-01" />
                                         </StackPanel>
                                         <CheckBox x:Name="ChkProdEsHerramienta" Grid.Column="1" Content="Herramienta" VerticalAlignment="Bottom" Margin="10,0,0,4" />
                                     </Grid>
@@ -509,15 +509,15 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,6,0">
-                                            <TextBlock Text="Departamento" FontSize="11.5" FontWeight="SemiBold" />
+                                            <TextBlock Text="Departamento que Solicita" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                             <ComboBox x:Name="CboSolDepartamento" SelectionChanged="CboSolDepartamento_SelectionChanged" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="3,0,6,0">
-                                            <TextBlock Text="Solicitante" FontSize="11.5" FontWeight="SemiBold" />
+                                            <TextBlock Text="Solicitante / Encargado" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                             <ComboBox x:Name="CboSolEncargado" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="3,0,0,0">
-                                            <TextBlock Text="Proyecto" FontSize="11.5" FontWeight="SemiBold" />
+                                            <TextBlock Text="Proyecto Destino" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                             <ComboBox x:Name="CboSolProyecto" />
                                         </StackPanel>
                                     </Grid>
@@ -537,12 +537,12 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBox x:Name="TxtWhatsappInput"
-                                                         Grid.Column="0"
-                                                         Height="48"
-                                                         TextWrapping="Wrap"
-                                                         AcceptsReturn="True"
-                                                         ToolTip="Pegue aquí el mensaje de WhatsApp" />
+                                                <ui:TextBox x:Name="TxtWhatsappInput"
+                                                            Grid.Column="0"
+                                                            Height="48"
+                                                            TextWrapping="Wrap"
+                                                            AcceptsReturn="True"
+                                                            PlaceholderText="Pegue aquí el texto de WhatsApp (ej. 5 Tornillo 1/4, 2 Cable calibre 12)..." />
                                                 <ui:Button Grid.Column="1"
                                                            Margin="8,0,0,0"
                                                            Content="Interpretar"
@@ -555,18 +555,18 @@
                                     <Grid Margin="0,0,0,8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="95" />
+                                            <ColumnDefinition Width="105" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <ComboBox x:Name="CboSolProductoAgregar" Grid.Column="0" Margin="0,0,6,0" />
-                                        <TextBox x:Name="TxtSolCantidadAgregar" Grid.Column="1" Text="1" Margin="0,0,6,0" VerticalContentAlignment="Center" />
+                                        <ui:TextBox x:Name="TxtSolCantidadAgregar" Grid.Column="1" Text="1" PlaceholderText="Cantidad" Margin="0,0,6,0" VerticalContentAlignment="Center" />
                                         <ui:Button Grid.Column="2" Content="Agregar Partida" Click="BtnAgregarPartidaSolicitud_Click" />
                                     </Grid>
                                 </StackPanel>
 
                                 <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                    <TextBlock Text="Notas" FontSize="11.5" />
-                                    <TextBox x:Name="TxtSolNotas" Margin="0,2,0,8" />
+                                    <TextBlock Text="Notas o Justificación de la Solicitud" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                    <ui:TextBox x:Name="TxtSolNotas" Margin="0,0,0,8" PlaceholderText="Ej. Material requerido para armado de gabinete eléctrico..." />
                                     <UniformGrid Columns="2">
                                         <ui:Button Content="Limpiar" Margin="0,0,6,0" Click="BtnLimpiarPartidasSolicitud_Click" />
                                         <ui:Button Content="Guardar Solicitud" Appearance="Primary" Click="BtnGuardarSolicitud_Click" />
@@ -624,7 +624,7 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                        <TextBlock Text="Solicitud" FontWeight="Bold" FontSize="12" />
+                                        <TextBlock Text="Solicitud a Cotizar" FontWeight="Bold" FontSize="12" Margin="0,0,0,2" />
                                         <ComboBox x:Name="CboCompSolicitud" SelectionChanged="CboCompSolicitud_SelectionChanged" />
                                     </StackPanel>
                                     <TextBlock x:Name="TxtCompInfoSolicitud" Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
@@ -640,12 +640,12 @@
                                             <ComboBox x:Name="CboCompProv1" Margin="0,4,0,6" SelectionChanged="CboCompProveedores_SelectionChanged" />
                                             <UniformGrid Columns="2">
                                                 <StackPanel Margin="0,0,4,0">
-                                                    <TextBlock Text="Envío ($)" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtCompFlete1" Text="0.00" TextChanged="TxtCompTotales_TextChanged" />
+                                                    <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompFlete1" Text="0.00" PlaceholderText="0.00" TextChanged="TxtCompTotales_TextChanged" />
                                                 </StackPanel>
                                                 <StackPanel Margin="4,0,0,0">
-                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtCompDias1" Text="2" />
+                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompDias1" Text="2" PlaceholderText="Días" />
                                                 </StackPanel>
                                             </UniformGrid>
                                             <TextBlock x:Name="TxtResumenProv1" Text="Subtotal: $0.00 | Total: $0.00" FontWeight="Bold" FontSize="11.5" Margin="0,6,0,0" />
@@ -658,12 +658,12 @@
                                             <ComboBox x:Name="CboCompProv2" Margin="0,4,0,6" SelectionChanged="CboCompProveedores_SelectionChanged" />
                                             <UniformGrid Columns="2">
                                                 <StackPanel Margin="0,0,4,0">
-                                                    <TextBlock Text="Envío ($)" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtCompFlete2" Text="150.00" TextChanged="TxtCompTotales_TextChanged" />
+                                                    <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompFlete2" Text="150.00" PlaceholderText="0.00" TextChanged="TxtCompTotales_TextChanged" />
                                                 </StackPanel>
                                                 <StackPanel Margin="4,0,0,0">
-                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtCompDias2" Text="4" />
+                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompDias2" Text="4" PlaceholderText="Días" />
                                                 </StackPanel>
                                             </UniformGrid>
                                             <TextBlock x:Name="TxtResumenProv2" Text="Subtotal: $0.00 | Total: $0.00" FontWeight="Bold" FontSize="11.5" Margin="0,6,0,0" />
@@ -676,12 +676,12 @@
                                             <ComboBox x:Name="CboCompProv3" Margin="0,4,0,6" SelectionChanged="CboCompProveedores_SelectionChanged" />
                                             <UniformGrid Columns="2">
                                                 <StackPanel Margin="0,0,4,0">
-                                                    <TextBlock Text="Envío ($)" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtCompFlete3" Text="0.00" TextChanged="TxtCompTotales_TextChanged" />
+                                                    <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompFlete3" Text="0.00" PlaceholderText="0.00" TextChanged="TxtCompTotales_TextChanged" />
                                                 </StackPanel>
                                                 <StackPanel Margin="4,0,0,0">
-                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" />
-                                                    <TextBox x:Name="TxtCompDias3" Text="1" />
+                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompDias3" Text="1" PlaceholderText="Días" />
                                                 </StackPanel>
                                             </UniformGrid>
                                             <TextBlock x:Name="TxtResumenProv3" Text="Subtotal: $0.00 | Total: $0.00" FontWeight="Bold" FontSize="11.5" Margin="0,6,0,0" />
@@ -766,8 +766,8 @@
                                     <TextBlock x:Name="TxtTituloRecepcionOc" DockPanel.Dock="Top" Text="Recepción de Mercancía" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
 
                                     <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                        <TextBlock Text="Observaciones" FontSize="11.5" />
-                                        <TextBox x:Name="TxtNotasRecepcionOc" Margin="0,2,0,8" />
+                                        <TextBlock Text="Observaciones de Recepción" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtNotasRecepcionOc" Margin="0,0,0,8" PlaceholderText="Ej. Entrega parcial recibida sin daños, pendiente resto de cajas..." />
                                         <ui:Button Content="Registrar Recepción"
                                                    Appearance="Primary"
                                                    HorizontalAlignment="Stretch"
@@ -833,15 +833,15 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="Departamento" FontSize="11" />
+                                            <TextBlock Text="Departamento" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
                                             <ComboBox x:Name="CboSalDepartamento" SelectionChanged="CboSalDepartamento_SelectionChanged" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,4,0">
-                                            <TextBlock Text="Recibe" FontSize="11" />
+                                            <TextBlock Text="Persona que Recibe" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
                                             <ComboBox x:Name="CboSalEncargado" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                            <TextBlock Text="Proyecto" FontSize="11" />
+                                            <TextBlock Text="Proyecto Destino" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
                                             <ComboBox x:Name="CboSalProyecto" />
                                         </StackPanel>
                                     </Grid>
@@ -849,18 +849,18 @@
                                     <Grid Margin="0,0,0,8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="80" />
+                                            <ColumnDefinition Width="90" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <ComboBox x:Name="CboSalProductoPos" Grid.Column="0" Margin="0,0,6,0" />
-                                        <TextBox x:Name="TxtSalCantidadPos" Grid.Column="1" Text="1" Margin="0,0,6,0" VerticalContentAlignment="Center" />
+                                        <ui:TextBox x:Name="TxtSalCantidadPos" Grid.Column="1" Text="1" PlaceholderText="Cant." Margin="0,0,6,0" VerticalContentAlignment="Center" />
                                         <ui:Button Grid.Column="2" Content="Agregar" Click="BtnAgregarPartidaSalidaPos_Click" />
                                     </Grid>
                                 </StackPanel>
 
                                 <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                    <TextBlock Text="Observaciones" FontSize="11" />
-                                    <TextBox x:Name="TxtSalNotas" Margin="0,2,0,8" />
+                                    <TextBlock Text="Observaciones de Salida" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                    <ui:TextBox x:Name="TxtSalNotas" Margin="0,0,0,8" PlaceholderText="Ej. Entrega para instalación eléctrica en planta..." />
                                     <UniformGrid Columns="2">
                                         <ui:Button Content="Limpiar" Margin="0,0,6,0" Click="BtnLimpiarSalidaPos_Click" />
                                         <ui:Button Content="Registrar Salida" Appearance="Primary" Click="BtnRegistrarSalidaAlmacen_Click" />
@@ -914,7 +914,7 @@
                                                 <ComboBoxItem Content="Dañado" />
                                                 <ComboBoxItem Content="Extraviado" />
                                             </ComboBox>
-                                            <TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" ToolTip="Observaciones" />
+                                            <ui:TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" PlaceholderText="Observaciones al devolver..." />
                                             <ui:Button Grid.Column="2" Content="Registrar Devolución" Appearance="Primary" Margin="0,0,6,0" Click="BtnRegistrarDevolucionHerramienta_Click" />
                                             <ui:Button Grid.Column="3" Content="Imprimir" Click="BtnReimprimirValePrestamo_Click" />
                                         </Grid>
@@ -1142,45 +1142,45 @@
 
                                         <UniformGrid Columns="2" Margin="0,0,0,6">
                                             <StackPanel Margin="0,0,4,0">
-                                                <TextBlock Text="RFC" FontSize="11" />
-                                                <TextBox x:Name="TxtProvRfc" />
+                                                <TextBlock Text="RFC" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtProvRfc" PlaceholderText="Ej. FIE920315AB1" />
                                             </StackPanel>
                                             <StackPanel Margin="4,0,0,0">
-                                                <TextBlock Text="Nombre Comercial" FontSize="11" />
-                                                <TextBox x:Name="TxtProvComercial" />
+                                                <TextBlock Text="Nombre Comercial" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtProvComercial" PlaceholderText="Ej. FerreIndustrial" />
                                             </StackPanel>
                                         </UniformGrid>
 
-                                        <TextBlock Text="Razón Social" FontSize="11" />
-                                        <TextBox x:Name="TxtProvRazon" Margin="0,0,0,6" />
+                                        <TextBlock Text="Razón Social" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtProvRazon" Margin="0,0,0,6" PlaceholderText="Ej. Ferretería Industrial S.A. de C.V." />
 
                                         <UniformGrid Columns="2" Margin="0,0,0,6">
                                             <StackPanel Margin="0,0,4,0">
-                                                <TextBlock Text="Contacto" FontSize="11" />
-                                                <TextBox x:Name="TxtProvContacto" />
+                                                <TextBlock Text="Persona de Contacto" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtProvContacto" PlaceholderText="Ej. Ing. Pedro Gómez" />
                                             </StackPanel>
                                             <StackPanel Margin="4,0,0,0">
-                                                <TextBlock Text="Teléfono" FontSize="11" />
-                                                <TextBox x:Name="TxtProvTelefono" />
+                                                <TextBlock Text="Teléfono" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtProvTelefono" PlaceholderText="Ej. 55-1234-5678" />
                                             </StackPanel>
                                         </UniformGrid>
 
-                                        <TextBlock Text="Correo Electrónico" FontSize="11" />
-                                        <TextBox x:Name="TxtProvCorreo" Margin="0,0,0,6" />
+                                        <TextBlock Text="Correo Electrónico" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtProvCorreo" Margin="0,0,0,6" PlaceholderText="Ej. ventas@proveedor.com" />
 
                                         <UniformGrid Columns="2" Margin="0,0,0,6">
                                             <StackPanel Margin="0,0,4,0">
-                                                <TextBlock Text="Condiciones de Pago" FontSize="11" />
-                                                <TextBox x:Name="TxtProvCondiciones" Text="Contado" />
+                                                <TextBlock Text="Condiciones de Pago" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtProvCondiciones" Text="Contado" PlaceholderText="Ej. Contado / Crédito 30 días" />
                                             </StackPanel>
                                             <StackPanel Margin="4,0,0,0">
-                                                <TextBlock Text="Entrega (Días)" FontSize="11" />
-                                                <TextBox x:Name="TxtProvDias" Text="3" />
+                                                <TextBlock Text="Entrega (Días)" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtProvDias" Text="3" PlaceholderText="Ej. 3" />
                                             </StackPanel>
                                         </UniformGrid>
 
-                                        <TextBlock Text="Notas" FontSize="11" />
-                                        <TextBox x:Name="TxtProvNotas" Height="56" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10" />
+                                        <TextBlock Text="Notas / Datos Bancarios" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtProvNotas" Height="56" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10" PlaceholderText="Ej. Envío gratis en pedidos mayores a $2,500, cuenta CLABE..." />
 
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -1250,16 +1250,16 @@
                                             <ui:Button Content="Nuevo" HorizontalAlignment="Right" Click="BtnNuevoProyecto_Click" />
                                         </DockPanel>
 
-                                        <TextBlock Text="Código" FontSize="11" />
-                                        <TextBox x:Name="TxtProyCodigo" Margin="0,0,0,6" />
+                                        <TextBlock Text="Código del Proyecto" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtProyCodigo" Margin="0,0,0,6" PlaceholderText="Ej. PRY-2026-04" />
 
-                                        <TextBlock Text="Nombre del Proyecto" FontSize="11" />
-                                        <TextBox x:Name="TxtProyNombre" Margin="0,0,0,6" />
+                                        <TextBlock Text="Nombre del Proyecto" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtProyNombre" Margin="0,0,0,6" PlaceholderText="Ej. Celda de Ensamble Línea 3" />
 
-                                        <TextBlock Text="Cliente / Área" FontSize="11" />
-                                        <TextBox x:Name="TxtProyArea" Margin="0,0,0,6" />
+                                        <TextBlock Text="Cliente o Área Asignada" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtProyArea" Margin="0,0,0,6" PlaceholderText="Ej. Planta Norte / Cliente Automotriz" />
 
-                                        <TextBlock Text="Estatus" FontSize="11" />
+                                        <TextBlock Text="Estatus" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                         <ComboBox x:Name="CboProyEstatus" SelectedIndex="0" Margin="0,0,0,12">
                                             <ComboBoxItem Content="Activo" />
                                             <ComboBoxItem Content="Pausado" />
@@ -1335,20 +1335,20 @@
                                                     <ui:Button Content="Nuevo" HorizontalAlignment="Right" Click="BtnNuevoEncargado_Click" />
                                                 </DockPanel>
 
-                                                <TextBlock Text="Departamento" FontSize="11" />
+                                                <TextBlock Text="Departamento Asignado" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                 <ComboBox x:Name="CboAltaEncargadoDepto" Margin="0,0,0,6" />
 
-                                                <TextBlock Text="Nombre Completo" FontSize="11" />
-                                                <TextBox x:Name="TxtAltaEncargadoNombre" Margin="0,0,0,6" />
+                                                <TextBlock Text="Nombre Completo" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtAltaEncargadoNombre" Margin="0,0,0,6" PlaceholderText="Ej. Ing. Carlos Mendoza" />
 
                                                 <UniformGrid Columns="2" Margin="0,0,0,10">
                                                     <StackPanel Margin="0,0,4,0">
-                                                        <TextBlock Text="Puesto" FontSize="11" />
-                                                        <TextBox x:Name="TxtAltaEncargadoPuesto" />
+                                                        <TextBlock Text="Puesto / Cargo" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <ui:TextBox x:Name="TxtAltaEncargadoPuesto" PlaceholderText="Ej. Gerente Mecánico" />
                                                     </StackPanel>
                                                     <StackPanel Margin="4,0,0,0">
-                                                        <TextBlock Text="Teléfono" FontSize="11" />
-                                                        <TextBox x:Name="TxtAltaEncargadoTelefono" />
+                                                        <TextBlock Text="Teléfono / Ext." FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <ui:TextBox x:Name="TxtAltaEncargadoTelefono" PlaceholderText="Ej. 55-1020-3040" />
                                                     </StackPanel>
                                                 </UniformGrid>
 
@@ -1384,12 +1384,12 @@
 
                                                 <UniformGrid Columns="2" Margin="0,0,0,8">
                                                     <StackPanel Margin="0,0,4,0">
-                                                        <TextBlock Text="Código" FontSize="11" />
-                                                        <TextBox x:Name="TxtDeptoCodigo" />
+                                                        <TextBlock Text="Código" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <ui:TextBox x:Name="TxtDeptoCodigo" PlaceholderText="Ej. ING-MEC" />
                                                     </StackPanel>
                                                     <StackPanel Margin="4,0,0,0">
-                                                        <TextBlock Text="Nombre" FontSize="11" />
-                                                        <TextBox x:Name="TxtDeptoNombre" />
+                                                        <TextBlock Text="Nombre del Departamento" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <ui:TextBox x:Name="TxtDeptoNombre" PlaceholderText="Ej. Ingeniería Mecánica" />
                                                     </StackPanel>
                                                 </UniformGrid>
 
@@ -1467,26 +1467,26 @@
                                                     <ui:Button Content="Nueva" HorizontalAlignment="Right" Click="BtnNuevaHerramientaDir_Click" />
                                                 </DockPanel>
 
-                                                <TextBlock Text="Producto Base" FontSize="11" />
+                                                <TextBlock Text="Producto Base" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                 <ComboBox x:Name="CboDirHerProducto" Margin="0,0,0,6" />
 
                                                 <UniformGrid Columns="2" Margin="0,0,0,6">
                                                     <StackPanel Margin="0,0,4,0">
-                                                        <TextBlock Text="Código Individual" FontSize="11" />
-                                                        <TextBox x:Name="TxtDirHerCodigo" FontFamily="Consolas" />
+                                                        <TextBlock Text="Código Individual" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <ui:TextBox x:Name="TxtDirHerCodigo" FontFamily="Consolas" PlaceholderText="Ej. HER-0007" />
                                                     </StackPanel>
                                                     <StackPanel Margin="4,0,0,0">
-                                                        <TextBlock Text="Número de Serie" FontSize="11" />
-                                                        <TextBox x:Name="TxtDirHerSerie" />
+                                                        <TextBlock Text="Número de Serie" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <ui:TextBox x:Name="TxtDirHerSerie" PlaceholderText="Ej. BOS-882910 o S/N" />
                                                     </StackPanel>
                                                 </UniformGrid>
 
-                                                <TextBlock Text="Marca / Modelo" FontSize="11" />
-                                                <TextBox x:Name="TxtDirHerMarca" Margin="0,0,0,6" />
+                                                <TextBlock Text="Marca / Modelo" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtDirHerMarca" Margin="0,0,0,6" PlaceholderText="Ej. Bosch GSB 16 RE" />
 
                                                 <UniformGrid Columns="2" Margin="0,0,0,6">
                                                     <StackPanel Margin="0,0,4,0">
-                                                        <TextBlock Text="Estado" FontSize="11" />
+                                                        <TextBlock Text="Estado" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                         <ComboBox x:Name="CboDirHerEstado" SelectedIndex="0">
                                                             <ComboBoxItem Content="Disponible" />
                                                             <ComboBoxItem Content="En Préstamo" />
@@ -1495,13 +1495,13 @@
                                                         </ComboBox>
                                                     </StackPanel>
                                                     <StackPanel Margin="4,0,0,0">
-                                                        <TextBlock Text="Ubicación" FontSize="11" />
-                                                        <TextBox x:Name="TxtDirHerUbicacion" Text="Gabinete H-1" />
+                                                        <TextBlock Text="Ubicación" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <ui:TextBox x:Name="TxtDirHerUbicacion" Text="Gabinete H-1" PlaceholderText="Ej. Gabinete H-1" />
                                                     </StackPanel>
                                                 </UniformGrid>
 
-                                                <TextBlock Text="Notas" FontSize="11" />
-                                                <TextBox x:Name="TxtDirHerNotas" Margin="0,0,0,10" />
+                                                <TextBlock Text="Notas / Accesorios Incluidos" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtDirHerNotas" Margin="0,0,0,10" PlaceholderText="Ej. En maletín con llave de mandril..." />
 
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
@@ -1521,8 +1521,8 @@
                                                     <ui:Button Content="Nueva" HorizontalAlignment="Right" Click="BtnNuevaCategoriaDir_Click" />
                                                 </DockPanel>
 
-                                                <TextBlock Text="Nombre" FontSize="11" />
-                                                <TextBox x:Name="TxtDirCatNombre" Margin="0,0,0,8" />
+                                                <TextBlock Text="Nombre de la Categoría" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtDirCatNombre" Margin="0,0,0,8" PlaceholderText="Ej. Neumática e Hidráulica" />
 
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
