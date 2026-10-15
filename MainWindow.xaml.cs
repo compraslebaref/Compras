@@ -23,6 +23,12 @@ public partial class MainWindow : FluentWindow
 {
     private bool _temaOscuro = false;
     private Producto _productoEnEdicion = new();
+    private int _proveedorEditandoId = 0;
+    private int _proyectoEditandoId = 0;
+    private int _encargadoEditandoId = 0;
+    private int _departamentoEditandoId = 0;
+    private int _herramientaEditandoId = 0;
+    private int _categoriaEditandoId = 0;
     private readonly List<(Producto producto, decimal cantidad)> _carritoTienda = new();
     private readonly ObservableCollection<SolicitudPartida> _partidasNuevaSolicitud = new();
     private readonly ObservableCollection<CotizacionRenglonComparativo> _renglonesComparativa = new();
@@ -88,6 +94,7 @@ public partial class MainWindow : FluentWindow
         RefrescarAlmacenPosYPrestamos();
         RefrescarFacturasXml();
         RefrescarAnalisis();
+        RefrescarDirectorios();
     }
 
     private void CargarCombosBase()
@@ -131,11 +138,13 @@ public partial class MainWindow : FluentWindow
         CboSalProductoPos.ItemsSource = productos.Where(p => !p.EsHerramienta).ToList();
         if (CboSalProductoPos.SelectedIndex < 0) CboSalProductoPos.SelectedIndex = 0;
 
-        // XML y Catálogos base
+        // XML y Directorios
         CboXmlVincularProducto.ItemsSource = productos;
         if (CboXmlVincularProducto.SelectedIndex < 0 && productos.Count > 0) CboXmlVincularProducto.SelectedIndex = 0;
         CboAltaEncargadoDepto.ItemsSource = deptos;
         if (CboAltaEncargadoDepto.SelectedIndex < 0 && deptos.Count > 0) CboAltaEncargadoDepto.SelectedIndex = 0;
+        CboDirHerProducto.ItemsSource = productos.Where(p => p.EsHerramienta).ToList();
+        if (CboDirHerProducto.SelectedIndex < 0 && CboDirHerProducto.Items.Count > 0) CboDirHerProducto.SelectedIndex = 0;
     }
 
     // ==================== NAVEGACIÓN Y TEMA WINDOWS 11 ====================
@@ -143,7 +152,7 @@ public partial class MainWindow : FluentWindow
     private void CambiarSeccion(int index)
     {
         MainTabControl.SelectedIndex = index;
-        var botones = new[] { NavDashboard, NavCatalogo, NavSolicitudes, NavComparativa, NavOrdenes, NavAlmacenPos, NavFacturasXml, NavAnalisis };
+        var botones = new[] { NavDashboard, NavCatalogo, NavSolicitudes, NavComparativa, NavOrdenes, NavAlmacenPos, NavFacturasXml, NavAnalisis, NavDirectorios };
         for (int i = 0; i < botones.Length; i++)
         {
             botones[i].Appearance = i == index ? ControlAppearance.Primary : ControlAppearance.Secondary;
@@ -471,6 +480,29 @@ public partial class MainWindow : FluentWindow
         DatabaseService.GuardarProducto(_productoEnEdicion);
         CargarTodoElSistema();
         CargarProductoEnEditor(_productoEnEdicion);
+    }
+
+    private void BtnEliminarProducto_Click(object sender, RoutedEventArgs e)
+    {
+        if (_productoEnEdicion.Id == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un producto guardado para eliminarlo.", "Producto no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (System.Windows.MessageBox.Show(this, $"¿Desea eliminar el producto '{_productoEnEdicion.Nombre}' del catálogo?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            DatabaseService.EliminarProducto(_productoEnEdicion.Id);
+            BtnNuevoProducto_Click(sender, e);
+            CargarTodoElSistema();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar este producto porque ya tiene movimientos vinculados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void BtnEnviarCarritoASolicitud_Click(object sender, RoutedEventArgs e)
@@ -1236,50 +1268,537 @@ public partial class MainWindow : FluentWindow
         DgAnalisisProyectos.ItemsSource = proyStats;
     }
 
+    // =====================================================================
+    // TAB 8: DIRECTORIOS (PROVEEDORES, PROYECTOS, PERSONAL, DEPTOS, HERRAMIENTAS, CATEGORÍAS)
+    // =====================================================================
+    private void RefrescarDirectorios()
+    {
+        DgDirProveedores.ItemsSource = DatabaseService.ObtenerProveedores();
+        DgDirProyectos.ItemsSource = DatabaseService.ObtenerProyectos();
+        DgDirPersonal.ItemsSource = DatabaseService.ObtenerEncargados();
+        DgDirDepartamentos.ItemsSource = DatabaseService.ObtenerDepartamentos();
+        DgDirHerramientas.ItemsSource = DatabaseService.ObtenerHerramientas();
+        DgDirCategorias.ItemsSource = DatabaseService.ObtenerCategorias();
+    }
+
+    // --- 8.1 PROVEEDORES ---
+    private void DgDirProveedores_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgDirProveedores.SelectedItem is not Proveedor p) return;
+
+        _proveedorEditandoId = p.Id;
+        TxtProvRfc.Text = p.Rfc;
+        TxtProvComercial.Text = p.NombreComercial;
+        TxtProvRazon.Text = p.RazonSocial;
+        TxtProvContacto.Text = p.Contacto;
+        TxtProvTelefono.Text = p.Telefono;
+        TxtProvCorreo.Text = p.Correo;
+        TxtProvCondiciones.Text = p.CondicionesPago;
+        TxtProvDias.Text = p.DiasEntregaPromedio.ToString();
+        TxtProvNotas.Text = p.Notas;
+
+        var ocs = DatabaseService.ObtenerOrdenesCompra().Where(o => o.ProveedorId == p.Id).ToList();
+        var cfdis = DatabaseService.ObtenerFacturasXml().Where(f => string.Equals(f.EmisorRfc, p.Rfc, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        var desglose = new List<object>();
+        foreach (var oc in ocs)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Orden Compra",
+                Folio = oc.Folio,
+                Fecha = oc.Fecha,
+                Detalle = $"{oc.ProyectoNombre} ({oc.Partidas.Count} partidas)",
+                Estatus = oc.Estatus,
+                Monto = oc.TotalConIva
+            });
+        }
+        foreach (var cfdi in cfdis)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Factura CFDI",
+                Folio = string.IsNullOrWhiteSpace(cfdi.SerieFolio) ? cfdi.Uuid[..Math.Min(8, cfdi.Uuid.Length)] : cfdi.SerieFolio,
+                Fecha = cfdi.FechaTimbrado,
+                Detalle = string.IsNullOrWhiteSpace(cfdi.OrdenCompraFolio) ? "Sin OC vinculada" : $"OC: {cfdi.OrdenCompraFolio}",
+                Estatus = "Timbrada",
+                Monto = cfdi.Total
+            });
+        }
+
+        TxtDesgloseProveedorTitulo.Text = $"Desglose de {p.NombreComercial} — {ocs.Count} OC ({ocs.Sum(x => x.TotalConIva):C2}) | {cfdis.Count} Facturas CFDI";
+        DgDesgloseProveedor.ItemsSource = desglose;
+    }
+
+    private void BtnNuevoProveedor_Click(object sender, RoutedEventArgs e)
+    {
+        _proveedorEditandoId = 0;
+        DgDirProveedores.SelectedItem = null;
+        TxtProvRfc.Clear();
+        TxtProvComercial.Clear();
+        TxtProvRazon.Clear();
+        TxtProvContacto.Clear();
+        TxtProvTelefono.Clear();
+        TxtProvCorreo.Clear();
+        TxtProvCondiciones.Text = "Contado";
+        TxtProvDias.Text = "3";
+        TxtProvNotas.Clear();
+        TxtDesgloseProveedorTitulo.Text = "Seleccione un proveedor para consultar sus órdenes de compra y facturas";
+        DgDesgloseProveedor.ItemsSource = null;
+    }
+
     private void BtnGuardarProveedor_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(TxtProvRfc.Text) || string.IsNullOrWhiteSpace(TxtProvRazon.Text))
+        {
+            System.Windows.MessageBox.Show(this, "Complete al menos el RFC y la Razón Social del proveedor.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
+        }
 
         DatabaseService.GuardarProveedor(new Proveedor
         {
-            Rfc = TxtProvRfc.Text,
-            RazonSocial = TxtProvRazon.Text,
-            NombreComercial = string.IsNullOrWhiteSpace(TxtProvComercial.Text) ? TxtProvRazon.Text : TxtProvComercial.Text,
-            Contacto = TxtProvContacto.Text,
-            Telefono = TxtProvTelefono.Text,
-            DiasEntregaPromedio = (int)ParseDecimal(TxtProvDias.Text, 3m)
+            Id = _proveedorEditandoId,
+            Rfc = TxtProvRfc.Text.Trim(),
+            RazonSocial = TxtProvRazon.Text.Trim(),
+            NombreComercial = string.IsNullOrWhiteSpace(TxtProvComercial.Text) ? TxtProvRazon.Text.Trim() : TxtProvComercial.Text.Trim(),
+            Contacto = TxtProvContacto.Text.Trim(),
+            Telefono = TxtProvTelefono.Text.Trim(),
+            Correo = TxtProvCorreo.Text.Trim(),
+            CondicionesPago = string.IsNullOrWhiteSpace(TxtProvCondiciones.Text) ? "Contado" : TxtProvCondiciones.Text.Trim(),
+            DiasEntregaPromedio = (int)ParseDecimal(TxtProvDias.Text, 3m),
+            Notas = TxtProvNotas.Text.Trim()
         });
 
-        TxtProvRfc.Clear();
-        TxtProvRazon.Clear();
-        TxtProvComercial.Clear();
-        TxtProvContacto.Clear();
-        TxtProvTelefono.Clear();
+        BtnNuevoProveedor_Click(sender, e);
         CargarTodoElSistema();
+    }
+
+    private void BtnEliminarProveedor_Click(object sender, RoutedEventArgs e)
+    {
+        if (_proveedorEditandoId == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un proveedor de la tabla para eliminarlo.", "Proveedor no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este proveedor del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            DatabaseService.EliminarProveedor(_proveedorEditandoId);
+            BtnNuevoProveedor_Click(sender, e);
+            CargarTodoElSistema();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar este proveedor porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // --- 8.2 PROYECTOS Y CLIENTES / ÁREAS ---
+    private void DgDirProyectos_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgDirProyectos.SelectedItem is not Proyecto pr) return;
+
+        _proyectoEditandoId = pr.Id;
+        TxtProyCodigo.Text = pr.Codigo;
+        TxtProyNombre.Text = pr.Nombre;
+        TxtProyArea.Text = pr.ClienteArea;
+        foreach (ComboBoxItem item in CboProyEstatus.Items)
+        {
+            if (string.Equals(item.Content?.ToString(), pr.Estatus, StringComparison.OrdinalIgnoreCase))
+            {
+                CboProyEstatus.SelectedItem = item;
+                break;
+            }
+        }
+
+        var sols = DatabaseService.ObtenerSolicitudes().Where(s => s.ProyectoId == pr.Id).ToList();
+        var ocs = DatabaseService.ObtenerOrdenesCompra().Where(o => o.ProyectoId == pr.Id).ToList();
+        var salidas = DatabaseService.ObtenerSalidasAlmacen().Where(s => s.ProyectoId == pr.Id).ToList();
+
+        var desglose = new List<object>();
+        foreach (var s in sols)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Solicitud",
+                Folio = s.Folio,
+                Fecha = s.Fecha,
+                Detalle = $"{s.DepartamentoNombre} - {s.EncargadoNombre} ({s.Partidas.Count} partidas)",
+                Estatus = s.Estatus,
+                Monto = 0m
+            });
+        }
+        foreach (var oc in ocs)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Orden Compra",
+                Folio = oc.Folio,
+                Fecha = oc.Fecha,
+                Detalle = $"Proveedor: {oc.ProveedorNombre}",
+                Estatus = oc.Estatus,
+                Monto = oc.TotalConIva
+            });
+        }
+        foreach (var sal in salidas)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Salida Almacén",
+                Folio = sal.Folio,
+                Fecha = sal.Fecha,
+                Detalle = $"Recibe: {sal.EncargadoNombre} ({sal.Partidas.Count} artículos)",
+                Estatus = "Entregada",
+                Monto = sal.CostoTotalEstimado
+            });
+        }
+
+        TxtDesgloseProyectoTitulo.Text = $"Desglose de {pr.Codigo} ({pr.ClienteArea}) — Compras OC: {ocs.Sum(x => x.TotalConIva):C2} | Salidas Almacén: {salidas.Sum(x => x.CostoTotalEstimado):C2}";
+        DgDesgloseProyecto.ItemsSource = desglose;
+    }
+
+    private void BtnNuevoProyecto_Click(object sender, RoutedEventArgs e)
+    {
+        _proyectoEditandoId = 0;
+        DgDirProyectos.SelectedItem = null;
+        TxtProyCodigo.Clear();
+        TxtProyNombre.Clear();
+        TxtProyArea.Clear();
+        CboProyEstatus.SelectedIndex = 0;
+        TxtDesgloseProyectoTitulo.Text = "Seleccione un proyecto para consultar sus solicitudes, órdenes de compra y salidas de almacén";
+        DgDesgloseProyecto.ItemsSource = null;
     }
 
     private void BtnGuardarProyecto_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(TxtProyCodigo.Text) || string.IsNullOrWhiteSpace(TxtProyNombre.Text))
+        {
+            System.Windows.MessageBox.Show(this, "Escriba el código y nombre del proyecto.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string estatus = (CboProyEstatus.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Activo";
+        DatabaseService.GuardarProyecto(TxtProyCodigo.Text, TxtProyNombre.Text, TxtProyArea.Text, estatus, _proyectoEditandoId);
+        BtnNuevoProyecto_Click(sender, e);
+        CargarTodoElSistema();
+    }
+
+    private void BtnEliminarProyecto_Click(object sender, RoutedEventArgs e)
+    {
+        if (_proyectoEditandoId == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un proyecto de la tabla para eliminarlo.", "Proyecto no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este proyecto?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
-        DatabaseService.GuardarProyecto(TxtProyCodigo.Text, TxtProyNombre.Text, TxtProyArea.Text);
-        TxtProyCodigo.Clear();
-        TxtProyNombre.Clear();
-        TxtProyArea.Clear();
-        CargarTodoElSistema();
+        try
+        {
+            DatabaseService.EliminarProyecto(_proyectoEditandoId);
+            BtnNuevoProyecto_Click(sender, e);
+            CargarTodoElSistema();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar este proyecto porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // --- 8.3 PERSONAL Y DEPARTAMENTOS ---
+    private void DgDirPersonal_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgDirPersonal.SelectedItem is not Encargado enc) return;
+
+        _encargadoEditandoId = enc.Id;
+        TxtAltaEncargadoNombre.Text = enc.Nombre;
+        TxtAltaEncargadoPuesto.Text = enc.Puesto;
+        TxtAltaEncargadoTelefono.Text = enc.Telefono;
+        if (CboAltaEncargadoDepto.ItemsSource is IEnumerable<Departamento> deptos)
+            CboAltaEncargadoDepto.SelectedItem = deptos.FirstOrDefault(d => d.Id == enc.DepartamentoId);
+
+        var sols = DatabaseService.ObtenerSolicitudes().Where(s => s.EncargadoId == enc.Id).ToList();
+        var salidas = DatabaseService.ObtenerSalidasAlmacen().Where(s => s.EncargadoId == enc.Id).ToList();
+        var prestamos = DatabaseService.ObtenerPrestamosHerramienta().Where(p => p.EncargadoId == enc.Id).ToList();
+
+        var desglose = new List<object>();
+        foreach (var s in sols)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Solicitud",
+                Folio = s.Folio,
+                Fecha = s.Fecha,
+                Detalle = $"Proyecto: {s.ProyectoNombre} ({s.Partidas.Count} partidas)",
+                Estatus = s.Estatus
+            });
+        }
+        foreach (var sal in salidas)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Salida Almacén",
+                Folio = sal.Folio,
+                Fecha = sal.Fecha,
+                Detalle = $"Proyecto: {sal.ProyectoNombre} ({sal.CostoTotalEstimado:C2})",
+                Estatus = "Entregada"
+            });
+        }
+        foreach (var pre in prestamos)
+        {
+            desglose.Add(new
+            {
+                Tipo = "Préstamo Herr.",
+                Folio = pre.Folio,
+                Fecha = pre.FechaSalida,
+                Detalle = $"{pre.Partidas.Count} herramientas ({pre.ProyectoNombre})",
+                Estatus = pre.Estatus
+            });
+        }
+
+        TxtDesglosePersonalTitulo.Text = $"Desglose de {enc.Nombre} ({enc.Puesto}) — {sols.Count} Solicitudes | {salidas.Count} Salidas | {prestamos.Count} Préstamos";
+        DgDesglosePersonal.ItemsSource = desglose;
+    }
+
+    private void BtnNuevoEncargado_Click(object sender, RoutedEventArgs e)
+    {
+        _encargadoEditandoId = 0;
+        DgDirPersonal.SelectedItem = null;
+        TxtAltaEncargadoNombre.Clear();
+        TxtAltaEncargadoPuesto.Clear();
+        TxtAltaEncargadoTelefono.Clear();
+        TxtDesglosePersonalTitulo.Text = "Seleccione una persona para ver sus solicitudes, salidas de almacén y préstamos de herramienta";
+        DgDesglosePersonal.ItemsSource = null;
     }
 
     private void BtnGuardarEncargado_Click(object sender, RoutedEventArgs e)
     {
         if (CboAltaEncargadoDepto.SelectedItem is not Departamento dep || string.IsNullOrWhiteSpace(TxtAltaEncargadoNombre.Text))
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un departamento y escriba el nombre completo.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        DatabaseService.GuardarEncargado(dep.Id, TxtAltaEncargadoNombre.Text, TxtAltaEncargadoPuesto.Text, TxtAltaEncargadoTelefono.Text, _encargadoEditandoId);
+        BtnNuevoEncargado_Click(sender, e);
+        CargarTodoElSistema();
+    }
+
+    private void BtnEliminarEncargado_Click(object sender, RoutedEventArgs e)
+    {
+        if (_encargadoEditandoId == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un registro de personal para eliminarlo.", "Personal no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar a esta persona del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
-        DatabaseService.GuardarEncargado(dep.Id, TxtAltaEncargadoNombre.Text, TxtAltaEncargadoPuesto.Text, "");
-        TxtAltaEncargadoNombre.Clear();
-        TxtAltaEncargadoPuesto.Clear();
+        try
+        {
+            DatabaseService.EliminarEncargado(_encargadoEditandoId);
+            BtnNuevoEncargado_Click(sender, e);
+            CargarTodoElSistema();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar este registro de personal porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void DgDirDepartamentos_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgDirDepartamentos.SelectedItem is not Departamento d) return;
+        _departamentoEditandoId = d.Id;
+        TxtDeptoCodigo.Text = d.Codigo;
+        TxtDeptoNombre.Text = d.Nombre;
+    }
+
+    private void BtnNuevoDepartamento_Click(object sender, RoutedEventArgs e)
+    {
+        _departamentoEditandoId = 0;
+        DgDirDepartamentos.SelectedItem = null;
+        TxtDeptoCodigo.Clear();
+        TxtDeptoNombre.Clear();
+    }
+
+    private void BtnGuardarDepartamento_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(TxtDeptoCodigo.Text) || string.IsNullOrWhiteSpace(TxtDeptoNombre.Text))
+        {
+            System.Windows.MessageBox.Show(this, "Escriba el código y nombre del departamento.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        DatabaseService.GuardarDepartamento(TxtDeptoCodigo.Text, TxtDeptoNombre.Text, _departamentoEditandoId);
+        BtnNuevoDepartamento_Click(sender, e);
         CargarTodoElSistema();
+    }
+
+    private void BtnEliminarDepartamento_Click(object sender, RoutedEventArgs e)
+    {
+        if (_departamentoEditandoId == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un departamento para eliminarlo.", "Departamento no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este departamento?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            DatabaseService.EliminarDepartamento(_departamentoEditandoId);
+            BtnNuevoDepartamento_Click(sender, e);
+            CargarTodoElSistema();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar este departamento porque tiene registros asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // --- 8.4 HERRAMIENTAS Y CATEGORÍAS ---
+    private void DgDirHerramientas_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgDirHerramientas.SelectedItem is not HerramientaActivo h) return;
+
+        _herramientaEditandoId = h.Id;
+        if (CboDirHerProducto.ItemsSource is IEnumerable<Producto> prods)
+            CboDirHerProducto.SelectedItem = prods.FirstOrDefault(p => p.Id == h.ProductoId);
+        TxtDirHerCodigo.Text = h.CodigoIndividual;
+        TxtDirHerSerie.Text = h.NumeroSerie;
+        TxtDirHerMarca.Text = h.MarcaModelo;
+        TxtDirHerUbicacion.Text = h.Ubicacion;
+        TxtDirHerNotas.Text = h.NotasEstado;
+
+        foreach (ComboBoxItem item in CboDirHerEstado.Items)
+        {
+            if (string.Equals(item.Content?.ToString(), h.Estado, StringComparison.OrdinalIgnoreCase))
+            {
+                CboDirHerEstado.SelectedItem = item;
+                break;
+            }
+        }
+    }
+
+    private void BtnNuevaHerramientaDir_Click(object sender, RoutedEventArgs e)
+    {
+        _herramientaEditandoId = 0;
+        DgDirHerramientas.SelectedItem = null;
+        TxtDirHerCodigo.Text = DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
+        TxtDirHerSerie.Clear();
+        TxtDirHerMarca.Clear();
+        CboDirHerEstado.SelectedIndex = 0;
+        TxtDirHerUbicacion.Text = "Almacén Herramientas";
+        TxtDirHerNotas.Clear();
+    }
+
+    private void BtnGuardarHerramientaDir_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboDirHerProducto.SelectedItem is not Producto prod)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione el producto base para la herramienta.", "Falta producto", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string codigo = string.IsNullOrWhiteSpace(TxtDirHerCodigo.Text)
+            ? DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual")
+            : TxtDirHerCodigo.Text.Trim();
+        string estado = (CboDirHerEstado.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Disponible";
+
+        DatabaseService.GuardarHerramientaActivo(new HerramientaActivo
+        {
+            Id = _herramientaEditandoId,
+            ProductoId = prod.Id,
+            CodigoIndividual = codigo,
+            NumeroSerie = string.IsNullOrWhiteSpace(TxtDirHerSerie.Text) ? "S/N" : TxtDirHerSerie.Text.Trim(),
+            MarcaModelo = TxtDirHerMarca.Text.Trim(),
+            Estado = estado,
+            Ubicacion = string.IsNullOrWhiteSpace(TxtDirHerUbicacion.Text) ? "Almacén Herramientas" : TxtDirHerUbicacion.Text.Trim(),
+            NotasEstado = TxtDirHerNotas.Text.Trim()
+        });
+
+        BtnNuevaHerramientaDir_Click(sender, e);
+        CargarTodoElSistema();
+    }
+
+    private void BtnEliminarHerramientaDir_Click(object sender, RoutedEventArgs e)
+    {
+        if (_herramientaEditandoId == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una herramienta de la tabla para eliminarla.", "Herramienta no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar esta herramienta individual?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            DatabaseService.EliminarHerramientaActivo(_herramientaEditandoId);
+            BtnNuevaHerramientaDir_Click(sender, e);
+            CargarTodoElSistema();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar esta herramienta porque tiene préstamos registrados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void DgDirCategorias_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgDirCategorias.SelectedItem is not Categoria c) return;
+        _categoriaEditandoId = c.Id;
+        TxtDirCatNombre.Text = c.Nombre;
+    }
+
+    private void BtnNuevaCategoriaDir_Click(object sender, RoutedEventArgs e)
+    {
+        _categoriaEditandoId = 0;
+        DgDirCategorias.SelectedItem = null;
+        TxtDirCatNombre.Clear();
+    }
+
+    private void BtnGuardarCategoriaDir_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(TxtDirCatNombre.Text))
+        {
+            System.Windows.MessageBox.Show(this, "Escriba el nombre de la categoría.", "Falta nombre", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        DatabaseService.GuardarCategoria(TxtDirCatNombre.Text, _categoriaEditandoId);
+        BtnNuevaCategoriaDir_Click(sender, e);
+        CargarTodoElSistema();
+    }
+
+    private void BtnEliminarCategoriaDir_Click(object sender, RoutedEventArgs e)
+    {
+        if (_categoriaEditandoId == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una categoría para eliminarla.", "Categoría no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar esta categoría?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            DatabaseService.EliminarCategoria(_categoriaEditandoId);
+            BtnNuevaCategoriaDir_Click(sender, e);
+            CargarTodoElSistema();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar esta categoría porque tiene productos vinculados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void BtnRespaldarDb_Click(object sender, RoutedEventArgs e)

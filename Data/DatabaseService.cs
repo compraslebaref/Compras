@@ -421,14 +421,32 @@ INSERT INTO PrestamoPartidas (PrestamoHerramientaId, HerramientaActivoId, Estado
         return list;
     }
 
-    public static void GuardarDepartamento(string codigo, string nombre)
+    public static void GuardarDepartamento(string codigo, string nombre, int id = 0)
     {
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO Departamentos (Codigo, Nombre) VALUES ($c, $n)";
+        if (id > 0)
+        {
+            cmd.CommandText = "UPDATE Departamentos SET Codigo=$c, Nombre=$n WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$id", id);
+        }
+        else
+        {
+            cmd.CommandText = "INSERT INTO Departamentos (Codigo, Nombre) VALUES ($c, $n)";
+        }
         cmd.Parameters.AddWithValue("$c", codigo.Trim().ToUpperInvariant());
         cmd.Parameters.AddWithValue("$n", nombre.Trim());
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarDepartamento(int id)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Departamentos WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
     }
 
@@ -441,7 +459,7 @@ INSERT INTO PrestamoPartidas (PrestamoHerramientaId, HerramientaActivoId, Estado
         cmd.CommandText = @"
 SELECT e.Id, e.DepartamentoId, d.Nombre, e.Nombre, e.Puesto, e.Telefono
 FROM Encargados e
-JOIN Departamentos d ON d.Id = e.DepartamentoId
+LEFT JOIN Departamentos d ON d.Id = e.DepartamentoId
 WHERE ($depId IS NULL OR e.DepartamentoId = $depId)
 ORDER BY e.Nombre";
         cmd.Parameters.AddWithValue("$depId", departamentoId.HasValue ? departamentoId.Value : DBNull.Value);
@@ -452,7 +470,7 @@ ORDER BY e.Nombre";
             {
                 Id = r.GetInt32(0),
                 DepartamentoId = r.GetInt32(1),
-                DepartamentoNombre = r.GetString(2),
+                DepartamentoNombre = r.IsDBNull(2) ? "Sin departamento" : r.GetString(2),
                 Nombre = r.GetString(3),
                 Puesto = r.GetString(4),
                 Telefono = r.GetString(5)
@@ -461,16 +479,34 @@ ORDER BY e.Nombre";
         return list;
     }
 
-    public static void GuardarEncargado(int departamentoId, string nombre, string puesto, string telefono)
+    public static void GuardarEncargado(int departamentoId, string nombre, string puesto, string telefono, int id = 0)
     {
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO Encargados (DepartamentoId, Nombre, Puesto, Telefono) VALUES ($d, $n, $p, $t)";
+        if (id > 0)
+        {
+            cmd.CommandText = "UPDATE Encargados SET DepartamentoId=$d, Nombre=$n, Puesto=$p, Telefono=$t WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$id", id);
+        }
+        else
+        {
+            cmd.CommandText = "INSERT INTO Encargados (DepartamentoId, Nombre, Puesto, Telefono) VALUES ($d, $n, $p, $t)";
+        }
         cmd.Parameters.AddWithValue("$d", departamentoId);
         cmd.Parameters.AddWithValue("$n", nombre.Trim());
         cmd.Parameters.AddWithValue("$p", puesto.Trim());
         cmd.Parameters.AddWithValue("$t", telefono.Trim());
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarEncargado(int id)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Encargados WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
     }
 
@@ -497,15 +533,34 @@ ORDER BY e.Nombre";
         return list;
     }
 
-    public static void GuardarProyecto(string codigo, string nombre, string area)
+    public static void GuardarProyecto(string codigo, string nombre, string area, string estatus = "Activo", int id = 0)
     {
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO Proyectos (Codigo, Nombre, ClienteArea, Estatus, EsStockGeneral) VALUES ($c, $n, $a, 'Activo', 0)";
+        if (id > 0)
+        {
+            cmd.CommandText = "UPDATE Proyectos SET Codigo=$c, Nombre=$n, ClienteArea=$a, Estatus=$e WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$id", id);
+        }
+        else
+        {
+            cmd.CommandText = "INSERT INTO Proyectos (Codigo, Nombre, ClienteArea, Estatus, EsStockGeneral) VALUES ($c, $n, $a, $e, 0)";
+        }
         cmd.Parameters.AddWithValue("$c", codigo.Trim().ToUpperInvariant());
         cmd.Parameters.AddWithValue("$n", nombre.Trim());
         cmd.Parameters.AddWithValue("$a", area.Trim());
+        cmd.Parameters.AddWithValue("$e", string.IsNullOrWhiteSpace(estatus) ? "Activo" : estatus.Trim());
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarProyecto(int id)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Proyectos WHERE Id=$id AND EsStockGeneral=0";
+        cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
     }
 
@@ -528,6 +583,34 @@ ORDER BY e.Nombre";
             });
         }
         return list;
+    }
+
+    public static void GuardarCategoria(string nombre, int id = 0)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        if (id > 0)
+        {
+            cmd.CommandText = "UPDATE Categorias SET Nombre=$n WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$id", id);
+        }
+        else
+        {
+            cmd.CommandText = "INSERT INTO Categorias (Nombre, Icono, ColorHex) VALUES ($n, 'Box24', '#0078D4')";
+        }
+        cmd.Parameters.AddWithValue("$n", nombre.Trim());
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarCategoria(int id)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Categorias WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
     }
 
     public static List<Proveedor> ObtenerProveedores()
@@ -592,6 +675,16 @@ SELECT last_insert_rowid();";
             return p.Id;
         }
         return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public static void EliminarProveedor(int id)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Proveedores WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
     }
 
     // ==================== PRODUCTOS Y HERRAMIENTAS ====================
@@ -761,6 +854,26 @@ VALUES ($pid, $ci, $ns, $mm, $est, $ubi, '', '', $not)";
         cmd.Parameters.AddWithValue("$est", h.Estado);
         cmd.Parameters.AddWithValue("$ubi", h.Ubicacion.Trim());
         cmd.Parameters.AddWithValue("$not", h.NotasEstado.Trim());
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarHerramientaActivo(int id)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM HerramientasActivos WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarProducto(int id)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Productos WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
     }
 
