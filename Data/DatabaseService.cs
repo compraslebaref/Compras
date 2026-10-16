@@ -28,6 +28,8 @@ public static class DatabaseService
         Directory.CreateDirectory(XmlFolder);
         Directory.CreateDirectory(BackupsFolder);
 
+        RestaurarDatosRepositorioSiEsNecesario();
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
@@ -281,6 +283,51 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         SeedInitialDataIfEmpty(conn);
         conn.Close();
         SincronizarFacturasYOrdenesExistentes();
+    }
+
+    private static void RestaurarDatosRepositorioSiEsNecesario()
+    {
+        try
+        {
+            string? repoDataDir = null;
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                string candidate = Path.Combine(dir.FullName, "Data", "compras_almacen.db");
+                if (File.Exists(candidate))
+                {
+                    repoDataDir = Path.Combine(dir.FullName, "Data");
+                    break;
+                }
+                dir = dir.Parent;
+            }
+
+            if (repoDataDir == null)
+                return;
+
+            string repoDb = Path.Combine(repoDataDir, "compras_almacen.db");
+            if (!File.Exists(DbPath) && File.Exists(repoDb))
+            {
+                File.Copy(repoDb, DbPath, overwrite: false);
+            }
+
+            string repoImgs = Path.Combine(repoDataDir, "ImagenesCatalogo");
+            if (Directory.Exists(repoImgs))
+            {
+                foreach (var imgFile in Directory.GetFiles(repoImgs))
+                {
+                    string destImg = Path.Combine(ImagesFolder, Path.GetFileName(imgFile));
+                    if (!File.Exists(destImg))
+                    {
+                        File.Copy(imgFile, destImg, overwrite: false);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Continuar normalmente si ocurre algún error de permisos
+        }
     }
 
     private static void SeedInitialDataIfEmpty(SqliteConnection conn)

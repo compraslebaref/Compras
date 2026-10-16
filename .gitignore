@@ -12,8 +12,9 @@ publish/
 *.userosscache
 *.sln.docstates
 
-# Bases de datos locales y respaldos temporales
+# Bases de datos temporales (excepto el respaldo versionado en Data/)
 *.db
+!Data/compras_almacen.db
 *.db-shm
 *.db-wal
 *.sqlite

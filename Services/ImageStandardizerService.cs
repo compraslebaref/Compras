@@ -78,6 +78,25 @@ public static class ImageStandardizerService
         return destPath;
     }
 
+    private static string? ResolverRutaImagen(string? ruta)
+    {
+        if (string.IsNullOrWhiteSpace(ruta))
+            return null;
+
+        if (File.Exists(ruta))
+            return ruta;
+
+        string fileName = Path.GetFileName(ruta);
+        if (!string.IsNullOrWhiteSpace(fileName))
+        {
+            string localCandidate = Path.Combine(DatabaseService.ImagesFolder, fileName);
+            if (File.Exists(localCandidate))
+                return localCandidate;
+        }
+
+        return null;
+    }
+
     public static ImageSource? ObtenerMiniaturaCacheada(string? ruta)
     {
         if (string.IsNullOrWhiteSpace(ruta))
@@ -85,7 +104,8 @@ public static class ImageStandardizerService
 
         return _thumbnailCache.GetOrAdd(ruta, path =>
         {
-            if (!File.Exists(path))
+            string? resolved = ResolverRutaImagen(path);
+            if (resolved == null)
                 return null;
 
             try
@@ -94,7 +114,7 @@ public static class ImageStandardizerService
                 bi.BeginInit();
                 bi.CacheOption = BitmapCacheOption.OnLoad;
                 bi.DecodePixelWidth = ThumbnailDecodeWidth;
-                bi.UriSource = new Uri(path, UriKind.Absolute);
+                bi.UriSource = new Uri(resolved, UriKind.Absolute);
                 bi.EndInit();
                 bi.Freeze();
                 return bi;
@@ -108,7 +128,8 @@ public static class ImageStandardizerService
 
     public static ImageSource? CargarImagenSegura(string? ruta)
     {
-        if (string.IsNullOrWhiteSpace(ruta) || !File.Exists(ruta))
+        string? resolved = ResolverRutaImagen(ruta);
+        if (resolved == null)
             return null;
 
         try
@@ -116,7 +137,7 @@ public static class ImageStandardizerService
             var bi = new BitmapImage();
             bi.BeginInit();
             bi.CacheOption = BitmapCacheOption.OnLoad;
-            bi.UriSource = new Uri(ruta, UriKind.Absolute);
+            bi.UriSource = new Uri(resolved, UriKind.Absolute);
             bi.EndInit();
             bi.Freeze();
             return bi;
