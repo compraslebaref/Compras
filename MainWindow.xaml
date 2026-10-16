@@ -251,8 +251,9 @@
                                     <ui:TextBox x:Name="TxtBuscarCatalogo"
                                                 Grid.Column="0"
                                                 Margin="0,0,8,0"
-                                                PlaceholderText="Buscar producto o código..."
+                                                PlaceholderText="Buscar producto o escanear código (PRD, ENT, SAL, OC)..."
                                                 VerticalContentAlignment="Center"
+                                                KeyDown="TxtBuscarCatalogo_KeyDown"
                                                 TextChanged="TxtBuscarCatalogo_TextChanged" />
                                     <TextBlock x:Name="TxtContadorCatalogo"
                                                Grid.Column="1"
@@ -841,119 +842,193 @@
                 <!-- ==================== TAB 5: ALMACÉN ==================== -->
                 <TabItem>
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="200" />
+                        </Grid.RowDefinitions>
 
-                        <!-- Izquierda: Salida de Material -->
-                        <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Top">
-                                    <TextBlock Text="Salida de Material" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+                        <!-- Barra de Búsqueda y Escaneo de Almacén -->
+                        <Border Grid.Row="0"
+                                Margin="0,0,0,10"
+                                Padding="12,8"
+                                CornerRadius="8"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                                    <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="Departamento" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                            <ComboBox x:Name="CboSalDepartamento" SelectionChanged="CboSalDepartamento_SelectionChanged" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="4,0,4,0">
-                                            <TextBlock Text="Persona que Recibe" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                            <ComboBox x:Name="CboSalEncargado" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                            <TextBlock Text="Proyecto Destino" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                            <ComboBox x:Name="CboSalProyecto" />
-                                        </StackPanel>
-                                    </Grid>
+                                <ui:SymbolIcon Grid.Column="0"
+                                               Symbol="BarcodeScanner24"
+                                               FontSize="20"
+                                               Margin="4,0,10,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="#0078D4" />
 
-                                    <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="90" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox x:Name="CboSalProductoPos" Grid.Column="0" Margin="0,0,6,0" />
-                                        <ui:TextBox x:Name="TxtSalCantidadPos" Grid.Column="1" Text="1" PlaceholderText="Cant." Margin="0,0,6,0" VerticalContentAlignment="Center" />
-                                        <ui:Button Grid.Column="2" Content="Agregar" Click="BtnAgregarPartidaSalidaPos_Click" />
-                                    </Grid>
-                                </StackPanel>
+                                <ui:TextBox x:Name="TxtBuscarAlmacen"
+                                            Grid.Column="1"
+                                            PlaceholderText="Buscar en Almacén o escanear código de barras (Producto, Entrada ENT-..., Salida SAL-..., Herramienta HER-... o Préstamo PRE-...)..."
+                                            VerticalContentAlignment="Center"
+                                            FontSize="13"
+                                            KeyDown="TxtBuscarAlmacen_KeyDown"
+                                            TextChanged="TxtBuscarAlmacen_TextChanged" />
 
-                                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                    <TextBlock Text="Observaciones de Salida" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                    <ui:TextBox x:Name="TxtSalNotas" Margin="0,0,0,8" PlaceholderText="Ej. Entrega para instalación eléctrica en planta..." />
-                                    <UniformGrid Columns="2">
-                                        <ui:Button Content="Limpiar" Margin="0,0,6,0" Click="BtnLimpiarSalidaPos_Click" />
-                                        <ui:Button Content="Registrar Salida" Appearance="Primary" Click="BtnRegistrarSalidaAlmacen_Click" />
-                                    </UniformGrid>
-                                </StackPanel>
+                                <ui:Button Grid.Column="2"
+                                           Margin="8,0,0,0"
+                                           Appearance="Primary"
+                                           Icon="{ui:SymbolIcon Search24}"
+                                           Content="Buscar / Agregar"
+                                           Click="BtnBuscarAlmacen_Click" />
 
-                                <DataGrid x:Name="DgPartidasSalidaPos" AutoGenerateColumns="False" CanUserAddRows="False">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="85" />
-                                        <DataGridTextColumn Header="Material" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                        <DataGridTextColumn Header="Cantidad" Binding="{Binding CantidadEntregada}" Width="95" />
-                                        <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" IsReadOnly="True" Width="75" />
-                                        <DataGridTextColumn Header="Importe" Binding="{Binding ImporteCosto, StringFormat={}{0:C2}}" IsReadOnly="True" Width="85" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </DockPanel>
+                                <ui:Button Grid.Column="3"
+                                           Margin="6,0,0,0"
+                                           Content="Limpiar Filtro"
+                                           Click="BtnLimpiarBusquedaAlmacen_Click" />
+                            </Grid>
                         </Border>
 
-                        <!-- Derecha: Préstamo de Herramienta -->
-                        <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Top">
-                                    <DockPanel Margin="0,0,0,10">
-                                        <TextBlock Text="Préstamo de Herramienta" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
-                                        <ui:Button Content="Nueva Herramienta" HorizontalAlignment="Right" Click="BtnNuevaHerramientaIndividual_Click" />
-                                    </DockPanel>
+                        <!-- Cuerpo Central: Salida de Material y Préstamo de Herramienta -->
+                        <Grid Grid.Row="1" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
 
-                                    <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox x:Name="CboHerramientaDisponible" Grid.Column="0" Margin="0,0,6,0" />
-                                        <ui:Button Grid.Column="1" Appearance="Primary" Content="Registrar Préstamo" Click="BtnPrestarHerramienta_Click" />
-                                    </Grid>
-                                </StackPanel>
+                            <!-- Izquierda: Salida de Material -->
+                            <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Top">
+                                        <TextBlock Text="Salida de Material" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
 
-                                <!-- Devolución -->
-                                <Border DockPanel.Dock="Bottom" Padding="10" CornerRadius="6" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                    <StackPanel>
-                                        <TextBlock Text="Devolución de Herramienta" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
-                                        <Grid>
+                                        <Grid Margin="0,0,0,8">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="135" />
                                                 <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                                <TextBlock Text="Departamento" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ComboBox x:Name="CboSalDepartamento" SelectionChanged="CboSalDepartamento_SelectionChanged" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="4,0,4,0">
+                                                <TextBlock Text="Persona que Recibe" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ComboBox x:Name="CboSalEncargado" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Margin="4,0,0,0">
+                                                <TextBlock Text="Proyecto Destino" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ComboBox x:Name="CboSalProyecto" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="90" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <ComboBox x:Name="CboEstadoRetornoHerramienta" Grid.Column="0" SelectedIndex="0" Margin="0,0,6,0">
-                                                <ComboBoxItem Content="Bueno" />
-                                                <ComboBoxItem Content="Dañado" />
-                                                <ComboBoxItem Content="Extraviado" />
-                                            </ComboBox>
-                                            <ui:TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" PlaceholderText="Observaciones al devolver..." />
-                                            <ui:Button Grid.Column="2" Content="Registrar Devolución" Appearance="Primary" Margin="0,0,6,0" Click="BtnRegistrarDevolucionHerramienta_Click" />
-                                            <ui:Button Grid.Column="3" Content="Imprimir" Click="BtnReimprimirValePrestamo_Click" />
+                                            <ComboBox x:Name="CboSalProductoPos" Grid.Column="0" Margin="0,0,6,0" />
+                                            <ui:TextBox x:Name="TxtSalCantidadPos" Grid.Column="1" Text="1" PlaceholderText="Cant." Margin="0,0,6,0" VerticalContentAlignment="Center" />
+                                            <ui:Button Grid.Column="2" Content="Agregar" Click="BtnAgregarPartidaSalidaPos_Click" />
                                         </Grid>
                                     </StackPanel>
-                                </Border>
 
-                                <DataGrid x:Name="DgPrestamosHerramientas" AutoGenerateColumns="False" IsReadOnly="True">
+                                    <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                        <TextBlock Text="Observaciones de Salida" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                        <ui:TextBox x:Name="TxtSalNotas" Margin="0,0,0,8" PlaceholderText="Ej. Entrega para instalación eléctrica en planta..." />
+                                        <UniformGrid Columns="2">
+                                            <ui:Button Content="Limpiar" Margin="0,0,6,0" Click="BtnLimpiarSalidaPos_Click" />
+                                            <ui:Button Content="Registrar Salida" Appearance="Primary" Click="BtnRegistrarSalidaAlmacen_Click" />
+                                        </UniformGrid>
+                                    </StackPanel>
+
+                                    <DataGrid x:Name="DgPartidasSalidaPos" AutoGenerateColumns="False" CanUserAddRows="False">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="85" />
+                                            <DataGridTextColumn Header="Material" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                            <DataGridTextColumn Header="Cantidad" Binding="{Binding CantidadEntregada}" Width="95" />
+                                            <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" IsReadOnly="True" Width="75" />
+                                            <DataGridTextColumn Header="Importe" Binding="{Binding ImporteCosto, StringFormat={}{0:C2}}" IsReadOnly="True" Width="85" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Derecha: Préstamo de Herramienta -->
+                            <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Top">
+                                        <DockPanel Margin="0,0,0,10">
+                                            <TextBlock Text="Préstamo de Herramienta" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
+                                            <ui:Button Content="Nueva Herramienta" HorizontalAlignment="Right" Click="BtnNuevaHerramientaIndividual_Click" />
+                                        </DockPanel>
+
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="CboHerramientaDisponible" Grid.Column="0" Margin="0,0,6,0" />
+                                            <ui:Button Grid.Column="1" Appearance="Primary" Content="Registrar Préstamo" Click="BtnPrestarHerramienta_Click" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Devolución -->
+                                    <Border DockPanel.Dock="Bottom" Padding="10" CornerRadius="6" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                        <StackPanel>
+                                            <TextBlock Text="Devolución de Herramienta" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="135" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ComboBox x:Name="CboEstadoRetornoHerramienta" Grid.Column="0" SelectedIndex="0" Margin="0,0,6,0">
+                                                    <ComboBoxItem Content="Bueno" />
+                                                    <ComboBoxItem Content="Dañado" />
+                                                    <ComboBoxItem Content="Extraviado" />
+                                                </ComboBox>
+                                                <ui:TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" PlaceholderText="Observaciones al devolver..." />
+                                                <ui:Button Grid.Column="2" Content="Registrar Devolución" Appearance="Primary" Margin="0,0,6,0" Click="BtnRegistrarDevolucionHerramienta_Click" />
+                                                <ui:Button Grid.Column="3" Content="Imprimir" Click="BtnReimprimirValePrestamo_Click" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <DataGrid x:Name="DgPrestamosHerramientas" AutoGenerateColumns="False" IsReadOnly="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Folio" Binding="{Binding FolioVale}" Width="105" />
+                                            <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="85" />
+                                            <DataGridTextColumn Header="Herramienta" Binding="{Binding HerramientaDescripcion}" Width="*" />
+                                            <DataGridTextColumn Header="Responsable" Binding="{Binding EncargadoNombre}" Width="125" />
+                                            <DataGridTextColumn Header="Estado" Binding="{Binding EstadoDevolucion}" Width="95" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Historial de Vales de Entrada y Salida en Almacén -->
+                        <Border Grid.Row="2" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <DockPanel>
+                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                    <TextBlock Text="Historial de Entradas y Salidas de Almacén" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                                    <ui:Button Content="Ver / Imprimir Vale" Icon="{ui:SymbolIcon Print24}" HorizontalAlignment="Right" Click="BtnImprimirMovimientoAlmacen_Click" />
+                                </DockPanel>
+                                <DataGrid x:Name="DgMovimientosAlmacen" AutoGenerateColumns="False" IsReadOnly="True">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Folio" Binding="{Binding FolioVale}" Width="105" />
-                                        <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="85" />
-                                        <DataGridTextColumn Header="Herramienta" Binding="{Binding HerramientaDescripcion}" Width="*" />
-                                        <DataGridTextColumn Header="Responsable" Binding="{Binding EncargadoNombre}" Width="125" />
-                                        <DataGridTextColumn Header="Estado" Binding="{Binding EstadoDevolucion}" Width="95" />
+                                        <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="125" />
+                                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoMovimiento}" Width="95" />
+                                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="125" />
+                                        <DataGridTextColumn Header="Responsable / Proveedor" Binding="{Binding ResponsableOProveedor}" Width="210" />
+                                        <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="220" />
+                                        <DataGridTextColumn Header="Detalle / Notas" Binding="{Binding DetalleResumen}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>

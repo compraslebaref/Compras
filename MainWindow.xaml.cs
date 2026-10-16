@@ -39,6 +39,8 @@ public partial class MainWindow : FluentWindow
     private readonly ObservableCollection<SolicitudPartida> _partidasNuevaSolicitud = new();
     private readonly ObservableCollection<CotizacionRenglonComparativo> _renglonesComparativa = new();
     private readonly ObservableCollection<SalidaPartida> _partidasSalidaPos = new();
+    private List<PrestamoVistaFila> _todosPrestamosFilas = new();
+    private List<MovimientoAlmacenFila> _todosMovimientosAlmacen = new();
     private FacturaXml? _facturaXmlEnPantalla;
     private bool _actualizandoCombosXml = false;
 
@@ -54,6 +56,18 @@ public partial class MainWindow : FluentWindow
         public string ProyectoNombre { get; set; } = string.Empty;
         public string EstadoDevolucion { get; set; } = string.Empty;
         public PrestamoHerramienta PrestamoOriginal { get; set; } = null!;
+    }
+
+    public class MovimientoAlmacenFila
+    {
+        public string Folio { get; set; } = string.Empty;
+        public string TipoMovimiento { get; set; } = string.Empty;
+        public string Fecha { get; set; } = string.Empty;
+        public string ResponsableOProveedor { get; set; } = string.Empty;
+        public string ProyectoNombre { get; set; } = string.Empty;
+        public string DetalleResumen { get; set; } = string.Empty;
+        public EntradaAlmacen? EntradaOriginal { get; set; }
+        public SalidaAlmacen? SalidaOriginal { get; set; }
     }
 
     public MainWindow()
@@ -232,9 +246,67 @@ public partial class MainWindow : FluentWindow
         ProcesarCodigoEscaneado(TxtOmniScanner.Text);
     }
 
+    private static string NormalizarCodigoEscaneado(string? rawInput)
+    {
+        if (string.IsNullOrWhiteSpace(rawInput))
+            return string.Empty;
+
+        string s = rawInput.Trim().ToUpperInvariant();
+        // Las pistolas de código de barras en teclado Español/Latinoamérica suelen enviar ' o / o ? o _ en lugar de -
+        s = s.Replace('\'', '-')
+             .Replace('’', '-')
+             .Replace('´', '-')
+             .Replace('`', '-')
+             .Replace('/', '-')
+             .Replace('?', '-')
+             .Replace('_', '-');
+
+        while (s.Contains("--"))
+            s = s.Replace("--", "-");
+
+        return s;
+    }
+
+    private static bool CoincideFolioFlexible(string folioReal, string codigoBuscado)
+    {
+        if (string.IsNullOrWhiteSpace(folioReal) || string.IsNullOrWhiteSpace(codigoBuscado))
+            return false;
+
+        string f = NormalizarCodigoEscaneado(folioReal);
+        string c = NormalizarCodigoEscaneado(codigoBuscado);
+
+        if (f.Equals(c, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Permitir buscar "ENT-0001" o "ENT-1" y que coincida con "ENT-2026-0001"
+        var partesF = f.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        var partesC = c.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        if (partesF.Length >= 2 && partesC.Length >= 2 &&
+            partesF[0].Equals(partesC[0], StringComparison.OrdinalIgnoreCase))
+        {
+            if (int.TryParse(partesF[^1], out int numF) && int.TryParse(partesC[^1], out int numC) && numF == numC)
+            {
+                if (partesC.Length == 2 || partesF[1].Equals(partesC[1], StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool EsPrefijoDocumento(string code)
+    {
+        return code.StartsWith("ENT-") ||
+               code.StartsWith("SAL-") ||
+               code.StartsWith("OC-") ||
+               code.StartsWith("PRE-") ||
+               code.StartsWith("HER-") ||
+               code.StartsWith("SOL-");
+    }
+
     private void ProcesarCodigoEscaneado(string? rawInput)
     {
-        string code = (rawInput ?? string.Empty).Trim().ToUpperInvariant();
+        string code = NormalizarCodigoEscaneado(rawInput);
         if (string.IsNullOrWhiteSpace(code))
             return;
 
@@ -245,7 +317,7 @@ public partial class MainWindow : FluentWindow
         if (code.StartsWith("OC-"))
         {
             var ocs = DatabaseService.ObtenerOrdenesCompra();
-            var oc = ocs.FirstOrDefault(o => o.Folio.Equals(code, StringComparison.OrdinalIgnoreCase));
+            var oc = ocs.FirstOrDefault(o => CoincideFolioFlexible(o.Folio, code));
             if (oc != null)
             {
                 CambiarSeccion(4);
@@ -263,15 +335,19 @@ public partial class MainWindow : FluentWindow
             CambiarSeccion(5);
             RefrescarAlmacenPosYPrestamos();
 
-            var filas = DgPrestamosHerramientas.Items.Cast<PrestamoVistaFila>().ToList();
+            var filas = _todosPrestamosFilas.Count > 0
+                ? _todosPrestamosFilas
+                : DgPrestamosHerramientas.Items.Cast<PrestamoVistaFila>().ToList();
+
             var match = filas.FirstOrDefault(f =>
-                (f.FolioVale.Equals(code, StringComparison.OrdinalIgnoreCase) || f.CodigoIndividual.Equals(code, StringComparison.OrdinalIgnoreCase)) &&
+                (CoincideFolioFlexible(f.FolioVale, code) || CoincideFolioFlexible(f.CodigoIndividual, code)) &&
                 f.EstadoDevolucion == "Pendiente")
-                ?? filas.FirstOrDefault(f => f.FolioVale.Equals(code, StringComparison.OrdinalIgnoreCase) || f.CodigoIndividual.Equals(code, StringComparison.OrdinalIgnoreCase));
+                ?? filas.FirstOrDefault(f => CoincideFolioFlexible(f.FolioVale, code) || CoincideFolioFlexible(f.CodigoIndividual, code));
 
             if (match != null)
             {
                 DgPrestamosHerramientas.SelectedItem = match;
+                DgPrestamosHerramientas.ScrollIntoView(match);
                 System.Windows.MessageBox.Show(this,
                     $"Resguardo localizado: {match.FolioVale}\nHerramienta: {match.CodigoIndividual} ({match.HerramientaDescripcion})\nEncargado: {match.EncargadoNombre}\n\nSeleccione el estado de retorno (Bueno / Dañado / Extraviado) y haga clic en 'Registrar Devolución'.",
                     "Escaneo de Herramienta / Resguardo", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -279,7 +355,7 @@ public partial class MainWindow : FluentWindow
             }
 
             // Si es una herramienta disponible, seleccionarla para prestarla
-            var disp = CboHerramientaDisponible.Items.Cast<HerramientaActivo>().FirstOrDefault(h => h.CodigoIndividual.Equals(code, StringComparison.OrdinalIgnoreCase));
+            var disp = CboHerramientaDisponible.Items.Cast<HerramientaActivo>().FirstOrDefault(h => CoincideFolioFlexible(h.CodigoIndividual, code));
             if (disp != null)
             {
                 CboHerramientaDisponible.SelectedItem = disp;
@@ -294,7 +370,7 @@ public partial class MainWindow : FluentWindow
         if (code.StartsWith("SOL-"))
         {
             var sols = DatabaseService.ObtenerSolicitudes();
-            var sol = sols.FirstOrDefault(s => s.Folio.Equals(code, StringComparison.OrdinalIgnoreCase));
+            var sol = sols.FirstOrDefault(s => CoincideFolioFlexible(s.Folio, code));
             if (sol != null)
             {
                 CambiarSeccion(3);
@@ -303,33 +379,62 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        // 4. ¿Es un Vale de Entrada (ENT-xxxx) o Vale de Salida (SAL-xxxx)? -> Abrir su vista previa impresa
+        // 4. ¿Es un Vale de Entrada (ENT-xxxx) o Vale de Salida (SAL-xxxx)? -> Localizar y abrir su vista previa impresa
         if (code.StartsWith("ENT-"))
         {
-            var ent = DatabaseService.ObtenerEntradasAlmacen().FirstOrDefault(x => x.Folio.Equals(code, StringComparison.OrdinalIgnoreCase));
+            var ent = DatabaseService.ObtenerEntradasAlmacen().FirstOrDefault(x => CoincideFolioFlexible(x.Folio, code));
             if (ent != null)
             {
+                if (MainTabControl.SelectedIndex == 5)
+                {
+                    RefrescarAlmacenPosYPrestamos();
+                    var filaMov = DgMovimientosAlmacen.Items.Cast<MovimientoAlmacenFila>().FirstOrDefault(m => m.TipoMovimiento == "ENTRADA" && m.Folio == ent.Folio);
+                    if (filaMov != null)
+                    {
+                        DgMovimientosAlmacen.SelectedItem = filaMov;
+                        DgMovimientosAlmacen.ScrollIntoView(filaMov);
+                    }
+                }
+                else if (MainTabControl.SelectedIndex == 4)
+                {
+                    var filaEnt = DgEntradasHistorial.Items.Cast<EntradaAlmacen>().FirstOrDefault(x => x.Id == ent.Id);
+                    if (filaEnt != null)
+                    {
+                        DgEntradasHistorial.SelectedItem = filaEnt;
+                        DgEntradasHistorial.ScrollIntoView(filaEnt);
+                    }
+                }
                 BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent);
                 return;
             }
         }
         if (code.StartsWith("SAL-"))
         {
-            var sal = DatabaseService.ObtenerSalidasAlmacen().FirstOrDefault(x => x.Folio.Equals(code, StringComparison.OrdinalIgnoreCase));
+            var sal = DatabaseService.ObtenerSalidasAlmacen().FirstOrDefault(x => CoincideFolioFlexible(x.Folio, code));
             if (sal != null)
             {
+                CambiarSeccion(5);
+                RefrescarAlmacenPosYPrestamos();
+                var filaMov = DgMovimientosAlmacen.Items.Cast<MovimientoAlmacenFila>().FirstOrDefault(m => m.TipoMovimiento == "SALIDA" && m.Folio == sal.Folio);
+                if (filaMov != null)
+                {
+                    DgMovimientosAlmacen.SelectedItem = filaMov;
+                    DgMovimientosAlmacen.ScrollIntoView(filaMov);
+                }
                 BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, sal);
                 return;
             }
         }
 
         // 5. ¿Es un Producto del Catálogo (PRD-xxxx o Código de Barras EAN/UPC)?
-        var prod = DatabaseService.BuscarProductoPorCodigo(code);
+        var prod = DatabaseService.BuscarProductoPorCodigo(code)
+                   ?? (rawInput != null ? DatabaseService.BuscarProductoPorCodigo(rawInput.Trim()) : null);
         if (prod != null)
         {
             // Si estamos en Almacén POS (Tab 5), agregar directo como caja registradora
             if (MainTabControl.SelectedIndex == 5)
             {
+                CboSalProductoPos.SelectedItem = CboSalProductoPos.Items.Cast<Producto>().FirstOrDefault(x => x.Id == prod.Id);
                 AgregarProductoAValeSalidaPos(prod, 1m);
                 return;
             }
@@ -353,7 +458,7 @@ public partial class MainWindow : FluentWindow
         }
 
         System.Windows.MessageBox.Show(this,
-            $"No se encontró ningún documento o producto con el código '{code}'.\nPuede registrarlo como nuevo producto en el Catálogo Visual.",
+            $"No se encontró ningún documento o producto con el código '{code}'.\n\nFormatos soportados:\n• Entrada de Almacén: ENT-2026-0001\n• Salida de Almacén: SAL-2026-0001\n• Orden de Compra: OC-2026-0001\n• Préstamo / Herramienta: PRE-2026-0001 / HER-0001\n• Producto: Código de barras o PRD-0001",
             "Código no registrado", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
@@ -385,7 +490,26 @@ public partial class MainWindow : FluentWindow
             _cacheProductos = DatabaseService.ObtenerProductos();
         }
 
-        string filtro = TxtBuscarCatalogo?.Text?.Trim() ?? string.Empty;
+        string filtroRaw = TxtBuscarCatalogo?.Text?.Trim() ?? string.Empty;
+        string filtroNorm = NormalizarCodigoEscaneado(filtroRaw);
+
+        // Si el usuario escaneó un folio de documento (ENT-, SAL-, OC-, PRE-, HER-, SOL-) en el buscador del catálogo y el código está completo
+        if (filtroNorm.Length >= 8 && EsPrefijoDocumento(filtroNorm))
+        {
+            bool existeDoc =
+                (filtroNorm.StartsWith("ENT-") && DatabaseService.ObtenerEntradasAlmacen().Any(x => x.Folio.Equals(filtroNorm, StringComparison.OrdinalIgnoreCase))) ||
+                (filtroNorm.StartsWith("SAL-") && DatabaseService.ObtenerSalidasAlmacen().Any(x => x.Folio.Equals(filtroNorm, StringComparison.OrdinalIgnoreCase))) ||
+                (filtroNorm.StartsWith("OC-") && DatabaseService.ObtenerOrdenesCompra().Any(x => x.Folio.Equals(filtroNorm, StringComparison.OrdinalIgnoreCase))) ||
+                ((filtroNorm.StartsWith("PRE-") || filtroNorm.StartsWith("HER-")) && _todosPrestamosFilas.Any(x => x.FolioVale.Equals(filtroNorm, StringComparison.OrdinalIgnoreCase) || x.CodigoIndividual.Equals(filtroNorm, StringComparison.OrdinalIgnoreCase)));
+
+            if (existeDoc)
+            {
+                TxtBuscarCatalogo!.Clear();
+                ProcesarCodigoEscaneado(filtroNorm);
+                return;
+            }
+        }
+
         int catId = (CboFiltroCategoria?.SelectedItem as Categoria)?.Id ?? 0;
 
         IEnumerable<Producto> query = _cacheProductos;
@@ -394,13 +518,15 @@ public partial class MainWindow : FluentWindow
             query = query.Where(p => p.CategoriaId == catId);
         }
 
-        if (!string.IsNullOrWhiteSpace(filtro))
+        if (!string.IsNullOrWhiteSpace(filtroRaw))
         {
             query = query.Where(p =>
-                p.Nombre.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
-                p.CodigoInterno.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
-                p.CodigoBarras.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
-                p.Descripcion.Contains(filtro, StringComparison.OrdinalIgnoreCase));
+                p.Nombre.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoInterno.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoInterno.Contains(filtroNorm, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoBarras.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoBarras.Contains(filtroNorm, StringComparison.OrdinalIgnoreCase) ||
+                p.Descripcion.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase));
         }
 
         _catalogoFiltrado = query.ToList();
@@ -463,6 +589,40 @@ public partial class MainWindow : FluentWindow
     {
         _timerBusquedaCatalogo.Stop();
         _timerBusquedaCatalogo.Start();
+    }
+
+    private void TxtBuscarCatalogo_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            _timerBusquedaCatalogo.Stop();
+            string raw = TxtBuscarCatalogo.Text?.Trim() ?? string.Empty;
+            string code = NormalizarCodigoEscaneado(raw);
+            if (string.IsNullOrWhiteSpace(code))
+                return;
+
+            // Si es un documento (ENT-, SAL-, OC-, PRE-, HER-, SOL-), procesarlo con el escáner global
+            if (EsPrefijoDocumento(code))
+            {
+                TxtBuscarCatalogo.Clear();
+                ProcesarCodigoEscaneado(code);
+                e.Handled = true;
+                return;
+            }
+
+            // Si coincide exactamente con el código de barras o código interno de un producto, seleccionarlo y agregarlo
+            var prodExacto = DatabaseService.BuscarProductoPorCodigo(code) ?? DatabaseService.BuscarProductoPorCodigo(raw);
+            if (prodExacto != null)
+            {
+                RefrescarCatalogoVisual();
+                CargarProductoEnEditor(prodExacto);
+                e.Handled = true;
+                return;
+            }
+
+            RefrescarCatalogoVisual();
+            e.Handled = true;
+        }
     }
 
     private void CboFiltroCategoria_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1142,7 +1302,211 @@ public partial class MainWindow : FluentWindow
                 });
             }
         }
-        DgPrestamosHerramientas.ItemsSource = filas;
+        _todosPrestamosFilas = filas;
+
+        var movs = new List<MovimientoAlmacenFila>();
+        var entradas = DatabaseService.ObtenerEntradasAlmacen();
+        foreach (var ent in entradas)
+        {
+            string detalle = ent.Partidas.Count > 0
+                ? string.Join(", ", ent.Partidas.Select(p => $"{p.CantidadIngresadaAlmacen:0.##} {p.UnidadAlmacen} {p.ProductoNombre}"))
+                : ent.Notas;
+            movs.Add(new MovimientoAlmacenFila
+            {
+                TipoMovimiento = "ENTRADA",
+                Folio = ent.Folio,
+                Fecha = ent.Fecha,
+                ResponsableOProveedor = ent.ProveedorNombre,
+                ProyectoNombre = string.IsNullOrWhiteSpace(ent.OrdenCompraFolio)
+                    ? "Almacén General"
+                    : $"OC: {ent.OrdenCompraFolio}",
+                DetalleResumen = detalle,
+                EntradaOriginal = ent
+            });
+        }
+
+        var salidas = DatabaseService.ObtenerSalidasAlmacen();
+        foreach (var sal in salidas)
+        {
+            string detalle = sal.Partidas.Count > 0
+                ? string.Join(", ", sal.Partidas.Select(p => $"{p.CantidadEntregada:0.##} {p.UnidadAlmacen} {p.ProductoNombre}"))
+                : sal.Notas;
+            movs.Add(new MovimientoAlmacenFila
+            {
+                TipoMovimiento = "SALIDA",
+                Folio = sal.Folio,
+                Fecha = sal.Fecha,
+                ResponsableOProveedor = $"{sal.EncargadoNombre} ({sal.DepartamentoNombre})",
+                ProyectoNombre = sal.ProyectoNombre,
+                DetalleResumen = detalle,
+                SalidaOriginal = sal
+            });
+        }
+
+        _todosMovimientosAlmacen = movs
+            .OrderByDescending(m => m.Fecha)
+            .ThenByDescending(m => m.Folio)
+            .ToList();
+
+        AplicarFiltroAlmacen();
+    }
+
+    private void AplicarFiltroAlmacen()
+    {
+        string raw = TxtBuscarAlmacen?.Text?.Trim() ?? string.Empty;
+        string norm = NormalizarCodigoEscaneado(raw);
+
+        var todosProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            CboSalProductoPos.ItemsSource = todosProds;
+            if (CboSalProductoPos.Items.Count > 0 && CboSalProductoPos.SelectedIndex < 0)
+                CboSalProductoPos.SelectedIndex = 0;
+
+            DgPrestamosHerramientas.ItemsSource = _todosPrestamosFilas;
+            DgMovimientosAlmacen.ItemsSource = _todosMovimientosAlmacen;
+            return;
+        }
+
+        var prodsFiltrados = todosProds.Where(p =>
+            p.Nombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.CodigoInterno.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.CodigoInterno.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
+            p.CodigoBarras.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.CodigoBarras.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
+            p.Descripcion.Contains(raw, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (prodsFiltrados.Count > 0)
+        {
+            CboSalProductoPos.ItemsSource = prodsFiltrados;
+            CboSalProductoPos.SelectedIndex = 0;
+        }
+
+        var prestamosFiltrados = _todosPrestamosFilas.Where(f =>
+            f.FolioVale.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            f.FolioVale.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
+            CoincideFolioFlexible(f.FolioVale, norm) ||
+            f.CodigoIndividual.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            f.CodigoIndividual.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
+            CoincideFolioFlexible(f.CodigoIndividual, norm) ||
+            f.HerramientaDescripcion.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            f.EncargadoNombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            f.ProyectoNombre.Contains(raw, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        var movsFiltrados = _todosMovimientosAlmacen.Where(m =>
+            m.Folio.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            m.Folio.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
+            CoincideFolioFlexible(m.Folio, norm) ||
+            m.TipoMovimiento.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            m.ResponsableOProveedor.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            m.ProyectoNombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            m.DetalleResumen.Contains(raw, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        DgPrestamosHerramientas.ItemsSource = prestamosFiltrados;
+        if (prestamosFiltrados.Count == 1)
+            DgPrestamosHerramientas.SelectedItem = prestamosFiltrados[0];
+
+        DgMovimientosAlmacen.ItemsSource = movsFiltrados;
+        if (movsFiltrados.Count == 1)
+            DgMovimientosAlmacen.SelectedItem = movsFiltrados[0];
+    }
+
+    private void TxtBuscarAlmacen_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        AplicarFiltroAlmacen();
+    }
+
+    private void TxtBuscarAlmacen_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            EjecutarAccionBuscadorAlmacen();
+            e.Handled = true;
+        }
+    }
+
+    private void BtnBuscarAlmacen_Click(object sender, RoutedEventArgs e)
+    {
+        EjecutarAccionBuscadorAlmacen();
+    }
+
+    private void BtnLimpiarBusquedaAlmacen_Click(object sender, RoutedEventArgs e)
+    {
+        TxtBuscarAlmacen.Clear();
+        AplicarFiltroAlmacen();
+        TxtBuscarAlmacen.Focus();
+    }
+
+    private void EjecutarAccionBuscadorAlmacen()
+    {
+        string raw = TxtBuscarAlmacen?.Text?.Trim() ?? string.Empty;
+        string code = NormalizarCodigoEscaneado(raw);
+        if (string.IsNullOrWhiteSpace(code))
+            return;
+
+        // 1. Si es código de Entrada, Salida, OC, Préstamo, Herramienta o Solicitud, o coincide con un folio existente
+        if (EsPrefijoDocumento(code))
+        {
+            TxtBuscarAlmacen!.Clear();
+            AplicarFiltroAlmacen();
+            ProcesarCodigoEscaneado(code);
+            return;
+        }
+
+        // 2. Si coincide exactamente con el código de barras o código interno de un producto, agregarlo al vale de salida POS
+        var prodExacto = DatabaseService.BuscarProductoPorCodigo(code) ?? DatabaseService.BuscarProductoPorCodigo(raw);
+        if (prodExacto != null)
+        {
+            TxtBuscarAlmacen!.Clear();
+            AplicarFiltroAlmacen();
+            CboSalProductoPos.SelectedItem = CboSalProductoPos.Items.Cast<Producto>().FirstOrDefault(x => x.Id == prodExacto.Id);
+            decimal cant = ParseDecimal(TxtSalCantidadPos.Text, 1m);
+            AgregarProductoAValeSalidaPos(prodExacto, cant);
+            return;
+        }
+
+        // 3. Si al filtrar por texto queda exactamente 1 movimiento (Entrada o Salida) y ningún producto exacto, abrir su vista previa
+        AplicarFiltroAlmacen();
+        if (DgMovimientosAlmacen.Items.Count == 1 && DgMovimientosAlmacen.Items[0] is MovimientoAlmacenFila unicoMov &&
+            (unicoMov.Folio.Contains(code, StringComparison.OrdinalIgnoreCase) || CoincideFolioFlexible(unicoMov.Folio, code)))
+        {
+            AbrirVistaPreviaMovimientoAlmacen(unicoMov);
+            return;
+        }
+
+        // 4. Si al filtrar por texto coincide con 1 único producto en el combo POS, seleccionarlo listo para agregar
+        if (CboSalProductoPos.Items.Count == 1 && CboSalProductoPos.Items[0] is Producto unicoProd)
+        {
+            CboSalProductoPos.SelectedItem = unicoProd;
+        }
+    }
+
+    private void BtnImprimirMovimientoAlmacen_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgMovimientosAlmacen.SelectedItem is MovimientoAlmacenFila fila)
+        {
+            AbrirVistaPreviaMovimientoAlmacen(fila);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this,
+                "Seleccione un movimiento (Entrada ENT-xxxx o Salida SAL-xxxx) de la tabla inferior o escanee su código de barras en el buscador.",
+                "Seleccione un vale", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void AbrirVistaPreviaMovimientoAlmacen(MovimientoAlmacenFila fila)
+    {
+        if (fila.EntradaOriginal != null)
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, fila.EntradaOriginal);
+        }
+        else if (fila.SalidaOriginal != null)
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, fila.SalidaOriginal);
+        }
     }
 
     private void AgregarProductoAValeSalidaPos(Producto prod, decimal cantidadMenudeo)

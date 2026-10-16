@@ -1397,11 +1397,11 @@ ORDER BY Id DESC";
         {
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
-SELECT ep.Id, ep.EntradaAlmacenId, ep.ProductoId, p.CodigoInterno, p.Nombre,
+SELECT ep.Id, ep.EntradaAlmacenId, ep.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto'),
        ep.CantidadCompraRecibida, ep.UnidadCompra, ep.FactorConversion,
        ep.CantidadIngresadaAlmacen, ep.UnidadAlmacen, ep.CostoUnitarioCompraConIva
 FROM EntradaPartidas ep
-JOIN Productos p ON p.Id = ep.ProductoId
+LEFT JOIN Productos p ON p.Id = ep.ProductoId
 WHERE ep.EntradaAlmacenId = $eid";
             pCmd.Parameters.AddWithValue("$eid", ent.Id);
             using var pr = pCmd.ExecuteReader();
