@@ -332,6 +332,9 @@
                                                                    RenderOptions.BitmapScalingMode="LowQuality"
                                                                    Stretch="Uniform"
                                                                    Margin="4" />
+                                                            <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#E0F2FE">
+                                                                <TextBlock Text="{Binding CategoriaNombre}" Foreground="#0369A1" FontSize="9.5" FontWeight="SemiBold" MaxWidth="115" TextTrimming="CharacterEllipsis" />
+                                                            </Border>
                                                             <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#0F172A">
                                                                 <TextBlock Text="{Binding CodigoInterno}" Foreground="White" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" />
                                                             </Border>
@@ -339,7 +342,8 @@
                                                     </Border>
 
                                                     <TextBlock Text="{Binding Nombre}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" ToolTip="{Binding Nombre}" />
-                                                    <TextBlock Text="{Binding ConversionTexto}" FontSize="11" Opacity="0.72" Margin="0,2,0,4" />
+                                                    <TextBlock Text="{Binding FichaTecnicaResumen}" FontSize="10.5" Foreground="#0284C7" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding FichaTecnicaResumen}" Margin="0,1,0,1" />
+                                                    <TextBlock Text="{Binding ConversionTexto}" FontSize="11" Opacity="0.72" Margin="0,0,0,4" />
 
                                                     <Grid Margin="0,2,0,6">
                                                         <Grid.ColumnDefinitions>
@@ -430,10 +434,66 @@
                                     </Grid>
 
                                     <TextBlock Text="Nombre del Producto" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                    <ui:TextBox x:Name="TxtProdNombre" Margin="0,0,0,6" PlaceholderText="Ej. Tornillo Hexagonal Inox 1/4 x 1 pulg" />
+                                    <ui:TextBox x:Name="TxtProdNombre" Margin="0,0,0,6" PlaceholderText="Ej. Compresor Scroll 5 Toneladas / Paño Microfibra" />
 
-                                    <TextBlock Text="Categoría" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                    <ComboBox x:Name="CboProdCategoria" Margin="0,0,0,6" />
+                                    <TextBlock Text="Categoría (Define los campos técnicos abajo)" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                    <ComboBox x:Name="CboProdCategoria" Margin="0,0,0,6" SelectionChanged="CboProdCategoria_SelectionChanged" />
+
+                                    <!-- Ficha Técnica Inteligente (Universal + Dinámica por Categoría) -->
+                                    <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,2,0,8">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,6">
+                                                <TextBlock Text="Ficha Técnica y Especificaciones" FontWeight="Bold" FontSize="11.5" VerticalAlignment="Center" />
+                                                <ui:Button Content="Autocompletar"
+                                                           FontSize="10.5"
+                                                           Padding="6,2"
+                                                           HorizontalAlignment="Right"
+                                                           ToolTip="Detectar categoría, marca, modelo, medidas y especificaciones desde el nombre"
+                                                           Click="BtnAutocompletarFichaProducto_Click" />
+                                            </DockPanel>
+
+                                            <!-- Nivel 1: Campos Universales (Marca, Modelo, Medidas) -->
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                                    <TextBlock Text="Marca" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtProdMarca" PlaceholderText="Ej. LG, Trane, Pretul, 3M" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                                    <TextBlock Text="Modelo / N° Parte" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtProdModelo" PlaceholderText="Ej. EBR80820305, MVPP600" />
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <TextBlock Text="Medidas / Dimensiones" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdMedidas" Margin="0,0,0,6" PlaceholderText="Ej. 40x40 cm, 3/4 x 2 pulg, 18 m x 19 mm" />
+
+                                            <!-- Nivel 2: Campos Dinámicos según la Categoría seleccionada -->
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                                    <TextBlock x:Name="LblProdCampo1" Text="Capacidad Eléctrica / Voltaje" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
+                                                    <ui:TextBox x:Name="TxtProdCapacidadElectrica" PlaceholderText="Ej. 220V / 5 Ton / Microfibra" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                                    <TextBlock x:Name="LblProdCampo2" Text="Corriente / Potencia / Material" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
+                                                    <ui:TextBox x:Name="TxtProdEspecificacion1" PlaceholderText="Ej. 40A, 160W, Cédula 40, 4 L" />
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <TextBlock x:Name="LblProdCampo3" Text="Gas / Polos / Color / Especificación" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
+                                            <ui:TextBox x:Name="TxtProdEspecificacion2" Margin="0,0,0,6" PlaceholderText="Ej. R-410A, Trifásico, IP65, Color Azul" />
+
+                                            <TextBlock Text="Notas Técnicas / Descripción Adicional" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <ui:TextBox x:Name="TxtProdDescripcion" PlaceholderText="Observaciones adicionales, compatibilidad o referencia SAT..." />
+                                        </StackPanel>
+                                    </Border>
 
                                     <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,2,0,8">
                                         <StackPanel>
@@ -1567,8 +1627,9 @@
                                                       IsReadOnly="True"
                                                       SelectionChanged="DgDirCategorias_SelectionChanged">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="65" />
-                                                    <DataGridTextColumn Header="Nombre de la Categoría" Binding="{Binding Nombre}" Width="*" />
+                                                    <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="55" />
+                                                    <DataGridTextColumn Header="Nombre de la Categoría" Binding="{Binding Nombre}" Width="240" />
+                                                    <DataGridTextColumn Header="Campos Técnicos de esta Categoría" Binding="{Binding CamposResumen}" Width="*" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -1634,19 +1695,28 @@
                                         <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                             <StackPanel>
                                                 <DockPanel Margin="0,0,0,8">
-                                                    <TextBlock Text="Categoría" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                                                    <TextBlock Text="Categoría y Plantilla Técnica" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
                                                     <ui:Button Content="Nueva" HorizontalAlignment="Right" Click="BtnNuevaCategoriaDir_Click" />
                                                 </DockPanel>
 
                                                 <TextBlock Text="Nombre de la Categoría" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                <ui:TextBox x:Name="TxtDirCatNombre" Margin="0,0,0,8" PlaceholderText="Ej. Neumática e Hidráulica" />
+                                                <ui:TextBox x:Name="TxtDirCatNombre" Margin="0,0,0,6" PlaceholderText="Ej. Refrigeración y Aire Acondicionado" />
+
+                                                <TextBlock Text="Etiqueta Campo Técnico 1" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtDirCatCampo1" Margin="0,0,0,6" PlaceholderText="Ej. Capacidad Eléctrica / Voltaje" />
+
+                                                <TextBlock Text="Etiqueta Campo Técnico 2" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtDirCatCampo2" Margin="0,0,0,6" PlaceholderText="Ej. Corriente / Potencia / Material" />
+
+                                                <TextBlock Text="Etiqueta Campo Técnico 3" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ui:TextBox x:Name="TxtDirCatCampo3" Margin="0,0,0,8" PlaceholderText="Ej. Gas / Polos / Color / Norma" />
 
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <ui:Button Grid.Column="0" Content="Guardar Categoría" HorizontalAlignment="Stretch" Click="BtnGuardarCategoriaDir_Click" />
+                                                    <ui:Button Grid.Column="0" Content="Guardar Categoría" Appearance="Primary" HorizontalAlignment="Stretch" Click="BtnGuardarCategoriaDir_Click" />
                                                     <ui:Button Grid.Column="1" Margin="6,0,0,0" Content="Eliminar" Click="BtnEliminarCategoriaDir_Click" />
                                                 </Grid>
                                             </StackPanel>

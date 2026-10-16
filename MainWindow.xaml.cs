@@ -526,6 +526,13 @@ public partial class MainWindow : FluentWindow
                 p.CodigoInterno.Contains(filtroNorm, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoBarras.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoBarras.Contains(filtroNorm, StringComparison.OrdinalIgnoreCase) ||
+                p.Marca.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.Modelo.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.Medidas.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.CapacidadElectrica.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.Especificacion1.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.Especificacion2.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.CategoriaNombre.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
                 p.Descripcion.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase));
         }
 
@@ -631,6 +638,55 @@ public partial class MainWindow : FluentWindow
         RefrescarCatalogoVisual();
     }
 
+    private void CboProdCategoria_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CboProdCategoria?.SelectedItem is Categoria cat)
+        {
+            ActualizarEtiquetasFichaPorCategoria(cat);
+        }
+    }
+
+    private void ActualizarEtiquetasFichaPorCategoria(Categoria? cat)
+    {
+        if (LblProdCampo1 == null || LblProdCampo2 == null || LblProdCampo3 == null)
+            return;
+
+        LblProdCampo1.Text = !string.IsNullOrWhiteSpace(cat?.EtiquetaCampo1)
+            ? cat.EtiquetaCampo1
+            : "Capacidad Eléctrica / Tipo";
+        LblProdCampo2.Text = !string.IsNullOrWhiteSpace(cat?.EtiquetaCampo2)
+            ? cat.EtiquetaCampo2
+            : "Especificación / Material";
+        LblProdCampo3.Text = !string.IsNullOrWhiteSpace(cat?.EtiquetaCampo3)
+            ? cat.EtiquetaCampo3
+            : "Detalle Adicional / Color";
+    }
+
+    private void BtnAutocompletarFichaProducto_Click(object sender, RoutedEventArgs e)
+    {
+        string nombre = TxtProdNombre.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            System.Windows.MessageBox.Show(this, "Escriba primero el nombre del producto para detectar su categoría y especificaciones técnicas.", "Nombre vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var info = DatabaseService.ClasificarYExtraerEspecificacionesProducto(nombre, TxtProdDescripcion.Text);
+        var cat = CboProdCategoria.Items.Cast<Categoria>().FirstOrDefault(c => c.Id == info.CategoriaId);
+        if (cat != null)
+        {
+            CboProdCategoria.SelectedItem = cat;
+            ActualizarEtiquetasFichaPorCategoria(cat);
+        }
+
+        if (!string.IsNullOrWhiteSpace(info.Marca)) TxtProdMarca.Text = info.Marca;
+        if (!string.IsNullOrWhiteSpace(info.Modelo)) TxtProdModelo.Text = info.Modelo;
+        if (!string.IsNullOrWhiteSpace(info.Medidas)) TxtProdMedidas.Text = info.Medidas;
+        if (!string.IsNullOrWhiteSpace(info.CapacidadElectrica)) TxtProdCapacidadElectrica.Text = info.CapacidadElectrica;
+        if (!string.IsNullOrWhiteSpace(info.Especificacion1)) TxtProdEspecificacion1.Text = info.Especificacion1;
+        if (!string.IsNullOrWhiteSpace(info.Especificacion2)) TxtProdEspecificacion2.Text = info.Especificacion2;
+    }
+
     private void AgregarAlCarritoTienda(Producto p, decimal cantidad)
     {
         var idx = _carritoTienda.FindIndex(x => x.producto.Id == p.Id);
@@ -675,6 +731,13 @@ public partial class MainWindow : FluentWindow
         TxtProdCodigoInterno.Text = p.CodigoInterno;
         TxtProdCodigoBarras.Text = p.CodigoBarras;
         TxtProdNombre.Text = p.Nombre;
+        TxtProdMarca.Text = p.Marca;
+        TxtProdModelo.Text = p.Modelo;
+        TxtProdMedidas.Text = p.Medidas;
+        TxtProdCapacidadElectrica.Text = p.CapacidadElectrica;
+        TxtProdEspecificacion1.Text = p.Especificacion1;
+        TxtProdEspecificacion2.Text = p.Especificacion2;
+        TxtProdDescripcion.Text = p.Descripcion;
         TxtProdUnidadCompra.Text = p.UnidadCompra;
         TxtProdUnidadAlmacen.Text = p.UnidadAlmacen;
         TxtProdFactor.Text = p.FactorConversion.ToString("0.##", CultureInfo.InvariantCulture);
@@ -685,7 +748,11 @@ public partial class MainWindow : FluentWindow
         ChkProdEsHerramienta.IsChecked = p.EsHerramienta;
 
         var cat = CboProdCategoria.Items.Cast<Categoria>().FirstOrDefault(c => c.Id == p.CategoriaId);
-        if (cat != null) CboProdCategoria.SelectedItem = cat;
+        if (cat != null)
+        {
+            CboProdCategoria.SelectedItem = cat;
+            ActualizarEtiquetasFichaPorCategoria(cat);
+        }
 
         ImgPreviewProducto.Source = ImageStandardizerService.CargarImagenSegura(p.ImagenRuta);
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(p.CodigoEfectivo);
@@ -699,9 +766,16 @@ public partial class MainWindow : FluentWindow
         TxtProdCodigoInterno.Text = sig;
         TxtProdCodigoBarras.Text = sig;
         TxtProdNombre.Text = string.Empty;
-        TxtProdUnidadCompra.Text = "Caja (100 pzas)";
+        TxtProdMarca.Text = string.Empty;
+        TxtProdModelo.Text = string.Empty;
+        TxtProdMedidas.Text = string.Empty;
+        TxtProdCapacidadElectrica.Text = string.Empty;
+        TxtProdEspecificacion1.Text = string.Empty;
+        TxtProdEspecificacion2.Text = string.Empty;
+        TxtProdDescripcion.Text = string.Empty;
+        TxtProdUnidadCompra.Text = "Pieza";
         TxtProdUnidadAlmacen.Text = "Pieza";
-        TxtProdFactor.Text = "100";
+        TxtProdFactor.Text = "1";
         TxtProdStock.Text = "0";
         TxtProdStockMin.Text = "5";
         TxtProdCosto.Text = "0.00";
@@ -709,6 +783,7 @@ public partial class MainWindow : FluentWindow
         ChkProdEsHerramienta.IsChecked = false;
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(sig);
+        ActualizarEtiquetasFichaPorCategoria(CboProdCategoria?.SelectedItem as Categoria);
         ActualizarSeleccionCatalogo();
     }
 
@@ -762,6 +837,13 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.CodigoBarras = TxtProdCodigoBarras.Text.Trim();
         _productoEnEdicion.Nombre = TxtProdNombre.Text.Trim();
         _productoEnEdicion.CategoriaId = (CboProdCategoria.SelectedItem as Categoria)?.Id ?? 1;
+        _productoEnEdicion.Marca = TxtProdMarca.Text.Trim();
+        _productoEnEdicion.Modelo = TxtProdModelo.Text.Trim();
+        _productoEnEdicion.Medidas = TxtProdMedidas.Text.Trim();
+        _productoEnEdicion.CapacidadElectrica = TxtProdCapacidadElectrica.Text.Trim();
+        _productoEnEdicion.Especificacion1 = TxtProdEspecificacion1.Text.Trim();
+        _productoEnEdicion.Especificacion2 = TxtProdEspecificacion2.Text.Trim();
+        _productoEnEdicion.Descripcion = TxtProdDescripcion.Text.Trim();
         _productoEnEdicion.UnidadCompra = string.IsNullOrWhiteSpace(TxtProdUnidadCompra.Text) ? "Pieza" : TxtProdUnidadCompra.Text.Trim();
         _productoEnEdicion.UnidadAlmacen = string.IsNullOrWhiteSpace(TxtProdUnidadAlmacen.Text) ? "Pieza" : TxtProdUnidadAlmacen.Text.Trim();
         _productoEnEdicion.FactorConversion = ParseDecimal(TxtProdFactor.Text, 1m);
@@ -775,7 +857,8 @@ public partial class MainWindow : FluentWindow
         {
             DatabaseService.GuardarProducto(_productoEnEdicion);
             CargarTodoElSistema();
-            CargarProductoEnEditor(_productoEnEdicion);
+            var actualizado = _cacheProductos.FirstOrDefault(x => x.Id == _productoEnEdicion.Id) ?? _productoEnEdicion;
+            CargarProductoEnEditor(actualizado);
         });
     }
 
@@ -1375,6 +1458,13 @@ public partial class MainWindow : FluentWindow
             p.CodigoInterno.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
             p.CodigoBarras.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
             p.CodigoBarras.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
+            p.Marca.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.Modelo.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.Medidas.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.CapacidadElectrica.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.Especificacion1.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.Especificacion2.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+            p.CategoriaNombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
             p.Descripcion.Contains(raw, StringComparison.OrdinalIgnoreCase)).ToList();
 
         if (prodsFiltrados.Count > 0)
@@ -2585,6 +2675,9 @@ public partial class MainWindow : FluentWindow
         if (DgDirCategorias.SelectedItem is not Categoria c) return;
         _categoriaEditandoId = c.Id;
         TxtDirCatNombre.Text = c.Nombre;
+        TxtDirCatCampo1.Text = c.EtiquetaCampo1;
+        TxtDirCatCampo2.Text = c.EtiquetaCampo2;
+        TxtDirCatCampo3.Text = c.EtiquetaCampo3;
     }
 
     private void BtnNuevaCategoriaDir_Click(object sender, RoutedEventArgs e)
@@ -2592,6 +2685,9 @@ public partial class MainWindow : FluentWindow
         _categoriaEditandoId = 0;
         DgDirCategorias.SelectedItem = null;
         TxtDirCatNombre.Clear();
+        TxtDirCatCampo1.Text = "Capacidad Eléctrica / Tipo";
+        TxtDirCatCampo2.Text = "Especificación / Material";
+        TxtDirCatCampo3.Text = "Detalle Adicional / Color";
     }
 
     private void BtnGuardarCategoriaDir_Click(object sender, RoutedEventArgs e)
@@ -2602,7 +2698,12 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        DatabaseService.GuardarCategoria(TxtDirCatNombre.Text, _categoriaEditandoId);
+        DatabaseService.GuardarCategoria(
+            TxtDirCatNombre.Text,
+            _categoriaEditandoId,
+            TxtDirCatCampo1.Text,
+            TxtDirCatCampo2.Text,
+            TxtDirCatCampo3.Text);
         BtnNuevaCategoriaDir_Click(sender, e);
         CargarTodoElSistema();
     }

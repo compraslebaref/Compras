@@ -42,6 +42,10 @@ public class Categoria
     public string Nombre { get; set; } = string.Empty;
     public string Icono { get; set; } = "Box24";
     public string ColorHex { get; set; } = "#0078D4";
+    public string EtiquetaCampo1 { get; set; } = "Capacidad Eléctrica / Tipo";
+    public string EtiquetaCampo2 { get; set; } = "Especificación / Material";
+    public string EtiquetaCampo3 { get; set; } = "Detalle Adicional / Color";
+    public string CamposResumen => $"{EtiquetaCampo1} | {EtiquetaCampo2} | {EtiquetaCampo3}";
     public override string ToString() => Nombre;
 }
 
@@ -57,6 +61,12 @@ public class Producto : INotifyPropertyChanged
     public string Descripcion { get; set; } = string.Empty;
     public int CategoriaId { get; set; }
     public string CategoriaNombre { get; set; } = string.Empty;
+    public string Marca { get; set; } = string.Empty;
+    public string Modelo { get; set; } = string.Empty;
+    public string Medidas { get; set; } = string.Empty;
+    public string CapacidadElectrica { get; set; } = string.Empty; // Campo dinámico 1 según categoría
+    public string Especificacion1 { get; set; } = string.Empty;    // Campo dinámico 2 según categoría
+    public string Especificacion2 { get; set; } = string.Empty;    // Campo dinámico 3 según categoría
     public string UnidadCompra { get; set; } = "Pieza";       // Ej. Caja, Paquete, Rollo, Pieza
     public string UnidadAlmacen { get; set; } = "Pieza";      // Ej. Pieza, Metro, Par
     public decimal FactorConversion { get; set; } = 1m;       // Ej. 1 Caja = 100 Piezas
@@ -86,6 +96,20 @@ public class Producto : INotifyPropertyChanged
     public string ConversionTexto => FactorConversion > 1
         ? $"1 {UnidadCompra} = {FactorConversion:0.##} {UnidadAlmacen}"
         : $"1 {UnidadAlmacen}";
+    public string FichaTecnicaResumen
+    {
+        get
+        {
+            var partes = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Marca)) partes.Add(Marca);
+            if (!string.IsNullOrWhiteSpace(Modelo)) partes.Add($"Mod: {Modelo}");
+            if (!string.IsNullOrWhiteSpace(Medidas)) partes.Add(Medidas);
+            if (!string.IsNullOrWhiteSpace(CapacidadElectrica)) partes.Add(CapacidadElectrica);
+            if (!string.IsNullOrWhiteSpace(Especificacion1)) partes.Add(Especificacion1);
+            if (!string.IsNullOrWhiteSpace(Especificacion2)) partes.Add(Especificacion2);
+            return partes.Count > 0 ? string.Join(" • ", partes) : CategoriaNombre;
+        }
+    }
     public string CodigoEfectivo => string.IsNullOrWhiteSpace(CodigoBarras) ? CodigoInterno : CodigoBarras;
     public bool Seleccionado
     {
@@ -102,7 +126,10 @@ public class Producto : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public override string ToString() => $"{CodigoInterno} - {Nombre}";
+    public override string ToString() =>
+        !string.IsNullOrWhiteSpace(Marca) || !string.IsNullOrWhiteSpace(Modelo)
+            ? $"{CodigoInterno} - {Nombre} [{Marca} {Modelo}]".Trim()
+            : $"{CodigoInterno} - {Nombre}";
 }
 
 public class HerramientaActivo

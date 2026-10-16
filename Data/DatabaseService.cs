@@ -62,7 +62,10 @@ CREATE TABLE IF NOT EXISTS Categorias (
     Id INTEGER PRIMARY KEY AUTOINCREMENT,
     Nombre TEXT NOT NULL,
     Icono TEXT NOT NULL DEFAULT 'Box24',
-    ColorHex TEXT NOT NULL DEFAULT '#0078D4'
+    ColorHex TEXT NOT NULL DEFAULT '#0078D4',
+    EtiquetaCampo1 TEXT NOT NULL DEFAULT 'Capacidad Eléctrica / Tipo',
+    EtiquetaCampo2 TEXT NOT NULL DEFAULT 'Especificación / Material',
+    EtiquetaCampo3 TEXT NOT NULL DEFAULT 'Detalle Adicional / Color'
 );
 
 CREATE TABLE IF NOT EXISTS Productos (
@@ -72,6 +75,12 @@ CREATE TABLE IF NOT EXISTS Productos (
     Nombre TEXT NOT NULL,
     Descripcion TEXT NOT NULL DEFAULT '',
     CategoriaId INTEGER NOT NULL,
+    Marca TEXT NOT NULL DEFAULT '',
+    Modelo TEXT NOT NULL DEFAULT '',
+    Medidas TEXT NOT NULL DEFAULT '',
+    CapacidadElectrica TEXT NOT NULL DEFAULT '',
+    Especificacion1 TEXT NOT NULL DEFAULT '',
+    Especificacion2 TEXT NOT NULL DEFAULT '',
     UnidadCompra TEXT NOT NULL DEFAULT 'Pieza',
     UnidadAlmacen TEXT NOT NULL DEFAULT 'Pieza',
     FactorConversion REAL NOT NULL DEFAULT 1,
@@ -280,9 +289,38 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
 ";
         cmd.ExecuteNonQuery();
 
+        AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo1", "TEXT NOT NULL DEFAULT 'Capacidad Eléctrica / Tipo'");
+        AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo2", "TEXT NOT NULL DEFAULT 'Especificación / Material'");
+        AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo3", "TEXT NOT NULL DEFAULT 'Detalle Adicional / Color'");
+
+        AsegurarColumnaExiste(conn, "Productos", "Marca", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "Productos", "Modelo", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "Productos", "Medidas", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "Productos", "CapacidadElectrica", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "Productos", "Especificacion1", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "Productos", "Especificacion2", "TEXT NOT NULL DEFAULT ''");
+
         SeedInitialDataIfEmpty(conn);
+        MigrarCategoriasYReclasificarCatalogo(conn);
         conn.Close();
         SincronizarFacturasYOrdenesExistentes();
+    }
+
+    private static void AsegurarColumnaExiste(SqliteConnection conn, string tabla, string columna, string definicionSql)
+    {
+        using var check = conn.CreateCommand();
+        check.CommandText = $"PRAGMA table_info({tabla});";
+        using var r = check.ExecuteReader();
+        while (r.Read())
+        {
+            if (string.Equals(r.GetString(1), columna, StringComparison.OrdinalIgnoreCase))
+                return;
+        }
+        r.Close();
+
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {tabla} ADD COLUMN {columna} {definicionSql};";
+        alter.ExecuteNonQuery();
     }
 
     private static void RestaurarDatosRepositorioSiEsNecesario()
@@ -655,7 +693,7 @@ ORDER BY e.Nombre";
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Id, Nombre, Icono, ColorHex FROM Categorias ORDER BY Id";
+        cmd.CommandText = "SELECT Id, Nombre, Icono, ColorHex, EtiquetaCampo1, EtiquetaCampo2, EtiquetaCampo3 FROM Categorias ORDER BY Id";
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
@@ -664,27 +702,37 @@ ORDER BY e.Nombre";
                 Id = r.GetInt32(0),
                 Nombre = r.GetString(1),
                 Icono = r.GetString(2),
-                ColorHex = r.GetString(3)
+                ColorHex = r.GetString(3),
+                EtiquetaCampo1 = r.IsDBNull(4) || string.IsNullOrWhiteSpace(r.GetString(4)) ? "Capacidad Eléctrica / Tipo" : r.GetString(4),
+                EtiquetaCampo2 = r.IsDBNull(5) || string.IsNullOrWhiteSpace(r.GetString(5)) ? "Especificación / Material" : r.GetString(5),
+                EtiquetaCampo3 = r.IsDBNull(6) || string.IsNullOrWhiteSpace(r.GetString(6)) ? "Detalle Adicional / Color" : r.GetString(6)
             });
         }
         return list;
     }
 
-    public static void GuardarCategoria(string nombre, int id = 0)
+    public static void GuardarCategoria(string nombre, int id = 0, string? etiqueta1 = null, string? etiqueta2 = null, string? etiqueta3 = null)
     {
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
+        string e1 = string.IsNullOrWhiteSpace(etiqueta1) ? "Capacidad Eléctrica / Tipo" : etiqueta1.Trim();
+        string e2 = string.IsNullOrWhiteSpace(etiqueta2) ? "Especificación / Material" : etiqueta2.Trim();
+        string e3 = string.IsNullOrWhiteSpace(etiqueta3) ? "Detalle Adicional / Color" : etiqueta3.Trim();
+
         if (id > 0)
         {
-            cmd.CommandText = "UPDATE Categorias SET Nombre=$n WHERE Id=$id";
+            cmd.CommandText = "UPDATE Categorias SET Nombre=$n, EtiquetaCampo1=$e1, EtiquetaCampo2=$e2, EtiquetaCampo3=$e3 WHERE Id=$id";
             cmd.Parameters.AddWithValue("$id", id);
         }
         else
         {
-            cmd.CommandText = "INSERT INTO Categorias (Nombre, Icono, ColorHex) VALUES ($n, 'Box24', '#0078D4')";
+            cmd.CommandText = "INSERT INTO Categorias (Nombre, Icono, ColorHex, EtiquetaCampo1, EtiquetaCampo2, EtiquetaCampo3) VALUES ($n, 'Box24', '#0078D4', $e1, $e2, $e3)";
         }
         cmd.Parameters.AddWithValue("$n", nombre.Trim());
+        cmd.Parameters.AddWithValue("$e1", e1);
+        cmd.Parameters.AddWithValue("$e2", e2);
+        cmd.Parameters.AddWithValue("$e3", e3);
         cmd.ExecuteNonQuery();
     }
 
@@ -783,11 +831,21 @@ SELECT last_insert_rowid();";
         cmd.CommandText = @"
 SELECT p.Id, p.CodigoInterno, p.CodigoBarras, p.Nombre, p.Descripcion, p.CategoriaId, c.Nombre,
        p.UnidadCompra, p.UnidadAlmacen, p.FactorConversion, p.StockActual, p.StockReservadoProyecto,
-       p.StockMinimo, p.UltimoCostoCompra, p.Ubicacion, p.ImagenRuta, p.EsHerramienta
+       p.StockMinimo, p.UltimoCostoCompra, p.Ubicacion, p.ImagenRuta, p.EsHerramienta,
+       p.Marca, p.Modelo, p.Medidas, p.CapacidadElectrica, p.Especificacion1, p.Especificacion2
 FROM Productos p
 LEFT JOIN Categorias c ON c.Id = p.CategoriaId
 WHERE ($cat IS NULL OR p.CategoriaId = $cat)
-  AND ($f IS NULL OR p.Nombre LIKE '%' || $f || '%' OR p.CodigoInterno LIKE '%' || $f || '%' OR p.CodigoBarras LIKE '%' || $f || '%' OR p.Descripcion LIKE '%' || $f || '%')
+  AND ($f IS NULL OR p.Nombre LIKE '%' || $f || '%'
+       OR p.CodigoInterno LIKE '%' || $f || '%'
+       OR p.CodigoBarras LIKE '%' || $f || '%'
+       OR p.Descripcion LIKE '%' || $f || '%'
+       OR p.Marca LIKE '%' || $f || '%'
+       OR p.Modelo LIKE '%' || $f || '%'
+       OR p.Medidas LIKE '%' || $f || '%'
+       OR p.CapacidadElectrica LIKE '%' || $f || '%'
+       OR p.Especificacion1 LIKE '%' || $f || '%'
+       OR p.Especificacion2 LIKE '%' || $f || '%')
 ORDER BY p.CodigoInterno";
         cmd.Parameters.AddWithValue("$cat", categoriaId.HasValue && categoriaId.Value > 0 ? categoriaId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("$f", string.IsNullOrWhiteSpace(filtro) ? DBNull.Value : filtro.Trim());
@@ -812,7 +870,13 @@ ORDER BY p.CodigoInterno";
                 UltimoCostoCompra = Convert.ToDecimal(r.GetDouble(13)),
                 Ubicacion = r.GetString(14),
                 ImagenRuta = r.GetString(15),
-                EsHerramienta = r.GetInt32(16) == 1
+                EsHerramienta = r.GetInt32(16) == 1,
+                Marca = r.IsDBNull(17) ? string.Empty : r.GetString(17),
+                Modelo = r.IsDBNull(18) ? string.Empty : r.GetString(18),
+                Medidas = r.IsDBNull(19) ? string.Empty : r.GetString(19),
+                CapacidadElectrica = r.IsDBNull(20) ? string.Empty : r.GetString(20),
+                Especificacion1 = r.IsDBNull(21) ? string.Empty : r.GetString(21),
+                Especificacion2 = r.IsDBNull(22) ? string.Empty : r.GetString(22)
             });
         }
         return list;
@@ -842,6 +906,7 @@ ORDER BY p.CodigoInterno";
             cmd.CommandText = @"
 UPDATE Productos SET
     CodigoInterno=$ci, CodigoBarras=$cb, Nombre=$nom, Descripcion=$desc, CategoriaId=$cat,
+    Marca=$mar, Modelo=$mod, Medidas=$med, CapacidadElectrica=$cap, Especificacion1=$esp1, Especificacion2=$esp2,
     UnidadCompra=$uc, UnidadAlmacen=$ua, FactorConversion=$fc, StockActual=$sa,
     StockMinimo=$sm, UltimoCostoCompra=$ucc, Ubicacion=$ubi, ImagenRuta=$img, EsHerramienta=$her
 WHERE Id=$id";
@@ -850,16 +915,22 @@ WHERE Id=$id";
         else
         {
             cmd.CommandText = @"
-INSERT INTO Productos (CodigoInterno, CodigoBarras, Nombre, Descripcion, CategoriaId, UnidadCompra, UnidadAlmacen, FactorConversion, StockActual, StockReservadoProyecto, StockMinimo, UltimoCostoCompra, Ubicacion, ImagenRuta, EsHerramienta)
-VALUES ($ci, $cb, $nom, $desc, $cat, $uc, $ua, $fc, $sa, 0, $sm, $ucc, $ubi, $img, $her);
+INSERT INTO Productos (CodigoInterno, CodigoBarras, Nombre, Descripcion, CategoriaId, Marca, Modelo, Medidas, CapacidadElectrica, Especificacion1, Especificacion2, UnidadCompra, UnidadAlmacen, FactorConversion, StockActual, StockReservadoProyecto, StockMinimo, UltimoCostoCompra, Ubicacion, ImagenRuta, EsHerramienta)
+VALUES ($ci, $cb, $nom, $desc, $cat, $mar, $mod, $med, $cap, $esp1, $esp2, $uc, $ua, $fc, $sa, 0, $sm, $ucc, $ubi, $img, $her);
 SELECT last_insert_rowid();";
         }
 
         cmd.Parameters.AddWithValue("$ci", p.CodigoInterno.Trim().ToUpperInvariant());
         cmd.Parameters.AddWithValue("$cb", p.CodigoBarras.Trim());
         cmd.Parameters.AddWithValue("$nom", p.Nombre.Trim());
-        cmd.Parameters.AddWithValue("$desc", p.Descripcion.Trim());
+        cmd.Parameters.AddWithValue("$desc", (p.Descripcion ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$cat", p.CategoriaId > 0 ? p.CategoriaId : 1);
+        cmd.Parameters.AddWithValue("$mar", (p.Marca ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$mod", (p.Modelo ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$med", (p.Medidas ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$cap", (p.CapacidadElectrica ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$esp1", (p.Especificacion1 ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$esp2", (p.Especificacion2 ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$uc", p.UnidadCompra.Trim());
         cmd.Parameters.AddWithValue("$ua", p.UnidadAlmacen.Trim());
         cmd.Parameters.AddWithValue("$fc", (double)Math.Max(0.0001m, p.FactorConversion));
@@ -876,6 +947,337 @@ SELECT last_insert_rowid();";
             return p.Id;
         }
         return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    private static void MigrarCategoriasYReclasificarCatalogo(SqliteConnection conn)
+    {
+        var definicionesCategorias = new (int Id, string Nombre, string Icono, string Color, string E1, string E2, string E3)[]
+        {
+            (1,  "Refrigeración y Aire Acondicionado (HVAC)", "Temperature24",   "#0284C7", "Capacidad / Tonelaje",         "Capacidad Eléctrica (V/F/Hz)", "Gas / Valor Técnico / Equipo"),
+            (2,  "Eléctrico, Iluminación y Control",          "Flash24",         "#EAB308", "Capacidad Eléctrica / Voltaje", "Corriente / Potencia",         "Polos / Calibre / Protección IP"),
+            (3,  "Plomería, Tubería y Conexiones",            "Water24",         "#0EA5E9", "Diámetro / Conexión",           "Material y Cédula",            "Tipo de Unión / Presión"),
+            (4,  "Herramientas, Medición y Maquinaria",       "Wrench24",        "#EA580C", "Alimentación / Tipo",           "Potencia / Capacidad",         "Encastre / Punta / Especificación"),
+            (5,  "Pintura, Impermeabilizantes y Obra",        "PaintBrush24",    "#8B5CF6", "Color / Acabado",               "Contenido / Rendimiento",      "Base / Superficie / Durabilidad"),
+            (6,  "Tornillería, Fijación y Herrajes",          "Settings24",      "#64748B", "Paso / Calibre / Tipo",         "Material / Acabado",           "Capacidad / Resistencia"),
+            (7,  "Soldadura, Químicos y Consumibles Técnicos","Beaker24",        "#D97706", "Contenido / Presentación",      "Aplicación / Especificación",  "Grano / Pureza / Temperatura"),
+            (8,  "Seguridad Industrial y EPP",                "ShieldCheckmark24","#16A34A","Talla",                         "Material / Recubrimiento",     "Color / Norma / Protección"),
+            (9,  "Limpieza, Higiene y Jardinería",            "Sparkle24",       "#14B8A6", "Material / Tipo",               "Contenido / Presentación",     "Color / Aroma"),
+            (10, "Papelería, Oficina y Comedor",              "Document24",      "#6366F1", "Tamaño / Formato",              "Color / Presentación",         "Detalle / Conectividad"),
+            (11, "Servicios, Peajes y Gastos Operativos",     "Receipt24",       "#78716C", "Tipo de Servicio / Gasto",      "Ruta / Referencia",            "Vigencia / Observación")
+        };
+
+        using var tx = conn.BeginTransaction();
+
+        foreach (var c in definicionesCategorias)
+        {
+            using var upCat = conn.CreateCommand();
+            upCat.Transaction = tx;
+            upCat.CommandText = @"
+INSERT INTO Categorias (Id, Nombre, Icono, ColorHex, EtiquetaCampo1, EtiquetaCampo2, EtiquetaCampo3)
+VALUES ($id, $n, $i, $col, $e1, $e2, $e3)
+ON CONFLICT(Id) DO UPDATE SET
+    Nombre = excluded.Nombre,
+    Icono = excluded.Icono,
+    ColorHex = excluded.ColorHex,
+    EtiquetaCampo1 = excluded.EtiquetaCampo1,
+    EtiquetaCampo2 = excluded.EtiquetaCampo2,
+    EtiquetaCampo3 = excluded.EtiquetaCampo3;";
+            upCat.Parameters.AddWithValue("$id", c.Id);
+            upCat.Parameters.AddWithValue("$n", c.Nombre);
+            upCat.Parameters.AddWithValue("$i", c.Icono);
+            upCat.Parameters.AddWithValue("$col", c.Color);
+            upCat.Parameters.AddWithValue("$e1", c.E1);
+            upCat.Parameters.AddWithValue("$e2", c.E2);
+            upCat.Parameters.AddWithValue("$e3", c.E3);
+            upCat.ExecuteNonQuery();
+        }
+
+        using var checkMig = conn.CreateCommand();
+        checkMig.Transaction = tx;
+        checkMig.CommandText = "SELECT COUNT(*) FROM ConfiguracionSistema WHERE Clave = 'Reclasificacion11CategoriasV1';";
+        bool yaReclasificado = Convert.ToInt32(checkMig.ExecuteScalar()) > 0;
+
+        if (!yaReclasificado)
+        {
+            var productosExistentes = new List<(int Id, string Nombre, string Descripcion)>();
+            using (var sel = conn.CreateCommand())
+            {
+                sel.Transaction = tx;
+                sel.CommandText = "SELECT Id, Nombre, Descripcion FROM Productos;";
+                using var r = sel.ExecuteReader();
+                while (r.Read())
+                {
+                    productosExistentes.Add((r.GetInt32(0), r.GetString(1), r.IsDBNull(2) ? string.Empty : r.GetString(2)));
+                }
+            }
+
+            foreach (var item in productosExistentes)
+            {
+                var info = ClasificarYExtraerEspecificacionesProducto(item.Nombre, item.Descripcion);
+                using var upd = conn.CreateCommand();
+                upd.Transaction = tx;
+                upd.CommandText = @"
+UPDATE Productos SET
+    CategoriaId = $cat,
+    Marca = $mar,
+    Modelo = $mod,
+    Medidas = $med,
+    CapacidadElectrica = $cap,
+    Especificacion1 = $esp1,
+    Especificacion2 = $esp2,
+    EsHerramienta = CASE WHEN $cat = 4 AND EsHerramienta = 1 THEN 1 ELSE EsHerramienta END
+WHERE Id = $id;";
+                upd.Parameters.AddWithValue("$id", item.Id);
+                upd.Parameters.AddWithValue("$cat", info.CategoriaId);
+                upd.Parameters.AddWithValue("$mar", info.Marca);
+                upd.Parameters.AddWithValue("$mod", info.Modelo);
+                upd.Parameters.AddWithValue("$med", info.Medidas);
+                upd.Parameters.AddWithValue("$cap", info.CapacidadElectrica);
+                upd.Parameters.AddWithValue("$esp1", info.Especificacion1);
+                upd.Parameters.AddWithValue("$esp2", info.Especificacion2);
+                upd.ExecuteNonQuery();
+            }
+
+            using var mark = conn.CreateCommand();
+            mark.Transaction = tx;
+            mark.CommandText = "INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ('Reclasificacion11CategoriasV1', '1');";
+            mark.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
+    public static (int CategoriaId, string Marca, string Modelo, string Medidas, string CapacidadElectrica, string Especificacion1, string Especificacion2)
+        ClasificarYExtraerEspecificacionesProducto(string? nombreRaw, string? descripcionRaw = null)
+    {
+        string nombre = (nombreRaw ?? string.Empty).Trim();
+        string u = nombre.ToUpperInvariant();
+
+        // 1. Determinar Categoría (1 a 11)
+        int catId = DeterminarCategoriaIdPorNombre(u);
+
+        // 2. Extraer Marca conocida
+        string marca = ExtraerMarcaConocida(u);
+
+        // 3. Extraer Modelo / Número de parte
+        string modelo = ExtraerModeloConocido(nombre, u);
+
+        // 4. Extraer Medidas / Dimensiones físicas
+        string medidas = ExtraerMedidasConocidas(u);
+
+        // 5. Extraer Campos Dinámicos 1, 2 y 3 según la Categoría
+        var (c1, c2, c3) = ExtraerCamposEspecificosPorCategoria(catId, nombre, u);
+
+        return (catId, marca, modelo, medidas, c1, c2, c3);
+    }
+
+    private static int DeterminarCategoriaIdPorNombre(string u)
+    {
+        if (ContieneAlguno(u, "AUTOVÍA", "AUTOVIA", "PEAJE", "NRU ", "CASETA", "FLETE"))
+            return 11; // Servicios, Peajes y Gastos Operativos
+
+        if (ContieneAlguno(u, "CASCO DE SEGURIDAD", "BARBOQUEJO", "LENTES DE SEGURIDAD", "LENTE CON RECUBRIMIENTO", "GUANTE", "PONCHO UNITALLA", "BANDA DE PLÁSTICOPROHIBIDO", "PROHIBIDO"))
+            return 8; // Seguridad Industrial y EPP
+
+        if (ContieneAlguno(u, "CARPETA", "FOLDER", "ENGARGO", "OPALINA", "BOLIG", "LECTOR TARJETAS CLIP", "STARLINK", "GATORADE", "SPLENDA", "TENEDORES", "CUCHASOP", "SERVILLETA", "SERVI BOLSA"))
+            return 10; // Papelería, Oficina y Comedor
+
+        if (ContieneAlguno(u, "MICROFIBRA", "PANO MICROFIBRA", "TRAPEADOR", "ESCOBA", "CEPILLO", "FIBRA MULTIUSOS", "BOLSA NEGRA", "BOLS BAS", "BOLSA VERDE", "BOLSA REUTILIZABLE", "COSTALITOS", "CLORALEX", "BLANQ", "FABULOSO", "PINOL", "LYSOL", "DESINFECTANTE", "WINDEX", "LIMPIADOR", "ARIEL", "AXION", "LAVATRASTES", "AIR WICK", "GLD AER", "PAPEL HIGIÉNICO", "PAPEL HIGIENICO", "TOALLA SCOTT", "BANOS CLX", "PROTECTO ES MED", "PRICESA 200G", "INSECTICIDA", "INSEC H24", "REP.DE MOSQUITOS", "TRAMPA H-24", "HERBICESPED", "FUMIGADOR", "CUBETA 4L")
+            && !ContieneAlguno(u, "ESCOBA METÁLICA", "ESCOBA JAR", "MICROFIBRA 3/8"))
+            return 9; // Limpieza, Higiene y Jardinería
+
+        if (ContieneAlguno(u, "MINISPLIT", "MINI SPLIT", "CONDENSADOR", "EVAPORADOR", "COMPRESOR", "REFRIGERANTE", "FAN COIL", "BOMBA DE DRENAJE", "BOMBA DE CONDENSADO", "VALVULA DE EXPANSION", "VALVULA SERVICIO", "FILTRO DESHIDRATADOR", "SENSOR TRIPLE", "SENSOR DOBLE", "SENSOR DE AMBIENTE", "SENSOR DE POZO", "SENSOR TRANE", "PRESOSTATO", "CONTROLADOR ELECTRONICO DIGITAL LG", "CONTROL UNIVERSAL MIRAGE", "TUBERIA DE EXPANSION", "CHAROLA DE DRENAJE", "TURBINA PARA FAN"))
+            return 1; // Refrigeración y Aire Acondicionado (HVAC)
+
+        if (ContieneAlguno(u, "IMPERMEABILI", "IMPERCOAT", "IMPERPRIM", "FESTERMIX", "NAYA SBS", "LAVILUX", "LAVIFLEX", "PINT HGAR", "BROCHA", "RODILLO", "MANERAL", "FELPA", "PLASTIPROTECTOR", "CINTA AZUL", "CINTA MASKING", "DURETAN", "SILICON", "CEMENTO BLANCO", "THINNER", "THINER", "AGUARRAS", "GUARDAPOLVOS"))
+            return 5; // Pintura, Impermeabilizantes y Obra
+
+        if (ContieneAlguno(u, "HIDRAULIC", "PVC SAN", "YEE PVC", "CODO 90", "TAPON MACHO", "TAPÓN MACHO", "TAPON HIDRAULICO", "TAPON INSERCCION", "NIPLE GALVANIZADO", "REDUCCION BUSHIN", "BRIDA DE", "TUERCA UNION", "MANGUERA", "LLAVE P/MANGUERA", "LLAVE MANGUERA", "CONECTOR RÁPIDO", "CONECTORES RÁPIDOS", "CONECTORE HEMBRA PLÁSTICO", "CONECTOR PLÁSTICO, HEMBRA", "BOQUILLA MINI")
+            && !u.Contains("LAVA-1500P"))
+            return 3; // Plomería, Tubería y Conexiones
+
+        if (ContieneAlguno(u, "TORNILLO", "PIJA", "ARANDELA", "TAQUETE", "MÉNSULA", "MENSULA", "ESQUINERO DE UNION", "CONECTOR MET", "CABLE DE ACERO", "NUDO PARA CABLE", "GUARDACABO", "TENSORES ELASTICOS", "SUJETADORES CON MATRACA", "BANDA GATES", "RODAMIENTO DE BOLAS"))
+            return 6; // Tornillería, Fijación y Herrajes
+
+        if (ContieneAlguno(u, "VARITA DE PLATA", "SOLDADURA DE PLATA", "PASTA FUNDENTE", "FUNDENTE", "TANGIT", "PEGAMENTO PARA PVC", "LIJA", "DISCOS DE LIJA", "CINTA TEFLON", "CINTA PARA DUCTO", "CINTA DE ALUMINIO", "SCOTCH CINTA DE MONTAJE", "SOLVENTE DIELECTRICO", "ALCOHOL ISOPROPILICO", "LUBRICANTE", "GRASA AUTOMOTRIZ", "ÁCIDO MURIATICO", "ACIDO MURIATICO", "ESTOPA", "PASTILLAS SAL"))
+            return 7; // Soldadura, Químicos y Consumibles Técnicos
+
+        if (ContieneAlguno(u, "FLEXOMETRO", "VENTILADOR PEDESTAL", "SOPLADORA", "DESARMADOR", "ASPIRADORA", "HIDROLAVADORA", "LAVA-1500P", "ESCOBA JAR", "ESCOBA METÁLICA", "PUNTAS DE IMPACTO", "DADOS MAG", "SEGUETA", "BROQUERO", "BROCA", "MULTÍMETRO", "MULTIMETRO", "CABLES DE PRUEBA", "MACHETE", "PALA CUADRADA", "LINTERNA", "LAMPARA PORTATIL"))
+            return 4; // Herramientas, Medición y Maquinaria
+
+        return 2; // Eléctrico, Iluminación y Control
+    }
+
+    private static bool ContieneAlguno(string textoUpper, params string[] terminos)
+    {
+        foreach (var t in terminos)
+        {
+            if (textoUpper.Contains(t, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static string ExtraerMarcaConocida(string u)
+    {
+        var marcas = new (string Patron, string NombreMarca)[]
+        {
+            (" LG ", "LG"), ("PANASONIC", "Panasonic"), ("TRANE", "Trane"), ("MIRAGE", "Mirage"),
+            ("EMERSON", "Emerson"), ("SANHUA", "Sanhua"), ("GENETRON", "Genetron"), ("MYVENT", "MyVent"),
+            ("TECNOLITE", "Tecnolite"), ("VOLTECK", "Volteck"), ("PRETUL", "Pretul"), ("FIERO", "Fiero"),
+            ("TRUPER", "Truper"), ("BTDIN", "Bticino"), ("ARGOS", "Argos"), ("3M", "3M"), ("TUK", "Tuk"),
+            ("OSEL", "Osel"), ("LAVILUX", "Lavilux"), ("LAVIFLEX", "Laviflex"), ("IMPERCOAT", "Impercoat"),
+            ("FESTERMIX", "Fester"), ("IMPERPRIM", "Fester"), ("DURETAN", "Duretan / Pennsylvania"),
+            ("NAYA SBS", "Naya"), ("ADHECRETO", "Adhecreto"), ("TANGIT", "Tangit / Henkel"),
+            ("SISTA", "Sista"), ("SCOTCH", "Scotch / 3M"), ("GATES", "Gates"), ("OLMECA", "Olmeca"),
+            ("GIM", "GIM"), ("SPOC", "Spoc"), ("CARRAND", "Carrand"), ("REYNERA", "Reynera"),
+            ("CLORALEX", "Cloralex"), ("FABULOSO", "Fabuloso"), ("PINOL", "Pinol"), ("LYSOL", "Lysol"),
+            ("WINDEX", "Windex"), ("ARIEL", "Ariel"), ("AXION", "Axion"), ("AIR WICK", "Air Wick"),
+            ("GLD AER", "Glade"), ("SCOTT", "Scott"), ("SUAVEL", "Suavel"), ("FANCY", "Fancy"),
+            ("H-24", "H-24"), ("H24", "H-24"), ("BIC", "BIC"), ("STARLINK", "Starlink"),
+            ("CLIP PLUS", "Clip"), ("SPLENDA", "Splenda"), ("GATORADE", "Gatorade"), ("UNISAL", "Unisal"),
+            ("AUTOVÍA DEL MAYAB", "Autovía del Mayab")
+        };
+
+        string padded = $" {u} ";
+        foreach (var (patron, marca) in marcas)
+        {
+            if (padded.Contains(patron, StringComparison.OrdinalIgnoreCase))
+                return marca;
+        }
+        return string.Empty;
+    }
+
+    private static string ExtraerModeloConocido(string nombre, string u)
+    {
+        var regexModelos = new[]
+        {
+            @"\b(EB[GRD]\d{8}|AKB\d{8}|EA[PU]\d{8}|AHA\d{8}|AGK\d{8}|AJR\d{8}|MJX\d{8}|4681A\d{5}[A-Z]?)\b",
+            @"\b(CSHW\w+|C-SBP\w+|OTP\d+\w+|IU2C\d+\w*|MVPP\d+|FEFL\d+|ER\d+-\w+|MRC4K2E|APFD-\w+|6625-90-247|100UFOLED\w+|150LQLED\w+|LAVA-1500P|ASPI-03|EP-22P|607-ZZ|D245)\b",
+            @"\b(GATES\s*[A-Z]{1,2}\d+)\b"
+        };
+
+        foreach (var pat in regexModelos)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(u, pat);
+            if (m.Success)
+                return m.Groups[1].Value.Trim();
+        }
+        return string.Empty;
+    }
+
+    private static string ExtraerMedidasConocidas(string u)
+    {
+        var patronesMedida = new[]
+        {
+            @"\b(\d+(?:-\d+/\d+|\s+\d+/\d+|/\d+)?\s*[""']?\s*X\s*\d+(?:\.\d+|\s+\d+/\d+|/\d+)?\s*(?:MM|CM|M|MT|MTS|[""'])?)\b",
+            @"\b(LARGO\s+\d+\s*CM(?:\s+POR\s+DIAMETRO\s+\d+\s*CM)?)\b",
+            @"\b(\d+(?:\s+\d+/\d+|-\d+/\d+|/\d+)\s*(?:PULG|[""']))\b",
+            @"\b(\d+\s*(?:MT|MTS|M)\b)",
+            @"\b(\d+(?:\.\d+)?\s*(?:MM|CM)\b)"
+        };
+
+        foreach (var pat in patronesMedida)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(u, pat);
+            if (m.Success)
+                return m.Groups[1].Value.Trim();
+        }
+        return string.Empty;
+    }
+
+    private static (string C1, string C2, string C3) ExtraerCamposEspecificosPorCategoria(int catId, string nombre, string u)
+    {
+        string volt = ExtraerPatron(u, @"\b(\d+(?:\s*A\s*\d+|-\d+)?\s*V(?:DC|AC|\s+DC|\s+AC)?|\d+\s*VOLTS?)\b");
+        string ampWatt = ExtraerPatron(u, @"\b(\d+(?:\.\d+)?\s*(?:AMP|A|W|KW|MAH|MFD|HP|LM))\b");
+        string ton = ExtraerPatron(u, @"\b(\d+(?:\.\d+)?\s*TONELADAS?|\d+/\d+\s*HP|\d+(?:\.\d+)?\s*HP|\d+\s*LITROS?)\b");
+        string gas = ExtraerPatron(u, @"\b(R-?\d{2,3}[A-Z]?)\b");
+        string ohm = ExtraerPatron(u, @"\b(\d+K(?:\s*,\s*(?:POZO\s*\w+\s*)?\d+K)*)\b");
+        string psi = ExtraerPatron(u, @"\b(\d+(?:\.\d+)?\s*PSI(?:\s*\(\s*\d+\s*BAR\s*\))?)\b");
+        string contenido = ExtraerPatron(u, @"\b(\d+(?:\.\d+)?\s*(?:LTS?|LITROS?|ML|GAL(?:ON|ONES)?|GR|G|KG|KL))\b");
+        string color = ExtraerPatron(u, @"\b(BLANCO|NEGRO(?:\s+MATE)?|ROJO|AZUL|AMARILLO|NARANJA|VERDE|GRIS|CAFE|TRANSPARENTE)\b");
+
+        switch (catId)
+        {
+            case 1: // Refrigeración y Aire Acondicionado (HVAC)
+            {
+                string c1 = !string.IsNullOrEmpty(ton) ? ton : (!string.IsNullOrEmpty(ohm) ? $"Sensor {ohm} Ohm" : psi);
+                string fase = u.Contains("TRIFASICO") || u.Contains("3PH") ? " Trifásico" : string.Empty;
+                string c2 = (volt + (string.IsNullOrEmpty(ampWatt) ? "" : $" / {ampWatt}") + fase).Trim(' ', '/');
+                string c3 = !string.IsNullOrEmpty(gas) ? $"Gas {gas}" : (u.Contains("INVERTER") ? "Sistema Inverter" : (u.Contains("CONDENSADORA") ? "Para Condensadora" : (u.Contains("EVAPORADOR") ? "Para Evaporador" : string.Empty)));
+                return (c1, c2, c3);
+            }
+            case 2: // Eléctrico, Iluminación y Control
+            {
+                string c1 = volt;
+                string c2 = ampWatt;
+                string polosCal = ExtraerPatron(u, @"\b(\d+\s*POLOS?|\d+P|CALIBRE\s*\d+|\d+X\d+\s*AWG|IP\d{2}|2X\d+)\b");
+                return (c1, c2, polosCal);
+            }
+            case 3: // Plomería, Tubería y Conexiones
+            {
+                string diam = ExtraerPatron(u, @"\b(\d+\s+\d+/\d+|\d+/\d+|\d+\s*MM|\d+\s*[""'])\b");
+                string mat = u.Contains("GALVANIZAD") ? "Acero Galvanizado" : (u.Contains("PVC SAN") ? "PVC Sanitario" : (u.Contains("C-40") || u.Contains("C- 40") || u.Contains("HIDRAULIC") ? "PVC Hidráulico Cédula 40" : (u.Contains("ALUMINIO") ? "Aluminio" : "Plástico / Reforzado")));
+                string tipo = u.Contains("MACHO") ? "Rosca Macho" : (u.Contains("HEMBRA") ? "Conexión Hembra" : (u.Contains("RÁPIDO") || u.Contains("RAPIDO") ? "Acoplamiento Rápido" : "Conexión Hidráulica"));
+                return (diam, mat, tipo);
+            }
+            case 4: // Herramientas, Medición y Maquinaria
+            {
+                string alim = !string.IsNullOrEmpty(volt) ? $"Eléctrica {volt}" : (u.Contains("RECARGABLE") ? "Batería Recargable" : (u.Contains("PILA") ? "A Baterías" : "Manual / Uso Industrial"));
+                string cap = !string.IsNullOrEmpty(ampWatt) ? ampWatt : psi;
+                string esp = ExtraerPatron(u, @"\b(SDS\s*PLUS|ALTA\s*VELOCIDAD|IMPACTO|BIMETÁLICA|ANTI\s*IMPACTO|CONFORT\s*GRIP|MAGNETICOS?)\b");
+                return (alim, cap, esp);
+            }
+            case 5: // Pintura, Impermeabilizantes y Obra
+            {
+                string dur = ExtraerPatron(u, @"\b(\d+\s*AÑOS|FIBRATADO|ACRILICO|POLIURETANO|PELO\s*DE\s*CAMELLO|MICROFIBRA|POLIESTER)\b");
+                return (color, contenido, dur);
+            }
+            case 6: // Tornillería, Fijación y Herrajes
+            {
+                string cal = ExtraerPatron(u, @"\b(#\d+|\d+/\d+[""']?)\b");
+                string mat = u.Contains("GALVANIZADO") ? "Acero Galvanizado" : (u.Contains("ACERO") ? "Acero" : (u.Contains("PLASTICO") || u.Contains("PLÁSTICO") ? "Plástico / Nylon" : "Metal"));
+                string res = ExtraerPatron(u, @"\b(\d+\s*(?:LB|KG|PZAS|PIEZAS))\b");
+                return (cal, mat, res);
+            }
+            case 7: // Soldadura, Químicos y Consumibles Técnicos
+            {
+                string aplic = u.Contains("PLATA") ? "Soldadura de Plata" : (u.Contains("PVC") ? "Cementante PVC" : (u.Contains("DIELECTRICO") ? "Limpieza Dieléctrica" : (u.Contains("ALTAS TEMPERATURAS") ? "Alta Temperatura" : "Uso Técnico")));
+                string grano = ExtraerPatron(u, @"\b(GRANO\s*\d+|0%\s*AG|TODA\s*PRESION|BASE\s*BENTONA)\b");
+                return (contenido, aplic, grano);
+            }
+            case 8: // Seguridad Industrial y EPP
+            {
+                string talla = u.Contains("XCH") ? "Extra Chica (XCH)" : (u.Contains("CHICOS") ? "Chica (CH)" : (u.Contains("MEDIANOS") ? "Mediana (M)" : (u.Contains("GRANDE") ? "Grande (G)" : "Unitalla")));
+                string mat = u.Contains("NITRILO") ? "Nylon con recubrimiento Nitrilo" : (u.Contains("PUNTOS PVC") ? "Algodón con puntos PVC" : (u.Contains("PVC") ? "PVC Impermeable" : "Policarbonato / Polietileno"));
+                string prot = !string.IsNullOrEmpty(color) ? color : (u.Contains("ANTIEMPAÑE") ? "Antiempañe" : "Protección Industrial");
+                return (talla, mat, prot);
+            }
+            case 9: // Limpieza, Higiene y Jardinería
+            {
+                string tipo = u.Contains("MICROFIBRA") ? "Paño Microfibra" : (u.Contains("ALGODON") ? "Algodón" : (u.Contains("ROLLO") || u.Contains("BOLSA") ? "Bolsa Polietileno" : "Limpieza / Higiene"));
+                return (tipo, contenido, color);
+            }
+            case 10: // Papelería, Oficina y Comedor
+            {
+                string tam = u.Contains("CARTA") || u.Contains("CTA") ? "Tamaño Carta" : (u.Contains("SATELITAL") ? "Kit Antena + Router WiFi" : "Estándar");
+                return (tam, !string.IsNullOrEmpty(color) ? color : contenido, string.Empty);
+            }
+            case 11: // Servicios, Peajes y Gastos Operativos
+            {
+                string refNru = ExtraerPatron(nombre, @"\b(NRU\s*\w+)\b");
+                string fecha = ExtraerPatron(nombre, @"(\(\d{2}/\d{2}/\d{4}\))");
+                return ("Peaje / Caseta Autopista", refNru, fecha);
+            }
+            default:
+                return (volt, ampWatt, color);
+        }
+    }
+
+    private static string ExtraerPatron(string texto, string regex)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(texto, regex, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return m.Success ? m.Groups[1].Value.Trim() : string.Empty;
     }
 
     public static List<HerramientaActivo> ObtenerHerramientas()
@@ -1854,6 +2256,10 @@ LIMIT 1";
             ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
             : Math.Round(c.ValorUnitario * 1.16m, 2);
 
+        var info = ClasificarYExtraerEspecificacionesProducto(nombre, c.ClaveProdServ);
+        if (categorias.Any(x => x.Id == info.CategoriaId))
+            categoriaId = info.CategoriaId;
+
         var nuevoProd = new Producto
         {
             CodigoInterno = nuevoCodigo,
@@ -1861,6 +2267,12 @@ LIMIT 1";
             Nombre = nombre,
             Descripcion = $"Clave SAT: {c.ClaveProdServ} | ID Prov: {noId} | Creado desde Factura {serieFolio}",
             CategoriaId = categoriaId,
+            Marca = info.Marca,
+            Modelo = !string.IsNullOrWhiteSpace(info.Modelo) ? info.Modelo : (noId.Length >= 4 ? noId : string.Empty),
+            Medidas = info.Medidas,
+            CapacidadElectrica = info.CapacidadElectrica,
+            Especificacion1 = info.Especificacion1,
+            Especificacion2 = info.Especificacion2,
             UnidadCompra = unidad,
             UnidadAlmacen = unidad,
             FactorConversion = 1m,
