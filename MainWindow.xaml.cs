@@ -59,12 +59,32 @@ public partial class MainWindow : FluentWindow
         DgPartidasSalidaPos.ItemsSource = _partidasSalidaPos;
 
         PreviewKeyDown += MainWindow_PreviewKeyDown;
-        Loaded += (_, _) =>
+        Loaded += async (_, _) =>
         {
-            CargarTodoElSistema();
-            LimpiarEditorProducto();
+            await EjecutarConIndicadorCargaAsync("Cargando sistema y catálogos...", () =>
+            {
+                CargarTodoElSistema();
+                LimpiarEditorProducto();
+            });
             TxtOmniScanner.Focus();
         };
+    }
+
+    private async Task EjecutarConIndicadorCargaAsync(string mensaje, Action accion)
+    {
+        try
+        {
+            TxtMensajeCargando.Text = mensaje;
+            OverlayCargando.Visibility = Visibility.Visible;
+            Mouse.OverrideCursor = Cursors.Wait;
+            await Task.Delay(25);
+            accion();
+        }
+        finally
+        {
+            OverlayCargando.Visibility = Visibility.Collapsed;
+            Mouse.OverrideCursor = null;
+        }
     }
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -87,7 +107,6 @@ public partial class MainWindow : FluentWindow
 
     private void CargarTodoElSistema()
     {
-        DatabaseService.SincronizarFacturasYOrdenesExistentes();
         CargarCombosBase();
         RefrescarDashboard();
         RefrescarCatalogoVisual();
@@ -474,7 +493,7 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void BtnGuardarProducto_Click(object sender, RoutedEventArgs e)
+    private async void BtnGuardarProducto_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(TxtProdNombre.Text))
         {
@@ -495,12 +514,23 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.Ubicacion = TxtProdUbicacion.Text.Trim();
         _productoEnEdicion.EsHerramienta = ChkProdEsHerramienta.IsChecked == true;
 
-        DatabaseService.GuardarProducto(_productoEnEdicion);
-        CargarTodoElSistema();
-        CargarProductoEnEditor(_productoEnEdicion);
+        await EjecutarConIndicadorCargaAsync("Guardando producto...", () =>
+        {
+            DatabaseService.GuardarProducto(_productoEnEdicion);
+            CargarTodoElSistema();
+            CargarProductoEnEditor(_productoEnEdicion);
+        });
     }
 
-    private void BtnEliminarProducto_Click(object sender, RoutedEventArgs e)
+    private async void BtnEliminarProductoCatalogoCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Producto prod })
+        {
+            await EliminarProductoConConfirmacionAsync(prod);
+        }
+    }
+
+    private async void BtnEliminarProducto_Click(object sender, RoutedEventArgs e)
     {
         if (_productoEnEdicion.Id == 0)
         {
@@ -508,18 +538,31 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (System.Windows.MessageBox.Show(this, $"¿Desea eliminar el producto '{_productoEnEdicion.Nombre}' del catálogo?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        await EliminarProductoConConfirmacionAsync(_productoEnEdicion);
+    }
+
+    private async Task EliminarProductoConConfirmacionAsync(Producto prod)
+    {
+        if (System.Windows.MessageBox.Show(this, $"¿Desea eliminar el producto '[{prod.CodigoInterno}] {prod.Nombre}' del catálogo?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
         {
-            DatabaseService.EliminarProducto(_productoEnEdicion.Id);
-            BtnNuevoProducto_Click(sender, e);
-            CargarTodoElSistema();
+            await EjecutarConIndicadorCargaAsync("Eliminando producto del catálogo...", () =>
+            {
+                DatabaseService.EliminarProducto(prod.Id);
+                _carritoTienda.RemoveAll(x => x.producto.Id == prod.Id);
+                TxtStatusCarrito.Text = $"Carrito: {_carritoTienda.Sum(x => x.cantidad):0.##} artículos";
+                if (_productoEnEdicion.Id == prod.Id)
+                {
+                    LimpiarEditorProducto();
+                }
+                CargarTodoElSistema();
+            });
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar este producto porque ya tiene movimientos vinculados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, $"Error al eliminar el producto:\n{ex.Message}", "Error al eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -1191,49 +1234,52 @@ public partial class MainWindow : FluentWindow
         CargarArchivoXmlEnPantalla(demoPath);
     }
 
-    private void CargarArchivoXmlEnPantalla(string rutaXml)
+    private async void CargarArchivoXmlEnPantalla(string rutaXml)
     {
         try
         {
-            _facturaXmlEnPantalla = XmlCfdiService.LeerArchivoCfdiXml(rutaXml);
-
-            _actualizandoCombosXml = true;
-            try
+            await EjecutarConIndicadorCargaAsync("Analizando factura XML y verificando productos...", () =>
             {
-                DgFacturasRegistradas.SelectedItem = null;
+                _facturaXmlEnPantalla = XmlCfdiService.LeerArchivoCfdiXml(rutaXml);
 
-                // Seleccionar proyecto Stock General por defecto al cargar nueva factura
-                if (CboXmlProyecto.ItemsSource is IEnumerable<Proyecto> proys)
+                _actualizandoCombosXml = true;
+                try
                 {
-                    var stock = proys.FirstOrDefault(p => p.EsStockGeneral) ?? proys.FirstOrDefault();
-                    if (stock != null)
-                        CboXmlProyecto.SelectedItem = stock;
+                    DgFacturasRegistradas.SelectedItem = null;
+
+                    // Seleccionar proyecto Stock General por defecto al cargar nueva factura
+                    if (CboXmlProyecto.ItemsSource is IEnumerable<Proyecto> proys)
+                    {
+                        var stock = proys.FirstOrDefault(p => p.EsStockGeneral) ?? proys.FirstOrDefault();
+                        if (stock != null)
+                            CboXmlProyecto.SelectedItem = stock;
+                    }
+
+                    // Buscar si ya existe una OC emitida sin factura de ese mismo proveedor; si no, seleccionar "Crear nueva OC automáticamente"
+                    if (CboXmlOrdenCompra.ItemsSource is IEnumerable<OrdenCompra> listaOcs)
+                    {
+                        var idsConFactura = DatabaseService.ObtenerFacturasXml()
+                            .Where(f => f.OrdenCompraId.HasValue)
+                            .Select(f => f.OrdenCompraId!.Value)
+                            .ToHashSet();
+
+                        var ocMismoProv = listaOcs.FirstOrDefault(o =>
+                            o.Id > 0 &&
+                            o.ProveedorRfc.Equals(_facturaXmlEnPantalla.EmisorRfc, StringComparison.OrdinalIgnoreCase) &&
+                            o.Estatus == "Emitida" &&
+                            !idsConFactura.Contains(o.Id));
+
+                        CboXmlOrdenCompra.SelectedItem = ocMismoProv ?? listaOcs.FirstOrDefault(o => o.Id == 0);
+                    }
+                }
+                finally
+                {
+                    _actualizandoCombosXml = false;
                 }
 
-                // Buscar si ya existe una OC emitida sin factura de ese mismo proveedor; si no, seleccionar "Crear nueva OC automáticamente"
-                if (CboXmlOrdenCompra.ItemsSource is IEnumerable<OrdenCompra> listaOcs)
-                {
-                    var idsConFactura = DatabaseService.ObtenerFacturasXml()
-                        .Where(f => f.OrdenCompraId.HasValue)
-                        .Select(f => f.OrdenCompraId!.Value)
-                        .ToHashSet();
-
-                    var ocMismoProv = listaOcs.FirstOrDefault(o =>
-                        o.Id > 0 &&
-                        o.ProveedorRfc.Equals(_facturaXmlEnPantalla.EmisorRfc, StringComparison.OrdinalIgnoreCase) &&
-                        o.Estatus == "Emitida" &&
-                        !idsConFactura.Contains(o.Id));
-
-                    CboXmlOrdenCompra.SelectedItem = ocMismoProv ?? listaOcs.FirstOrDefault(o => o.Id == 0);
-                }
-            }
-            finally
-            {
-                _actualizandoCombosXml = false;
-            }
-
-            ActualizarResumenFacturaXml();
-            DgXmlConceptosActual.ItemsSource = _facturaXmlEnPantalla.Conceptos;
+                ActualizarResumenFacturaXml();
+                DgXmlConceptosActual.ItemsSource = _facturaXmlEnPantalla.Conceptos;
+            });
         }
         catch (Exception ex)
         {
@@ -1330,7 +1376,7 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void BtnCrearProductoDesdeConceptoXml_Click(object sender, RoutedEventArgs e)
+    private async void BtnCrearProductoDesdeConceptoXml_Click(object sender, RoutedEventArgs e)
     {
         var facturaActiva = _facturaXmlEnPantalla ?? (DgFacturasRegistradas.SelectedItem as FacturaXml);
         if (facturaActiva == null)
@@ -1340,13 +1386,13 @@ public partial class MainWindow : FluentWindow
         }
 
         var conceptosACrear = new List<FacturaConcepto>();
-        if (DgXmlConceptosActual.SelectedItem is FacturaConcepto seleccionado && !seleccionado.ProductoIdVinculado.HasValue)
+        if (DgXmlConceptosActual.SelectedItem is FacturaConcepto seleccionado && (!seleccionado.ProductoIdVinculado.HasValue || seleccionado.ProductoIdVinculado <= 0))
         {
             conceptosACrear.Add(seleccionado);
         }
         else
         {
-            conceptosACrear.AddRange(facturaActiva.Conceptos.Where(c => !c.ProductoIdVinculado.HasValue));
+            conceptosACrear.AddRange(facturaActiva.Conceptos.Where(c => !c.ProductoIdVinculado.HasValue || c.ProductoIdVinculado <= 0));
         }
 
         if (conceptosACrear.Count == 0)
@@ -1356,27 +1402,30 @@ public partial class MainWindow : FluentWindow
         }
 
         var creados = new List<Producto>();
-        foreach (var c in conceptosACrear)
+        await EjecutarConIndicadorCargaAsync("Creando productos nuevos en el catálogo...", () =>
         {
-            var prod = DatabaseService.CrearProductoDesdeConceptoXml(facturaActiva.EmisorRfc, facturaActiva.SerieFolio, c);
-            creados.Add(prod);
-            if (_facturaXmlEnPantalla == null && facturaActiva.Id > 0 && c.Id > 0)
+            foreach (var c in conceptosACrear)
             {
-                DatabaseService.ActualizarConceptoFacturaRegistrada(facturaActiva.Id, c.Id, prod.Id);
+                var prod = DatabaseService.CrearProductoDesdeConceptoXml(facturaActiva.EmisorRfc, facturaActiva.SerieFolio, c);
+                creados.Add(prod);
+                if (_facturaXmlEnPantalla == null && facturaActiva.Id > 0 && c.Id > 0)
+                {
+                    DatabaseService.ActualizarConceptoFacturaRegistrada(facturaActiva.Id, c.Id, prod.Id);
+                }
             }
-        }
 
-        if (_facturaXmlEnPantalla == null)
-        {
-            CargarTodoElSistema();
-        }
-        else
-        {
-            CargarCombosBase();
-            RefrescarCatalogoVisual();
-            DgXmlConceptosActual.Items.Refresh();
-            ActualizarResumenFacturaXml();
-        }
+            if (_facturaXmlEnPantalla == null)
+            {
+                CargarTodoElSistema();
+            }
+            else
+            {
+                CargarCombosBase();
+                RefrescarCatalogoVisual();
+                DgXmlConceptosActual.Items.Refresh();
+                ActualizarResumenFacturaXml();
+            }
+        });
 
         string listaNombres = string.Join("\n", creados.Select(p => $"• [{p.CodigoInterno}] {p.Nombre} ({p.UltimoCostoCompra:C2})"));
         System.Windows.MessageBox.Show(this,
@@ -1417,7 +1466,7 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void BtnEliminarFacturaXml_Click(object sender, RoutedEventArgs e)
+    private async void BtnEliminarFacturaXml_Click(object sender, RoutedEventArgs e)
     {
         if (DgFacturasRegistradas.SelectedItem is FacturaXml fac)
         {
@@ -1430,13 +1479,16 @@ public partial class MainWindow : FluentWindow
             if (resp != System.Windows.MessageBoxResult.Yes)
                 return;
 
-            DatabaseService.EliminarFacturaXml(fac.Id);
-            if (_facturaXmlEnPantalla == null)
+            await EjecutarConIndicadorCargaAsync("Eliminando factura y actualizando análisis...", () =>
             {
-                DgXmlConceptosActual.ItemsSource = null;
-                TxtXmlResumenActual.Text = "Factura eliminada correctamente.";
-            }
-            CargarTodoElSistema();
+                DatabaseService.EliminarFacturaXml(fac.Id);
+                if (_facturaXmlEnPantalla == null)
+                {
+                    DgXmlConceptosActual.ItemsSource = null;
+                    TxtXmlResumenActual.Text = "Factura eliminada correctamente.";
+                }
+                CargarTodoElSistema();
+            });
             return;
         }
 
@@ -1464,7 +1516,7 @@ public partial class MainWindow : FluentWindow
             MessageBoxImage.Information);
     }
 
-    private void BtnGuardarFacturaXml_Click(object sender, RoutedEventArgs e)
+    private async void BtnGuardarFacturaXml_Click(object sender, RoutedEventArgs e)
     {
         if (_facturaXmlEnPantalla == null)
         {
@@ -1494,17 +1546,23 @@ public partial class MainWindow : FluentWindow
             _facturaXmlEnPantalla.OrdenCompraFolio = string.Empty;
         }
 
-        int productosAntes = DatabaseService.ObtenerProductos().Count;
-        var facturaGuardada = DatabaseService.GuardarFacturaXml(_facturaXmlEnPantalla);
-        int productosDespues = DatabaseService.ObtenerProductos().Count;
-        int nuevosCreados = Math.Max(0, productosDespues - productosAntes);
+        FacturaXml facturaGuardada = null!;
+        int nuevosCreados = 0;
 
-        _facturaXmlEnPantalla = null;
-        DgXmlConceptosActual.ItemsSource = facturaGuardada.Conceptos;
-        TxtXmlResumenActual.Text = nuevosCreados > 0
-            ? $"Factura registrada exitosamente (OC: {facturaGuardada.OrdenCompraFolio}). Se crearon {nuevosCreados} producto(s) nuevos en el catálogo."
-            : $"Factura registrada exitosamente (OC: {facturaGuardada.OrdenCompraFolio}). Costos y análisis actualizados.";
-        CargarTodoElSistema();
+        await EjecutarConIndicadorCargaAsync("Guardando factura XML, orden de compra y productos...", () =>
+        {
+            int productosAntes = DatabaseService.ObtenerProductos().Count;
+            facturaGuardada = DatabaseService.GuardarFacturaXml(_facturaXmlEnPantalla);
+            int productosDespues = DatabaseService.ObtenerProductos().Count;
+            nuevosCreados = Math.Max(0, productosDespues - productosAntes);
+
+            _facturaXmlEnPantalla = null;
+            DgXmlConceptosActual.ItemsSource = facturaGuardada.Conceptos;
+            TxtXmlResumenActual.Text = nuevosCreados > 0
+                ? $"Factura registrada exitosamente (OC: {facturaGuardada.OrdenCompraFolio}). Se crearon {nuevosCreados} producto(s) nuevos en el catálogo."
+                : $"Factura registrada exitosamente (OC: {facturaGuardada.OrdenCompraFolio}). Costos y análisis actualizados.";
+            CargarTodoElSistema();
+        });
 
         if (nuevosCreados > 0)
         {

@@ -902,10 +902,23 @@ VALUES ($pid, $ci, $ns, $mm, $est, $ubi, '', '', $not)";
     {
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
+        using var tx = conn.BeginTransaction();
+
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM Productos WHERE Id=$id";
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+UPDATE FacturaConceptos SET ProductoIdVinculado = -1 WHERE ProductoIdVinculado = $id;
+DELETE FROM ProductoProveedorMapa WHERE ProductoId = $id;
+DELETE FROM OrdenCompraPartidas WHERE ProductoId = $id;
+DELETE FROM SolicitudPartidas WHERE ProductoId = $id;
+DELETE FROM EntradaPartidas WHERE ProductoId = $id;
+DELETE FROM SalidaPartidas WHERE ProductoId = $id;
+DELETE FROM HerramientasActivos WHERE ProductoId = $id;
+DELETE FROM Productos WHERE Id = $id;";
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
+
+        tx.Commit();
     }
 
     // ==================== SOLICITUDES DE INGENIERÍA ====================
@@ -922,8 +935,8 @@ SELECT s.Id, s.Folio, s.Fecha, s.DepartamentoId, COALESCE(d.Nombre, 'Sin depto')
 FROM Solicitudes s
 LEFT JOIN Departamentos d ON d.Id = s.DepartamentoId
 LEFT JOIN Encargados e ON e.Id = s.EncargadoId
-LEFT JOIN Proyectos pr ON pr.Id = s.ProyectoId
-ORDER BY s.Id DESC";
+LEFT JOIN Proyectos pr ON pr.Id = p.ProyectoId
+ORDER BY s.Id DESC".Replace("p.ProyectoId", "s.ProyectoId");
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
@@ -1022,8 +1035,9 @@ VALUES ($sid, $pid, $cant, $not)";
         var list = new List<OrdenCompra>();
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
 SELECT oc.Id, oc.Folio, oc.Fecha, oc.SolicitudId, COALESCE(s.Folio, ''), oc.CotizacionFolio,
        oc.ProveedorId, COALESCE(pv.RazonSocial, 'Proveedor'), COALESCE(pv.NombreComercial, 'Proveedor'), COALESCE(pv.Rfc, ''),
        oc.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Sin proyecto'), oc.DepartamentoNombre, oc.EncargadoNombre,
@@ -1033,54 +1047,60 @@ LEFT JOIN Proveedores pv ON pv.Id = oc.ProveedorId
 LEFT JOIN Proyectos pr ON pr.Id = oc.ProyectoId
 LEFT JOIN Solicitudes s ON s.Id = oc.SolicitudId
 ORDER BY oc.Id DESC";
-        using var r = cmd.ExecuteReader();
-        while (r.Read())
-        {
-            string razon = r.GetString(7);
-            string com = r.GetString(8);
-            list.Add(new OrdenCompra
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
             {
-                Id = r.GetInt32(0),
-                Folio = r.GetString(1),
-                Fecha = r.GetString(2),
-                SolicitudId = r.GetInt32(3),
-                SolicitudFolio = r.GetString(4),
-                CotizacionFolio = r.GetString(5),
-                ProveedorId = r.GetInt32(6),
-                ProveedorNombre = string.IsNullOrWhiteSpace(com) ? razon : com,
-                ProveedorRfc = r.GetString(9),
-                ProyectoId = r.GetInt32(10),
-                ProyectoNombre = r.GetString(11),
-                DepartamentoNombre = r.GetString(12),
-                EncargadoNombre = r.GetString(13),
-                TiempoEntregaDias = r.GetInt32(14),
-                CostoEnvioConIva = Convert.ToDecimal(r.GetDouble(15)),
-                Subtotal = Convert.ToDecimal(r.GetDouble(16)),
-                Iva = Convert.ToDecimal(r.GetDouble(17)),
-                TotalConIva = Convert.ToDecimal(r.GetDouble(18)),
-                Estatus = r.GetString(19),
-                Notas = r.GetString(20)
-            });
+                string razon = r.GetString(7);
+                string com = r.GetString(8);
+                list.Add(new OrdenCompra
+                {
+                    Id = r.GetInt32(0),
+                    Folio = r.GetString(1),
+                    Fecha = r.GetString(2),
+                    SolicitudId = r.GetInt32(3),
+                    SolicitudFolio = r.GetString(4),
+                    CotizacionFolio = r.GetString(5),
+                    ProveedorId = r.GetInt32(6),
+                    ProveedorNombre = string.IsNullOrWhiteSpace(com) ? razon : com,
+                    ProveedorRfc = r.GetString(9),
+                    ProyectoId = r.GetInt32(10),
+                    ProyectoNombre = r.GetString(11),
+                    DepartamentoNombre = r.GetString(12),
+                    EncargadoNombre = r.GetString(13),
+                    TiempoEntregaDias = r.GetInt32(14),
+                    CostoEnvioConIva = Convert.ToDecimal(r.GetDouble(15)),
+                    Subtotal = Convert.ToDecimal(r.GetDouble(16)),
+                    Iva = Convert.ToDecimal(r.GetDouble(17)),
+                    TotalConIva = Convert.ToDecimal(r.GetDouble(18)),
+                    Estatus = r.GetString(19),
+                    Notas = r.GetString(20)
+                });
+            }
         }
 
-        foreach (var oc in list)
+        if (list.Count == 0)
+            return list;
+
+        var ocDict = list.ToDictionary(o => o.Id);
+        using (var pCmd = conn.CreateCommand())
         {
-            using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
 SELECT ocp.Id, ocp.OrdenCompraId, ocp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto'),
        COALESCE(p.UnidadCompra, 'Pza'), COALESCE(p.UnidadAlmacen, 'Pza'), COALESCE(p.FactorConversion, 1),
        ocp.CantidadPedida, ocp.CantidadRecibida, ocp.PrecioUnitarioSinIva
 FROM OrdenCompraPartidas ocp
-LEFT JOIN Productos p ON p.Id = ocp.ProductoId
-WHERE ocp.OrdenCompraId = $ocid";
-            pCmd.Parameters.AddWithValue("$ocid", oc.Id);
+INNER JOIN Productos p ON p.Id = ocp.ProductoId";
             using var pr = pCmd.ExecuteReader();
             while (pr.Read())
             {
+                int ocId = pr.GetInt32(1);
+                if (!ocDict.TryGetValue(ocId, out var oc))
+                    continue;
+
                 var part = new OrdenCompraPartida
                 {
                     Id = pr.GetInt32(0),
-                    OrdenCompraId = pr.GetInt32(1),
+                    OrdenCompraId = ocId,
                     ProductoId = pr.GetInt32(2),
                     ProductoCodigo = pr.GetString(3),
                     ProductoNombre = pr.GetString(4),
@@ -1095,6 +1115,7 @@ WHERE ocp.OrdenCompraId = $ocid";
                 oc.Partidas.Add(part);
             }
         }
+
         return list;
     }
 
@@ -2177,12 +2198,25 @@ UPDATE FacturasXml SET OrdenCompraId = NULL, OrdenCompraFolio = '' WHERE OrdenCo
 DELETE FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores);";
                 delOrphanOcs.ExecuteNonQuery();
             }
+
+            // 5. Si algún concepto apuntaba a un producto ya eliminado del catálogo, marcarlo como -1 para no recrearlo
+            using (var markDeletedProd = conn.CreateCommand())
+            {
+                markDeletedProd.CommandText = @"
+UPDATE FacturaConceptos
+SET ProductoIdVinculado = -1
+WHERE ProductoIdVinculado IS NOT NULL
+  AND ProductoIdVinculado > 0
+  AND ProductoIdVinculado NOT IN (SELECT Id FROM Productos)";
+                markDeletedProd.ExecuteNonQuery();
+            }
         }
 
         int defaultProyectoId = ObtenerProyectoStockGeneralId();
         var proyectosIds = ObtenerProyectos().Select(p => p.Id).ToHashSet();
         var facturas = ObtenerFacturasXml().OrderBy(f => f.Id).ToList();
         var catalogo = ObtenerProductos().ToDictionary(p => p.Id);
+        var ocsDict = ObtenerOrdenesCompra().ToDictionary(o => o.Id);
 
         foreach (var fac in facturas)
         {
@@ -2190,7 +2224,11 @@ DELETE FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores);
 
             foreach (var c in fac.Conceptos)
             {
-                bool requiereRevinculacion = !c.ProductoIdVinculado.HasValue || !catalogo.ContainsKey(c.ProductoIdVinculado.Value);
+                // Si el usuario eliminó este producto del catálogo (-1), respetarlo y no volver a crearlo
+                if (c.ProductoIdVinculado == -1)
+                    continue;
+
+                bool requiereRevinculacion = !c.ProductoIdVinculado.HasValue;
 
                 // Si fue vinculado por un NoIdentificacion corto (ej. "1") a un producto con nombre totalmente distinto, corregir
                 if (!requiereRevinculacion && c.NoIdentificacion.Trim().Length < 4 && catalogo.TryGetValue(c.ProductoIdVinculado!.Value, out var prodActual))
@@ -2235,27 +2273,14 @@ DELETE FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores);
                     upC.Parameters.AddWithValue("$cid", c.Id);
                     upC.ExecuteNonQuery();
                 }
-
-                if (c.ProductoIdVinculado.HasValue && c.ProductoIdVinculado.Value > 0)
-                {
-                    decimal costoConIva = c.Cantidad > 0m && (c.Importe + c.IvaConcepto) > 0m
-                        ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
-                        : Math.Round(c.ValorUnitario * 1.16m, 2);
-                    using var connP = new SqliteConnection(ConnectionString);
-                    connP.Open();
-                    using var upP = connP.CreateCommand();
-                    upP.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid";
-                    upP.Parameters.AddWithValue("$costo", (double)costoConIva);
-                    upP.Parameters.AddWithValue("$pid", c.ProductoIdVinculado.Value);
-                    upP.ExecuteNonQuery();
-                }
             }
 
             // Verificar si la factura tiene una Orden de Compra válida de su mismo proveedor
-            var ocs = ObtenerOrdenesCompra();
-            var ocActual = fac.OrdenCompraId.HasValue
-                ? ocs.FirstOrDefault(o => o.Id == fac.OrdenCompraId.Value && o.ProveedorId == provId)
-                : null;
+            OrdenCompra? ocActual = null;
+            if (fac.OrdenCompraId.HasValue && ocsDict.TryGetValue(fac.OrdenCompraId.Value, out var ocCand) && ocCand.ProveedorId == provId)
+            {
+                ocActual = ocCand;
+            }
 
             if (ocActual == null)
             {
@@ -2268,11 +2293,6 @@ DELETE FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores);
                 upFac.Parameters.AddWithValue("$fol", nuevoFolio);
                 upFac.Parameters.AddWithValue("$fid", fac.Id);
                 upFac.ExecuteNonQuery();
-            }
-            else
-            {
-                int proyId = proyectosIds.Contains(ocActual.ProyectoId) ? ocActual.ProyectoId : defaultProyectoId;
-                SincronizarOrdenCompraConSusFacturas(ocActual.Id, proyId);
             }
         }
     }
@@ -2377,8 +2397,9 @@ DELETE FROM OrdenesCompra WHERE ProveedorId NOT IN (SELECT Id FROM Proveedores);
         var list = new List<FacturaXml>();
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
 SELECT f.Id, f.Uuid, f.SerieFolio, f.FechaTimbrado, f.EmisorRfc, f.EmisorNombre, f.Moneda, f.TipoCambio,
        f.Subtotal, f.Descuento, f.Iva, f.Total, f.OrdenCompraId, f.OrdenCompraFolio, f.RutaArchivoXml,
        oc.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Stock General')
@@ -2386,48 +2407,63 @@ FROM FacturasXml f
 LEFT JOIN OrdenesCompra oc ON oc.Id = f.OrdenCompraId
 LEFT JOIN Proyectos pr ON pr.Id = oc.ProyectoId
 ORDER BY f.Id DESC";
-        using var r = cmd.ExecuteReader();
-        while (r.Read())
-        {
-            list.Add(new FacturaXml
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
             {
-                Id = r.GetInt32(0),
-                Uuid = r.GetString(1),
-                SerieFolio = r.GetString(2),
-                FechaTimbrado = r.GetString(3),
-                EmisorRfc = r.GetString(4),
-                EmisorNombre = r.GetString(5),
-                Moneda = r.GetString(6),
-                TipoCambio = Convert.ToDecimal(r.GetDouble(7)),
-                Subtotal = Convert.ToDecimal(r.GetDouble(8)),
-                Descuento = Convert.ToDecimal(r.GetDouble(9)),
-                Iva = Convert.ToDecimal(r.GetDouble(10)),
-                Total = Convert.ToDecimal(r.GetDouble(11)),
-                OrdenCompraId = r.IsDBNull(12) ? null : r.GetInt32(12),
-                OrdenCompraFolio = r.GetString(13),
-                RutaArchivoXml = r.GetString(14),
-                ProyectoId = r.IsDBNull(15) ? null : r.GetInt32(15),
-                ProyectoNombre = r.GetString(16)
-            });
+                list.Add(new FacturaXml
+                {
+                    Id = r.GetInt32(0),
+                    Uuid = r.GetString(1),
+                    SerieFolio = r.GetString(2),
+                    FechaTimbrado = r.GetString(3),
+                    EmisorRfc = r.GetString(4),
+                    EmisorNombre = r.GetString(5),
+                    Moneda = r.GetString(6),
+                    TipoCambio = Convert.ToDecimal(r.GetDouble(7)),
+                    Subtotal = Convert.ToDecimal(r.GetDouble(8)),
+                    Descuento = Convert.ToDecimal(r.GetDouble(9)),
+                    Iva = Convert.ToDecimal(r.GetDouble(10)),
+                    Total = Convert.ToDecimal(r.GetDouble(11)),
+                    OrdenCompraId = r.IsDBNull(12) ? null : r.GetInt32(12),
+                    OrdenCompraFolio = r.GetString(13),
+                    RutaArchivoXml = r.GetString(14),
+                    ProyectoId = r.IsDBNull(15) ? null : r.GetInt32(15),
+                    ProyectoNombre = r.GetString(16)
+                });
+            }
         }
 
+        if (list.Count == 0)
+            return list;
+
+        var facDict = list.ToDictionary(f => f.Id);
         var productosDict = ObtenerProductos().ToDictionary(p => p.Id, p => $"✔ [{p.CodigoInterno}] {p.Nombre}");
-        foreach (var f in list)
+
+        using (var cCmd = conn.CreateCommand())
         {
-            using var cCmd = conn.CreateCommand();
             cCmd.CommandText = @"
 SELECT Id, FacturaXmlId, ClaveProdServ, NoIdentificacion, Descripcion, Unidad, Cantidad, ValorUnitario, Importe, IvaConcepto, ProductoIdVinculado
-FROM FacturaConceptos
-WHERE FacturaXmlId = $fid";
-            cCmd.Parameters.AddWithValue("$fid", f.Id);
+FROM FacturaConceptos";
             using var cr = cCmd.ExecuteReader();
             while (cr.Read())
             {
+                int facId = cr.GetInt32(1);
+                if (!facDict.TryGetValue(facId, out var f))
+                    continue;
+
                 int? pid = cr.IsDBNull(10) ? null : cr.GetInt32(10);
+                string estatusProd;
+                if (pid.HasValue && pid.Value == -1)
+                    estatusProd = "🗑 Eliminado del catálogo";
+                else if (pid.HasValue && productosDict.TryGetValue(pid.Value, out var pNom))
+                    estatusProd = pNom;
+                else
+                    estatusProd = "Sin vincular";
+
                 f.Conceptos.Add(new FacturaConcepto
                 {
                     Id = cr.GetInt32(0),
-                    FacturaXmlId = cr.GetInt32(1),
+                    FacturaXmlId = facId,
                     ClaveProdServ = cr.GetString(2),
                     NoIdentificacion = cr.GetString(3),
                     Descripcion = cr.GetString(4),
@@ -2436,11 +2472,12 @@ WHERE FacturaXmlId = $fid";
                     ValorUnitario = Convert.ToDecimal(cr.GetDouble(7)),
                     Importe = Convert.ToDecimal(cr.GetDouble(8)),
                     IvaConcepto = Convert.ToDecimal(cr.GetDouble(9)),
-                    ProductoIdVinculado = pid,
-                    ProductoVinculadoNombre = pid.HasValue && productosDict.TryGetValue(pid.Value, out var pNom) ? pNom : "Sin vincular"
+                    ProductoIdVinculado = pid > 0 && productosDict.ContainsKey(pid.Value) ? pid : (pid == -1 ? -1 : null),
+                    ProductoVinculadoNombre = estatusProd
                 });
             }
         }
+
         return list;
     }
 

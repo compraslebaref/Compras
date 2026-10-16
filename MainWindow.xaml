@@ -349,6 +349,7 @@
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
                                                         <ui:Button Grid.Column="0"
                                                                    HorizontalAlignment="Stretch"
@@ -362,6 +363,13 @@
                                                                    ToolTip="Editar producto"
                                                                    Tag="{Binding}"
                                                                    Click="BtnEditarProductoCatalogo_Click" />
+                                                        <ui:Button Grid.Column="2"
+                                                                   Margin="6,0,0,0"
+                                                                   Appearance="Danger"
+                                                                   Icon="{ui:SymbolIcon Delete24}"
+                                                                   ToolTip="Eliminar producto"
+                                                                   Tag="{Binding}"
+                                                                   Click="BtnEliminarProductoCatalogoCard_Click" />
                                                     </Grid>
                                                 </StackPanel>
                                             </Border>
@@ -1562,6 +1570,40 @@
                     </TabControl>
                 </TabItem>
             </TabControl>
+        </Grid>
+
+        <!-- Indicador global de carga / procesamiento -->
+        <Grid x:Name="OverlayCargando"
+              Grid.Row="0"
+              Grid.RowSpan="3"
+              Panel.ZIndex="999"
+              Background="#75000000"
+              Visibility="Collapsed">
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Padding="28,22"
+                    CornerRadius="12"
+                    Background="{DynamicResource ApplicationBackgroundBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1">
+                <StackPanel HorizontalAlignment="Center">
+                    <ui:ProgressRing IsIndeterminate="True"
+                                     Width="44"
+                                     Height="44"
+                                     HorizontalAlignment="Center"
+                                     Margin="0,0,0,12" />
+                    <TextBlock x:Name="TxtMensajeCargando"
+                               Text="Procesando..."
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="Por favor espera un momento"
+                               FontSize="11.5"
+                               Opacity="0.7"
+                               HorizontalAlignment="Center"
+                               Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </ui:FluentWindow>
