@@ -268,6 +268,13 @@ CREATE TABLE IF NOT EXISTS ConfiguracionSistema (
     Clave TEXT PRIMARY KEY,
     Valor TEXT NOT NULL DEFAULT ''
 );
+
+CREATE INDEX IF NOT EXISTS IDX_Productos_CodigoInterno ON Productos(CodigoInterno);
+CREATE INDEX IF NOT EXISTS IDX_Productos_Nombre ON Productos(Nombre);
+CREATE INDEX IF NOT EXISTS IDX_Productos_CategoriaId ON Productos(CategoriaId);
+CREATE INDEX IF NOT EXISTS IDX_OrdenCompraPartidas_OcId ON OrdenCompraPartidas(OrdenCompraId);
+CREATE INDEX IF NOT EXISTS IDX_OrdenCompraPartidas_ProdId ON OrdenCompraPartidas(ProductoId);
+CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(FacturaXmlId);
 ";
         cmd.ExecuteNonQuery();
 

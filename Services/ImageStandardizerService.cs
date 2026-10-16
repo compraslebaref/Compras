@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -10,6 +11,8 @@ namespace SistemaComprasAlmacen.Services;
 public static class ImageStandardizerService
 {
     private const int TargetSize = 400;
+    private const int ThumbnailDecodeWidth = 140;
+    private static readonly ConcurrentDictionary<string, ImageSource?> _thumbnailCache = new(StringComparer.OrdinalIgnoreCase);
 
     public static string? GuardarDesdePortapapeles(string codigoProducto)
     {
@@ -71,7 +74,36 @@ public static class ImageStandardizerService
             encoder.Save(fs);
         }
 
+        _thumbnailCache.TryRemove(destPath, out _);
         return destPath;
+    }
+
+    public static ImageSource? ObtenerMiniaturaCacheada(string? ruta)
+    {
+        if (string.IsNullOrWhiteSpace(ruta))
+            return null;
+
+        return _thumbnailCache.GetOrAdd(ruta, path =>
+        {
+            if (!File.Exists(path))
+                return null;
+
+            try
+            {
+                var bi = new BitmapImage();
+                bi.BeginInit();
+                bi.CacheOption = BitmapCacheOption.OnLoad;
+                bi.DecodePixelWidth = ThumbnailDecodeWidth;
+                bi.UriSource = new Uri(path, UriKind.Absolute);
+                bi.EndInit();
+                bi.Freeze();
+                return bi;
+            }
+            catch
+            {
+                return null;
+            }
+        });
     }
 
     public static ImageSource? CargarImagenSegura(string? ruta)

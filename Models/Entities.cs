@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Windows.Media;
+using SistemaComprasAlmacen.Services;
 
 namespace SistemaComprasAlmacen.Models;
 
@@ -42,8 +45,11 @@ public class Categoria
     public override string ToString() => Nombre;
 }
 
-public class Producto
+public class Producto : INotifyPropertyChanged
 {
+    private bool _seleccionado;
+    private string _imagenRuta = string.Empty;
+
     public int Id { get; set; }
     public string CodigoInterno { get; set; } = string.Empty; // Ej. PRD-0001
     public string CodigoBarras { get; set; } = string.Empty;  // EAN/UPC o igual al interno
@@ -60,7 +66,20 @@ public class Producto
     public decimal UltimoCostoCompra { get; set; }            // Por UnidadCompra (con IVA)
     public decimal CostoUnitarioAlmacen => FactorConversion > 0 ? Math.Round(UltimoCostoCompra / FactorConversion, 2) : UltimoCostoCompra;
     public string Ubicacion { get; set; } = "A-01";
-    public string ImagenRuta { get; set; } = string.Empty;
+    public string ImagenRuta
+    {
+        get => _imagenRuta;
+        set
+        {
+            if (_imagenRuta != value)
+            {
+                _imagenRuta = value ?? string.Empty;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ImagenRuta)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ImagenMiniatura)));
+            }
+        }
+    }
+    public ImageSource? ImagenMiniatura => ImageStandardizerService.ObtenerMiniaturaCacheada(_imagenRuta);
     public bool EsHerramienta { get; set; }
     public decimal StockLibre => Math.Max(0, StockActual - StockReservadoProyecto);
     public bool StockBajo => StockActual <= StockMinimo;
@@ -68,7 +87,21 @@ public class Producto
         ? $"1 {UnidadCompra} = {FactorConversion:0.##} {UnidadAlmacen}"
         : $"1 {UnidadAlmacen}";
     public string CodigoEfectivo => string.IsNullOrWhiteSpace(CodigoBarras) ? CodigoInterno : CodigoBarras;
-    public bool Seleccionado { get; set; }
+    public bool Seleccionado
+    {
+        get => _seleccionado;
+        set
+        {
+            if (_seleccionado != value)
+            {
+                _seleccionado = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Seleccionado)));
+            }
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public override string ToString() => $"{CodigoInterno} - {Nombre}";
 }
 

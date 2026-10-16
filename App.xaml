@@ -93,6 +93,17 @@
                 </Style.Triggers>
             </Style>
 
+            <!-- Virtualización global para listas desplegables (ComboBox) con cientos de productos -->
+            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel IsVirtualizing="True" VirtualizationMode="Recycling" />
+                        </ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- Estilo global para sub-pestañas (TabItem en Directorios) -->
             <Style TargetType="TabItem">
                 <Setter Property="Padding" Value="14,8" />

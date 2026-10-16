@@ -243,6 +243,7 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="210" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
@@ -253,22 +254,31 @@
                                                 PlaceholderText="Buscar producto o código..."
                                                 VerticalContentAlignment="Center"
                                                 TextChanged="TxtBuscarCatalogo_TextChanged" />
+                                    <TextBlock x:Name="TxtContadorCatalogo"
+                                               Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               FontSize="11.5"
+                                               Opacity="0.7"
+                                               Margin="0,0,10,0"
+                                               Text="0 productos" />
                                     <ComboBox x:Name="CboFiltroCategoria"
-                                              Grid.Column="1"
+                                              Grid.Column="2"
                                               Margin="0,0,8,0"
                                               SelectionChanged="CboFiltroCategoria_SelectionChanged" />
-                                    <ui:Button Grid.Column="2"
+                                    <ui:Button Grid.Column="3"
                                                Margin="0,0,6,0"
                                                Content="A Solicitud"
                                                Appearance="Primary"
                                                Click="BtnEnviarCarritoASolicitud_Click" />
-                                    <ui:Button Grid.Column="3"
+                                    <ui:Button Grid.Column="4"
                                                Content="A Salida"
                                                Click="BtnEnviarCarritoASalida_Click" />
                                 </Grid>
                             </Border>
 
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ScrollViewer x:Name="SvCatalogoVisual"
+                                          VerticalScrollBarVisibility="Auto"
+                                          ScrollChanged="SvCatalogoVisual_ScrollChanged">
                                 <ItemsControl x:Name="IcCatalogoVisual">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
@@ -317,7 +327,10 @@
                                                                 <ui:SymbolIcon Symbol="Box24" FontSize="38" Foreground="#0078D4" HorizontalAlignment="Center" />
                                                                 <TextBlock Text="{Binding CategoriaNombre}" FontSize="10.5" Foreground="#64748B" HorizontalAlignment="Center" Margin="0,4,0,0" />
                                                             </StackPanel>
-                                                            <Image Source="{Binding ImagenRuta}" Stretch="Uniform" Margin="4" />
+                                                            <Image Source="{Binding ImagenMiniatura, Mode=OneWay}"
+                                                                   RenderOptions.BitmapScalingMode="LowQuality"
+                                                                   Stretch="Uniform"
+                                                                   Margin="4" />
                                                             <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#0F172A">
                                                                 <TextBlock Text="{Binding CodigoInterno}" Foreground="White" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" />
                                                             </Border>

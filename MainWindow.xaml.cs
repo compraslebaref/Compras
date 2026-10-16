@@ -13,6 +13,7 @@ using Microsoft.Win32;
 using SistemaComprasAlmacen.Data;
 using SistemaComprasAlmacen.Models;
 using SistemaComprasAlmacen.Services;
+using System.Windows.Threading;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 using MessageBoxButton = System.Windows.MessageBoxButton;
@@ -21,8 +22,13 @@ namespace SistemaComprasAlmacen;
 
 public partial class MainWindow : FluentWindow
 {
+    private const int CatalogoTamanoLote = 48;
     private bool _temaOscuro = false;
     private Producto _productoEnEdicion = new();
+    private List<Producto> _cacheProductos = new();
+    private List<Producto> _catalogoFiltrado = new();
+    private readonly ObservableCollection<Producto> _catalogoVisible = new();
+    private readonly DispatcherTimer _timerBusquedaCatalogo;
     private int _proveedorEditandoId = 0;
     private int _proyectoEditandoId = 0;
     private int _encargadoEditandoId = 0;
@@ -54,9 +60,20 @@ public partial class MainWindow : FluentWindow
     {
         InitializeComponent();
 
+        IcCatalogoVisual.ItemsSource = _catalogoVisible;
         DgPartidasNuevaSolicitud.ItemsSource = _partidasNuevaSolicitud;
         DgComparativa.ItemsSource = _renglonesComparativa;
         DgPartidasSalidaPos.ItemsSource = _partidasSalidaPos;
+
+        _timerBusquedaCatalogo = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(120)
+        };
+        _timerBusquedaCatalogo.Tick += (_, _) =>
+        {
+            _timerBusquedaCatalogo.Stop();
+            RefrescarCatalogoVisual();
+        };
 
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         Loaded += async (_, _) =>
@@ -124,13 +141,15 @@ public partial class MainWindow : FluentWindow
         var proyectos = DatabaseService.ObtenerProyectos();
         var categorias = DatabaseService.ObtenerCategorias();
         var proveedores = DatabaseService.ObtenerProveedores();
-        var productos = DatabaseService.ObtenerProductos();
+        _cacheProductos = DatabaseService.ObtenerProductos();
+        var productos = _cacheProductos;
 
         // Filtro categorías en catálogo
+        int catFiltroPrevio = (CboFiltroCategoria.SelectedItem as Categoria)?.Id ?? 0;
         var catsConTodas = new List<Categoria> { new() { Id = 0, Nombre = "Todas las categorías" } };
         catsConTodas.AddRange(categorias);
         CboFiltroCategoria.ItemsSource = catsConTodas;
-        if (CboFiltroCategoria.SelectedIndex < 0) CboFiltroCategoria.SelectedIndex = 0;
+        CboFiltroCategoria.SelectedItem = catsConTodas.FirstOrDefault(c => c.Id == catFiltroPrevio) ?? catsConTodas[0];
 
         CboProdCategoria.ItemsSource = categorias;
         if (CboProdCategoria.SelectedIndex < 0) CboProdCategoria.SelectedIndex = 0;
@@ -344,7 +363,7 @@ public partial class MainWindow : FluentWindow
     {
         var sols = DatabaseService.ObtenerSolicitudes();
         var ocs = DatabaseService.ObtenerOrdenesCompra();
-        var prods = DatabaseService.ObtenerProductos();
+        var prods = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
         var her = DatabaseService.ObtenerHerramientas();
 
         KpiSolicitudes.Text = sols.Count(s => s.Estatus == "Pendiente").ToString();
@@ -361,18 +380,96 @@ public partial class MainWindow : FluentWindow
 
     private void RefrescarCatalogoVisual()
     {
-        string? filtro = TxtBuscarCatalogo?.Text;
-        int? catId = (CboFiltroCategoria?.SelectedItem as Categoria)?.Id;
-        var lista = DatabaseService.ObtenerProductos(filtro, catId);
-        foreach (var item in lista)
+        if (_cacheProductos.Count == 0)
         {
-            item.Seleccionado = _productoEnEdicion.Id > 0 && item.Id == _productoEnEdicion.Id;
+            _cacheProductos = DatabaseService.ObtenerProductos();
         }
-        IcCatalogoVisual.ItemsSource = lista;
+
+        string filtro = TxtBuscarCatalogo?.Text?.Trim() ?? string.Empty;
+        int catId = (CboFiltroCategoria?.SelectedItem as Categoria)?.Id ?? 0;
+
+        IEnumerable<Producto> query = _cacheProductos;
+        if (catId > 0)
+        {
+            query = query.Where(p => p.CategoriaId == catId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro))
+        {
+            query = query.Where(p =>
+                p.Nombre.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoInterno.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoBarras.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
+                p.Descripcion.Contains(filtro, StringComparison.OrdinalIgnoreCase));
+        }
+
+        _catalogoFiltrado = query.ToList();
+        ActualizarSeleccionCatalogo();
+
+        _catalogoVisible.Clear();
+        int cantidadInicial = Math.Min(CatalogoTamanoLote, _catalogoFiltrado.Count);
+        for (int i = 0; i < cantidadInicial; i++)
+        {
+            _catalogoVisible.Add(_catalogoFiltrado[i]);
+        }
+
+        SvCatalogoVisual?.ScrollToTop();
+        ActualizarTextoContadorCatalogo();
     }
 
-    private void TxtBuscarCatalogo_TextChanged(object sender, TextChangedEventArgs e) => RefrescarCatalogoVisual();
-    private void CboFiltroCategoria_SelectionChanged(object sender, SelectionChangedEventArgs e) => RefrescarCatalogoVisual();
+    private void CargarMasProductosCatalogo()
+    {
+        if (_catalogoVisible.Count >= _catalogoFiltrado.Count)
+            return;
+
+        int inicio = _catalogoVisible.Count;
+        int fin = Math.Min(inicio + CatalogoTamanoLote, _catalogoFiltrado.Count);
+        for (int i = inicio; i < fin; i++)
+        {
+            _catalogoVisible.Add(_catalogoFiltrado[i]);
+        }
+
+        ActualizarTextoContadorCatalogo();
+    }
+
+    private void ActualizarTextoContadorCatalogo()
+    {
+        if (TxtContadorCatalogo == null) return;
+        TxtContadorCatalogo.Text = _catalogoVisible.Count < _catalogoFiltrado.Count
+            ? $"{_catalogoVisible.Count} de {_catalogoFiltrado.Count} productos"
+            : $"{_catalogoFiltrado.Count} productos";
+    }
+
+    private void ActualizarSeleccionCatalogo()
+    {
+        int idSel = _productoEnEdicion.Id;
+        foreach (var item in _cacheProductos)
+        {
+            item.Seleccionado = idSel > 0 && item.Id == idSel;
+        }
+    }
+
+    private void SvCatalogoVisual_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.VerticalChange <= 0) return;
+        if (_catalogoVisible.Count < _catalogoFiltrado.Count &&
+            e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 280)
+        {
+            CargarMasProductosCatalogo();
+        }
+    }
+
+    private void TxtBuscarCatalogo_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _timerBusquedaCatalogo.Stop();
+        _timerBusquedaCatalogo.Start();
+    }
+
+    private void CboFiltroCategoria_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        RefrescarCatalogoVisual();
+    }
 
     private void AgregarAlCarritoTienda(Producto p, decimal cantidad)
     {
@@ -432,7 +529,7 @@ public partial class MainWindow : FluentWindow
 
         ImgPreviewProducto.Source = ImageStandardizerService.CargarImagenSegura(p.ImagenRuta);
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(p.CodigoEfectivo);
-        RefrescarCatalogoVisual();
+        ActualizarSeleccionCatalogo();
     }
 
     private void LimpiarEditorProducto()
@@ -452,7 +549,7 @@ public partial class MainWindow : FluentWindow
         ChkProdEsHerramienta.IsChecked = false;
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(sig);
-        RefrescarCatalogoVisual();
+        ActualizarSeleccionCatalogo();
     }
 
     private void BtnNuevoProducto_Click(object sender, RoutedEventArgs e) => LimpiarEditorProducto();
