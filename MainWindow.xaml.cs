@@ -37,6 +37,8 @@ public partial class MainWindow : FluentWindow
     private int _categoriaEditandoId = 0;
     private int _solicitudEditandoId = 0;
     private bool _sincronizandoSolicitudes = false;
+    private bool _cargandoDetalleComparativa = false;
+    private bool _actualizandoPreciosIvaComp = false;
     private readonly List<(Producto producto, decimal cantidad)> _carritoTienda = new();
     private readonly ObservableCollection<SolicitudPartida> _partidasNuevaSolicitud = new();
     private readonly ObservableCollection<CotizacionRenglonComparativo> _renglonesComparativa = new();
@@ -1223,7 +1225,25 @@ public partial class MainWindow : FluentWindow
                 UnidadCompra = p.UnidadCompra,
                 CantidadSolicitada = p.CantidadSolicitada,
                 StockActualAlmacen = p.StockActualAlmacen,
-                NotasPartida = p.NotasPartida
+                NotasPartida = p.NotasPartida,
+                Proveedor1Id = p.Proveedor1Id,
+                PrecioSinIva1 = p.PrecioSinIva1,
+                DiasEntrega1 = p.DiasEntrega1,
+                FleteConIva1 = p.FleteConIva1,
+                NotasCotizacion1 = p.NotasCotizacion1,
+                Proveedor2Id = p.Proveedor2Id,
+                PrecioSinIva2 = p.PrecioSinIva2,
+                DiasEntrega2 = p.DiasEntrega2,
+                FleteConIva2 = p.FleteConIva2,
+                NotasCotizacion2 = p.NotasCotizacion2,
+                Proveedor3Id = p.Proveedor3Id,
+                PrecioSinIva3 = p.PrecioSinIva3,
+                DiasEntrega3 = p.DiasEntrega3,
+                FleteConIva3 = p.FleteConIva3,
+                NotasCotizacion3 = p.NotasCotizacion3,
+                ProveedorGanadorIndice = p.ProveedorGanadorIndice,
+                OrdenCompraId = p.OrdenCompraId,
+                OrdenCompraFolio = p.OrdenCompraFolio
             });
         }
         DgPartidasNuevaSolicitud.Items.Refresh();
@@ -1410,6 +1430,11 @@ public partial class MainWindow : FluentWindow
             return;
 
         if (!VerificarPermisoEdicionSolicitudActual()) return;
+        if (partida.TieneOcGenerada)
+        {
+            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede modificarse.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
 
         if (partida.CantidadSolicitada > 1)
         {
@@ -1430,6 +1455,11 @@ public partial class MainWindow : FluentWindow
             return;
 
         if (!VerificarPermisoEdicionSolicitudActual()) return;
+        if (partida.TieneOcGenerada)
+        {
+            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede modificarse.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
 
         partida.CantidadSolicitada += 1;
         DgPartidasNuevaSolicitud.Items.Refresh();
@@ -1442,6 +1472,11 @@ public partial class MainWindow : FluentWindow
             return;
 
         if (!VerificarPermisoEdicionSolicitudActual()) return;
+        if (partida.TieneOcGenerada)
+        {
+            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede quitarse de la solicitud.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
 
         _partidasNuevaSolicitud.Remove(partida);
         DgPartidasNuevaSolicitud.Items.Refresh();
@@ -1834,26 +1869,89 @@ public partial class MainWindow : FluentWindow
         CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
     }
 
-    // ==================== TAB 3: COMPARATIVA DE COTIZACIONES ====================
+    // ==================== TAB 3: COMPARATIVA DE COTIZACIONES POR PRODUCTO ====================
 
     private void CboCompSolicitud_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (CboCompSolicitud.SelectedItem is not Solicitud sol)
             return;
 
-        TxtCompInfoSolicitud.Text = $"Solicitud: {sol.Folio} | Depto: {sol.DepartamentoNombre} | Encargado: {sol.EncargadoNombre} | Proyecto: {sol.ProyectoNombre}";
+        int prevProdId = (DgComparativa.SelectedItem as CotizacionRenglonComparativo)?.ProductoId ?? 0;
+
+        TxtCompInfoSolicitud.Text = $"Solicitud: {sol.Folio} | Depto: {sol.DepartamentoNombre} | Solicitante: {sol.EncargadoNombre} | Proyecto: {sol.ProyectoNombre} | Estatus: {sol.Estatus}";
         _renglonesComparativa.Clear();
 
-        var productos = DatabaseService.ObtenerProductos().ToDictionary(p => p.Id);
+        var productos = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var proveedores = DatabaseService.ObtenerProveedores();
+        var provDict = proveedores.ToDictionary(p => p.Id);
+
         foreach (var part in sol.Partidas)
         {
-            decimal precioBaseSinIva = 100m;
-            if (productos.TryGetValue(part.ProductoId, out var pObj) && pObj.UltimoCostoCompra > 0)
+            productos.TryGetValue(part.ProductoId, out var pObj);
+            decimal ultimoCostoConIva = pObj?.UltimoCostoCompra ?? 0m;
+            decimal precioBaseSinIva = ultimoCostoConIva > 0 ? Math.Round(ultimoCostoConIva / 1.16m, 2) : 0m;
+
+            var (sugerencias, refHist) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(part.ProductoId);
+
+            int pv1 = part.Proveedor1Id;
+            decimal pr1 = part.PrecioSinIva1;
+            int d1 = part.DiasEntrega1 > 0 ? part.DiasEntrega1 : 2;
+            string nc1 = part.NotasCotizacion1;
+
+            int pv2 = part.Proveedor2Id;
+            decimal pr2 = part.PrecioSinIva2;
+            int d2 = part.DiasEntrega2 > 0 ? part.DiasEntrega2 : 3;
+            string nc2 = part.NotasCotizacion2;
+
+            int pv3 = part.Proveedor3Id;
+            decimal pr3 = part.PrecioSinIva3;
+            int d3 = part.DiasEntrega3 > 0 ? part.DiasEntrega3 : 1;
+            string nc3 = part.NotasCotizacion3;
+
+            bool sinProveedoresGuardados = pv1 == 0 && pv2 == 0 && pv3 == 0;
+            if (sinProveedoresGuardados)
             {
-                precioBaseSinIva = Math.Round(pObj.UltimoCostoCompra / 1.16m, 2);
+                // Pre-llenar automáticamente con proveedores que ya han vendido este producto antes, o del catálogo
+                var usados = new HashSet<int>();
+                if (sugerencias.Count >= 1)
+                {
+                    pv1 = sugerencias[0].proveedorId;
+                    if (pr1 <= 0) pr1 = sugerencias[0].precioSinIva;
+                    d1 = sugerencias[0].diasEntrega;
+                    if (string.IsNullOrWhiteSpace(nc1)) nc1 = sugerencias[0].notaSugerida;
+                    usados.Add(pv1);
+                }
+                if (sugerencias.Count >= 2)
+                {
+                    pv2 = sugerencias[1].proveedorId;
+                    if (pr2 <= 0) pr2 = sugerencias[1].precioSinIva;
+                    d2 = sugerencias[1].diasEntrega;
+                    if (string.IsNullOrWhiteSpace(nc2)) nc2 = sugerencias[1].notaSugerida;
+                    usados.Add(pv2);
+                }
+                if (sugerencias.Count >= 3)
+                {
+                    pv3 = sugerencias[2].proveedorId;
+                    if (pr3 <= 0) pr3 = sugerencias[2].precioSinIva;
+                    d3 = sugerencias[2].diasEntrega;
+                    if (string.IsNullOrWhiteSpace(nc3)) nc3 = sugerencias[2].notaSugerida;
+                    usados.Add(pv3);
+                }
+
+                // Completar opciones vacías con proveedores generales disponibles
+                foreach (var provCat in proveedores)
+                {
+                    if (usados.Contains(provCat.Id)) continue;
+                    if (pv1 == 0) { pv1 = provCat.Id; d1 = provCat.DiasEntregaPromedio > 0 ? provCat.DiasEntregaPromedio : 2; usados.Add(pv1); }
+                    else if (pv2 == 0) { pv2 = provCat.Id; d2 = provCat.DiasEntregaPromedio > 0 ? provCat.DiasEntregaPromedio : 3; usados.Add(pv2); }
+                    else if (pv3 == 0) { pv3 = provCat.Id; d3 = provCat.DiasEntregaPromedio > 0 ? provCat.DiasEntregaPromedio : 1; usados.Add(pv3); break; }
+                }
+
+                if (pr1 <= 0 && precioBaseSinIva > 0)
+                    pr1 = precioBaseSinIva;
             }
 
-            _renglonesComparativa.Add(new CotizacionRenglonComparativo
+            var renglon = new CotizacionRenglonComparativo
             {
                 SolicitudPartidaId = part.Id,
                 ProductoId = part.ProductoId,
@@ -1861,62 +1959,493 @@ public partial class MainWindow : FluentWindow
                 ProductoNombre = part.ProductoNombre,
                 UnidadCompra = part.UnidadCompra,
                 Cantidad = part.CantidadSolicitada,
-                PrecioSinIva1 = precioBaseSinIva,
-                PrecioSinIva2 = Math.Round(precioBaseSinIva * 1.04m, 2),
-                PrecioSinIva3 = Math.Round(precioBaseSinIva * 0.97m, 2),
-                ProveedorGanadorIndice = 3
-            });
+                StockActualAlmacen = part.StockActualAlmacen,
+                UltimoCostoCompraConIva = ultimoCostoConIva,
+                ReferenciaHistorica = refHist,
+
+                Proveedor1Id = pv1,
+                Proveedor1Nombre = provDict.TryGetValue(pv1, out var p1Obj) ? p1Obj.NombreMostrar : "Sin asignar",
+                PrecioSinIva1 = pr1,
+                DiasEntrega1 = d1,
+                FleteConIva1 = part.FleteConIva1,
+                NotasCotizacion1 = nc1,
+
+                Proveedor2Id = pv2,
+                Proveedor2Nombre = provDict.TryGetValue(pv2, out var p2Obj) ? p2Obj.NombreMostrar : "Sin asignar",
+                PrecioSinIva2 = pr2,
+                DiasEntrega2 = d2,
+                FleteConIva2 = part.FleteConIva2,
+                NotasCotizacion2 = nc2,
+
+                Proveedor3Id = pv3,
+                Proveedor3Nombre = provDict.TryGetValue(pv3, out var p3Obj) ? p3Obj.NombreMostrar : "Sin asignar",
+                PrecioSinIva3 = pr3,
+                DiasEntrega3 = d3,
+                FleteConIva3 = part.FleteConIva3,
+                NotasCotizacion3 = nc3,
+
+                ProveedorGanadorIndice = part.ProveedorGanadorIndice,
+                OrdenCompraId = part.OrdenCompraId,
+                OrdenCompraFolio = part.OrdenCompraFolio
+            };
+
+            if (sinProveedoresGuardados && renglon.SolicitudPartidaId > 0)
+            {
+                DatabaseService.GuardarCotizacionPartida(renglon);
+            }
+
+            _renglonesComparativa.Add(renglon);
+        }
+
+        if (_renglonesComparativa.Count > 0)
+        {
+            var aSeleccionar = _renglonesComparativa.FirstOrDefault(r => r.ProductoId == prevProdId) ?? _renglonesComparativa[0];
+            DgComparativa.SelectedItem = aSeleccionar;
+            CargarProductoEnTarjetasComparativa(aSeleccionar);
+        }
+        else
+        {
+            CargarProductoEnTarjetasComparativa(null);
         }
 
         RecalcularTotalesComparativa();
     }
 
-    private void CboCompProveedores_SelectionChanged(object sender, SelectionChangedEventArgs e) => RecalcularTotalesComparativa();
-    private void TxtCompTotales_TextChanged(object sender, TextChangedEventArgs e) => RecalcularTotalesComparativa();
-    private void BtnRecalcularComparativa_Click(object sender, RoutedEventArgs e) => RecalcularTotalesComparativa();
+    private void DgComparativa_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa) return;
+        CargarProductoEnTarjetasComparativa(DgComparativa.SelectedItem as CotizacionRenglonComparativo);
+    }
+
+    private void CargarProductoEnTarjetasComparativa(CotizacionRenglonComparativo? r)
+    {
+        if (TxtCompProdTitulo == null) return;
+
+        _cargandoDetalleComparativa = true;
+        try
+        {
+            if (r == null)
+            {
+                TxtCompProdTitulo.Text = "2. Seleccione un producto de la lista";
+                TxtCompProdSubtitulo.Text = "No hay producto seleccionado.";
+                TxtCompProdHistorial.Text = "";
+                TxtCompProdCantidad.Text = "1";
+                return;
+            }
+
+            TxtCompProdTitulo.Text = $"{r.ProductoCodigo} — {r.ProductoNombre}";
+            TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra} | Stock actual en almacén: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")}";
+            TxtCompProdHistorial.Text = r.ReferenciaHistorica;
+            TxtCompProdCantidad.Text = r.Cantidad.ToString("0.##", CultureInfo.InvariantCulture);
+
+            var proveedores = CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores();
+            CboCompProv1.SelectedItem = proveedores.FirstOrDefault(p => p.Id == r.Proveedor1Id);
+            CboCompProv2.SelectedItem = proveedores.FirstOrDefault(p => p.Id == r.Proveedor2Id);
+            CboCompProv3.SelectedItem = proveedores.FirstOrDefault(p => p.Id == r.Proveedor3Id);
+
+            TxtCompPrecioSinIva1.Text = r.PrecioSinIva1 > 0 ? r.PrecioSinIva1.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
+            TxtCompPrecioConIva1.Text = r.PrecioSinIva1 > 0 ? r.PrecioConIva1.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
+            TxtCompFlete1.Text = r.FleteConIva1.ToString("0.00", CultureInfo.InvariantCulture);
+            TxtCompDias1.Text = r.DiasEntrega1.ToString();
+            TxtCompNotas1.Text = r.NotasCotizacion1;
+
+            TxtCompPrecioSinIva2.Text = r.PrecioSinIva2 > 0 ? r.PrecioSinIva2.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
+            TxtCompPrecioConIva2.Text = r.PrecioSinIva2 > 0 ? r.PrecioConIva2.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
+            TxtCompFlete2.Text = r.FleteConIva2.ToString("0.00", CultureInfo.InvariantCulture);
+            TxtCompDias2.Text = r.DiasEntrega2.ToString();
+            TxtCompNotas2.Text = r.NotasCotizacion2;
+
+            TxtCompPrecioSinIva3.Text = r.PrecioSinIva3 > 0 ? r.PrecioSinIva3.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
+            TxtCompPrecioConIva3.Text = r.PrecioSinIva3 > 0 ? r.PrecioConIva3.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
+            TxtCompFlete3.Text = r.FleteConIva3.ToString("0.00", CultureInfo.InvariantCulture);
+            TxtCompDias3.Text = r.DiasEntrega3.ToString();
+            TxtCompNotas3.Text = r.NotasCotizacion3;
+
+            bool editable = !r.TieneOcGenerada;
+            TxtCompProdCantidad.IsEnabled = editable;
+            CboCompProv1.IsEnabled = editable;
+            CboCompProv2.IsEnabled = editable;
+            CboCompProv3.IsEnabled = editable;
+            TxtCompPrecioSinIva1.IsEnabled = editable;
+            TxtCompPrecioConIva1.IsEnabled = editable;
+            TxtCompPrecioSinIva2.IsEnabled = editable;
+            TxtCompPrecioConIva2.IsEnabled = editable;
+            TxtCompPrecioSinIva3.IsEnabled = editable;
+            TxtCompPrecioConIva3.IsEnabled = editable;
+            TxtCompFlete1.IsEnabled = editable;
+            TxtCompFlete2.IsEnabled = editable;
+            TxtCompFlete3.IsEnabled = editable;
+            TxtCompDias1.IsEnabled = editable;
+            TxtCompDias2.IsEnabled = editable;
+            TxtCompDias3.IsEnabled = editable;
+            TxtCompNotas1.IsEnabled = editable;
+            TxtCompNotas2.IsEnabled = editable;
+            TxtCompNotas3.IsEnabled = editable;
+            BtnElegirGanador1.IsEnabled = editable;
+            BtnElegirGanador2.IsEnabled = editable;
+            BtnElegirGanador3.IsEnabled = editable;
+
+            ActualizarResumenYAparienciaTarjetasProducto(r);
+        }
+        finally
+        {
+            _cargandoDetalleComparativa = false;
+        }
+    }
+
+    private void ActualizarResumenYAparienciaTarjetasProducto(CotizacionRenglonComparativo r)
+    {
+        if (TxtResumenProv1 == null) return;
+
+        decimal sub1 = Math.Round(r.Cantidad * r.PrecioSinIva1, 2);
+        decimal sub2 = Math.Round(r.Cantidad * r.PrecioSinIva2, 2);
+        decimal sub3 = Math.Round(r.Cantidad * r.PrecioSinIva3, 2);
+
+        TxtResumenProv1.Text = $"Subtotal ({r.Cantidad:0.##} {r.UnidadCompra}): ${sub1:N2}\nPartida c/IVA: ${r.TotalPartidaConIva1:N2}\nTotal + Envío: ${r.TotalConFlete1:N2}";
+        TxtResumenProv2.Text = $"Subtotal ({r.Cantidad:0.##} {r.UnidadCompra}): ${sub2:N2}\nPartida c/IVA: ${r.TotalPartidaConIva2:N2}\nTotal + Envío: ${r.TotalConFlete2:N2}";
+        TxtResumenProv3.Text = $"Subtotal ({r.Cantidad:0.##} {r.UnidadCompra}): ${sub3:N2}\nPartida c/IVA: ${r.TotalPartidaConIva3:N2}\nTotal + Envío: ${r.TotalConFlete3:N2}";
+
+        BdrBadgeGanador1.Visibility = r.ProveedorGanadorIndice == 1 ? Visibility.Visible : Visibility.Collapsed;
+        BdrBadgeGanador2.Visibility = r.ProveedorGanadorIndice == 2 ? Visibility.Visible : Visibility.Collapsed;
+        BdrBadgeGanador3.Visibility = r.ProveedorGanadorIndice == 3 ? Visibility.Visible : Visibility.Collapsed;
+
+        BdrCompCard1.BorderThickness = new Thickness(r.ProveedorGanadorIndice == 1 ? 2.8 : 1.2);
+        BdrCompCard2.BorderThickness = new Thickness(r.ProveedorGanadorIndice == 2 ? 2.8 : 1.2);
+        BdrCompCard3.BorderThickness = new Thickness(r.ProveedorGanadorIndice == 3 ? 2.8 : 1.2);
+
+        BtnElegirGanador1.Appearance = r.ProveedorGanadorIndice == 1 ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        BtnElegirGanador2.Appearance = r.ProveedorGanadorIndice == 2 ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        BtnElegirGanador3.Appearance = r.ProveedorGanadorIndice == 3 ? ControlAppearance.Primary : ControlAppearance.Secondary;
+
+        BtnElegirGanador1.Content = r.ProveedorGanadorIndice == 1 ? "★ Opción 1 Elegida" : "✓ Elegir Opción 1";
+        BtnElegirGanador2.Content = r.ProveedorGanadorIndice == 2 ? "★ Opción 2 Elegida" : "✓ Elegir Opción 2";
+        BtnElegirGanador3.Content = r.ProveedorGanadorIndice == 3 ? "★ Opción 3 Elegida" : "✓ Elegir Opción 3";
+    }
+
+    private void SincronizarRenglonActualDesdeTarjetas()
+    {
+        if (_cargandoDetalleComparativa || DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+            return;
+
+        decimal cant = ParseDecimal(TxtCompProdCantidad.Text, r.Cantidad);
+        if (cant > 0) r.Cantidad = cant;
+
+        if (CboCompProv1.SelectedItem is Proveedor p1)
+        {
+            r.Proveedor1Id = p1.Id;
+            r.Proveedor1Nombre = p1.NombreMostrar;
+        }
+        if (CboCompProv2.SelectedItem is Proveedor p2)
+        {
+            r.Proveedor2Id = p2.Id;
+            r.Proveedor2Nombre = p2.NombreMostrar;
+        }
+        if (CboCompProv3.SelectedItem is Proveedor p3)
+        {
+            r.Proveedor3Id = p3.Id;
+            r.Proveedor3Nombre = p3.NombreMostrar;
+        }
+
+        r.PrecioSinIva1 = ParseDecimal(TxtCompPrecioSinIva1.Text, 0m);
+        r.PrecioSinIva2 = ParseDecimal(TxtCompPrecioSinIva2.Text, 0m);
+        r.PrecioSinIva3 = ParseDecimal(TxtCompPrecioSinIva3.Text, 0m);
+
+        r.FleteConIva1 = ParseDecimal(TxtCompFlete1.Text, 0m);
+        r.FleteConIva2 = ParseDecimal(TxtCompFlete2.Text, 0m);
+        r.FleteConIva3 = ParseDecimal(TxtCompFlete3.Text, 0m);
+
+        r.DiasEntrega1 = Math.Max(1, (int)ParseDecimal(TxtCompDias1.Text, 2m));
+        r.DiasEntrega2 = Math.Max(1, (int)ParseDecimal(TxtCompDias2.Text, 3m));
+        r.DiasEntrega3 = Math.Max(1, (int)ParseDecimal(TxtCompDias3.Text, 1m));
+
+        r.NotasCotizacion1 = TxtCompNotas1.Text ?? string.Empty;
+        r.NotasCotizacion2 = TxtCompNotas2.Text ?? string.Empty;
+        r.NotasCotizacion3 = TxtCompNotas3.Text ?? string.Empty;
+
+        DatabaseService.GuardarCotizacionPartida(r);
+        ActualizarResumenYAparienciaTarjetasProducto(r);
+        RecalcularTotalesComparativa();
+    }
+
+    private void TxtCompProdCantidad_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa) return;
+        SincronizarRenglonActualDesdeTarjetas();
+    }
+
+    private void CboCompProveedores_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa) return;
+        SincronizarRenglonActualDesdeTarjetas();
+    }
+
+    private void TxtCompPrecioSinIva1_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa || _actualizandoPreciosIvaComp) return;
+        _actualizandoPreciosIvaComp = true;
+        try
+        {
+            decimal sinIva = ParseDecimal(TxtCompPrecioSinIva1.Text, 0m);
+            TxtCompPrecioConIva1.Text = Math.Round(sinIva * 1.16m, 2).ToString("0.00", CultureInfo.InvariantCulture);
+            SincronizarRenglonActualDesdeTarjetas();
+        }
+        finally { _actualizandoPreciosIvaComp = false; }
+    }
+
+    private void TxtCompPrecioConIva1_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa || _actualizandoPreciosIvaComp) return;
+        _actualizandoPreciosIvaComp = true;
+        try
+        {
+            decimal conIva = ParseDecimal(TxtCompPrecioConIva1.Text, 0m);
+            TxtCompPrecioSinIva1.Text = Math.Round(conIva / 1.16m, 2).ToString("0.00", CultureInfo.InvariantCulture);
+            SincronizarRenglonActualDesdeTarjetas();
+        }
+        finally { _actualizandoPreciosIvaComp = false; }
+    }
+
+    private void TxtCompPrecioSinIva2_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa || _actualizandoPreciosIvaComp) return;
+        _actualizandoPreciosIvaComp = true;
+        try
+        {
+            decimal sinIva = ParseDecimal(TxtCompPrecioSinIva2.Text, 0m);
+            TxtCompPrecioConIva2.Text = Math.Round(sinIva * 1.16m, 2).ToString("0.00", CultureInfo.InvariantCulture);
+            SincronizarRenglonActualDesdeTarjetas();
+        }
+        finally { _actualizandoPreciosIvaComp = false; }
+    }
+
+    private void TxtCompPrecioConIva2_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa || _actualizandoPreciosIvaComp) return;
+        _actualizandoPreciosIvaComp = true;
+        try
+        {
+            decimal conIva = ParseDecimal(TxtCompPrecioConIva2.Text, 0m);
+            TxtCompPrecioSinIva2.Text = Math.Round(conIva / 1.16m, 2).ToString("0.00", CultureInfo.InvariantCulture);
+            SincronizarRenglonActualDesdeTarjetas();
+        }
+        finally { _actualizandoPreciosIvaComp = false; }
+    }
+
+    private void TxtCompPrecioSinIva3_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa || _actualizandoPreciosIvaComp) return;
+        _actualizandoPreciosIvaComp = true;
+        try
+        {
+            decimal sinIva = ParseDecimal(TxtCompPrecioSinIva3.Text, 0m);
+            TxtCompPrecioConIva3.Text = Math.Round(sinIva * 1.16m, 2).ToString("0.00", CultureInfo.InvariantCulture);
+            SincronizarRenglonActualDesdeTarjetas();
+        }
+        finally { _actualizandoPreciosIvaComp = false; }
+    }
+
+    private void TxtCompPrecioConIva3_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa || _actualizandoPreciosIvaComp) return;
+        _actualizandoPreciosIvaComp = true;
+        try
+        {
+            decimal conIva = ParseDecimal(TxtCompPrecioConIva3.Text, 0m);
+            TxtCompPrecioSinIva3.Text = Math.Round(conIva / 1.16m, 2).ToString("0.00", CultureInfo.InvariantCulture);
+            SincronizarRenglonActualDesdeTarjetas();
+        }
+        finally { _actualizandoPreciosIvaComp = false; }
+    }
+
+    private void TxtCompExtras_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa) return;
+        SincronizarRenglonActualDesdeTarjetas();
+    }
+
+    private void ElegirOpcionGanadoraProductoActual(int indiceOpcion)
+    {
+        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r)
+            return;
+
+        if (r.TieneOcGenerada)
+        {
+            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {r.OrdenCompraFolio}.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        SincronizarRenglonActualDesdeTarjetas();
+
+        if (indiceOpcion >= 1 && indiceOpcion <= 3)
+        {
+            int provId = indiceOpcion switch { 1 => r.Proveedor1Id, 2 => r.Proveedor2Id, 3 => r.Proveedor3Id, _ => 0 };
+            decimal precio = indiceOpcion switch { 1 => r.PrecioSinIva1, 2 => r.PrecioSinIva2, 3 => r.PrecioSinIva3, _ => 0m };
+
+            if (provId <= 0)
+            {
+                System.Windows.MessageBox.Show(this, $"Seleccione primero un Proveedor en la Opción {indiceOpcion}.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (precio <= 0)
+            {
+                System.Windows.MessageBox.Show(this, $"Capture primero un precio unitario mayor a $0.00 en la Opción {indiceOpcion}.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+        }
+
+        r.ProveedorGanadorIndice = indiceOpcion;
+        DatabaseService.GuardarCotizacionPartida(r);
+        ActualizarResumenYAparienciaTarjetasProducto(r);
+        RecalcularTotalesComparativa();
+    }
+
+    private void BtnElegirGanador1_Click(object sender, RoutedEventArgs e) => ElegirOpcionGanadoraProductoActual(1);
+    private void BtnElegirGanador2_Click(object sender, RoutedEventArgs e) => ElegirOpcionGanadoraProductoActual(2);
+    private void BtnElegirGanador3_Click(object sender, RoutedEventArgs e) => ElegirOpcionGanadoraProductoActual(3);
+    private void BtnLimpiarGanadorProductoActual_Click(object sender, RoutedEventArgs e) => ElegirOpcionGanadoraProductoActual(0);
+
+    private void BtnMejorPrecioProductoActual_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+            return;
+
+        SincronizarRenglonActualDesdeTarjetas();
+        int mejorIdx = DeterminarIndiceMejorPrecio(r);
+        if (mejorIdx == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Capture al menos un proveedor con precio mayor a $0.00 en las opciones de este artículo.", "Sin precios capturados", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        ElegirOpcionGanadoraProductoActual(mejorIdx);
+    }
+
+    private static int DeterminarIndiceMejorPrecio(CotizacionRenglonComparativo r)
+    {
+        var candidatos = new List<(int idx, decimal costoTotal)>();
+        if (r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0) candidatos.Add((1, r.TotalConFlete1));
+        if (r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0) candidatos.Add((2, r.TotalConFlete2));
+        if (r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0) candidatos.Add((3, r.TotalConFlete3));
+
+        return candidatos.Count > 0 ? candidatos.OrderBy(c => c.costoTotal).First().idx : 0;
+    }
 
     private void DgComparativa_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
-        Dispatcher.BeginInvoke(new Action(RecalcularTotalesComparativa), System.Windows.Threading.DispatcherPriority.Background);
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
+            {
+                DatabaseService.GuardarCotizacionPartida(r);
+                CargarProductoEnTarjetasComparativa(r);
+            }
+            RecalcularTotalesComparativa();
+        }), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void RecalcularTotalesComparativa()
     {
-        if (TxtResumenProv1 == null || _renglonesComparativa.Count == 0)
+        if (DgPrevisualizacionOcs == null)
             return;
 
         DgComparativa.Items.Refresh();
 
-        decimal flete1 = ParseDecimal(TxtCompFlete1.Text, 0m);
-        decimal flete2 = ParseDecimal(TxtCompFlete2.Text, 0m);
-        decimal flete3 = ParseDecimal(TxtCompFlete3.Text, 0m);
+        var decididosSinOc = _renglonesComparativa
+            .Where(r => !r.TieneOcGenerada && r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorIndice <= 3 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
+            .ToList();
 
-        decimal sub1 = _renglonesComparativa.Sum(r => Math.Round(r.Cantidad * r.PrecioSinIva1, 2));
-        decimal sub2 = _renglonesComparativa.Sum(r => Math.Round(r.Cantidad * r.PrecioSinIva2, 2));
-        decimal sub3 = _renglonesComparativa.Sum(r => Math.Round(r.Cantidad * r.PrecioSinIva3, 2));
+        var resumenesOc = decididosSinOc
+            .GroupBy(r => new { r.ProveedorGanadorId, r.ProveedorGanadorNombre })
+            .Select(g =>
+            {
+                decimal subPartidas = g.Sum(x => Math.Round(x.Cantidad * x.PrecioUnitarioGanadorSinIva, 2));
+                decimal fleteConIva = g.Sum(x => x.FleteGanadorConIva);
+                decimal fleteSinIva = Math.Round(fleteConIva / 1.16m, 2);
+                decimal subTotal = Math.Round(subPartidas + fleteSinIva, 2);
+                decimal iva = Math.Round(subTotal * 0.16m, 2);
+                decimal total = Math.Round(subTotal + iva, 2);
 
-        decimal tot1 = Math.Round(sub1 * 1.16m + flete1, 2);
-        decimal tot2 = Math.Round(sub2 * 1.16m + flete2, 2);
-        decimal tot3 = Math.Round(sub3 * 1.16m + flete3, 2);
+                return new ResumenOcPrevia
+                {
+                    ProveedorId = g.Key.ProveedorGanadorId,
+                    ProveedorNombre = g.Key.ProveedorGanadorNombre,
+                    CantidadPartidas = g.Count(),
+                    ProductosResumen = string.Join(", ", g.Select(x => x.ProductoCodigo)),
+                    DiasEntregaMax = g.Max(x => x.DiasEntregaGanador),
+                    SubtotalSinIva = subTotal,
+                    FleteConIva = fleteConIva,
+                    IvaTotal = iva,
+                    TotalConIva = total
+                };
+            })
+            .OrderByDescending(x => x.TotalConIva)
+            .ToList();
 
-        TxtResumenProv1.Text = $"Subtotal: ${sub1:N2} | Total: ${tot1:N2}";
-        TxtResumenProv2.Text = $"Subtotal: ${sub2:N2} | Total: ${tot2:N2}";
-        TxtResumenProv3.Text = $"Subtotal: ${sub3:N2} | Total: ${tot3:N2}";
+        DgPrevisualizacionOcs.ItemsSource = resumenesOc;
+
+        int totalProductos = _renglonesComparativa.Count;
+        int yaConOc = _renglonesComparativa.Count(r => r.TieneOcGenerada);
+        int listosParaOc = decididosSinOc.Count;
+        int pendientesElegir = totalProductos - yaConOc - listosParaOc;
+
+        if (TxtCompAvanceDecision != null)
+        {
+            TxtCompAvanceDecision.Text = $"Avance: {listosParaOc} decididos listos para emitir OC | {pendientesElegir} pendientes de elegir | {yaConOc} ya con OC emitida";
+        }
+
+        decimal granTotalOcs = resumenesOc.Sum(x => x.TotalConIva);
+        if (TxtResumenGeneralComparativa != null)
+        {
+            TxtResumenGeneralComparativa.Text = $"{resumenesOc.Count} OC(s) por emitir | Total: {granTotalOcs:C2}";
+        }
+
+        if (BtnGenerarOrdenesDesdeComparativa != null)
+        {
+            BtnGenerarOrdenesDesdeComparativa.IsEnabled = listosParaOc > 0;
+            BtnGenerarOrdenesDesdeComparativa.Content = listosParaOc > 0
+                ? $"Emitir {resumenesOc.Count} OC(s) ({listosParaOc} Productos Decididos)"
+                : (yaConOc == totalProductos && totalProductos > 0 ? "Todas las OCs ya fueron emitidas" : "Elija Ganador en al menos 1 producto");
+        }
     }
 
     private void BtnSeleccionarMejorPrecioPorPartida_Click(object sender, RoutedEventArgs e)
     {
+        SincronizarRenglonActualDesdeTarjetas();
+
+        int asignados = 0;
         foreach (var r in _renglonesComparativa)
         {
-            var opciones = new[]
+            if (r.TieneOcGenerada) continue;
+            int mejorIdx = DeterminarIndiceMejorPrecio(r);
+            if (mejorIdx > 0)
             {
-                (idx: 1, precio: r.PrecioSinIva1 > 0 ? r.PrecioSinIva1 : decimal.MaxValue),
-                (idx: 2, precio: r.PrecioSinIva2 > 0 ? r.PrecioSinIva2 : decimal.MaxValue),
-                (idx: 3, precio: r.PrecioSinIva3 > 0 ? r.PrecioSinIva3 : decimal.MaxValue)
-            };
-            r.ProveedorGanadorIndice = opciones.OrderBy(o => o.precio).First().idx;
+                r.ProveedorGanadorIndice = mejorIdx;
+                DatabaseService.GuardarCotizacionPartida(r);
+                asignados++;
+            }
+        }
+
+        if (DgComparativa.SelectedItem is CotizacionRenglonComparativo sel)
+        {
+            ActualizarResumenYAparienciaTarjetasProducto(sel);
         }
         RecalcularTotalesComparativa();
+
+        if (asignados == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Capture precios mayores a $0.00 en los productos pendientes para elegir automáticamente el mejor precio.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnGuardarBorradorComparativa_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud.SelectedItem is not Solicitud sol)
+            return;
+
+        SincronizarRenglonActualDesdeTarjetas();
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        RecalcularTotalesComparativa();
+        System.Windows.MessageBox.Show(this, $"Se guardó el borrador de la comparativa para la solicitud {sol.Folio}.\n\nPuede continuar cotizando más tarde o emitir Órdenes de Compra parciales cuando lo desee.", "Borrador Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void BtnGenerarOrdenesDesdeComparativa_Click(object sender, RoutedEventArgs e)
@@ -1924,18 +2453,43 @@ public partial class MainWindow : FluentWindow
         if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
             return;
 
-        var config = new Dictionary<int, (Proveedor? prov, decimal fleteConIva, int diasEntrega)>
+        SincronizarRenglonActualDesdeTarjetas();
+
+        var decididosSinOc = _renglonesComparativa
+            .Where(r => !r.TieneOcGenerada && r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorIndice <= 3 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
+            .ToList();
+
+        if (decididosSinOc.Count == 0)
         {
-            [1] = (CboCompProv1.SelectedItem as Proveedor, ParseDecimal(TxtCompFlete1.Text, 0m), (int)ParseDecimal(TxtCompDias1.Text, 2m)),
-            [2] = (CboCompProv2.SelectedItem as Proveedor, ParseDecimal(TxtCompFlete2.Text, 0m), (int)ParseDecimal(TxtCompDias2.Text, 4m)),
-            [3] = (CboCompProv3.SelectedItem as Proveedor, ParseDecimal(TxtCompFlete3.Text, 0m), (int)ParseDecimal(TxtCompDias3.Text, 1m))
-        };
+            System.Windows.MessageBox.Show(this, "Elija primero el proveedor ganador (con precio mayor a $0.00) en al menos un producto pendiente.", "Sin productos decididos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        int pendientesRestantes = _renglonesComparativa.Count(r => !r.TieneOcGenerada) - decididosSinOc.Count;
+        int numOcs = decididosSinOc.Select(r => r.ProveedorGanadorId).Distinct().Count();
+
+        if (pendientesRestantes > 0)
+        {
+            var resp = System.Windows.MessageBox.Show(this,
+                $"Se emitirán {numOcs} Orden(es) de Compra para los {decididosSinOc.Count} productos ya decididos.\n\nLos {pendientesRestantes} productos restantes quedarán pendientes en esta misma solicitud ({sol.Folio}) para que pueda cotizarlos y emitir su OC después.\n\n¿Desea emitir las Órdenes de Compra ahora?",
+                "Emisión Parcial de Órdenes de Compra",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (resp != System.Windows.MessageBoxResult.Yes)
+                return;
+        }
 
         string folioComp = $"COT-{DateTime.Now:yyyy}-{sol.Id:D4}";
-        var ordenesCreadas = DatabaseService.GenerarOrdenesDesdeComparativa(sol, folioComp, _renglonesComparativa.ToList(), config);
+        var ordenesCreadas = DatabaseService.GenerarOrdenesDesdeComparativa(sol, folioComp, _renglonesComparativa.ToList());
 
         CargarTodoElSistema();
-        CambiarSeccion(4);
+        CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
+
+        if (pendientesRestantes == 0)
+        {
+            CambiarSeccion(4);
+        }
 
         foreach (var oc in ordenesCreadas)
         {

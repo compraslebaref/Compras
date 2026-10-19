@@ -781,114 +781,300 @@
                     </Grid>
                 </TabItem>
 
-                <!-- ==================== TAB 3: COMPARATIVA ==================== -->
+                <!-- ==================== TAB 3: COMPARATIVA POR PRODUCTO ==================== -->
                 <TabItem>
                     <DockPanel>
-                        <Border DockPanel.Dock="Top" Padding="14" CornerRadius="8" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="360" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                        <TextBlock Text="Solicitud a Cotizar" FontWeight="Bold" FontSize="12" Margin="0,0,0,2" />
-                                        <ComboBox x:Name="CboCompSolicitud" SelectionChanged="CboCompSolicitud_SelectionChanged" />
-                                    </StackPanel>
-                                    <TextBlock x:Name="TxtCompInfoSolicitud" Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
-                                    <ui:Button Grid.Column="2"
-                                               Content="Seleccionar Mejor Precio"
+                        <!-- Barra Superior: Solicitud a Cotizar y Acciones Globales -->
+                        <Border DockPanel.Dock="Top" Padding="12" CornerRadius="8" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="340" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                    <TextBlock Text="Solicitud (Carrito) a Cotizar por Producto" FontWeight="Bold" FontSize="12" Margin="0,0,0,2" />
+                                    <ComboBox x:Name="CboCompSolicitud" SelectionChanged="CboCompSolicitud_SelectionChanged" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock x:Name="TxtCompInfoSolicitud" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="TxtCompAvanceDecision" FontSize="11.5" Foreground="#059669" FontWeight="Bold" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ui:Button Content="Auto-Elegir Mejor Precio (Todos)"
+                                               Margin="0,0,8,0"
                                                Click="BtnSeleccionarMejorPrecioPorPartida_Click" />
-                                </Grid>
-
-                                <UniformGrid Columns="3">
-                                    <Border Margin="0,0,6,0" Padding="10" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                        <StackPanel>
-                                            <TextBlock Text="Proveedor 1" FontWeight="Bold" FontSize="12" Foreground="#0078D4" />
-                                            <ComboBox x:Name="CboCompProv1" Margin="0,4,0,6" SelectionChanged="CboCompProveedores_SelectionChanged" />
-                                            <UniformGrid Columns="2">
-                                                <StackPanel Margin="0,0,4,0">
-                                                    <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ui:TextBox x:Name="TxtCompFlete1" Text="0.00" PlaceholderText="0.00" TextChanged="TxtCompTotales_TextChanged" />
-                                                </StackPanel>
-                                                <StackPanel Margin="4,0,0,0">
-                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ui:TextBox x:Name="TxtCompDias1" Text="2" PlaceholderText="Días" />
-                                                </StackPanel>
-                                            </UniformGrid>
-                                            <TextBlock x:Name="TxtResumenProv1" Text="Subtotal: $0.00 | Total: $0.00" FontWeight="Bold" FontSize="11.5" Margin="0,6,0,0" />
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Margin="3,0,3,0" Padding="10" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                        <StackPanel>
-                                            <TextBlock Text="Proveedor 2" FontWeight="Bold" FontSize="12" Foreground="#498205" />
-                                            <ComboBox x:Name="CboCompProv2" Margin="0,4,0,6" SelectionChanged="CboCompProveedores_SelectionChanged" />
-                                            <UniformGrid Columns="2">
-                                                <StackPanel Margin="0,0,4,0">
-                                                    <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ui:TextBox x:Name="TxtCompFlete2" Text="150.00" PlaceholderText="0.00" TextChanged="TxtCompTotales_TextChanged" />
-                                                </StackPanel>
-                                                <StackPanel Margin="4,0,0,0">
-                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ui:TextBox x:Name="TxtCompDias2" Text="4" PlaceholderText="Días" />
-                                                </StackPanel>
-                                            </UniformGrid>
-                                            <TextBlock x:Name="TxtResumenProv2" Text="Subtotal: $0.00 | Total: $0.00" FontWeight="Bold" FontSize="11.5" Margin="0,6,0,0" />
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Margin="6,0,0,0" Padding="10" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                        <StackPanel>
-                                            <TextBlock Text="Proveedor 3" FontWeight="Bold" FontSize="12" Foreground="#881798" />
-                                            <ComboBox x:Name="CboCompProv3" Margin="0,4,0,6" SelectionChanged="CboCompProveedores_SelectionChanged" />
-                                            <UniformGrid Columns="2">
-                                                <StackPanel Margin="0,0,4,0">
-                                                    <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ui:TextBox x:Name="TxtCompFlete3" Text="0.00" PlaceholderText="0.00" TextChanged="TxtCompTotales_TextChanged" />
-                                                </StackPanel>
-                                                <StackPanel Margin="4,0,0,0">
-                                                    <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ui:TextBox x:Name="TxtCompDias3" Text="1" PlaceholderText="Días" />
-                                                </StackPanel>
-                                            </UniformGrid>
-                                            <TextBlock x:Name="TxtResumenProv3" Text="Subtotal: $0.00 | Total: $0.00" FontWeight="Bold" FontSize="11.5" Margin="0,6,0,0" />
-                                        </StackPanel>
-                                    </Border>
-                                </UniformGrid>
-                            </StackPanel>
+                                    <ui:Button Content="Guardar Borrador"
+                                               Appearance="Secondary"
+                                               Click="BtnGuardarBorradorComparativa_Click" />
+                                </StackPanel>
+                            </Grid>
                         </Border>
 
-                        <Border DockPanel.Dock="Bottom" Padding="12" CornerRadius="8" Margin="0,10,0,0" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <ui:Button Content="Recalcular" Margin="0,0,8,0" Click="BtnRecalcularComparativa_Click" />
-                                <ui:Button Content="Generar Órdenes de Compra" Appearance="Primary" Click="BtnGenerarOrdenesDesdeComparativa_Click" />
-                            </StackPanel>
-                        </Border>
+                        <!-- Cuerpo Principal: Izquierda (Lista de Productos + Resumen OCs) | Derecha (Comparativa 3 Opciones del Producto Seleccionado) -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.05*" />
+                                <ColumnDefinition Width="1.15*" />
+                            </Grid.ColumnDefinitions>
 
-                        <DataGrid x:Name="DgComparativa"
-                                  AutoGenerateColumns="False"
-                                  CanUserAddRows="False"
-                                  CellEditEnding="DgComparativa_CellEditEnding">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="85" />
-                                <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="105" />
-                                <DataGridTextColumn Header="Cant." Binding="{Binding Cantidad}" Width="65" />
+                            <!-- IZQUIERDA: Tabla de Productos de la Solicitud + Pre-visualización de Órdenes de Compra -->
+                            <Grid Grid.Column="0" Margin="0,0,10,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="225" />
+                                </Grid.RowDefinitions>
 
-                                <DataGridTextColumn Header="P1 Subtotal" Binding="{Binding PrecioSinIva1, StringFormat={}{0:F2}}" Width="105" />
-                                <DataGridTextColumn Header="P1 Total c/IVA" Binding="{Binding TotalConIva1, StringFormat={}{0:C2}}" IsReadOnly="True" Width="105" />
+                                <!-- Tabla de Productos de la Solicitud -->
+                                <Border Grid.Row="0" Padding="12" CornerRadius="8" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                            <TextBlock Text="1. Artículos de la Solicitud (Seleccione un producto para cotizarlo)" FontWeight="Bold" FontSize="13.5" VerticalAlignment="Center" />
+                                        </DockPanel>
 
-                                <DataGridTextColumn Header="P2 Subtotal" Binding="{Binding PrecioSinIva2, StringFormat={}{0:F2}}" Width="105" />
-                                <DataGridTextColumn Header="P2 Total c/IVA" Binding="{Binding TotalConIva2, StringFormat={}{0:C2}}" IsReadOnly="True" Width="105" />
+                                        <DataGrid x:Name="DgComparativa"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  SelectionMode="Single"
+                                                  SelectionChanged="DgComparativa_SelectionChanged"
+                                                  CellEditEnding="DgComparativa_CellEditEnding">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
+                                                <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                                <DataGridTextColumn Header="Cant." Binding="{Binding Cantidad}" Width="58" />
+                                                <DataGridTextColumn Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="58" />
+                                                <DataGridTextColumn Header="Decisión / Ganador" Binding="{Binding EstadoDecisionTexto}" IsReadOnly="True" Width="175" />
+                                                <DataGridTextColumn Header="Total c/IVA" Binding="{Binding TotalGanadorConIva, StringFormat={}{0:C2}}" IsReadOnly="True" Width="95" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
 
-                                <DataGridTextColumn Header="P3 Subtotal" Binding="{Binding PrecioSinIva3, StringFormat={}{0:F2}}" Width="105" />
-                                <DataGridTextColumn Header="P3 Total c/IVA" Binding="{Binding TotalConIva3, StringFormat={}{0:C2}}" IsReadOnly="True" Width="105" />
+                                <!-- Pre-visualización de Órdenes de Compra por Proveedor Ganador -->
+                                <Border Grid.Row="1" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                            <TextBlock Text="3. Resumen de Órdenes de Compra a Emitir (Por Proveedor Ganador)" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="TxtResumenGeneralComparativa" FontSize="11.5" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                        </DockPanel>
 
-                                <DataGridTextColumn Header="Ganador (1-3)" Binding="{Binding ProveedorGanadorIndice}" Width="110" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                                        <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="TxtNotaEmisionParcial"
+                                                       Grid.Column="0"
+                                                       FontSize="11"
+                                                       Opacity="0.78"
+                                                       VerticalAlignment="Center"
+                                                       TextWrapping="Wrap"
+                                                       Text="Puede emitir OCs solo de los productos ya decididos hoy y dejar el resto pendientes." />
+                                            <ui:Button x:Name="BtnGenerarOrdenesDesdeComparativa"
+                                                       Grid.Column="1"
+                                                       Margin="10,0,0,0"
+                                                       Appearance="Primary"
+                                                       Content="Emitir Órdenes de Compra (Productos Decididos)"
+                                                       Click="BtnGenerarOrdenesDesdeComparativa_Click" />
+                                        </Grid>
+
+                                        <DataGrid x:Name="DgPrevisualizacionOcs"
+                                                  AutoGenerateColumns="False"
+                                                  IsReadOnly="True"
+                                                  CanUserAddRows="False">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Proveedor Ganador" Binding="{Binding ProveedorNombre}" Width="*" />
+                                                <DataGridTextColumn Header="Partidas" Binding="{Binding CantidadPartidas}" Width="68" />
+                                                <DataGridTextColumn Header="Entrega" Binding="{Binding DiasEntregaMax, StringFormat={}{0} días}" Width="72" />
+                                                <DataGridTextColumn Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="90" />
+                                                <DataGridTextColumn Header="Total OC c/IVA" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="110" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- DERECHA: Comparador Detallado por Producto (3 Opciones de Proveedor para el Producto Seleccionado) -->
+                            <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <DockPanel>
+                                    <!-- Encabezado del Producto Seleccionado -->
+                                    <Border DockPanel.Dock="Top" Padding="12" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <StackPanel>
+                                                    <TextBlock x:Name="TxtCompProdTitulo" Text="2. Seleccione un producto de la lista" FontSize="15" FontWeight="Bold" TextWrapping="Wrap" />
+                                                    <TextBlock x:Name="TxtCompProdSubtitulo" Text="Aquí podrá comparar hasta 3 proveedores específicos para ese artículo." FontSize="11.5" Opacity="0.8" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                                    <ui:Button Content="⚡ Mejor Precio del Artículo"
+                                                               FontSize="11"
+                                                               Margin="0,0,6,0"
+                                                               Click="BtnMejorPrecioProductoActual_Click" />
+                                                    <ui:Button Content="⏳ Sin Decidir"
+                                                               FontSize="11"
+                                                               Click="BtnLimpiarGanadorProductoActual_Click" />
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="135" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="Cant. a comprar:" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                    <ui:TextBox x:Name="TxtCompProdCantidad" Width="62" Text="1" TextChanged="TxtCompProdCantidad_TextChanged" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtCompProdHistorial"
+                                                           Grid.Column="1"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="11.5"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="#2563EB"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- 3 Tarjetas de Cotización Exclusivas del Producto Seleccionado -->
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <UniformGrid Columns="3">
+                                            <!-- OPCIÓN 1 -->
+                                            <Border x:Name="BdrCompCard1" Margin="0,0,5,0" Padding="10" CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="#0078D4" BorderThickness="1.5">
+                                                <StackPanel>
+                                                    <DockPanel Margin="0,0,0,6">
+                                                        <TextBlock Text="Opción 1" FontWeight="Bold" FontSize="13" Foreground="#0078D4" VerticalAlignment="Center" />
+                                                        <Border x:Name="BdrBadgeGanador1" Padding="6,2" CornerRadius="4" Background="#059669" HorizontalAlignment="Right" Visibility="Collapsed">
+                                                            <TextBlock Text="★ GANADOR" FontSize="9.5" FontWeight="Bold" Foreground="White" />
+                                                        </Border>
+                                                    </DockPanel>
+
+                                                    <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ComboBox x:Name="CboCompProv1" Margin="0,0,0,8" SelectionChanged="CboCompProveedores_SelectionChanged" />
+
+                                                    <TextBlock Text="Precio Unitario SIN IVA ($)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompPrecioSinIva1" Margin="0,0,0,6" PlaceholderText="0.00" TextChanged="TxtCompPrecioSinIva1_TextChanged" />
+
+                                                    <TextBlock Text="Precio Unitario CON IVA ($)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompPrecioConIva1" Margin="0,0,0,6" PlaceholderText="0.00" TextChanged="TxtCompPrecioConIva1_TextChanged" />
+
+                                                    <UniformGrid Columns="2" Margin="0,0,0,6">
+                                                        <StackPanel Margin="0,0,3,0">
+                                                            <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <ui:TextBox x:Name="TxtCompFlete1" Text="0.00" TextChanged="TxtCompExtras_TextChanged" />
+                                                        </StackPanel>
+                                                        <StackPanel Margin="3,0,0,0">
+                                                            <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <ui:TextBox x:Name="TxtCompDias1" Text="2" TextChanged="TxtCompExtras_TextChanged" />
+                                                        </StackPanel>
+                                                    </UniformGrid>
+
+                                                    <TextBlock Text="Notas / Marca ofertada" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompNotas1" Margin="0,0,0,8" PlaceholderText="Ej. Entrega inmediata..." TextChanged="TxtCompExtras_TextChanged" />
+
+                                                    <Border Padding="8" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
+                                                        <TextBlock x:Name="TxtResumenProv1" Text="Subtotal: $0.00&#x0a;Total c/IVA: $0.00" FontWeight="Bold" FontSize="11.5" TextWrapping="Wrap" />
+                                                    </Border>
+
+                                                    <ui:Button x:Name="BtnElegirGanador1"
+                                                               HorizontalAlignment="Stretch"
+                                                               Content="✓ Elegir Opción 1"
+                                                               Click="BtnElegirGanador1_Click" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- OPCIÓN 2 -->
+                                            <Border x:Name="BdrCompCard2" Margin="3,0,3,0" Padding="10" CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="#498205" BorderThickness="1.5">
+                                                <StackPanel>
+                                                    <DockPanel Margin="0,0,0,6">
+                                                        <TextBlock Text="Opción 2" FontWeight="Bold" FontSize="13" Foreground="#498205" VerticalAlignment="Center" />
+                                                        <Border x:Name="BdrBadgeGanador2" Padding="6,2" CornerRadius="4" Background="#059669" HorizontalAlignment="Right" Visibility="Collapsed">
+                                                            <TextBlock Text="★ GANADOR" FontSize="9.5" FontWeight="Bold" Foreground="White" />
+                                                        </Border>
+                                                    </DockPanel>
+
+                                                    <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ComboBox x:Name="CboCompProv2" Margin="0,0,0,8" SelectionChanged="CboCompProveedores_SelectionChanged" />
+
+                                                    <TextBlock Text="Precio Unitario SIN IVA ($)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompPrecioSinIva2" Margin="0,0,0,6" PlaceholderText="0.00" TextChanged="TxtCompPrecioSinIva2_TextChanged" />
+
+                                                    <TextBlock Text="Precio Unitario CON IVA ($)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompPrecioConIva2" Margin="0,0,0,6" PlaceholderText="0.00" TextChanged="TxtCompPrecioConIva2_TextChanged" />
+
+                                                    <UniformGrid Columns="2" Margin="0,0,0,6">
+                                                        <StackPanel Margin="0,0,3,0">
+                                                            <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <ui:TextBox x:Name="TxtCompFlete2" Text="0.00" TextChanged="TxtCompExtras_TextChanged" />
+                                                        </StackPanel>
+                                                        <StackPanel Margin="3,0,0,0">
+                                                            <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <ui:TextBox x:Name="TxtCompDias2" Text="3" TextChanged="TxtCompExtras_TextChanged" />
+                                                        </StackPanel>
+                                                    </UniformGrid>
+
+                                                    <TextBlock Text="Notas / Marca ofertada" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompNotas2" Margin="0,0,0,8" PlaceholderText="Ej. Sobre pedido..." TextChanged="TxtCompExtras_TextChanged" />
+
+                                                    <Border Padding="8" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
+                                                        <TextBlock x:Name="TxtResumenProv2" Text="Subtotal: $0.00&#x0a;Total c/IVA: $0.00" FontWeight="Bold" FontSize="11.5" TextWrapping="Wrap" />
+                                                    </Border>
+
+                                                    <ui:Button x:Name="BtnElegirGanador2"
+                                                               HorizontalAlignment="Stretch"
+                                                               Content="✓ Elegir Opción 2"
+                                                               Click="BtnElegirGanador2_Click" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- OPCIÓN 3 -->
+                                            <Border x:Name="BdrCompCard3" Margin="5,0,0,0" Padding="10" CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="#881798" BorderThickness="1.5">
+                                                <StackPanel>
+                                                    <DockPanel Margin="0,0,0,6">
+                                                        <TextBlock Text="Opción 3" FontWeight="Bold" FontSize="13" Foreground="#881798" VerticalAlignment="Center" />
+                                                        <Border x:Name="BdrBadgeGanador3" Padding="6,2" CornerRadius="4" Background="#059669" HorizontalAlignment="Right" Visibility="Collapsed">
+                                                            <TextBlock Text="★ GANADOR" FontSize="9.5" FontWeight="Bold" Foreground="White" />
+                                                        </Border>
+                                                    </DockPanel>
+
+                                                    <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ComboBox x:Name="CboCompProv3" Margin="0,0,0,8" SelectionChanged="CboCompProveedores_SelectionChanged" />
+
+                                                    <TextBlock Text="Precio Unitario SIN IVA ($)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompPrecioSinIva3" Margin="0,0,0,6" PlaceholderText="0.00" TextChanged="TxtCompPrecioSinIva3_TextChanged" />
+
+                                                    <TextBlock Text="Precio Unitario CON IVA ($)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompPrecioConIva3" Margin="0,0,0,6" PlaceholderText="0.00" TextChanged="TxtCompPrecioConIva3_TextChanged" />
+
+                                                    <UniformGrid Columns="2" Margin="0,0,0,6">
+                                                        <StackPanel Margin="0,0,3,0">
+                                                            <TextBlock Text="Envío ($ c/IVA)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <ui:TextBox x:Name="TxtCompFlete3" Text="0.00" TextChanged="TxtCompExtras_TextChanged" />
+                                                        </StackPanel>
+                                                        <StackPanel Margin="3,0,0,0">
+                                                            <TextBlock Text="Entrega (Días)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                            <ui:TextBox x:Name="TxtCompDias3" Text="1" TextChanged="TxtCompExtras_TextChanged" />
+                                                        </StackPanel>
+                                                    </UniformGrid>
+
+                                                    <TextBlock Text="Notas / Marca ofertada" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                    <ui:TextBox x:Name="TxtCompNotas3" Margin="0,0,0,8" PlaceholderText="Ej. Marca original..." TextChanged="TxtCompExtras_TextChanged" />
+
+                                                    <Border Padding="8" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
+                                                        <TextBlock x:Name="TxtResumenProv3" Text="Subtotal: $0.00&#x0a;Total c/IVA: $0.00" FontWeight="Bold" FontSize="11.5" TextWrapping="Wrap" />
+                                                    </Border>
+
+                                                    <ui:Button x:Name="BtnElegirGanador3"
+                                                               HorizontalAlignment="Stretch"
+                                                               Content="✓ Elegir Opción 3"
+                                                               Click="BtnElegirGanador3_Click" />
+                                                </StackPanel>
+                                            </Border>
+                                        </UniformGrid>
+                                    </ScrollViewer>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
                     </DockPanel>
                 </TabItem>
 

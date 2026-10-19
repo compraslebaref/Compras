@@ -300,6 +300,29 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         AsegurarColumnaExiste(conn, "Productos", "Especificacion1", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Productos", "Especificacion2", "TEXT NOT NULL DEFAULT ''");
 
+        // Columnas de cotización comparativa por producto en SolicitudPartidas
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "Proveedor1Id", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "PrecioSinIva1", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "DiasEntrega1", "INTEGER NOT NULL DEFAULT 2");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "FleteConIva1", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "NotasCotizacion1", "TEXT NOT NULL DEFAULT ''");
+
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "Proveedor2Id", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "PrecioSinIva2", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "DiasEntrega2", "INTEGER NOT NULL DEFAULT 3");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "FleteConIva2", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "NotasCotizacion2", "TEXT NOT NULL DEFAULT ''");
+
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "Proveedor3Id", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "PrecioSinIva3", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "DiasEntrega3", "INTEGER NOT NULL DEFAULT 1");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "FleteConIva3", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "NotasCotizacion3", "TEXT NOT NULL DEFAULT ''");
+
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "ProveedorGanadorIndice", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "OrdenCompraId", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "OrdenCompraFolio", "TEXT NOT NULL DEFAULT ''");
+
         SeedInitialDataIfEmpty(conn);
         MigrarCategoriasYReclasificarCatalogo(conn);
         conn.Close();
@@ -1417,7 +1440,12 @@ ORDER BY s.Id DESC".Replace("p.ProyectoId", "s.ProyectoId");
         {
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
-SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto eliminado'), COALESCE(p.UnidadCompra, 'Pza'), sp.CantidadSolicitada, COALESCE(p.StockActual, 0), sp.NotasPartida
+SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto eliminado'),
+       COALESCE(p.UnidadCompra, 'Pza'), sp.CantidadSolicitada, COALESCE(p.StockActual, 0), sp.NotasPartida,
+       COALESCE(sp.Proveedor1Id, 0), COALESCE(sp.PrecioSinIva1, 0), COALESCE(sp.DiasEntrega1, 2), COALESCE(sp.FleteConIva1, 0), COALESCE(sp.NotasCotizacion1, ''),
+       COALESCE(sp.Proveedor2Id, 0), COALESCE(sp.PrecioSinIva2, 0), COALESCE(sp.DiasEntrega2, 3), COALESCE(sp.FleteConIva2, 0), COALESCE(sp.NotasCotizacion2, ''),
+       COALESCE(sp.Proveedor3Id, 0), COALESCE(sp.PrecioSinIva3, 0), COALESCE(sp.DiasEntrega3, 1), COALESCE(sp.FleteConIva3, 0), COALESCE(sp.NotasCotizacion3, ''),
+       COALESCE(sp.ProveedorGanadorIndice, 0), COALESCE(sp.OrdenCompraId, 0), COALESCE(sp.OrdenCompraFolio, '')
 FROM SolicitudPartidas sp
 LEFT JOIN Productos p ON p.Id = sp.ProductoId
 WHERE sp.SolicitudId = $sid";
@@ -1435,7 +1463,25 @@ WHERE sp.SolicitudId = $sid";
                     UnidadCompra = pr.GetString(5),
                     CantidadSolicitada = Convert.ToDecimal(pr.GetDouble(6)),
                     StockActualAlmacen = Convert.ToDecimal(pr.GetDouble(7)),
-                    NotasPartida = pr.GetString(8)
+                    NotasPartida = pr.GetString(8),
+                    Proveedor1Id = pr.GetInt32(9),
+                    PrecioSinIva1 = Convert.ToDecimal(pr.GetDouble(10)),
+                    DiasEntrega1 = pr.GetInt32(11),
+                    FleteConIva1 = Convert.ToDecimal(pr.GetDouble(12)),
+                    NotasCotizacion1 = pr.GetString(13),
+                    Proveedor2Id = pr.GetInt32(14),
+                    PrecioSinIva2 = Convert.ToDecimal(pr.GetDouble(15)),
+                    DiasEntrega2 = pr.GetInt32(16),
+                    FleteConIva2 = Convert.ToDecimal(pr.GetDouble(17)),
+                    NotasCotizacion2 = pr.GetString(18),
+                    Proveedor3Id = pr.GetInt32(19),
+                    PrecioSinIva3 = Convert.ToDecimal(pr.GetDouble(20)),
+                    DiasEntrega3 = pr.GetInt32(21),
+                    FleteConIva3 = Convert.ToDecimal(pr.GetDouble(22)),
+                    NotasCotizacion3 = pr.GetString(23),
+                    ProveedorGanadorIndice = pr.GetInt32(24),
+                    OrdenCompraId = pr.GetInt32(25),
+                    OrdenCompraFolio = pr.GetString(26)
                 });
             }
         }
@@ -1486,21 +1532,19 @@ VALUES ($sid, $pid, $cant, $not)";
 
     public static Solicitud ActualizarSolicitudExistente(int solicitudId, int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas)
     {
+        var solPrevia = ObtenerSolicitudes().FirstOrDefault(s => s.Id == solicitudId);
+        if (solPrevia != null && solPrevia.Estatus == "OC Generada")
+        {
+            throw new InvalidOperationException("No se puede modificar una Solicitud que ya tiene todas sus Órdenes de Compra generadas.");
+        }
+
+        var prevPorProducto = solPrevia?.Partidas
+            .GroupBy(p => p.ProductoId)
+            .ToDictionary(g => g.Key, g => g.First()) ?? new Dictionary<int, SolicitudPartida>();
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var tx = conn.BeginTransaction();
-
-        using (var chk = conn.CreateCommand())
-        {
-            chk.Transaction = tx;
-            chk.CommandText = "SELECT Estatus FROM Solicitudes WHERE Id = $id";
-            chk.Parameters.AddWithValue("$id", solicitudId);
-            string estatus = Convert.ToString(chk.ExecuteScalar()) ?? "";
-            if (estatus == "OC Generada")
-            {
-                throw new InvalidOperationException("No se puede modificar una Solicitud que ya tiene Orden de Compra generada.");
-            }
-        }
 
         using (var cmd = conn.CreateCommand())
         {
@@ -1518,25 +1562,65 @@ WHERE Id = $id";
             cmd.ExecuteNonQuery();
         }
 
+        // Eliminar solo partidas que no tengan Orden de Compra emitida
         using (var delCmd = conn.CreateCommand())
         {
             delCmd.Transaction = tx;
-            delCmd.CommandText = "DELETE FROM SolicitudPartidas WHERE SolicitudId = $sid";
+            delCmd.CommandText = "DELETE FROM SolicitudPartidas WHERE SolicitudId = $sid AND COALESCE(OrdenCompraId, 0) = 0";
             delCmd.Parameters.AddWithValue("$sid", solicitudId);
             delCmd.ExecuteNonQuery();
         }
 
         foreach (var item in partidas)
         {
+            prevPorProducto.TryGetValue(item.ProductoId, out var prev);
+            if (prev != null && prev.TieneOcGenerada)
+            {
+                // Esa partida ya fue emitida en una OC; se conserva intacta en la BD
+                continue;
+            }
+
             using var pCmd = conn.CreateCommand();
             pCmd.Transaction = tx;
             pCmd.CommandText = @"
-INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, CantidadSolicitada, NotasPartida)
-VALUES ($sid, $pid, $cant, $not)";
+INSERT INTO SolicitudPartidas (
+    SolicitudId, ProductoId, CantidadSolicitada, NotasPartida,
+    Proveedor1Id, PrecioSinIva1, DiasEntrega1, FleteConIva1, NotasCotizacion1,
+    Proveedor2Id, PrecioSinIva2, DiasEntrega2, FleteConIva2, NotasCotizacion2,
+    Proveedor3Id, PrecioSinIva3, DiasEntrega3, FleteConIva3, NotasCotizacion3,
+    ProveedorGanadorIndice, OrdenCompraId, OrdenCompraFolio
+)
+VALUES (
+    $sid, $pid, $cant, $not,
+    $pv1, $pr1, $d1, $fl1, $nc1,
+    $pv2, $pr2, $d2, $fl2, $nc2,
+    $pv3, $pr3, $d3, $fl3, $nc3,
+    $gan, 0, ''
+)";
             pCmd.Parameters.AddWithValue("$sid", solicitudId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
             pCmd.Parameters.AddWithValue("$cant", (double)item.CantidadSolicitada);
             pCmd.Parameters.AddWithValue("$not", item.NotasPartida ?? string.Empty);
+
+            pCmd.Parameters.AddWithValue("$pv1", prev?.Proveedor1Id ?? item.Proveedor1Id);
+            pCmd.Parameters.AddWithValue("$pr1", (double)(prev?.PrecioSinIva1 ?? item.PrecioSinIva1));
+            pCmd.Parameters.AddWithValue("$d1", prev?.DiasEntrega1 ?? (item.DiasEntrega1 > 0 ? item.DiasEntrega1 : 2));
+            pCmd.Parameters.AddWithValue("$fl1", (double)(prev?.FleteConIva1 ?? item.FleteConIva1));
+            pCmd.Parameters.AddWithValue("$nc1", prev?.NotasCotizacion1 ?? item.NotasCotizacion1 ?? string.Empty);
+
+            pCmd.Parameters.AddWithValue("$pv2", prev?.Proveedor2Id ?? item.Proveedor2Id);
+            pCmd.Parameters.AddWithValue("$pr2", (double)(prev?.PrecioSinIva2 ?? item.PrecioSinIva2));
+            pCmd.Parameters.AddWithValue("$d2", prev?.DiasEntrega2 ?? (item.DiasEntrega2 > 0 ? item.DiasEntrega2 : 3));
+            pCmd.Parameters.AddWithValue("$fl2", (double)(prev?.FleteConIva2 ?? item.FleteConIva2));
+            pCmd.Parameters.AddWithValue("$nc2", prev?.NotasCotizacion2 ?? item.NotasCotizacion2 ?? string.Empty);
+
+            pCmd.Parameters.AddWithValue("$pv3", prev?.Proveedor3Id ?? item.Proveedor3Id);
+            pCmd.Parameters.AddWithValue("$pr3", (double)(prev?.PrecioSinIva3 ?? item.PrecioSinIva3));
+            pCmd.Parameters.AddWithValue("$d3", prev?.DiasEntrega3 ?? (item.DiasEntrega3 > 0 ? item.DiasEntrega3 : 1));
+            pCmd.Parameters.AddWithValue("$fl3", (double)(prev?.FleteConIva3 ?? item.FleteConIva3));
+            pCmd.Parameters.AddWithValue("$nc3", prev?.NotasCotizacion3 ?? item.NotasCotizacion3 ?? string.Empty);
+
+            pCmd.Parameters.AddWithValue("$gan", prev?.ProveedorGanadorIndice ?? item.ProveedorGanadorIndice);
             pCmd.ExecuteNonQuery();
         }
 
@@ -1766,43 +1850,203 @@ INNER JOIN Productos p ON p.Id = ocp.ProductoId";
         return list;
     }
 
-    public static List<OrdenCompra> GenerarOrdenesDesdeComparativa(
-        Solicitud solicitud,
-        string folioComparativa,
-        List<CotizacionRenglonComparativo> renglones,
-        Dictionary<int, (Proveedor? prov, decimal fleteConIva, int diasEntrega)> configColumnas)
+    public static (List<(int proveedorId, decimal precioSinIva, int diasEntrega, string notaSugerida)> opciones, string referenciaHistorica) ObtenerSugerenciasCotizacionPorProducto(int productoId)
     {
-        var creadas = new List<OrdenCompra>();
-        var gruposPorColumna = renglones
-            .Where(r => r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorIndice <= 3)
-            .GroupBy(r => r.ProveedorGanadorIndice);
+        var opciones = new List<(int proveedorId, decimal precioSinIva, int diasEntrega, string notaSugerida)>();
+        var proveedores = ObtenerProveedores();
+        var provDict = proveedores.ToDictionary(p => p.Id);
+        var provPorRfc = proveedores
+            .Where(p => !string.IsNullOrWhiteSpace(p.Rfc))
+            .GroupBy(p => p.Rfc.Trim().ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.First());
 
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
-        foreach (var grupo in gruposPorColumna)
+        // 1. Buscar en Órdenes de Compra previas de este producto
+        using (var cmdOc = conn.CreateCommand())
         {
-            int colIdx = grupo.Key;
-            if (!configColumnas.TryGetValue(colIdx, out var cfg) || cfg.prov == null)
+            cmdOc.CommandText = @"
+SELECT oc.ProveedorId, ocp.PrecioUnitarioSinIva, COALESCE(oc.TiempoEntregaDias, 2), oc.Folio, oc.Fecha
+FROM OrdenCompraPartidas ocp
+INNER JOIN OrdenesCompra oc ON oc.Id = ocp.OrdenCompraId
+WHERE ocp.ProductoId = $pid AND oc.ProveedorId > 0 AND ocp.PrecioUnitarioSinIva > 0
+ORDER BY ocp.Id DESC";
+            cmdOc.Parameters.AddWithValue("$pid", productoId);
+            using var r = cmdOc.ExecuteReader();
+            while (r.Read())
+            {
+                int pvId = r.GetInt32(0);
+                if (!provDict.ContainsKey(pvId) || opciones.Any(o => o.proveedorId == pvId))
+                    continue;
+
+                decimal precio = Convert.ToDecimal(r.GetDouble(1));
+                int dias = r.GetInt32(2);
+                string folioOc = r.GetString(3);
+                opciones.Add((pvId, Math.Round(precio, 2), dias > 0 ? dias : 2, $"Histórico {folioOc}"));
+                if (opciones.Count >= 3) break;
+            }
+        }
+
+        // 2. Buscar en ProductoProveedorMapa (Facturas XML vinculadas a este producto)
+        if (opciones.Count < 3)
+        {
+            using var cmdXml = conn.CreateCommand();
+            cmdXml.CommandText = @"
+SELECT EmisorRfc, UltimoPrecioSinIva, ClaveProveedor
+FROM ProductoProveedorMapa
+WHERE ProductoId = $pid AND UltimoPrecioSinIva > 0
+ORDER BY Id DESC";
+            cmdXml.Parameters.AddWithValue("$pid", productoId);
+            using var rx = cmdXml.ExecuteReader();
+            while (rx.Read())
+            {
+                string rfc = (rx.GetString(0) ?? "").Trim().ToUpperInvariant();
+                if (!provPorRfc.TryGetValue(rfc, out var prov) || opciones.Any(o => o.proveedorId == prov.Id))
+                    continue;
+
+                decimal precio = Convert.ToDecimal(rx.GetDouble(1));
+                string clave = rx.GetString(2);
+                opciones.Add((prov.Id, Math.Round(precio, 2), prov.DiasEntregaPromedio > 0 ? prov.DiasEntregaPromedio : 3, $"Factura XML ({clave})"));
+                if (opciones.Count >= 3) break;
+            }
+        }
+
+        string refHist;
+        if (opciones.Count > 0)
+        {
+            var mejor = opciones.OrderBy(o => o.precioSinIva).First();
+            string nomMejor = provDict.TryGetValue(mejor.proveedorId, out var pm) ? pm.NombreMostrar : "Proveedor";
+            refHist = $"Mejor histórico: {nomMejor} a ${mejor.precioSinIva:N2} s/IVA (${Math.Round(mejor.precioSinIva * 1.16m, 2):N2} c/IVA)";
+        }
+        else
+        {
+            refHist = "Sin compras previas registradas por proveedor (asigne proveedores a cotizar)";
+        }
+
+        return (opciones, refHist);
+    }
+
+    public static void GuardarCotizacionPartida(CotizacionRenglonComparativo r)
+    {
+        if (r.SolicitudPartidaId <= 0) return;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+UPDATE SolicitudPartidas
+SET CantidadSolicitada = $cant,
+    Proveedor1Id = $pv1, PrecioSinIva1 = $pr1, DiasEntrega1 = $d1, FleteConIva1 = $fl1, NotasCotizacion1 = $nc1,
+    Proveedor2Id = $pv2, PrecioSinIva2 = $pr2, DiasEntrega2 = $d2, FleteConIva2 = $fl2, NotasCotizacion2 = $nc2,
+    Proveedor3Id = $pv3, PrecioSinIva3 = $pr3, DiasEntrega3 = $d3, FleteConIva3 = $fl3, NotasCotizacion3 = $nc3,
+    ProveedorGanadorIndice = $gan
+WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$cant", (double)r.Cantidad);
+        cmd.Parameters.AddWithValue("$pv1", r.Proveedor1Id);
+        cmd.Parameters.AddWithValue("$pr1", (double)r.PrecioSinIva1);
+        cmd.Parameters.AddWithValue("$d1", r.DiasEntrega1);
+        cmd.Parameters.AddWithValue("$fl1", (double)r.FleteConIva1);
+        cmd.Parameters.AddWithValue("$nc1", r.NotasCotizacion1 ?? string.Empty);
+
+        cmd.Parameters.AddWithValue("$pv2", r.Proveedor2Id);
+        cmd.Parameters.AddWithValue("$pr2", (double)r.PrecioSinIva2);
+        cmd.Parameters.AddWithValue("$d2", r.DiasEntrega2);
+        cmd.Parameters.AddWithValue("$fl2", (double)r.FleteConIva2);
+        cmd.Parameters.AddWithValue("$nc2", r.NotasCotizacion2 ?? string.Empty);
+
+        cmd.Parameters.AddWithValue("$pv3", r.Proveedor3Id);
+        cmd.Parameters.AddWithValue("$pr3", (double)r.PrecioSinIva3);
+        cmd.Parameters.AddWithValue("$d3", r.DiasEntrega3);
+        cmd.Parameters.AddWithValue("$fl3", (double)r.FleteConIva3);
+        cmd.Parameters.AddWithValue("$nc3", r.NotasCotizacion3 ?? string.Empty);
+
+        cmd.Parameters.AddWithValue("$gan", r.ProveedorGanadorIndice);
+        cmd.Parameters.AddWithValue("$id", r.SolicitudPartidaId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void GuardarBorradorComparativa(int solicitudId, List<CotizacionRenglonComparativo> renglones)
+    {
+        foreach (var r in renglones)
+        {
+            if (!r.TieneOcGenerada)
+            {
+                GuardarCotizacionPartida(r);
+            }
+        }
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+UPDATE Solicitudes
+SET Estatus = CASE
+    WHEN Estatus = 'Pendiente' THEN 'En Comparativa'
+    ELSE Estatus
+END
+WHERE Id = $sid";
+        cmd.Parameters.AddWithValue("$sid", solicitudId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static List<OrdenCompra> GenerarOrdenesDesdeComparativa(
+        Solicitud solicitud,
+        string folioComparativa,
+        List<CotizacionRenglonComparativo> renglones)
+    {
+        // Primero guardar el borrador de todas las cotizaciones capturadas
+        GuardarBorradorComparativa(solicitud.Id, renglones);
+
+        var creadas = new List<OrdenCompra>();
+        var proveedoresDict = ObtenerProveedores().ToDictionary(p => p.Id);
+
+        // Filtrar solo los productos que tienen proveedor ganador elegido, precio > 0 y que aún NO tienen OC emitida
+        var partidasParaEmitir = renglones
+            .Where(r => !r.TieneOcGenerada &&
+                        r.ProveedorGanadorIndice >= 1 &&
+                        r.ProveedorGanadorIndice <= 3 &&
+                        r.ProveedorGanadorId > 0 &&
+                        r.PrecioUnitarioGanadorSinIva > 0)
+            .GroupBy(r => r.ProveedorGanadorId)
+            .ToList();
+
+        if (partidasParaEmitir.Count == 0)
+            return creadas;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        foreach (var grupo in partidasParaEmitir)
+        {
+            int proveedorId = grupo.Key;
+            if (!proveedoresDict.TryGetValue(proveedorId, out var prov))
                 continue;
 
             decimal subtotalPartidas = 0m;
-            var partidasOc = new List<(int prodId, decimal cant, decimal precioSinIva)>();
+            decimal fleteAcumuladoConIva = 0m;
+            int diasEntregaMax = 1;
+            var partidasOc = new List<(int solicitudPartidaId, int prodId, decimal cant, decimal precioSinIva, string notaCot)>();
 
             foreach (var reng in grupo)
             {
-                decimal precioSinIva = colIdx switch
-                {
-                    1 => reng.PrecioSinIva1,
-                    2 => reng.PrecioSinIva2,
-                    3 => reng.PrecioSinIva3,
-                    _ => reng.PrecioSinIva1
-                };
+                decimal precioSinIva = reng.PrecioUnitarioGanadorSinIva;
                 subtotalPartidas += Math.Round(reng.Cantidad * precioSinIva, 2);
-                partidasOc.Add((reng.ProductoId, reng.Cantidad, precioSinIva));
+                fleteAcumuladoConIva += reng.FleteGanadorConIva;
+                if (reng.DiasEntregaGanador > diasEntregaMax)
+                    diasEntregaMax = reng.DiasEntregaGanador;
+
+                string notaOpc = reng.ProveedorGanadorIndice switch
+                {
+                    1 => reng.NotasCotizacion1,
+                    2 => reng.NotasCotizacion2,
+                    3 => reng.NotasCotizacion3,
+                    _ => ""
+                };
+                partidasOc.Add((reng.SolicitudPartidaId, reng.ProductoId, reng.Cantidad, precioSinIva, notaOpc));
             }
 
-            decimal fleteSinIva = Math.Round(cfg.fleteConIva / 1.16m, 2);
+            decimal fleteSinIva = Math.Round(fleteAcumuladoConIva / 1.16m, 2);
             decimal subtotalTotal = Math.Round(subtotalPartidas + fleteSinIva, 2);
             decimal ivaTotal = Math.Round(subtotalTotal * 0.16m, 2);
             decimal totalConIva = Math.Round(subtotalTotal + ivaTotal, 2);
@@ -1821,16 +2065,16 @@ SELECT last_insert_rowid();";
             cmd.Parameters.AddWithValue("$fec", fecha);
             cmd.Parameters.AddWithValue("$sid", solicitud.Id);
             cmd.Parameters.AddWithValue("$cfol", folioComparativa);
-            cmd.Parameters.AddWithValue("$pvid", cfg.prov.Id);
+            cmd.Parameters.AddWithValue("$pvid", prov.Id);
             cmd.Parameters.AddWithValue("$prid", solicitud.ProyectoId);
             cmd.Parameters.AddWithValue("$dep", solicitud.DepartamentoNombre);
             cmd.Parameters.AddWithValue("$enc", solicitud.EncargadoNombre);
-            cmd.Parameters.AddWithValue("$dias", cfg.diasEntrega);
-            cmd.Parameters.AddWithValue("$flete", (double)cfg.fleteConIva);
+            cmd.Parameters.AddWithValue("$dias", diasEntregaMax);
+            cmd.Parameters.AddWithValue("$flete", (double)fleteAcumuladoConIva);
             cmd.Parameters.AddWithValue("$sub", (double)subtotalTotal);
             cmd.Parameters.AddWithValue("$iva", (double)ivaTotal);
             cmd.Parameters.AddWithValue("$tot", (double)totalConIva);
-            cmd.Parameters.AddWithValue("$not", $"Generada desde comparativa {folioComparativa} ({solicitud.Folio})");
+            cmd.Parameters.AddWithValue("$not", $"Generada desde comparativa por producto {folioComparativa} ({solicitud.Folio})");
             int ocId = Convert.ToInt32(cmd.ExecuteScalar());
 
             foreach (var p in partidasOc)
@@ -1845,16 +2089,38 @@ VALUES ($ocid, $pid, $cant, 0, $precio)";
                 pCmd.Parameters.AddWithValue("$cant", (double)p.cant);
                 pCmd.Parameters.AddWithValue("$precio", (double)p.precioSinIva);
                 pCmd.ExecuteNonQuery();
-            }
 
-            using var upSol = conn.CreateCommand();
-            upSol.Transaction = tx;
-            upSol.CommandText = "UPDATE Solicitudes SET Estatus = 'OC Generada' WHERE Id = $sid";
-            upSol.Parameters.AddWithValue("$sid", solicitud.Id);
-            upSol.ExecuteNonQuery();
+                if (p.solicitudPartidaId > 0)
+                {
+                    using var upSp = conn.CreateCommand();
+                    upSp.Transaction = tx;
+                    upSp.CommandText = @"
+UPDATE SolicitudPartidas
+SET OrdenCompraId = $ocid, OrdenCompraFolio = $ocfol
+WHERE Id = $spid";
+                    upSp.Parameters.AddWithValue("$ocid", ocId);
+                    upSp.Parameters.AddWithValue("$ocfol", folioOc);
+                    upSp.Parameters.AddWithValue("$spid", p.solicitudPartidaId);
+                    upSp.ExecuteNonQuery();
+                }
+            }
 
             tx.Commit();
             creadas.Add(ObtenerOrdenesCompra().First(o => o.Id == ocId));
+        }
+
+        // Actualizar estatus de la Solicitud según si todas sus partidas ya tienen OC o si aún quedan pendientes
+        using (var chkCmd = conn.CreateCommand())
+        {
+            chkCmd.CommandText = "SELECT COUNT(*) FROM SolicitudPartidas WHERE SolicitudId = $sid AND COALESCE(OrdenCompraId, 0) = 0";
+            chkCmd.Parameters.AddWithValue("$sid", solicitud.Id);
+            int pendientesSinOc = Convert.ToInt32(chkCmd.ExecuteScalar());
+
+            using var upSol = conn.CreateCommand();
+            upSol.CommandText = "UPDATE Solicitudes SET Estatus = $est WHERE Id = $sid";
+            upSol.Parameters.AddWithValue("$est", pendientesSinOc == 0 ? "OC Generada" : "Parcial en OC");
+            upSol.Parameters.AddWithValue("$sid", solicitud.Id);
+            upSol.ExecuteNonQuery();
         }
 
         return creadas;
