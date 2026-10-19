@@ -179,7 +179,14 @@ public class Solicitud
     public string Estatus { get; set; } = "Pendiente"; // Pendiente, En Comparativa, OC Generada, Atendida
     public string Notas { get; set; } = string.Empty;
     public List<SolicitudPartida> Partidas { get; set; } = new();
-    public override string ToString() => $"{Folio} | {ProyectoNombre} ({DepartamentoNombre} - {EncargadoNombre})";
+    public int TotalSkus => Partidas.Count;
+    public decimal TotalArticulos => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadSolicitada) : 0m;
+    public string ResumenArticulos => $"{TotalSkus} SKUs ({TotalArticulos:0.##} pzas)";
+    public bool EsEditable => !string.Equals(Estatus, "OC Generada", StringComparison.OrdinalIgnoreCase) &&
+                              !string.Equals(Estatus, "Atendida", StringComparison.OrdinalIgnoreCase);
+    public override string ToString() => Id == 0
+        ? "[Nuevo Carrito Temporal] (Sin guardar aún)"
+        : $"{Folio} | {ProyectoNombre} ({TotalSkus} art. - {EncargadoNombre})";
 }
 
 public class SolicitudPartida

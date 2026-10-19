@@ -35,6 +35,8 @@ public partial class MainWindow : FluentWindow
     private int _departamentoEditandoId = 0;
     private int _herramientaEditandoId = 0;
     private int _categoriaEditandoId = 0;
+    private int _solicitudEditandoId = 0;
+    private bool _sincronizandoSolicitudes = false;
     private readonly List<(Producto producto, decimal cantidad)> _carritoTienda = new();
     private readonly ObservableCollection<SolicitudPartida> _partidasNuevaSolicitud = new();
     private readonly ObservableCollection<CotizacionRenglonComparativo> _renglonesComparativa = new();
@@ -173,8 +175,7 @@ public partial class MainWindow : FluentWindow
         if (CboSolDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSolDepartamento.SelectedIndex = 0;
         CboSolProyecto.ItemsSource = proyectos;
         if (CboSolProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSolProyecto.SelectedIndex = 0;
-        CboSolProductoAgregar.ItemsSource = productos;
-        if (CboSolProductoAgregar.SelectedIndex < 0 && productos.Count > 0) CboSolProductoAgregar.SelectedIndex = 0;
+        FiltrarComboProductoSolicitud();
 
         // Comparativa proveedores
         CboCompProv1.ItemsSource = proveedores;
@@ -431,6 +432,14 @@ public partial class MainWindow : FluentWindow
                    ?? (rawInput != null ? DatabaseService.BuscarProductoPorCodigo(rawInput.Trim()) : null);
         if (prod != null)
         {
+            // Si estamos en Solicitudes (Tab 2), agregar directo al carrito/solicitud en edición
+            if (MainTabControl.SelectedIndex == 2)
+            {
+                decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
+                AgregarProductoAPartidasSolicitud(prod, cant, "Escáner Código de Barras");
+                return;
+            }
+
             // Si estamos en Almacén POS (Tab 5), agregar directo como caja registradora
             if (MainTabControl.SelectedIndex == 5)
             {
@@ -687,16 +696,53 @@ public partial class MainWindow : FluentWindow
         if (!string.IsNullOrWhiteSpace(info.Especificacion2)) TxtProdEspecificacion2.Text = info.Especificacion2;
     }
 
+    private void CboCarritoSolicitudDestino_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _sincronizandoSolicitudes) return;
+        ActualizarIndicadorCarritoSuperior();
+    }
+
+    private void ActualizarIndicadorCarritoSuperior()
+    {
+        if (TxtStatusCarrito == null) return;
+
+        if (CboCarritoSolicitudDestino?.SelectedItem is Solicitud sol && sol.Id > 0)
+        {
+            TxtStatusCarrito.Text = $"{sol.Folio}: {sol.TotalArticulos:0.##} art. ({sol.TotalSkus} SKUs)";
+        }
+        else
+        {
+            decimal totalItems = _carritoTienda.Sum(x => x.cantidad);
+            TxtStatusCarrito.Text = $"Carrito: {totalItems:0.##} art. ({_carritoTienda.Count} SKUs)";
+        }
+    }
+
     private void AgregarAlCarritoTienda(Producto p, decimal cantidad)
     {
+        if (CboCarritoSolicitudDestino?.SelectedItem is Solicitud solDestino && solDestino.Id > 0 && solDestino.EsEditable)
+        {
+            try
+            {
+                var solActualizada = DatabaseService.AgregarOIncrementarPartidaEnSolicitud(solDestino.Id, p.Id, cantidad, "Catálogo Visual");
+                RefrescarSolicitudes(solActualizada.Id);
+                RefrescarDashboard();
+                TxtStatusCarrito.Text = $"{solActualizada.Folio}: {solActualizada.TotalArticulos:0.##} art. ({solActualizada.TotalSkus} SKUs)";
+                return;
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(this, ex.Message, "Aviso", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+        }
+
         var idx = _carritoTienda.FindIndex(x => x.producto.Id == p.Id);
         if (idx >= 0)
             _carritoTienda[idx] = (p, _carritoTienda[idx].cantidad + cantidad);
         else
             _carritoTienda.Add((p, cantidad));
 
-        decimal totalItems = _carritoTienda.Sum(x => x.cantidad);
-        TxtStatusCarrito.Text = $"Carrito: {totalItems:0.##} art. ({_carritoTienda.Count} SKUs)";
+        ActualizarIndicadorCarritoSuperior();
     }
 
     private void BtnAgregarProductoCarrito_Click(object sender, RoutedEventArgs e)
@@ -908,10 +954,28 @@ public partial class MainWindow : FluentWindow
 
     private void BtnEnviarCarritoASolicitud_Click(object sender, RoutedEventArgs e)
     {
+        if (CboCarritoSolicitudDestino?.SelectedItem is Solicitud solDestino && solDestino.Id > 0)
+        {
+            CambiarSeccion(2);
+            var enHistorial = DgHistorialSolicitudes.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == solDestino.Id);
+            if (enHistorial != null)
+            {
+                DgHistorialSolicitudes.SelectedItem = enHistorial;
+                DgHistorialSolicitudes.ScrollIntoView(enHistorial);
+                CargarSolicitudEnEditor(enHistorial);
+            }
+            return;
+        }
+
         if (_carritoTienda.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Primero agregue productos al carrito haciendo clic en 'Agregar' en las tarjetas del catálogo.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            CambiarSeccion(2);
             return;
+        }
+
+        if (_solicitudEditandoId > 0)
+        {
+            IniciarNuevaSolicitudVacia();
         }
 
         foreach (var (prod, cant) in _carritoTienda)
@@ -927,11 +991,12 @@ public partial class MainWindow : FluentWindow
                     ProductoNombre = prod.Nombre,
                     UnidadCompra = prod.UnidadCompra,
                     CantidadSolicitada = cant,
-                    StockActualAlmacen = prod.StockActual
+                    StockActualAlmacen = prod.StockActual,
+                    NotasPartida = "Catálogo Visual"
                 });
         }
         _carritoTienda.Clear();
-        TxtStatusCarrito.Text = "Carrito: 0 artículos";
+        ActualizarIndicadorCarritoSuperior();
         DgPartidasNuevaSolicitud.Items.Refresh();
         CambiarSeccion(2);
     }
@@ -940,6 +1005,20 @@ public partial class MainWindow : FluentWindow
     {
         if (_carritoTienda.Count == 0)
         {
+            if (CboCarritoSolicitudDestino?.SelectedItem is Solicitud sol && sol.Id > 0 && sol.Partidas.Count > 0)
+            {
+                var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+                foreach (var part in sol.Partidas)
+                {
+                    if (prodsDict.TryGetValue(part.ProductoId, out var prod) && !prod.EsHerramienta)
+                    {
+                        AgregarProductoAValeSalidaPos(prod, part.CantidadSolicitada);
+                    }
+                }
+                CambiarSeccion(5);
+                return;
+            }
+
             System.Windows.MessageBox.Show(this, "Primero agregue productos al carrito haciendo clic en 'Agregar'.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -949,7 +1028,7 @@ public partial class MainWindow : FluentWindow
             AgregarProductoAValeSalidaPos(prod, cant);
         }
         _carritoTienda.Clear();
-        TxtStatusCarrito.Text = "Carrito: 0 artículos";
+        ActualizarIndicadorCarritoSuperior();
         CambiarSeccion(5);
     }
 
@@ -960,7 +1039,7 @@ public partial class MainWindow : FluentWindow
         BarcodePrintService.MostrarVistaPreviaCatalogoCodigosCarta(this, prods, hers);
     }
 
-    // ==================== TAB 2: SOLICITUDES DE INGENIERÍA ====================
+    // ==================== TAB 2: SOLICITUDES / CARRITOS DE INGENIERÍA ====================
 
     private void CboSolDepartamento_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -972,21 +1051,327 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void RefrescarSolicitudes()
+    private void FiltrarComboProductoSolicitud()
     {
-        var sols = DatabaseService.ObtenerSolicitudes();
-        DgHistorialSolicitudes.ItemsSource = sols;
-        CboCompSolicitud.ItemsSource = sols;
-        if (CboCompSolicitud.SelectedIndex < 0 && sols.Count > 0)
-            CboCompSolicitud.SelectedIndex = 0;
+        if (CboSolProductoAgregar == null) return;
+
+        var baseProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
+        string q = TxtBuscarProductoSolicitud?.Text?.Trim() ?? string.Empty;
+        string qNorm = NormalizarCodigoEscaneado(q);
+
+        int prevId = (CboSolProductoAgregar.SelectedItem as Producto)?.Id ?? 0;
+
+        List<Producto> filtrados;
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            filtrados = baseProds;
+            if (TxtContadorFiltroProductoSol != null)
+                TxtContadorFiltroProductoSol.Text = $"{baseProds.Count} artículos en catálogo";
+        }
+        else
+        {
+            var terminos = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            filtrados = baseProds.Where(p =>
+                (!string.IsNullOrEmpty(qNorm) && (
+                    p.CodigoInterno.Contains(qNorm, StringComparison.OrdinalIgnoreCase) ||
+                    p.CodigoBarras.Contains(qNorm, StringComparison.OrdinalIgnoreCase))) ||
+                terminos.All(t =>
+                    p.Nombre.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.CodigoInterno.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.CodigoBarras.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.CategoriaNombre.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.Marca.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.Modelo.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.Medidas.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.CapacidadElectrica.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.Especificacion1.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.Especificacion2.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.Descripcion.Contains(t, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+
+            if (TxtContadorFiltroProductoSol != null)
+                TxtContadorFiltroProductoSol.Text = $"{filtrados.Count} coincidencias";
+        }
+
+        CboSolProductoAgregar.ItemsSource = filtrados;
+        if (filtrados.Count > 0)
+        {
+            CboSolProductoAgregar.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+        }
     }
 
-    private void BtnAgregarPartidaSolicitud_Click(object sender, RoutedEventArgs e)
+    private void TxtBuscarProductoSolicitud_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (CboSolProductoAgregar.SelectedItem is not Producto prod)
+        if (!IsLoaded) return;
+        FiltrarComboProductoSolicitud();
+    }
+
+    private void TxtBuscarProductoSolicitud_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            string raw = TxtBuscarProductoSolicitud.Text?.Trim() ?? string.Empty;
+            string code = NormalizarCodigoEscaneado(raw);
+
+            // Si escaneó un folio de documento (SOL-, ENT-, SAL-, OC-)
+            if (!string.IsNullOrWhiteSpace(code) && EsPrefijoDocumento(code))
+            {
+                TxtBuscarProductoSolicitud.Clear();
+                ProcesarCodigoEscaneado(code);
+                e.Handled = true;
+                return;
+            }
+
+            decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
+
+            // Si coincide exactamente con un código de barras o código interno
+            var prodExacto = DatabaseService.BuscarProductoPorCodigo(code) ?? DatabaseService.BuscarProductoPorCodigo(raw);
+            if (prodExacto != null)
+            {
+                AgregarProductoAPartidasSolicitud(prodExacto, cant, "Búsqueda / Escáner");
+                TxtBuscarProductoSolicitud.Clear();
+                e.Handled = true;
+                return;
+            }
+
+            // Si hay un producto seleccionado en el combo filtrado, agregarlo con Enter
+            if (CboSolProductoAgregar.SelectedItem is Producto prodSel)
+            {
+                AgregarProductoAPartidasSolicitud(prodSel, cant, "Buscador de Solicitud");
+                TxtBuscarProductoSolicitud.SelectAll();
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void RefrescarSolicitudes(int? mantenerSolicitudId = null)
+    {
+        _sincronizandoSolicitudes = true;
+        try
+        {
+            var sols = DatabaseService.ObtenerSolicitudes();
+
+            int idHistSel = mantenerSolicitudId ?? (DgHistorialSolicitudes.SelectedItem as Solicitud)?.Id ?? _solicitudEditandoId;
+            int idCompSel = (CboCompSolicitud.SelectedItem as Solicitud)?.Id ?? 0;
+            int idDestSel = mantenerSolicitudId ?? (CboCarritoSolicitudDestino?.SelectedItem as Solicitud)?.Id ?? _solicitudEditandoId;
+
+            DgHistorialSolicitudes.ItemsSource = sols;
+            if (idHistSel > 0)
+            {
+                var matchHist = sols.FirstOrDefault(s => s.Id == idHistSel);
+                if (matchHist != null)
+                {
+                    DgHistorialSolicitudes.SelectedItem = matchHist;
+                }
+            }
+
+            CboCompSolicitud.ItemsSource = sols;
+            if (idCompSel > 0)
+            {
+                var matchComp = sols.FirstOrDefault(s => s.Id == idCompSel);
+                if (matchComp != null)
+                {
+                    CboCompSolicitud.SelectedItem = matchComp;
+                    CboCompSolicitud_SelectionChanged(CboCompSolicitud, null!);
+                }
+            }
+            else if (CboCompSolicitud.SelectedIndex < 0 && sols.Count > 0)
+            {
+                CboCompSolicitud.SelectedIndex = 0;
+            }
+
+            if (CboCarritoSolicitudDestino != null)
+            {
+                var opcionesCarrito = new List<Solicitud>
+                {
+                    new() { Id = 0, Folio = "NUEVO", Estatus = "Pendiente" }
+                };
+                opcionesCarrito.AddRange(sols.Where(s => s.EsEditable));
+                CboCarritoSolicitudDestino.ItemsSource = opcionesCarrito;
+                CboCarritoSolicitudDestino.SelectedItem = opcionesCarrito.FirstOrDefault(s => s.Id == idDestSel) ?? opcionesCarrito[0];
+            }
+
+            if (_solicitudEditandoId > 0)
+            {
+                var solEdit = sols.FirstOrDefault(s => s.Id == _solicitudEditandoId);
+                if (solEdit != null)
+                {
+                    SincronizarPartidasEditorDesdeSolicitud(solEdit);
+                }
+            }
+
+            ActualizarIndicadorCarritoSuperior();
+        }
+        finally
+        {
+            _sincronizandoSolicitudes = false;
+        }
+    }
+
+    private void SincronizarPartidasEditorDesdeSolicitud(Solicitud sol)
+    {
+        _partidasNuevaSolicitud.Clear();
+        foreach (var p in sol.Partidas)
+        {
+            _partidasNuevaSolicitud.Add(new SolicitudPartida
+            {
+                Id = p.Id,
+                SolicitudId = p.SolicitudId,
+                ProductoId = p.ProductoId,
+                ProductoCodigo = p.ProductoCodigo,
+                ProductoNombre = p.ProductoNombre,
+                UnidadCompra = p.UnidadCompra,
+                CantidadSolicitada = p.CantidadSolicitada,
+                StockActualAlmacen = p.StockActualAlmacen,
+                NotasPartida = p.NotasPartida
+            });
+        }
+        DgPartidasNuevaSolicitud.Items.Refresh();
+        ActualizarEncabezadoEditorSolicitud(sol);
+    }
+
+    private void ActualizarEncabezadoEditorSolicitud(Solicitud? sol)
+    {
+        if (TxtTituloEditorSolicitud == null || TxtEstadoEditorSolicitud == null || BdrEstadoEditorSolicitud == null)
             return;
 
-        decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
+        if (sol == null || sol.Id == 0)
+        {
+            TxtTituloEditorSolicitud.Text = "Nueva Solicitud (Carrito)";
+            TxtEstadoEditorSolicitud.Text = "NUEVO CARRITO";
+            BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(29, 78, 216));
+            BtnGuardarSolicitud.Content = "Crear / Guardar Carrito de Solicitud";
+            BtnGuardarSolicitud.IsEnabled = true;
+            BtnLimpiarPartidasSolicitud.IsEnabled = true;
+        }
+        else if (sol.EsEditable)
+        {
+            TxtTituloEditorSolicitud.Text = $"Editando Carrito: {sol.Folio}";
+            TxtEstadoEditorSolicitud.Text = $"CARRITO ABIERTO ({sol.TotalSkus} SKUs)";
+            BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(5, 150, 105));
+            BtnGuardarSolicitud.Content = $"Guardar Cambios en {sol.Folio} e Ir a Comparativa";
+            BtnGuardarSolicitud.IsEnabled = true;
+            BtnLimpiarPartidasSolicitud.IsEnabled = true;
+        }
+        else
+        {
+            TxtTituloEditorSolicitud.Text = $"Solicitud Cerrada: {sol.Folio}";
+            TxtEstadoEditorSolicitud.Text = "OC GENERADA (SOLO LECTURA)";
+            BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(107, 114, 128));
+            BtnGuardarSolicitud.Content = "Solicitud con Orden de Compra Generada";
+            BtnGuardarSolicitud.IsEnabled = false;
+            BtnLimpiarPartidasSolicitud.IsEnabled = false;
+        }
+    }
+
+    private void IniciarNuevaSolicitudVacia()
+    {
+        _solicitudEditandoId = 0;
+        _sincronizandoSolicitudes = true;
+        try
+        {
+            DgHistorialSolicitudes.SelectedItem = null;
+            if (CboCarritoSolicitudDestino?.ItemsSource is IEnumerable<Solicitud> opciones)
+            {
+                CboCarritoSolicitudDestino.SelectedItem = opciones.FirstOrDefault(s => s.Id == 0);
+            }
+        }
+        finally
+        {
+            _sincronizandoSolicitudes = false;
+        }
+
+        _partidasNuevaSolicitud.Clear();
+        TxtSolNotas.Clear();
+        DgPartidasNuevaSolicitud.Items.Refresh();
+        ActualizarEncabezadoEditorSolicitud(null);
+        ActualizarIndicadorCarritoSuperior();
+    }
+
+    private void CargarSolicitudEnEditor(Solicitud sol)
+    {
+        _solicitudEditandoId = sol.Id;
+
+        var dep = CboSolDepartamento.Items.Cast<Departamento>().FirstOrDefault(d => d.Id == sol.DepartamentoId);
+        if (dep != null)
+        {
+            CboSolDepartamento.SelectedItem = dep;
+            var encs = DatabaseService.ObtenerEncargados(dep.Id);
+            CboSolEncargado.ItemsSource = encs;
+            var enc = encs.FirstOrDefault(e => e.Id == sol.EncargadoId);
+            if (enc != null) CboSolEncargado.SelectedItem = enc;
+        }
+
+        var proy = CboSolProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == sol.ProyectoId);
+        if (proy != null) CboSolProyecto.SelectedItem = proy;
+
+        TxtSolNotas.Text = sol.Notas;
+        SincronizarPartidasEditorDesdeSolicitud(sol);
+
+        if (sol.EsEditable && CboCarritoSolicitudDestino?.ItemsSource is IEnumerable<Solicitud> opciones)
+        {
+            _sincronizandoSolicitudes = true;
+            try
+            {
+                var dest = opciones.FirstOrDefault(s => s.Id == sol.Id);
+                if (dest != null) CboCarritoSolicitudDestino.SelectedItem = dest;
+            }
+            finally
+            {
+                _sincronizandoSolicitudes = false;
+            }
+            ActualizarIndicadorCarritoSuperior();
+        }
+    }
+
+    private void DgHistorialSolicitudes_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _sincronizandoSolicitudes) return;
+        if (DgHistorialSolicitudes.SelectedItem is Solicitud sol)
+        {
+            CargarSolicitudEnEditor(sol);
+        }
+    }
+
+    private void PersistirCambioSiSolicitudEnEdicion()
+    {
+        if (_solicitudEditandoId <= 0) return;
+
+        var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+        if (solActual == null || !solActual.EsEditable) return;
+
+        int depId = (CboSolDepartamento.SelectedItem as Departamento)?.Id ?? solActual.DepartamentoId;
+        int encId = (CboSolEncargado.SelectedItem as Encargado)?.Id ?? solActual.EncargadoId;
+        int proyId = (CboSolProyecto.SelectedItem as Proyecto)?.Id ?? solActual.ProyectoId;
+        string origen = string.IsNullOrWhiteSpace(solActual.Origen) ? "Catálogo" : solActual.Origen;
+
+        DatabaseService.ActualizarSolicitudExistente(
+            _solicitudEditandoId,
+            depId,
+            encId,
+            proyId,
+            origen,
+            TxtSolNotas.Text,
+            _partidasNuevaSolicitud.ToList());
+
+        RefrescarSolicitudes(_solicitudEditandoId);
+        RefrescarDashboard();
+    }
+
+    private void AgregarProductoAPartidasSolicitud(Producto prod, decimal cant, string notas = "")
+    {
+        if (cant <= 0) cant = 1m;
+
+        if (_solicitudEditandoId > 0)
+        {
+            var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+            if (solActual != null && !solActual.EsEditable)
+            {
+                System.Windows.MessageBox.Show(this, $"La solicitud {solActual.Folio} ya tiene Orden de Compra generada y no puede modificarse.\n\nHaga clic en '+ Nuevo Carrito' para crear una nueva solicitud.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+        }
+
         var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == prod.Id);
         if (existente != null)
         {
@@ -1002,13 +1387,203 @@ public partial class MainWindow : FluentWindow
                 ProductoNombre = prod.Nombre,
                 UnidadCompra = prod.UnidadCompra,
                 CantidadSolicitada = cant,
-                StockActualAlmacen = prod.StockActual
+                StockActualAlmacen = prod.StockActual,
+                NotasPartida = notas
             });
         }
+
+        PersistirCambioSiSolicitudEnEdicion();
+    }
+
+    private void BtnAgregarPartidaSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboSolProductoAgregar.SelectedItem is not Producto prod)
+            return;
+
+        decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
+        AgregarProductoAPartidasSolicitud(prod, cant, "Manual");
+    }
+
+    private void BtnDisminuirPartidaSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not SolicitudPartida partida)
+            return;
+
+        if (!VerificarPermisoEdicionSolicitudActual()) return;
+
+        if (partida.CantidadSolicitada > 1)
+        {
+            partida.CantidadSolicitada -= 1;
+            DgPartidasNuevaSolicitud.Items.Refresh();
+        }
+        else
+        {
+            _partidasNuevaSolicitud.Remove(partida);
+        }
+
+        PersistirCambioSiSolicitudEnEdicion();
+    }
+
+    private void BtnAumentarPartidaSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not SolicitudPartida partida)
+            return;
+
+        if (!VerificarPermisoEdicionSolicitudActual()) return;
+
+        partida.CantidadSolicitada += 1;
+        DgPartidasNuevaSolicitud.Items.Refresh();
+        PersistirCambioSiSolicitudEnEdicion();
+    }
+
+    private void BtnQuitarPartidaSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not SolicitudPartida partida)
+            return;
+
+        if (!VerificarPermisoEdicionSolicitudActual()) return;
+
+        _partidasNuevaSolicitud.Remove(partida);
+        DgPartidasNuevaSolicitud.Items.Refresh();
+        PersistirCambioSiSolicitudEnEdicion();
+    }
+
+    private void DgPartidasNuevaSolicitud_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!VerificarPermisoEdicionSolicitudActual())
+            {
+                RefrescarSolicitudes(_solicitudEditandoId);
+                return;
+            }
+
+            var invalidas = _partidasNuevaSolicitud.Where(p => p.CantidadSolicitada <= 0).ToList();
+            foreach (var inv in invalidas)
+            {
+                _partidasNuevaSolicitud.Remove(inv);
+            }
+            DgPartidasNuevaSolicitud.Items.Refresh();
+            PersistirCambioSiSolicitudEnEdicion();
+        }), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private bool VerificarPermisoEdicionSolicitudActual()
+    {
+        if (_solicitudEditandoId <= 0) return true;
+        var sol = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+        if (sol != null && !sol.EsEditable)
+        {
+            System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no puede modificarse.", "Solo lectura", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+        return true;
+    }
+
+    private void BtnNuevaSolicitudVacia_Click(object sender, RoutedEventArgs e)
+    {
+        IniciarNuevaSolicitudVacia();
+    }
+
+    private void BtnCrearCarritoEIrCatalogo_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboSolDepartamento.SelectedItem is not Departamento dep ||
+            CboSolEncargado.SelectedItem is not Encargado enc ||
+            CboSolProyecto.SelectedItem is not Proyecto proy)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione Departamento, Solicitante y Proyecto para crear o vincular el Carrito de Solicitud.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        Solicitud carritoActivo;
+        if (_solicitudEditandoId > 0)
+        {
+            var solExistente = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+            if (solExistente != null && solExistente.EsEditable)
+            {
+                carritoActivo = DatabaseService.ActualizarSolicitudExistente(
+                    _solicitudEditandoId,
+                    dep.Id,
+                    enc.Id,
+                    proy.Id,
+                    solExistente.Origen,
+                    TxtSolNotas.Text,
+                    _partidasNuevaSolicitud.ToList());
+            }
+            else
+            {
+                carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proy.Id, "Catálogo", TxtSolNotas.Text, new List<SolicitudPartida>());
+            }
+        }
+        else
+        {
+            carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proy.Id, "Catálogo", TxtSolNotas.Text, _partidasNuevaSolicitud.ToList());
+        }
+
+        _solicitudEditandoId = carritoActivo.Id;
+        RefrescarSolicitudes(carritoActivo.Id);
+        RefrescarDashboard();
+        CambiarSeccion(1);
+    }
+
+    private void BtnIrCatalogoConSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = DgHistorialSolicitudes.SelectedItem as Solicitud
+                  ?? DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+
+        if (sol == null)
+        {
+            BtnCrearCarritoEIrCatalogo_Click(sender, e);
+            return;
+        }
+
+        if (!sol.EsEditable)
+        {
+            System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no admite más artículos.\n\nUse '+ Nuevo Carrito' para abrir una solicitud nueva.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        _solicitudEditandoId = sol.Id;
+        RefrescarSolicitudes(sol.Id);
+        CambiarSeccion(1);
+    }
+
+    private void BtnEliminarSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = DgHistorialSolicitudes.SelectedItem as Solicitud
+                  ?? DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+
+        if (sol == null)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una solicitud de la lista para eliminarla.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!sol.EsEditable)
+        {
+            System.Windows.MessageBox.Show(this, $"No se puede eliminar la solicitud {sol.Folio} porque ya tiene una Orden de Compra generada.", "Operación no permitida", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var resp = System.Windows.MessageBox.Show(this,
+            $"¿Está seguro de eliminar el carrito/solicitud {sol.Folio} ({sol.ProyectoNombre}) con {sol.TotalSkus} partidas?",
+            "Confirmar eliminación",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (resp != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        DatabaseService.EliminarSolicitud(sol.Id);
+        IniciarNuevaSolicitudVacia();
+        RefrescarSolicitudes();
+        RefrescarDashboard();
     }
 
     private void BtnInterpretarWhatsapp_Click(object sender, RoutedEventArgs e)
     {
+        if (!VerificarPermisoEdicionSolicitudActual()) return;
+
         string raw = TxtWhatsappInput.Text;
         if (string.IsNullOrWhiteSpace(raw))
         {
@@ -1044,6 +1619,8 @@ public partial class MainWindow : FluentWindow
                     Score = palabras.Count(w =>
                         p.Nombre.Contains(w, StringComparison.OrdinalIgnoreCase) ||
                         p.Descripcion.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                        p.Marca.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                        p.Modelo.Contains(w, StringComparison.OrdinalIgnoreCase) ||
                         p.CodigoInterno.Contains(w, StringComparison.OrdinalIgnoreCase))
                 })
                 .OrderByDescending(x => x.Score)
@@ -1052,25 +1629,38 @@ public partial class MainWindow : FluentWindow
             if (mejorProducto != null && mejorProducto.Score > 0)
             {
                 var p = mejorProducto.Producto;
-                _partidasNuevaSolicitud.Add(new SolicitudPartida
+                var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == p.Id);
+                if (existente != null)
                 {
-                    ProductoId = p.Id,
-                    ProductoCodigo = p.CodigoInterno,
-                    ProductoNombre = p.Nombre,
-                    UnidadCompra = p.UnidadCompra,
-                    CantidadSolicitada = cant,
-                    StockActualAlmacen = p.StockActual,
-                    NotasPartida = $"WhatsApp: {l}"
-                });
+                    existente.CantidadSolicitada += cant;
+                }
+                else
+                {
+                    _partidasNuevaSolicitud.Add(new SolicitudPartida
+                    {
+                        ProductoId = p.Id,
+                        ProductoCodigo = p.CodigoInterno,
+                        ProductoNombre = p.Nombre,
+                        UnidadCompra = p.UnidadCompra,
+                        CantidadSolicitada = cant,
+                        StockActualAlmacen = p.StockActual,
+                        NotasPartida = $"WhatsApp: {l}"
+                    });
+                }
                 agregados++;
             }
         }
 
         DgPartidasNuevaSolicitud.Items.Refresh();
         if (agregados > 0)
+        {
             TxtWhatsappInput.Clear();
+            PersistirCambioSiSolicitudEnEdicion();
+        }
         else
-            System.Windows.MessageBox.Show(this, "No se encontraron coincidencias automáticas en el catálogo para ese texto. Puede elegirlos con el selector o darlos de alta en el Catálogo Visual.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+        {
+            System.Windows.MessageBox.Show(this, "No se encontraron coincidencias automáticas en el catálogo para ese texto. Puede buscarlos en la barra superior o darlos de alta en el Catálogo Visual.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     private void BtnExportarPlantillaSolicitud_Click(object sender, RoutedEventArgs e)
@@ -1096,6 +1686,8 @@ public partial class MainWindow : FluentWindow
 
     private void BtnImportarPlantillaSolicitud_Click(object sender, RoutedEventArgs e)
     {
+        if (!VerificarPermisoEdicionSolicitudActual()) return;
+
         var dlg = new OpenFileDialog
         {
             Title = "Importar Plantilla de Solicitud (CSV)",
@@ -1118,25 +1710,49 @@ public partial class MainWindow : FluentWindow
                     p.Nombre.Contains(clave, StringComparison.OrdinalIgnoreCase));
                 if (prod != null)
                 {
-                    _partidasNuevaSolicitud.Add(new SolicitudPartida
+                    var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == prod.Id);
+                    if (existente != null)
                     {
-                        ProductoId = prod.Id,
-                        ProductoCodigo = prod.CodigoInterno,
-                        ProductoNombre = prod.Nombre,
-                        UnidadCompra = prod.UnidadCompra,
-                        CantidadSolicitada = cant,
-                        StockActualAlmacen = prod.StockActual,
-                        NotasPartida = nota
-                    });
+                        existente.CantidadSolicitada += cant;
+                    }
+                    else
+                    {
+                        _partidasNuevaSolicitud.Add(new SolicitudPartida
+                        {
+                            ProductoId = prod.Id,
+                            ProductoCodigo = prod.CodigoInterno,
+                            ProductoNombre = prod.Nombre,
+                            UnidadCompra = prod.UnidadCompra,
+                            CantidadSolicitada = cant,
+                            StockActualAlmacen = prod.StockActual,
+                            NotasPartida = nota
+                        });
+                    }
                 }
             }
             DgPartidasNuevaSolicitud.Items.Refresh();
+            PersistirCambioSiSolicitudEnEdicion();
         }
     }
 
     private void BtnLimpiarPartidasSolicitud_Click(object sender, RoutedEventArgs e)
     {
+        if (!VerificarPermisoEdicionSolicitudActual()) return;
+        if (_partidasNuevaSolicitud.Count == 0) return;
+
+        if (_solicitudEditandoId > 0)
+        {
+            var resp = System.Windows.MessageBox.Show(this,
+                "¿Desea vaciar todos los artículos de este carrito de solicitud?",
+                "Vaciar carrito",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (resp != System.Windows.MessageBoxResult.Yes) return;
+        }
+
         _partidasNuevaSolicitud.Clear();
+        DgPartidasNuevaSolicitud.Items.Refresh();
+        PersistirCambioSiSolicitudEnEdicion();
     }
 
     private void BtnGuardarSolicitud_Click(object sender, RoutedEventArgs e)
@@ -1149,31 +1765,73 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (_partidasNuevaSolicitud.Count == 0)
+        string origen = _partidasNuevaSolicitud.Any(p => (p.NotasPartida ?? "").StartsWith("WhatsApp")) ? "WhatsApp" : "Catálogo";
+        Solicitud guardada;
+
+        if (_solicitudEditandoId > 0)
         {
-            System.Windows.MessageBox.Show(this, "Agregue al menos un producto a la solicitud.", "Solicitud vacía", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (!VerificarPermisoEdicionSolicitudActual()) return;
+            guardada = DatabaseService.ActualizarSolicitudExistente(
+                _solicitudEditandoId,
+                dep.Id,
+                enc.Id,
+                proy.Id,
+                origen,
+                TxtSolNotas.Text,
+                _partidasNuevaSolicitud.ToList());
+        }
+        else
+        {
+            guardada = DatabaseService.CrearSolicitud(
+                dep.Id,
+                enc.Id,
+                proy.Id,
+                origen,
+                TxtSolNotas.Text,
+                _partidasNuevaSolicitud.ToList());
+            _solicitudEditandoId = guardada.Id;
+        }
+
+        RefrescarSolicitudes(guardada.Id);
+        RefrescarDashboard();
+
+        if (guardada.Partidas.Count == 0)
+        {
+            var irCat = System.Windows.MessageBox.Show(this,
+                $"Se creó el carrito de solicitud abierto {guardada.Folio} para el proyecto '{guardada.ProyectoNombre}'.\n\n¿Desea ir ahora al Catálogo Visual para escoger y agregar artículos a este carrito?",
+                "Carrito de Solicitud Creado",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+            if (irCat == System.Windows.MessageBoxResult.Yes)
+            {
+                CambiarSeccion(1);
+            }
             return;
         }
 
-        string origen = _partidasNuevaSolicitud.Any(p => p.NotasPartida.StartsWith("WhatsApp")) ? "WhatsApp" : "Catálogo";
-        var creada = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proy.Id, origen, TxtSolNotas.Text, _partidasNuevaSolicitud.ToList());
-
-        _partidasNuevaSolicitud.Clear();
-        TxtSolNotas.Clear();
-        CargarTodoElSistema();
-
-        // Pasar directo a la Comparativa con la solicitud recién creada
+        // Si ya tiene artículos, pasar directo a la Comparativa con la solicitud seleccionada
         CambiarSeccion(3);
-        CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == creada.Id);
+        CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == guardada.Id);
     }
 
     private void BtnEnviarSolicitudAComparativa_Click(object sender, RoutedEventArgs e)
     {
-        if (DgHistorialSolicitudes.SelectedItem is Solicitud sol)
+        var sol = DgHistorialSolicitudes.SelectedItem as Solicitud
+                  ?? DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+        if (sol == null)
         {
-            CambiarSeccion(3);
-            CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
+            System.Windows.MessageBox.Show(this, "Seleccione una solicitud de la lista.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
         }
+
+        if (sol.Partidas.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, $"El carrito {sol.Folio} aún no tiene artículos agregados.\n\nAgregue artículos desde el buscador o desde el Catálogo Visual antes de abrir la Comparativa.", "Carrito sin artículos", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        CambiarSeccion(3);
+        CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
     }
 
     // ==================== TAB 3: COMPARATIVA DE COTIZACIONES ====================

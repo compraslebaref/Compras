@@ -1484,6 +1484,197 @@ VALUES ($sid, $pid, $cant, $not)";
         return ObtenerSolicitudes().First(s => s.Id == solId);
     }
 
+    public static Solicitud ActualizarSolicitudExistente(int solicitudId, int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using (var chk = conn.CreateCommand())
+        {
+            chk.Transaction = tx;
+            chk.CommandText = "SELECT Estatus FROM Solicitudes WHERE Id = $id";
+            chk.Parameters.AddWithValue("$id", solicitudId);
+            string estatus = Convert.ToString(chk.ExecuteScalar()) ?? "";
+            if (estatus == "OC Generada")
+            {
+                throw new InvalidOperationException("No se puede modificar una Solicitud que ya tiene Orden de Compra generada.");
+            }
+        }
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+UPDATE Solicitudes
+SET DepartamentoId = $d, EncargadoId = $e, ProyectoId = $p, Origen = $or, Notas = $n
+WHERE Id = $id";
+            cmd.Parameters.AddWithValue("$d", departamentoId);
+            cmd.Parameters.AddWithValue("$e", encargadoId);
+            cmd.Parameters.AddWithValue("$p", proyectoId);
+            cmd.Parameters.AddWithValue("$or", origen);
+            cmd.Parameters.AddWithValue("$n", (notas ?? string.Empty).Trim());
+            cmd.Parameters.AddWithValue("$id", solicitudId);
+            cmd.ExecuteNonQuery();
+        }
+
+        using (var delCmd = conn.CreateCommand())
+        {
+            delCmd.Transaction = tx;
+            delCmd.CommandText = "DELETE FROM SolicitudPartidas WHERE SolicitudId = $sid";
+            delCmd.Parameters.AddWithValue("$sid", solicitudId);
+            delCmd.ExecuteNonQuery();
+        }
+
+        foreach (var item in partidas)
+        {
+            using var pCmd = conn.CreateCommand();
+            pCmd.Transaction = tx;
+            pCmd.CommandText = @"
+INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, CantidadSolicitada, NotasPartida)
+VALUES ($sid, $pid, $cant, $not)";
+            pCmd.Parameters.AddWithValue("$sid", solicitudId);
+            pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
+            pCmd.Parameters.AddWithValue("$cant", (double)item.CantidadSolicitada);
+            pCmd.Parameters.AddWithValue("$not", item.NotasPartida ?? string.Empty);
+            pCmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return ObtenerSolicitudes().First(s => s.Id == solicitudId);
+    }
+
+    public static Solicitud AgregarOIncrementarPartidaEnSolicitud(int solicitudId, int productoId, decimal cantidadAgregar, string notasPartida = "")
+    {
+        if (cantidadAgregar <= 0) cantidadAgregar = 1;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using (var chk = conn.CreateCommand())
+        {
+            chk.Transaction = tx;
+            chk.CommandText = "SELECT Estatus FROM Solicitudes WHERE Id = $id";
+            chk.Parameters.AddWithValue("$id", solicitudId);
+            string estatus = Convert.ToString(chk.ExecuteScalar()) ?? "";
+            if (estatus == "OC Generada")
+            {
+                throw new InvalidOperationException("No se pueden agregar artículos a una Solicitud que ya tiene Orden de Compra generada.");
+            }
+        }
+
+        int? partidaExistenteId = null;
+        decimal cantExistente = 0m;
+        using (var findCmd = conn.CreateCommand())
+        {
+            findCmd.Transaction = tx;
+            findCmd.CommandText = "SELECT Id, CantidadSolicitada FROM SolicitudPartidas WHERE SolicitudId = $sid AND ProductoId = $pid LIMIT 1";
+            findCmd.Parameters.AddWithValue("$sid", solicitudId);
+            findCmd.Parameters.AddWithValue("$pid", productoId);
+            using var r = findCmd.ExecuteReader();
+            if (r.Read())
+            {
+                partidaExistenteId = r.GetInt32(0);
+                cantExistente = Convert.ToDecimal(r.GetDouble(1));
+            }
+        }
+
+        if (partidaExistenteId.HasValue)
+        {
+            using var upCmd = conn.CreateCommand();
+            upCmd.Transaction = tx;
+            upCmd.CommandText = "UPDATE SolicitudPartidas SET CantidadSolicitada = $cant WHERE Id = $id";
+            upCmd.Parameters.AddWithValue("$cant", (double)(cantExistente + cantidadAgregar));
+            upCmd.Parameters.AddWithValue("$id", partidaExistenteId.Value);
+            upCmd.ExecuteNonQuery();
+        }
+        else
+        {
+            using var insCmd = conn.CreateCommand();
+            insCmd.Transaction = tx;
+            insCmd.CommandText = @"
+INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, CantidadSolicitada, NotasPartida)
+VALUES ($sid, $pid, $cant, $not)";
+            insCmd.Parameters.AddWithValue("$sid", solicitudId);
+            insCmd.Parameters.AddWithValue("$pid", productoId);
+            insCmd.Parameters.AddWithValue("$cant", (double)cantidadAgregar);
+            insCmd.Parameters.AddWithValue("$not", notasPartida ?? string.Empty);
+            insCmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return ObtenerSolicitudes().First(s => s.Id == solicitudId);
+    }
+
+    public static Solicitud QuitarPartidaDeSolicitud(int solicitudId, int productoId)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using (var chk = conn.CreateCommand())
+        {
+            chk.Transaction = tx;
+            chk.CommandText = "SELECT Estatus FROM Solicitudes WHERE Id = $id";
+            chk.Parameters.AddWithValue("$id", solicitudId);
+            string estatus = Convert.ToString(chk.ExecuteScalar()) ?? "";
+            if (estatus == "OC Generada")
+            {
+                throw new InvalidOperationException("No se pueden quitar artículos de una Solicitud que ya tiene Orden de Compra generada.");
+            }
+        }
+
+        using (var delCmd = conn.CreateCommand())
+        {
+            delCmd.Transaction = tx;
+            delCmd.CommandText = "DELETE FROM SolicitudPartidas WHERE SolicitudId = $sid AND ProductoId = $pid";
+            delCmd.Parameters.AddWithValue("$sid", solicitudId);
+            delCmd.Parameters.AddWithValue("$pid", productoId);
+            delCmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return ObtenerSolicitudes().First(s => s.Id == solicitudId);
+    }
+
+    public static void EliminarSolicitud(int solicitudId)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using (var chk = conn.CreateCommand())
+        {
+            chk.Transaction = tx;
+            chk.CommandText = "SELECT Estatus FROM Solicitudes WHERE Id = $id";
+            chk.Parameters.AddWithValue("$id", solicitudId);
+            string estatus = Convert.ToString(chk.ExecuteScalar()) ?? "";
+            if (estatus == "OC Generada")
+            {
+                throw new InvalidOperationException("No se puede eliminar una Solicitud que ya tiene Orden de Compra generada.");
+            }
+        }
+
+        using (var delPartidas = conn.CreateCommand())
+        {
+            delPartidas.Transaction = tx;
+            delPartidas.CommandText = "DELETE FROM SolicitudPartidas WHERE SolicitudId = $sid";
+            delPartidas.Parameters.AddWithValue("$sid", solicitudId);
+            delPartidas.ExecuteNonQuery();
+        }
+
+        using (var delSol = conn.CreateCommand())
+        {
+            delSol.Transaction = tx;
+            delSol.CommandText = "DELETE FROM Solicitudes WHERE Id = $sid";
+            delSol.Parameters.AddWithValue("$sid", solicitudId);
+            delSol.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
     // ==================== ÓRDENES DE COMPRA Y RECEPCIONES PARCIALES ====================
 
     public static List<OrdenCompra> ObtenerOrdenesCompra()

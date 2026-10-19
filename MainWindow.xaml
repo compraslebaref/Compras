@@ -240,41 +240,61 @@
                         <!-- Izquierda: Catálogo Visual -->
                         <DockPanel Grid.Column="0" Margin="0,0,12,0">
                             <Border DockPanel.Dock="Top" Padding="12" CornerRadius="8" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="210" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <ui:TextBox x:Name="TxtBuscarCatalogo"
-                                                Grid.Column="0"
-                                                Margin="0,0,8,0"
-                                                PlaceholderText="Buscar producto o escanear código (PRD, ENT, SAL, OC)..."
-                                                VerticalContentAlignment="Center"
-                                                KeyDown="TxtBuscarCatalogo_KeyDown"
-                                                TextChanged="TxtBuscarCatalogo_TextChanged" />
-                                    <TextBlock x:Name="TxtContadorCatalogo"
-                                               Grid.Column="1"
-                                               VerticalAlignment="Center"
-                                               FontSize="11.5"
-                                               Opacity="0.7"
-                                               Margin="0,0,10,0"
-                                               Text="0 productos" />
-                                    <ComboBox x:Name="CboFiltroCategoria"
-                                              Grid.Column="2"
-                                              Margin="0,0,8,0"
-                                              SelectionChanged="CboFiltroCategoria_SelectionChanged" />
-                                    <ui:Button Grid.Column="3"
-                                               Margin="0,0,6,0"
-                                               Content="A Solicitud"
-                                               Appearance="Primary"
-                                               Click="BtnEnviarCarritoASolicitud_Click" />
-                                    <ui:Button Grid.Column="4"
-                                               Content="A Salida"
-                                               Click="BtnEnviarCarritoASalida_Click" />
-                                </Grid>
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="220" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBox x:Name="TxtBuscarCatalogo"
+                                                    Grid.Column="0"
+                                                    Margin="0,0,8,0"
+                                                    PlaceholderText="Buscar producto o escanear código (PRD, ENT, SAL, OC)..."
+                                                    VerticalContentAlignment="Center"
+                                                    KeyDown="TxtBuscarCatalogo_KeyDown"
+                                                    TextChanged="TxtBuscarCatalogo_TextChanged" />
+                                        <TextBlock x:Name="TxtContadorCatalogo"
+                                                   Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="11.5"
+                                                   Opacity="0.7"
+                                                   Margin="0,0,10,0"
+                                                   Text="0 productos" />
+                                        <ComboBox x:Name="CboFiltroCategoria"
+                                                  Grid.Column="2"
+                                                  SelectionChanged="CboFiltroCategoria_SelectionChanged" />
+                                    </Grid>
+
+                                    <Border Padding="8,6" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="Carrito / Solicitud Destino:"
+                                                       FontWeight="SemiBold"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,8,0" />
+                                            <ComboBox x:Name="CboCarritoSolicitudDestino"
+                                                      Grid.Column="1"
+                                                      Margin="0,0,8,0"
+                                                      SelectionChanged="CboCarritoSolicitudDestino_SelectionChanged" />
+                                            <ui:Button Grid.Column="2"
+                                                       Margin="0,0,6,0"
+                                                       Content="Ver Carrito / Solicitud"
+                                                       Appearance="Primary"
+                                                       Click="BtnEnviarCarritoASolicitud_Click" />
+                                            <ui:Button Grid.Column="3"
+                                                       Content="A Salida Almacén"
+                                                       Click="BtnEnviarCarritoASalida_Click" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
                             </Border>
 
                             <ScrollViewer x:Name="SvCatalogoVisual"
@@ -579,15 +599,26 @@
                 <TabItem>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.15*" />
-                            <ColumnDefinition Width="0.85*" />
+                            <ColumnDefinition Width="1.18*" />
+                            <ColumnDefinition Width="0.82*" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- Izquierda: Nueva Solicitud -->
+                        <!-- Izquierda: Editor de Solicitud / Carrito -->
                         <Border Grid.Column="0" Margin="0,0,10,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                             <DockPanel>
                                 <StackPanel DockPanel.Dock="Top">
-                                    <TextBlock Text="Nueva Solicitud" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+                                    <DockPanel Margin="0,0,0,10">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock x:Name="TxtTituloEditorSolicitud" Text="Nueva Solicitud (Carrito)" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <Border x:Name="BdrEstadoEditorSolicitud" Padding="8,2" CornerRadius="4" Background="#1D4ED8" VerticalAlignment="Center">
+                                                <TextBlock x:Name="TxtEstadoEditorSolicitud" Text="NUEVO CARRITO" FontSize="10.5" FontWeight="Bold" Foreground="White" />
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <ui:Button x:Name="BtnNuevaSolicitudVacia" Content="+ Nuevo Carrito" FontSize="11.5" Margin="0,0,6,0" Click="BtnNuevaSolicitudVacia_Click" />
+                                            <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="Escoger del Catálogo Visual" Appearance="Primary" FontSize="11.5" Click="BtnCrearCarritoEIrCatalogo_Click" />
+                                        </StackPanel>
+                                    </DockPanel>
 
                                     <Grid Margin="0,0,0,8">
                                         <Grid.ColumnDefinitions>
@@ -626,7 +657,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <ui:TextBox x:Name="TxtWhatsappInput"
                                                             Grid.Column="0"
-                                                            Height="48"
+                                                            Height="44"
                                                             TextWrapping="Wrap"
                                                             AcceptsReturn="True"
                                                             PlaceholderText="Pegue aquí el texto de WhatsApp (ej. 5 Tornillo 1/4, 2 Cable calibre 12)..." />
@@ -638,60 +669,111 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Agregar partida manual -->
-                                    <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="105" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox x:Name="CboSolProductoAgregar" Grid.Column="0" Margin="0,0,6,0" />
-                                        <ui:TextBox x:Name="TxtSolCantidadAgregar" Grid.Column="1" Text="1" PlaceholderText="Cantidad" Margin="0,0,6,0" VerticalContentAlignment="Center" />
-                                        <ui:Button Grid.Column="2" Content="Agregar Partida" Click="BtnAgregarPartidaSolicitud_Click" />
-                                    </Grid>
+                                    <!-- Barra de Búsqueda + Agregar Partida -->
+                                    <Border Padding="10" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,6">
+                                                <TextBlock Text="Buscar y Agregar Artículo a la Solicitud" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                                <TextBlock x:Name="TxtContadorFiltroProductoSol" Text="" FontSize="11" Opacity="0.7" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            </DockPanel>
+                                            <ui:TextBox x:Name="TxtBuscarProductoSolicitud"
+                                                        Margin="0,0,0,6"
+                                                        PlaceholderText="Escriba nombre, código, marca, modelo, medida o escanee código de barras (Enter agrega directo)..."
+                                                        VerticalContentAlignment="Center"
+                                                        TextChanged="TxtBuscarProductoSolicitud_TextChanged"
+                                                        KeyDown="TxtBuscarProductoSolicitud_KeyDown" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="95" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ComboBox x:Name="CboSolProductoAgregar" Grid.Column="0" Margin="0,0,6,0" />
+                                                <ui:TextBox x:Name="TxtSolCantidadAgregar" Grid.Column="1" Text="1" PlaceholderText="Cant." Margin="0,0,6,0" VerticalContentAlignment="Center" />
+                                                <ui:Button Grid.Column="2" Content="+ Agregar Artículo" Appearance="Primary" Click="BtnAgregarPartidaSolicitud_Click" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
 
                                 <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
                                     <TextBlock Text="Notas o Justificación de la Solicitud" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                     <ui:TextBox x:Name="TxtSolNotas" Margin="0,0,0,8" PlaceholderText="Ej. Material requerido para armado de gabinete eléctrico..." />
-                                    <UniformGrid Columns="2">
-                                        <ui:Button Content="Limpiar" Margin="0,0,6,0" Click="BtnLimpiarPartidasSolicitud_Click" />
-                                        <ui:Button Content="Guardar Solicitud" Appearance="Primary" Click="BtnGuardarSolicitud_Click" />
-                                    </UniformGrid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:Button x:Name="BtnLimpiarPartidasSolicitud" Grid.Column="0" Content="Vaciar Artículos" Margin="0,0,8,0" Click="BtnLimpiarPartidasSolicitud_Click" />
+                                        <ui:Button x:Name="BtnGuardarSolicitud" Grid.Column="1" HorizontalAlignment="Stretch" Content="Crear / Guardar Carrito de Solicitud" Appearance="Primary" Click="BtnGuardarSolicitud_Click" />
+                                    </Grid>
                                 </StackPanel>
 
-                                <DataGrid x:Name="DgPartidasNuevaSolicitud" AutoGenerateColumns="False" CanUserAddRows="False">
+                                <DataGrid x:Name="DgPartidasNuevaSolicitud"
+                                          AutoGenerateColumns="False"
+                                          CanUserAddRows="False"
+                                          CellEditEnding="DgPartidasNuevaSolicitud_CellEditEnding">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="90" />
+                                        <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="85" />
                                         <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                        <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="115" />
-                                        <DataGridTextColumn Header="Cantidad" Binding="{Binding CantidadSolicitada}" Width="90" />
-                                        <DataGridTextColumn Header="Existencia" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="90" />
+                                        <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="95" />
+                                        <DataGridTextColumn Header="Cant." Binding="{Binding CantidadSolicitada, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                        <DataGridTextColumn Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="70" />
+                                        <DataGridTemplateColumn Header="Acciones" Width="140">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                        <Button Content="-" Padding="6,2" Margin="0,0,3,0" ToolTip="Disminuir cantidad" Click="BtnDisminuirPartidaSolicitud_Click" />
+                                                        <Button Content="+" Padding="6,2" Margin="0,0,5,0" ToolTip="Aumentar cantidad" Click="BtnAumentarPartidaSolicitud_Click" />
+                                                        <Button Content="Quitar" Padding="7,2" Background="#DC2626" Foreground="White" ToolTip="Quitar artículo de la solicitud" Click="BtnQuitarPartidaSolicitud_Click" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
                         </Border>
 
-                        <!-- Derecha: Solicitudes Registradas -->
+                        <!-- Derecha: Solicitudes Registradas (Carritos) -->
                         <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="Solicitudes Registradas" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+                                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <TextBlock Text="Carritos / Solicitudes Registradas" FontSize="16" FontWeight="Bold" />
+                                    <TextBlock Text="Seleccione cualquier solicitud Pendiente para ver, agregar o quitar sus artículos." FontSize="11.5" Opacity="0.72" Margin="0,2,0,0" />
+                                </StackPanel>
 
-                                <ui:Button DockPanel.Dock="Bottom"
-                                           Margin="0,8,0,0"
-                                           Appearance="Primary"
-                                           HorizontalAlignment="Stretch"
-                                           Content="Abrir en Comparativa"
-                                           Click="BtnEnviarSolicitudAComparativa_Click" />
+                                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:Button Grid.Column="0"
+                                                   Margin="0,0,6,0"
+                                                   HorizontalAlignment="Stretch"
+                                                   Content="Ir al Catálogo con esta Solicitud"
+                                                   Click="BtnIrCatalogoConSolicitud_Click" />
+                                        <ui:Button Grid.Column="1"
+                                                   Content="Eliminar Carrito"
+                                                   Click="BtnEliminarSolicitud_Click" />
+                                    </Grid>
+                                    <ui:Button Appearance="Primary"
+                                               HorizontalAlignment="Stretch"
+                                               Content="Abrir Solicitud en Comparativa"
+                                               Click="BtnEnviarSolicitudAComparativa_Click" />
+                                </StackPanel>
 
-                                <DataGrid x:Name="DgHistorialSolicitudes" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid x:Name="DgHistorialSolicitudes"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          SelectionChanged="DgHistorialSolicitudes_SelectionChanged">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="115" />
-                                        <DataGridTextColumn Header="Departamento" Binding="{Binding DepartamentoNombre}" Width="125" />
-                                        <DataGridTextColumn Header="Solicitante" Binding="{Binding EncargadoNombre}" Width="130" />
+                                        <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="105" />
                                         <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="*" />
-                                        <DataGridTextColumn Header="Origen" Binding="{Binding Origen}" Width="80" />
-                                        <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="105" />
+                                        <DataGridTextColumn Header="Solicitante" Binding="{Binding EncargadoNombre}" Width="115" />
+                                        <DataGridTextColumn Header="Artículos" Binding="{Binding ResumenArticulos}" Width="110" />
+                                        <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="95" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
