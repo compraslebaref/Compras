@@ -314,12 +314,19 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo2", "TEXT NOT NULL DEFAULT 'Especificación / Material'");
         AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo3", "TEXT NOT NULL DEFAULT 'Detalle Adicional / Color'");
 
+        AsegurarColumnaExiste(conn, "Productos", "Familia", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Productos", "Marca", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Productos", "Modelo", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Productos", "Medidas", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Productos", "CapacidadElectrica", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Productos", "Especificacion1", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Productos", "Especificacion2", "TEXT NOT NULL DEFAULT ''");
+
+        // Columnas para conceptos libres (sin SKU previo) en SolicitudPartidas y OrdenCompraPartidas
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "DescripcionLibre", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "UnidadLibre", "TEXT NOT NULL DEFAULT 'Pieza'");
+        AsegurarColumnaExiste(conn, "OrdenCompraPartidas", "DescripcionLibre", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "OrdenCompraPartidas", "UnidadLibre", "TEXT NOT NULL DEFAULT 'Pieza'");
 
         // Columnas de cotización comparativa por producto en SolicitudPartidas
         AsegurarColumnaExiste(conn, "SolicitudPartidas", "Proveedor1Id", "INTEGER NOT NULL DEFAULT 0");
@@ -364,6 +371,7 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         SeedInitialDataIfEmpty(conn);
         SeedEventosCalendarioSiVacio(conn);
         MigrarCategoriasYReclasificarCatalogo(conn);
+        AutoAsignarFamiliasInicialesSiVacio(conn);
         conn.Close();
         SincronizarFacturasYOrdenesExistentes();
     }
@@ -894,7 +902,7 @@ SELECT last_insert_rowid();";
 SELECT p.Id, p.CodigoInterno, p.CodigoBarras, p.Nombre, p.Descripcion, p.CategoriaId, c.Nombre,
        p.UnidadCompra, p.UnidadAlmacen, p.FactorConversion, p.StockActual, p.StockReservadoProyecto,
        p.StockMinimo, p.UltimoCostoCompra, p.Ubicacion, p.ImagenRuta, p.EsHerramienta,
-       p.Marca, p.Modelo, p.Medidas, p.CapacidadElectrica, p.Especificacion1, p.Especificacion2
+       p.Marca, p.Modelo, p.Medidas, p.CapacidadElectrica, p.Especificacion1, p.Especificacion2, COALESCE(p.Familia, '')
 FROM Productos p
 LEFT JOIN Categorias c ON c.Id = p.CategoriaId
 WHERE ($cat IS NULL OR p.CategoriaId = $cat)
@@ -902,6 +910,7 @@ WHERE ($cat IS NULL OR p.CategoriaId = $cat)
        OR p.CodigoInterno LIKE '%' || $f || '%'
        OR p.CodigoBarras LIKE '%' || $f || '%'
        OR p.Descripcion LIKE '%' || $f || '%'
+       OR p.Familia LIKE '%' || $f || '%'
        OR p.Marca LIKE '%' || $f || '%'
        OR p.Modelo LIKE '%' || $f || '%'
        OR p.Medidas LIKE '%' || $f || '%'
@@ -938,10 +947,160 @@ ORDER BY p.CodigoInterno";
                 Medidas = r.IsDBNull(19) ? string.Empty : r.GetString(19),
                 CapacidadElectrica = r.IsDBNull(20) ? string.Empty : r.GetString(20),
                 Especificacion1 = r.IsDBNull(21) ? string.Empty : r.GetString(21),
-                Especificacion2 = r.IsDBNull(22) ? string.Empty : r.GetString(22)
+                Especificacion2 = r.IsDBNull(22) ? string.Empty : r.GetString(22),
+                Familia = r.IsDBNull(23) ? string.Empty : r.GetString(23)
             });
         }
         return list;
+    }
+
+    public static List<string> ObtenerFamiliasProductos()
+    {
+        var baseFamilias = new List<string>
+        {
+            "Gas Refrigerante R-410A",
+            "Gas Refrigerante R-32",
+            "Gas Refrigerante R-404A",
+            "Gas Propileno / Soldadura",
+            "Aceites y Químicos HVAC",
+            "Capacitores HVAC",
+            "Contactores y Relevadores",
+            "Sensores y Controles HVAC",
+            "Filtros Deshidratadores",
+            "Válvulas y Accesorios HVAC",
+            "Soldadura de Plata y Fundente",
+            "Cinta de Aislar",
+            "Cinta de Montaje / Ducto / Teflón",
+            "Focos y Luminarias LED",
+            "Cable y Conductores Eléctricos",
+            "Pilas y Baterías",
+            "Tubería y Conexiones PVC",
+            "Mangueras y Conexiones Hidráulicas",
+            "Tornillos y Tuercas",
+            "Pijas y Taquetes",
+            "Discos de Corte y Lija",
+            "Brocas y Puntas",
+            "Herramienta Manual",
+            "Impermeabilizantes y Pintura",
+            "Brochas, Rodillos y Felpas",
+            "Selladores, Silicones y Pegamentos",
+            "Guantes de Seguridad",
+            "Cascos y Protección Cabeza",
+            "Botas y Calzado de Seguridad",
+            "Lentes y Protección Visual",
+            "Chalecos y Señalización",
+            "Jabón, Detergentes y Limpiadores",
+            "Toallas, Papel y Microfibras",
+            "Escobas, Cepillos y Trapeadores",
+            "Bolsas para Basura",
+            "Insecticidas y Plagas",
+            "Papelería y Artículos de Oficina"
+        };
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT TRIM(Familia) FROM Productos WHERE TRIM(COALESCE(Familia, '')) <> '' ORDER BY Familia";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            string fam = r.GetString(0);
+            if (!string.IsNullOrWhiteSpace(fam) && !baseFamilias.Any(x => x.Equals(fam, StringComparison.OrdinalIgnoreCase)))
+            {
+                baseFamilias.Add(fam);
+            }
+        }
+
+        return baseFamilias.OrderBy(x => x).ToList();
+    }
+
+    public static int RenombrarFamiliaMasivo(string familiaActual, string nuevaFamilia)
+    {
+        if (string.IsNullOrWhiteSpace(familiaActual))
+            return 0;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE Productos SET Familia = $nueva WHERE LOWER(TRIM(Familia)) = LOWER(TRIM($actual))";
+        cmd.Parameters.AddWithValue("$nueva", (nuevaFamilia ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$actual", familiaActual.Trim());
+        return cmd.ExecuteNonQuery();
+    }
+
+    public static string ExtraerFamiliaSugerida(string? nombreRaw)
+    {
+        string u = (nombreRaw ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(u)) return string.Empty;
+
+        if (u.Contains("R-410") || u.Contains("R410")) return "Gas Refrigerante R-410A";
+        if (u.Contains("R-32") || u.Contains("R32")) return "Gas Refrigerante R-32";
+        if (u.Contains("R-404") || u.Contains("R404")) return "Gas Refrigerante R-404A";
+        if (u.Contains("PROPILENO") || u.Contains("MAP-PRO")) return "Gas Propileno / Soldadura";
+        if (ContieneAlguno(u, "ACEITE", "COIL CLENER", "COIL CLEANER", "DESINCRUSTANTE", "DIELECTRICO")) return "Aceites y Químicos HVAC";
+        if (u.Contains("CAPACITOR")) return "Capacitores HVAC";
+        if (ContieneAlguno(u, "CONTACTOR", "RELEVADOR", "PASTILLA TERMOMAG", "INTERRUPTOR")) return "Contactores y Relevadores";
+        if (ContieneAlguno(u, "SENSOR", "TERMOSTATO", "CONTROL UNIVERSAL", "CONTROLADOR")) return "Sensores y Controles HVAC";
+        if (u.Contains("FILTRO DESHIDRATADOR")) return "Filtros Deshidratadores";
+        if (ContieneAlguno(u, "VALVULA", "VÁLVULA", "BOMBA DE CONDENSADO", "BOMBA DE DRENAJE")) return "Válvulas y Accesorios HVAC";
+        if (ContieneAlguno(u, "SOLDADURA DE PLATA", "VARITA DE PLATA", "VARILLA SOLDADURA", "FUNDENTE")) return "Soldadura de Plata y Fundente";
+        if (ContieneAlguno(u, "CINTA AISLAR", "CINTA AISLANTE")) return "Cinta de Aislar";
+        if (ContieneAlguno(u, "CINTA TEFLON", "CINTA PARA DUCTO", "CINTA DE ALUMINIO", "CINTA DE MONTAJE", "CINTA AZUL", "CINTA MASKING")) return "Cinta de Montaje / Ducto / Teflón";
+        if (ContieneAlguno(u, "FOCO", "LAMPARA", "LÁMPARA", "REFLECTOR", "LINTERNA")) return "Focos y Luminarias LED";
+        if (ContieneAlguno(u, "PILA ", "PILAS ", "PILAN ", "BATERIA", "BATERÍA")) return "Pilas y Baterías";
+        if (ContieneAlguno(u, "GUANTE", "GUANTES")) return "Guantes de Seguridad";
+        if (ContieneAlguno(u, "CASCO", "BARBOQUEJO")) return "Cascos y Protección Cabeza";
+        if (ContieneAlguno(u, "BOTA", "BORCEGUI", "CALZADO")) return "Botas y Calzado de Seguridad";
+        if (ContieneAlguno(u, "LENTE", "GAFA")) return "Lentes y Protección Visual";
+        if (ContieneAlguno(u, "CHALECO", "CONO", "SEÑAL")) return "Chalecos y Señalización";
+        if (ContieneAlguno(u, "JABON", "JABÓN", "DETERGENTE", "ARIEL", "AXION", "LAVATRASTES", "FABULOSO", "PINOL", "CLORALEX", "LYSOL", "WINDEX", "LIMPIADOR", "DESINFECTANTE")) return "Jabón, Detergentes y Limpiadores";
+        if (ContieneAlguno(u, "MICROFIBRA", "TOALLA", "PAPEL HIGI", "SERVILLETA", "ESTOPA")) return "Toallas, Papel y Microfibras";
+        if (ContieneAlguno(u, "ESCOBA", "TRAPEADOR", "CEPILLO", "RECOGEDOR", "FIBRA MULTIUSOS")) return "Escobas, Cepillos y Trapeadores";
+        if (ContieneAlguno(u, "BOLSA NEGRA", "BOLS BAS", "BOLSA VERDE", "COSTAL")) return "Bolsas para Basura";
+        if (ContieneAlguno(u, "INSECTICIDA", "INSEC ", "H-24", "H24", "MOSQUITO", "FUMIGADOR")) return "Insecticidas y Plagas";
+        if (ContieneAlguno(u, "PIJA", "TAQUETE")) return "Pijas y Taquetes";
+        if (ContieneAlguno(u, "TORNILLO", "TUERCA", "ARANDELA", "RONDANA", "ESPÁRRAGO")) return "Tornillos y Tuercas";
+        if (ContieneAlguno(u, "DISCO", "LIJA", "SEGUETA")) return "Discos de Corte y Lija";
+        if (ContieneAlguno(u, "BROCA", "PUNTA", "DADO", "BROQUERO")) return "Brocas y Puntas";
+        if (ContieneAlguno(u, "IMPERMEABILI", "IMPERCOAT", "IMPERPRIM", "FESTER", "PINTURA", "ESMALTE", "THINNER", "AGUARRAS")) return "Impermeabilizantes y Pintura";
+        if (ContieneAlguno(u, "BROCHA", "RODILLO", "FELPA", "MANERAL")) return "Brochas, Rodillos y Felpas";
+        if (ContieneAlguno(u, "SILICON", "SILICÓN", "SELLADOR", "DURETAN", "TANGIT", "PEGAMENTO", "ADHECRETO")) return "Selladores, Silicones y Pegamentos";
+        if (ContieneAlguno(u, "PVC", "CODO", "TEE", "YEE", "COPLE", "REDUCCION", "TAPON", "NIPLE", "TUBERIA", "TUBERÍA")) return "Tubería y Conexiones PVC";
+        if (ContieneAlguno(u, "MANGUERA", "CONECTOR RÁPIDO", "CONECTOR RAPIDO", "LLAVE MANGUERA")) return "Mangueras y Conexiones Hidráulicas";
+
+        return string.Empty;
+    }
+
+    private static void AutoAsignarFamiliasInicialesSiVacio(SqliteConnection conn)
+    {
+        var pendientes = new List<(int Id, string Nombre)>();
+        using (var sel = conn.CreateCommand())
+        {
+            sel.CommandText = "SELECT Id, Nombre FROM Productos WHERE TRIM(COALESCE(Familia, '')) = ''";
+            using var r = sel.ExecuteReader();
+            while (r.Read())
+            {
+                pendientes.Add((r.GetInt32(0), r.GetString(1)));
+            }
+        }
+
+        if (pendientes.Count == 0) return;
+
+        using var tx = conn.BeginTransaction();
+        foreach (var (id, nom) in pendientes)
+        {
+            string fam = ExtraerFamiliaSugerida(nom);
+            if (!string.IsNullOrWhiteSpace(fam))
+            {
+                using var up = conn.CreateCommand();
+                up.Transaction = tx;
+                up.CommandText = "UPDATE Productos SET Familia = $fam WHERE Id = $id";
+                up.Parameters.AddWithValue("$fam", fam);
+                up.Parameters.AddWithValue("$id", id);
+                up.ExecuteNonQuery();
+            }
+        }
+        tx.Commit();
     }
 
     public static Producto? BuscarProductoPorCodigo(string codigo)
@@ -963,11 +1122,14 @@ ORDER BY p.CodigoInterno";
         if (string.IsNullOrWhiteSpace(p.CodigoBarras))
             p.CodigoBarras = p.CodigoInterno;
 
+        if (string.IsNullOrWhiteSpace(p.Familia))
+            p.Familia = ExtraerFamiliaSugerida(p.Nombre);
+
         if (p.Id > 0)
         {
             cmd.CommandText = @"
 UPDATE Productos SET
-    CodigoInterno=$ci, CodigoBarras=$cb, Nombre=$nom, Descripcion=$desc, CategoriaId=$cat,
+    CodigoInterno=$ci, CodigoBarras=$cb, Nombre=$nom, Descripcion=$desc, CategoriaId=$cat, Familia=$fam,
     Marca=$mar, Modelo=$mod, Medidas=$med, CapacidadElectrica=$cap, Especificacion1=$esp1, Especificacion2=$esp2,
     UnidadCompra=$uc, UnidadAlmacen=$ua, FactorConversion=$fc, StockActual=$sa,
     StockMinimo=$sm, UltimoCostoCompra=$ucc, Ubicacion=$ubi, ImagenRuta=$img, EsHerramienta=$her
@@ -977,8 +1139,8 @@ WHERE Id=$id";
         else
         {
             cmd.CommandText = @"
-INSERT INTO Productos (CodigoInterno, CodigoBarras, Nombre, Descripcion, CategoriaId, Marca, Modelo, Medidas, CapacidadElectrica, Especificacion1, Especificacion2, UnidadCompra, UnidadAlmacen, FactorConversion, StockActual, StockReservadoProyecto, StockMinimo, UltimoCostoCompra, Ubicacion, ImagenRuta, EsHerramienta)
-VALUES ($ci, $cb, $nom, $desc, $cat, $mar, $mod, $med, $cap, $esp1, $esp2, $uc, $ua, $fc, $sa, 0, $sm, $ucc, $ubi, $img, $her);
+INSERT INTO Productos (CodigoInterno, CodigoBarras, Nombre, Descripcion, CategoriaId, Familia, Marca, Modelo, Medidas, CapacidadElectrica, Especificacion1, Especificacion2, UnidadCompra, UnidadAlmacen, FactorConversion, StockActual, StockReservadoProyecto, StockMinimo, UltimoCostoCompra, Ubicacion, ImagenRuta, EsHerramienta)
+VALUES ($ci, $cb, $nom, $desc, $cat, $fam, $mar, $mod, $med, $cap, $esp1, $esp2, $uc, $ua, $fc, $sa, 0, $sm, $ucc, $ubi, $img, $her);
 SELECT last_insert_rowid();";
         }
 
@@ -987,6 +1149,7 @@ SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$nom", p.Nombre.Trim());
         cmd.Parameters.AddWithValue("$desc", (p.Descripcion ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$cat", p.CategoriaId > 0 ? p.CategoriaId : 1);
+        cmd.Parameters.AddWithValue("$fam", (p.Familia ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$mar", (p.Marca ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$mod", (p.Modelo ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$med", (p.Medidas ?? string.Empty).Trim());
@@ -1479,12 +1642,15 @@ ORDER BY s.Id DESC".Replace("p.ProyectoId", "s.ProyectoId");
         {
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
-SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto eliminado'),
-       COALESCE(p.UnidadCompra, 'Pza'), sp.CantidadSolicitada, COALESCE(p.StockActual, 0), sp.NotasPartida,
+SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'CONCEPTO'),
+       CASE WHEN sp.ProductoId > 0 AND p.Nombre IS NOT NULL THEN p.Nombre ELSE COALESCE(NULLIF(sp.DescripcionLibre, ''), 'Concepto Abierto') END,
+       CASE WHEN sp.ProductoId > 0 AND p.UnidadCompra IS NOT NULL THEN p.UnidadCompra ELSE COALESCE(NULLIF(sp.UnidadLibre, ''), 'Pieza') END,
+       sp.CantidadSolicitada, COALESCE(p.StockActual, 0), sp.NotasPartida,
        COALESCE(sp.Proveedor1Id, 0), COALESCE(sp.PrecioSinIva1, 0), COALESCE(sp.DiasEntrega1, 2), COALESCE(sp.FleteConIva1, 0), COALESCE(sp.NotasCotizacion1, ''),
        COALESCE(sp.Proveedor2Id, 0), COALESCE(sp.PrecioSinIva2, 0), COALESCE(sp.DiasEntrega2, 3), COALESCE(sp.FleteConIva2, 0), COALESCE(sp.NotasCotizacion2, ''),
        COALESCE(sp.Proveedor3Id, 0), COALESCE(sp.PrecioSinIva3, 0), COALESCE(sp.DiasEntrega3, 1), COALESCE(sp.FleteConIva3, 0), COALESCE(sp.NotasCotizacion3, ''),
-       COALESCE(sp.ProveedorGanadorIndice, 0), COALESCE(sp.OrdenCompraId, 0), COALESCE(sp.OrdenCompraFolio, '')
+       COALESCE(sp.ProveedorGanadorIndice, 0), COALESCE(sp.OrdenCompraId, 0), COALESCE(sp.OrdenCompraFolio, ''),
+       COALESCE(sp.DescripcionLibre, ''), COALESCE(p.Familia, '')
 FROM SolicitudPartidas sp
 LEFT JOIN Productos p ON p.Id = sp.ProductoId
 WHERE sp.SolicitudId = $sid";
@@ -1492,13 +1658,22 @@ WHERE sp.SolicitudId = $sid";
             using var pr = pCmd.ExecuteReader();
             while (pr.Read())
             {
+                int prodId = pr.GetInt32(2);
+                string nomMostrar = pr.GetString(4);
+                string descLibre = pr.GetString(27);
+                string fam = pr.GetString(28);
+                if (string.IsNullOrWhiteSpace(fam))
+                    fam = ExtraerFamiliaSugerida(!string.IsNullOrWhiteSpace(descLibre) ? descLibre : nomMostrar);
+
                 sol.Partidas.Add(new SolicitudPartida
                 {
                     Id = pr.GetInt32(0),
                     SolicitudId = pr.GetInt32(1),
-                    ProductoId = pr.GetInt32(2),
-                    ProductoCodigo = pr.GetString(3),
-                    ProductoNombre = pr.GetString(4),
+                    ProductoId = prodId,
+                    ProductoCodigo = prodId > 0 ? pr.GetString(3) : "CONCEPTO",
+                    ProductoNombre = nomMostrar,
+                    DescripcionLibre = !string.IsNullOrWhiteSpace(descLibre) ? descLibre : nomMostrar,
+                    Familia = fam,
                     UnidadCompra = pr.GetString(5),
                     CantidadSolicitada = Convert.ToDecimal(pr.GetDouble(6)),
                     StockActualAlmacen = Convert.ToDecimal(pr.GetDouble(7)),
@@ -1556,10 +1731,12 @@ SELECT last_insert_rowid();";
             using var pCmd = conn.CreateCommand();
             pCmd.Transaction = tx;
             pCmd.CommandText = @"
-INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, CantidadSolicitada, NotasPartida)
-VALUES ($sid, $pid, $cant, $not)";
+INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida)
+VALUES ($sid, $pid, $dlib, $ulib, $cant, $not)";
             pCmd.Parameters.AddWithValue("$sid", solId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
+            pCmd.Parameters.AddWithValue("$dlib", !string.IsNullOrWhiteSpace(item.DescripcionLibre) ? item.DescripcionLibre.Trim() : (item.ProductoNombre ?? string.Empty).Trim());
+            pCmd.Parameters.AddWithValue("$ulib", string.IsNullOrWhiteSpace(item.UnidadCompra) ? "Pieza" : item.UnidadCompra.Trim());
             pCmd.Parameters.AddWithValue("$cant", (double)item.CantidadSolicitada);
             pCmd.Parameters.AddWithValue("$not", item.NotasPartida ?? string.Empty);
             pCmd.ExecuteNonQuery();
@@ -1577,9 +1754,12 @@ VALUES ($sid, $pid, $cant, $not)";
             throw new InvalidOperationException("No se puede modificar una Solicitud que ya tiene todas sus Órdenes de Compra generadas.");
         }
 
-        var prevPorProducto = solPrevia?.Partidas
-            .GroupBy(p => p.ProductoId)
-            .ToDictionary(g => g.Key, g => g.First()) ?? new Dictionary<int, SolicitudPartida>();
+        static string ClavePartida(SolicitudPartida sp) =>
+            sp.ProductoId > 0 ? $"PID:{sp.ProductoId}" : $"LIB:{(sp.DescripcionLibre ?? sp.ProductoNombre ?? "").Trim().ToUpperInvariant()}";
+
+        var prevPorClave = solPrevia?.Partidas
+            .GroupBy(ClavePartida)
+            .ToDictionary(g => g.Key, g => g.First()) ?? new Dictionary<string, SolicitudPartida>();
 
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
@@ -1612,7 +1792,7 @@ WHERE Id = $id";
 
         foreach (var item in partidas)
         {
-            prevPorProducto.TryGetValue(item.ProductoId, out var prev);
+            prevPorClave.TryGetValue(ClavePartida(item), out var prev);
             if (prev != null && prev.TieneOcGenerada)
             {
                 // Esa partida ya fue emitida en una OC; se conserva intacta en la BD
@@ -1623,14 +1803,14 @@ WHERE Id = $id";
             pCmd.Transaction = tx;
             pCmd.CommandText = @"
 INSERT INTO SolicitudPartidas (
-    SolicitudId, ProductoId, CantidadSolicitada, NotasPartida,
+    SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida,
     Proveedor1Id, PrecioSinIva1, DiasEntrega1, FleteConIva1, NotasCotizacion1,
     Proveedor2Id, PrecioSinIva2, DiasEntrega2, FleteConIva2, NotasCotizacion2,
     Proveedor3Id, PrecioSinIva3, DiasEntrega3, FleteConIva3, NotasCotizacion3,
     ProveedorGanadorIndice, OrdenCompraId, OrdenCompraFolio
 )
 VALUES (
-    $sid, $pid, $cant, $not,
+    $sid, $pid, $dlib, $ulib, $cant, $not,
     $pv1, $pr1, $d1, $fl1, $nc1,
     $pv2, $pr2, $d2, $fl2, $nc2,
     $pv3, $pr3, $d3, $fl3, $nc3,
@@ -1638,6 +1818,8 @@ VALUES (
 )";
             pCmd.Parameters.AddWithValue("$sid", solicitudId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
+            pCmd.Parameters.AddWithValue("$dlib", !string.IsNullOrWhiteSpace(item.DescripcionLibre) ? item.DescripcionLibre.Trim() : (item.ProductoNombre ?? string.Empty).Trim());
+            pCmd.Parameters.AddWithValue("$ulib", string.IsNullOrWhiteSpace(item.UnidadCompra) ? "Pieza" : item.UnidadCompra.Trim());
             pCmd.Parameters.AddWithValue("$cant", (double)item.CantidadSolicitada);
             pCmd.Parameters.AddWithValue("$not", item.NotasPartida ?? string.Empty);
 
@@ -1855,11 +2037,13 @@ ORDER BY oc.Id DESC";
         using (var pCmd = conn.CreateCommand())
         {
             pCmd.CommandText = @"
-SELECT ocp.Id, ocp.OrdenCompraId, ocp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto'),
-       COALESCE(p.UnidadCompra, 'Pza'), COALESCE(p.UnidadAlmacen, 'Pza'), COALESCE(p.FactorConversion, 1),
-       ocp.CantidadPedida, ocp.CantidadRecibida, ocp.PrecioUnitarioSinIva
+SELECT ocp.Id, ocp.OrdenCompraId, ocp.ProductoId, COALESCE(p.CodigoInterno, 'CONCEPTO'),
+       CASE WHEN ocp.ProductoId > 0 AND p.Nombre IS NOT NULL THEN p.Nombre ELSE COALESCE(NULLIF(ocp.DescripcionLibre, ''), 'Concepto Abierto') END,
+       CASE WHEN ocp.ProductoId > 0 AND p.UnidadCompra IS NOT NULL THEN p.UnidadCompra ELSE COALESCE(NULLIF(ocp.UnidadLibre, ''), 'Pieza') END,
+       COALESCE(p.UnidadAlmacen, COALESCE(NULLIF(ocp.UnidadLibre, ''), 'Pieza')), COALESCE(p.FactorConversion, 1),
+       ocp.CantidadPedida, ocp.CantidadRecibida, ocp.PrecioUnitarioSinIva, COALESCE(ocp.DescripcionLibre, '')
 FROM OrdenCompraPartidas ocp
-INNER JOIN Productos p ON p.Id = ocp.ProductoId";
+LEFT JOIN Productos p ON p.Id = ocp.ProductoId";
             using var pr = pCmd.ExecuteReader();
             while (pr.Read())
             {
@@ -1867,13 +2051,17 @@ INNER JOIN Productos p ON p.Id = ocp.ProductoId";
                 if (!ocDict.TryGetValue(ocId, out var oc))
                     continue;
 
+                int prodId = pr.GetInt32(2);
+                string nom = pr.GetString(4);
+                string dLib = pr.GetString(11);
                 var part = new OrdenCompraPartida
                 {
                     Id = pr.GetInt32(0),
                     OrdenCompraId = ocId,
-                    ProductoId = pr.GetInt32(2),
-                    ProductoCodigo = pr.GetString(3),
-                    ProductoNombre = pr.GetString(4),
+                    ProductoId = prodId,
+                    ProductoCodigo = prodId > 0 ? pr.GetString(3) : "CONCEPTO",
+                    ProductoNombre = nom,
+                    DescripcionLibre = !string.IsNullOrWhiteSpace(dLib) ? dLib : nom,
                     UnidadCompra = pr.GetString(5),
                     UnidadAlmacen = pr.GetString(6),
                     FactorConversion = Convert.ToDecimal(pr.GetDouble(7)),
@@ -1889,9 +2077,11 @@ INNER JOIN Productos p ON p.Id = ocp.ProductoId";
         return list;
     }
 
-    public static (List<(int proveedorId, decimal precioSinIva, int diasEntrega, string notaSugerida)> opciones, string referenciaHistorica) ObtenerSugerenciasCotizacionPorProducto(int productoId)
+    public static List<ReferenciaSimilarHistorica> ObtenerReferenciasSimilaresParaComparativa(int productoId, string? nombreOConcepto = null, string? familia = null)
     {
-        var opciones = new List<(int proveedorId, decimal precioSinIva, int diasEntrega, string notaSugerida)>();
+        var resultados = new List<ReferenciaSimilarHistorica>();
+        var todosProductos = ObtenerProductos();
+        var prodDict = todosProductos.ToDictionary(p => p.Id);
         var proveedores = ObtenerProveedores();
         var provDict = proveedores.ToDictionary(p => p.Id);
         var provPorRfc = proveedores
@@ -1899,69 +2089,171 @@ INNER JOIN Productos p ON p.Id = ocp.ProductoId";
             .GroupBy(p => p.Rfc.Trim().ToUpperInvariant())
             .ToDictionary(g => g.Key, g => g.First());
 
+        Producto? prodBase = productoId > 0 && prodDict.TryGetValue(productoId, out var pb) ? pb : null;
+        string textoBase = !string.IsNullOrWhiteSpace(nombreOConcepto) ? nombreOConcepto.Trim() : (prodBase?.Nombre ?? string.Empty);
+        string famBase = !string.IsNullOrWhiteSpace(familia) ? familia.Trim() : (prodBase?.Familia ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(famBase))
+            famBase = ExtraerFamiliaSugerida(textoBase);
+
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "DE", "LA", "EL", "LOS", "LAS", "PARA", "CON", "SIN", "POR", "DEL", "PZA", "PZAS", "PIEZA", "PIEZAS",
+            "CAJA", "PAQ", "PAQUETE", "MOD", "MODELO", "TIPO", "COLOR", "USO", "PACK", "CONCEPTO", "ABIERTO"
+        };
+
+        var palabrasClave = textoBase
+            .Split(new[] { ' ', ',', '.', '/', '-', '(', ')', '[', ']', '"' }, StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length >= 3 && !stopWords.Contains(w))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var idsCandidatos = new HashSet<int>();
+        if (productoId > 0)
+            idsCandidatos.Add(productoId);
+
+        foreach (var p in todosProductos)
+        {
+            if (!string.IsNullOrWhiteSpace(famBase) &&
+                !string.IsNullOrWhiteSpace(p.Familia) &&
+                p.Familia.Equals(famBase, StringComparison.OrdinalIgnoreCase))
+            {
+                idsCandidatos.Add(p.Id);
+                continue;
+            }
+
+            if (palabrasClave.Count > 0)
+            {
+                int coincidencias = palabrasClave.Count(w =>
+                    p.Nombre.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                    p.Familia.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                    p.Marca.Contains(w, StringComparison.OrdinalIgnoreCase));
+
+                if ((palabrasClave.Count == 1 && coincidencias >= 1) ||
+                    (palabrasClave.Count >= 2 && coincidencias >= Math.Min(2, palabrasClave.Count)))
+                {
+                    idsCandidatos.Add(p.Id);
+                }
+            }
+        }
+
+        if (idsCandidatos.Count == 0)
+            return resultados;
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
-        // 1. Buscar en Órdenes de Compra previas de este producto
+        // 1. Buscar en Órdenes de Compra de todos los productos candidatos (familia / similares)
         using (var cmdOc = conn.CreateCommand())
         {
-            cmdOc.CommandText = @"
-SELECT oc.ProveedorId, ocp.PrecioUnitarioSinIva, COALESCE(oc.TiempoEntregaDias, 2), oc.Folio, oc.Fecha
+            cmdOc.CommandText = $@"
+SELECT ocp.ProductoId, oc.ProveedorId, ocp.PrecioUnitarioSinIva, COALESCE(oc.TiempoEntregaDias, 2), oc.Folio, oc.Fecha
 FROM OrdenCompraPartidas ocp
 INNER JOIN OrdenesCompra oc ON oc.Id = ocp.OrdenCompraId
-WHERE ocp.ProductoId = $pid AND oc.ProveedorId > 0 AND ocp.PrecioUnitarioSinIva > 0
+WHERE ocp.ProductoId IN ({string.Join(",", idsCandidatos)})
+  AND oc.ProveedorId > 0
+  AND ocp.PrecioUnitarioSinIva > 0
+  AND oc.Estatus <> 'Cancelada'
 ORDER BY ocp.Id DESC";
-            cmdOc.Parameters.AddWithValue("$pid", productoId);
             using var r = cmdOc.ExecuteReader();
             while (r.Read())
             {
-                int pvId = r.GetInt32(0);
-                if (!provDict.ContainsKey(pvId) || opciones.Any(o => o.proveedorId == pvId))
+                int pid = r.GetInt32(0);
+                int pvId = r.GetInt32(1);
+                if (!prodDict.TryGetValue(pid, out var prd) || !provDict.TryGetValue(pvId, out var prv))
                     continue;
 
-                decimal precio = Convert.ToDecimal(r.GetDouble(1));
-                int dias = r.GetInt32(2);
-                string folioOc = r.GetString(3);
-                opciones.Add((pvId, Math.Round(precio, 2), dias > 0 ? dias : 2, $"Histórico {folioOc}"));
-                if (opciones.Count >= 3) break;
+                if (resultados.Any(x => x.ProductoId == pid && x.ProveedorId == pvId))
+                    continue;
+
+                decimal precio = Math.Round(Convert.ToDecimal(r.GetDouble(2)), 2);
+                int dias = r.GetInt32(3);
+                string folioOc = r.GetString(4);
+
+                resultados.Add(new ReferenciaSimilarHistorica
+                {
+                    ProductoId = pid,
+                    ProductoCodigo = prd.CodigoInterno,
+                    ProductoNombre = prd.Nombre,
+                    Familia = prd.Familia,
+                    ProveedorId = pvId,
+                    ProveedorNombre = prv.NombreMostrar,
+                    PrecioSinIva = precio,
+                    DiasEntrega = dias > 0 ? dias : 2,
+                    ReferenciaOrigen = $"Histórico {folioOc} ([{prd.CodigoInterno}] {prd.Nombre})"
+                });
             }
         }
 
-        // 2. Buscar en ProductoProveedorMapa (Facturas XML vinculadas a este producto)
-        if (opciones.Count < 3)
+        // 2. Complementar con ProductoProveedorMapa (Facturas XML)
+        using (var cmdXml = conn.CreateCommand())
         {
-            using var cmdXml = conn.CreateCommand();
-            cmdXml.CommandText = @"
-SELECT EmisorRfc, UltimoPrecioSinIva, ClaveProveedor
+            cmdXml.CommandText = $@"
+SELECT ProductoId, EmisorRfc, UltimoPrecioSinIva, ClaveProveedor
 FROM ProductoProveedorMapa
-WHERE ProductoId = $pid AND UltimoPrecioSinIva > 0
+WHERE ProductoId IN ({string.Join(",", idsCandidatos)})
+  AND UltimoPrecioSinIva > 0
 ORDER BY Id DESC";
-            cmdXml.Parameters.AddWithValue("$pid", productoId);
             using var rx = cmdXml.ExecuteReader();
             while (rx.Read())
             {
-                string rfc = (rx.GetString(0) ?? "").Trim().ToUpperInvariant();
-                if (!provPorRfc.TryGetValue(rfc, out var prov) || opciones.Any(o => o.proveedorId == prov.Id))
+                int pid = rx.GetInt32(0);
+                string rfc = (rx.GetString(1) ?? "").Trim().ToUpperInvariant();
+                if (!prodDict.TryGetValue(pid, out var prd) || !provPorRfc.TryGetValue(rfc, out var prv))
                     continue;
 
-                decimal precio = Convert.ToDecimal(rx.GetDouble(1));
-                string clave = rx.GetString(2);
-                opciones.Add((prov.Id, Math.Round(precio, 2), prov.DiasEntregaPromedio > 0 ? prov.DiasEntregaPromedio : 3, $"Factura XML ({clave})"));
-                if (opciones.Count >= 3) break;
+                if (resultados.Any(x => x.ProductoId == pid && x.ProveedorId == prv.Id))
+                    continue;
+
+                decimal precio = Math.Round(Convert.ToDecimal(rx.GetDouble(2)), 2);
+                string clave = rx.GetString(3);
+
+                resultados.Add(new ReferenciaSimilarHistorica
+                {
+                    ProductoId = pid,
+                    ProductoCodigo = prd.CodigoInterno,
+                    ProductoNombre = prd.Nombre,
+                    Familia = prd.Familia,
+                    ProveedorId = prv.Id,
+                    ProveedorNombre = prv.NombreMostrar,
+                    PrecioSinIva = precio,
+                    DiasEntrega = prv.DiasEntregaPromedio > 0 ? prv.DiasEntregaPromedio : 3,
+                    ReferenciaOrigen = $"Factura XML ({clave} - [{prd.CodigoInterno}] {prd.Nombre})"
+                });
             }
         }
 
+        // Ordenar priorizando el mejor precio unitario sin IVA
+        return resultados
+            .OrderBy(x => x.PrecioSinIva)
+            .ThenByDescending(x => x.ProductoId == productoId ? 1 : 0)
+            .ToList();
+    }
+
+    public static (List<(int proveedorId, decimal precioSinIva, int diasEntrega, string notaSugerida)> opciones, string referenciaHistorica) ObtenerSugerenciasCotizacionPorProducto(int productoId, string? nombreOConcepto = null, string? familia = null)
+    {
+        var similares = ObtenerReferenciasSimilaresParaComparativa(productoId, nombreOConcepto, familia);
+        var opciones = similares
+            .GroupBy(s => s.ProveedorId)
+            .Select(g =>
+            {
+                var best = g.OrderBy(x => x.PrecioSinIva).First();
+                return (best.ProveedorId, best.PrecioSinIva, best.DiasEntrega, best.ReferenciaOrigen);
+            })
+            .OrderBy(x => x.PrecioSinIva)
+            .Take(3)
+            .ToList();
+
         string refHist;
-        if (opciones.Count > 0)
+        if (similares.Count > 0)
         {
-            opciones = opciones.OrderBy(o => o.precioSinIva).ToList();
-            var mejor = opciones[0];
-            string nomMejor = provDict.TryGetValue(mejor.proveedorId, out var pm) ? pm.NombreMostrar : "Proveedor";
-            refHist = $"Mejor histórico: {nomMejor} a ${mejor.precioSinIva:N2} s/IVA (${Math.Round(mejor.precioSinIva * 1.16m, 2):N2} c/IVA)";
+            var mejor = similares[0];
+            int numProvs = similares.Select(x => x.ProveedorId).Distinct().Count();
+            int numProds = similares.Select(x => x.ProductoId).Distinct().Count();
+            refHist = $"Mejor histórico ({numProds} SKU(s) similares / {numProvs} prov.): {mejor.ProveedorNombre} a ${mejor.PrecioSinIva:N2} s/IVA (${mejor.PrecioConIva:N2} c/IVA) [{mejor.ProductoCodigo}]";
         }
         else
         {
-            refHist = "Sin compras previas registradas por proveedor (asigne proveedor a cotizar)";
+            refHist = "Sin compras previas registradas para este artículo o similares (asigne proveedor a cotizar)";
         }
 
         return (opciones, refHist);
@@ -2066,7 +2358,7 @@ WHERE Id = $sid";
             decimal subtotalPartidas = 0m;
             decimal fleteAcumuladoConIva = 0m;
             int diasEntregaMax = 1;
-            var partidasOc = new List<(int solicitudPartidaId, int prodId, decimal cant, decimal precioSinIva, string notaCot)>();
+            var partidasOc = new List<(int solicitudPartidaId, int prodId, string descLibre, string unidadCompra, decimal cant, decimal precioSinIva, string notaCot)>();
 
             foreach (var reng in grupo)
             {
@@ -2083,7 +2375,8 @@ WHERE Id = $sid";
                     3 => reng.NotasCotizacion3,
                     _ => ""
                 };
-                partidasOc.Add((reng.SolicitudPartidaId, reng.ProductoId, reng.Cantidad, precioSinIva, notaOpc));
+                string descLib = !string.IsNullOrWhiteSpace(reng.DescripcionLibre) ? reng.DescripcionLibre : reng.ProductoNombre;
+                partidasOc.Add((reng.SolicitudPartidaId, reng.ProductoId, descLib, reng.UnidadCompra, reng.Cantidad, precioSinIva, notaOpc));
             }
 
             decimal fleteSinIva = Math.Round(fleteAcumuladoConIva / 1.16m, 2);
@@ -2122,10 +2415,12 @@ SELECT last_insert_rowid();";
                 using var pCmd = conn.CreateCommand();
                 pCmd.Transaction = tx;
                 pCmd.CommandText = @"
-INSERT INTO OrdenCompraPartidas (OrdenCompraId, ProductoId, CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva)
-VALUES ($ocid, $pid, $cant, 0, $precio)";
+INSERT INTO OrdenCompraPartidas (OrdenCompraId, ProductoId, DescripcionLibre, UnidadLibre, CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva)
+VALUES ($ocid, $pid, $dlib, $ulib, $cant, 0, $precio)";
                 pCmd.Parameters.AddWithValue("$ocid", ocId);
                 pCmd.Parameters.AddWithValue("$pid", p.prodId);
+                pCmd.Parameters.AddWithValue("$dlib", p.descLibre ?? string.Empty);
+                pCmd.Parameters.AddWithValue("$ulib", string.IsNullOrWhiteSpace(p.unidadCompra) ? "Pieza" : p.unidadCompra);
                 pCmd.Parameters.AddWithValue("$cant", (double)p.cant);
                 pCmd.Parameters.AddWithValue("$precio", (double)p.precioSinIva);
                 pCmd.ExecuteNonQuery();
@@ -2171,6 +2466,52 @@ WHERE Id = $spid";
         List<(OrdenCompraPartida partida, decimal cantidadRecibirAhora)> recepcion,
         string notas)
     {
+        // Si alguna partida por recibir era un Concepto Abierto (ProductoId <= 0), darla de alta en el Catálogo (PRD-xxxx) ahora que ya se compró/recibió
+        foreach (var (partida, cantRecibir) in recepcion.Where(x => x.cantidadRecibirAhora > 0))
+        {
+            if (partida.ProductoId <= 0)
+            {
+                string nombreReal = !string.IsNullOrWhiteSpace(partida.DescripcionLibre) ? partida.DescripcionLibre.Trim() : partida.ProductoNombre.Trim();
+                var info = ClasificarYExtraerEspecificacionesProducto(nombreReal, notas);
+                string fam = ExtraerFamiliaSugerida(nombreReal);
+                var nuevoProd = new Producto
+                {
+                    Nombre = nombreReal,
+                    Descripcion = $"Creado al recibir Compra {oc.Folio} ({oc.ProveedorNombre})",
+                    CategoriaId = info.CategoriaId,
+                    Familia = fam,
+                    Marca = info.Marca,
+                    Modelo = info.Modelo,
+                    Medidas = info.Medidas,
+                    CapacidadElectrica = info.CapacidadElectrica,
+                    Especificacion1 = info.Especificacion1,
+                    Especificacion2 = info.Especificacion2,
+                    UnidadCompra = string.IsNullOrWhiteSpace(partida.UnidadCompra) ? "Pieza" : partida.UnidadCompra,
+                    UnidadAlmacen = string.IsNullOrWhiteSpace(partida.UnidadAlmacen) ? "Pieza" : partida.UnidadAlmacen,
+                    FactorConversion = Math.Max(1m, partida.FactorConversion),
+                    StockActual = 0m,
+                    StockMinimo = 5m,
+                    UltimoCostoCompra = partida.PrecioUnitarioConIva,
+                    Ubicacion = "Almacén General"
+                };
+                int nuevoProdId = GuardarProducto(nuevoProd);
+                partida.ProductoId = nuevoProdId;
+                partida.ProductoCodigo = nuevoProd.CodigoInterno;
+
+                using var connUp = new SqliteConnection(ConnectionString);
+                connUp.Open();
+                using var upOcp = connUp.CreateCommand();
+                upOcp.CommandText = @"
+UPDATE OrdenCompraPartidas SET ProductoId = $pid WHERE Id = $id;
+UPDATE SolicitudPartidas SET ProductoId = $pid WHERE OrdenCompraId = $ocid AND ProductoId <= 0 AND LOWER(TRIM(DescripcionLibre)) = LOWER(TRIM($dlib));";
+                upOcp.Parameters.AddWithValue("$pid", nuevoProdId);
+                upOcp.Parameters.AddWithValue("$id", partida.Id);
+                upOcp.Parameters.AddWithValue("$ocid", oc.Id);
+                upOcp.Parameters.AddWithValue("$dlib", nombreReal);
+                upOcp.ExecuteNonQuery();
+            }
+        }
+
         string folioEnt = GenerarSiguienteFolio("ENT", "EntradasAlmacen");
         string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
 

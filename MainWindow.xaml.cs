@@ -190,6 +190,23 @@ public partial class MainWindow : FluentWindow
             CboProdCategoria.ItemsSource = categorias;
             if (CboProdCategoria.SelectedIndex < 0) CboProdCategoria.SelectedIndex = 0;
 
+            // Familias / Agrupadores genéricos de productos
+            var familias = DatabaseService.ObtenerFamiliasProductos();
+            if (CboFiltroFamilia != null)
+            {
+                string famFiltroPrevia = CboFiltroFamilia.SelectedItem as string ?? "Todas las familias";
+                var famsConTodas = new List<string> { "Todas las familias" };
+                famsConTodas.AddRange(familias);
+                CboFiltroFamilia.ItemsSource = famsConTodas;
+                CboFiltroFamilia.SelectedItem = famsConTodas.FirstOrDefault(f => f.Equals(famFiltroPrevia, StringComparison.OrdinalIgnoreCase)) ?? famsConTodas[0];
+            }
+            if (CboProdFamilia != null)
+            {
+                string textoFamActual = CboProdFamilia.Text;
+                CboProdFamilia.ItemsSource = familias;
+                CboProdFamilia.Text = textoFamActual;
+            }
+
             // Solicitudes
             CboSolDepartamento.ItemsSource = deptos;
             if (CboSolDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSolDepartamento.SelectedIndex = 0;
@@ -884,17 +901,23 @@ public partial class MainWindow : FluentWindow
         }
 
         int catId = (CboFiltroCategoria?.SelectedItem as Categoria)?.Id ?? 0;
+        string famFiltro = CboFiltroFamilia?.SelectedItem as string ?? "Todas las familias";
 
         IEnumerable<Producto> query = _cacheProductos;
         if (catId > 0)
         {
             query = query.Where(p => p.CategoriaId == catId);
         }
+        if (!string.IsNullOrWhiteSpace(famFiltro) && !famFiltro.Equals("Todas las familias", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(p => string.Equals(p.Familia, famFiltro, StringComparison.OrdinalIgnoreCase));
+        }
 
         if (!string.IsNullOrWhiteSpace(filtroRaw))
         {
             query = query.Where(p =>
                 p.Nombre.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.Familia.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoInterno.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoInterno.Contains(filtroNorm, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoBarras.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
@@ -1055,6 +1078,213 @@ public partial class MainWindow : FluentWindow
         RefrescarCatalogoVisual();
     }
 
+    private void CboFiltroFamilia_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _actualizandoCombosBase) return;
+        RefrescarCatalogoVisual();
+    }
+
+    private void BtnGestionarFamilias_Click(object sender, RoutedEventArgs e)
+    {
+        var familias = DatabaseService.ObtenerFamiliasProductos();
+        var win = new Window
+        {
+            Title = "Gestión Manual de Familias / Agrupadores de Productos",
+            Width = 540,
+            Height = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "🗂️ Crear, Renombrar o Unificar Familias de Productos",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Las Familias agrupan productos equivalentes de distintas marcas o presentaciones (ej. 'JABON', 'MICROFIBRA', 'GAS REFRIGERANTE') para comparar sus precios históricos juntos.",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 14)
+        });
+
+        // Sección 1: Crear / Asignar nueva familia al producto actual en edición
+        var bdrNueva = new Border
+        {
+            Padding = new Thickness(12),
+            CornerRadius = new CornerRadius(6),
+            Background = new SolidColorBrush(Color.FromRgb(239, 246, 255)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        var spNueva = new StackPanel();
+        spNueva.Children.Add(new TextBlock
+        {
+            Text = "1. Crear nueva Familia o asignar al producto actual:",
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        var gridNueva = new Grid();
+        gridNueva.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridNueva.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var txtNuevaFam = new System.Windows.Controls.TextBox
+        {
+            Text = CboProdFamilia?.Text ?? string.Empty,
+            FontSize = 12.5,
+            Padding = new Thickness(6, 4, 6, 4),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var btnUsarNueva = new System.Windows.Controls.Button
+        {
+            Content = "Asignar al Producto Actual",
+            Padding = new Thickness(10, 4, 10, 4),
+            FontWeight = FontWeights.SemiBold
+        };
+        Grid.SetColumn(txtNuevaFam, 0);
+        Grid.SetColumn(btnUsarNueva, 1);
+        gridNueva.Children.Add(txtNuevaFam);
+        gridNueva.Children.Add(btnUsarNueva);
+        spNueva.Children.Add(gridNueva);
+        bdrNueva.Child = spNueva;
+        root.Children.Add(bdrNueva);
+
+        // Sección 2: Renombrar o Unificar una familia existente en todo el catálogo
+        var bdrRenombrar = new Border
+        {
+            Padding = new Thickness(12),
+            CornerRadius = new CornerRadius(6),
+            Background = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        var spRen = new StackPanel();
+        spRen.Children.Add(new TextBlock
+        {
+            Text = "2. Renombrar o Unificar una Familia en todo el Catálogo:",
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        spRen.Children.Add(new TextBlock
+        {
+            Text = "Familia actual a modificar:",
+            FontSize = 11,
+            Margin = new Thickness(0, 0, 0, 2)
+        });
+        var cboFamOrigen = new System.Windows.Controls.ComboBox
+        {
+            ItemsSource = familias,
+            SelectedItem = familias.FirstOrDefault(f => f.Equals(CboProdFamilia?.Text, StringComparison.OrdinalIgnoreCase)) ?? familias.FirstOrDefault(),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        spRen.Children.Add(cboFamOrigen);
+
+        spRen.Children.Add(new TextBlock
+        {
+            Text = "Nuevo nombre de Familia (si escribe una existente, se unificarán):",
+            FontSize = 11,
+            Margin = new Thickness(0, 0, 0, 2)
+        });
+        var gridRen = new Grid();
+        gridRen.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridRen.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var txtFamDestino = new System.Windows.Controls.TextBox
+        {
+            Text = cboFamOrigen.SelectedItem as string ?? string.Empty,
+            FontSize = 12.5,
+            Padding = new Thickness(6, 4, 6, 4),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        cboFamOrigen.SelectionChanged += (_, _) =>
+        {
+            if (cboFamOrigen.SelectedItem is string s)
+                txtFamDestino.Text = s;
+        };
+        var btnAplicarRenombre = new System.Windows.Controls.Button
+        {
+            Content = "Renombrar en Catálogo",
+            Padding = new Thickness(10, 4, 10, 4),
+            FontWeight = FontWeights.SemiBold
+        };
+        Grid.SetColumn(txtFamDestino, 0);
+        Grid.SetColumn(btnAplicarRenombre, 1);
+        gridRen.Children.Add(txtFamDestino);
+        gridRen.Children.Add(btnAplicarRenombre);
+        spRen.Children.Add(gridRen);
+        bdrRenombrar.Child = spRen;
+        root.Children.Add(bdrRenombrar);
+
+        var btnCerrar = new System.Windows.Controls.Button
+        {
+            Content = "Cerrar",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(16, 5, 16, 5)
+        };
+        btnCerrar.Click += (_, _) => win.Close();
+        root.Children.Add(btnCerrar);
+
+        btnUsarNueva.Click += (_, _) =>
+        {
+            string fam = txtNuevaFam.Text.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(fam))
+            {
+                System.Windows.MessageBox.Show(win, "Escriba el nombre de la familia.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (CboProdFamilia != null)
+            {
+                var lista = (CboProdFamilia.ItemsSource as IEnumerable<string>)?.ToList() ?? new List<string>();
+                if (!lista.Any(x => x.Equals(fam, StringComparison.OrdinalIgnoreCase)))
+                {
+                    lista.Add(fam);
+                    lista.Sort(StringComparer.OrdinalIgnoreCase);
+                    CboProdFamilia.ItemsSource = lista;
+                }
+                CboProdFamilia.Text = fam;
+            }
+            if (_productoEnEdicion.Id > 0)
+            {
+                _productoEnEdicion.Familia = fam;
+                DatabaseService.GuardarProducto(_productoEnEdicion);
+                CargarTodoElSistema(conservarPosicionCatalogo: true);
+                System.Windows.MessageBox.Show(win, $"Se asignó y guardó la familia '{fam}' en el producto {_productoEnEdicion.CodigoInterno}.", "Familia Asignada", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            win.Close();
+        };
+
+        btnAplicarRenombre.Click += (_, _) =>
+        {
+            string origen = (cboFamOrigen.SelectedItem as string)?.Trim() ?? string.Empty;
+            string destino = txtFamDestino.Text.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(origen) || string.IsNullOrWhiteSpace(destino))
+            {
+                System.Windows.MessageBox.Show(win, "Seleccione la familia actual y escriba el nuevo nombre.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            int afectados = DatabaseService.RenombrarFamiliaMasivo(origen, destino);
+            if (CboProdFamilia != null && string.Equals(CboProdFamilia.Text, origen, StringComparison.OrdinalIgnoreCase))
+            {
+                CboProdFamilia.Text = destino;
+            }
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            System.Windows.MessageBox.Show(win, $"Se actualizaron {afectados} productos de la familia '{origen}' a '{destino}'.", "Familia Actualizada", MessageBoxButton.OK, MessageBoxImage.Information);
+            win.Close();
+        };
+
+        win.Content = root;
+        win.ShowDialog();
+    }
+
     private void CboProdCategoria_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (CboProdCategoria?.SelectedItem is Categoria cat)
@@ -1102,6 +1332,12 @@ public partial class MainWindow : FluentWindow
         if (!string.IsNullOrWhiteSpace(info.CapacidadElectrica)) TxtProdCapacidadElectrica.Text = info.CapacidadElectrica;
         if (!string.IsNullOrWhiteSpace(info.Especificacion1)) TxtProdEspecificacion1.Text = info.Especificacion1;
         if (!string.IsNullOrWhiteSpace(info.Especificacion2)) TxtProdEspecificacion2.Text = info.Especificacion2;
+        if (CboProdFamilia != null)
+        {
+            string famSugerida = DatabaseService.ExtraerFamiliaSugerida(nombre);
+            if (!string.IsNullOrWhiteSpace(famSugerida))
+                CboProdFamilia.Text = famSugerida;
+        }
     }
 
     private void CboCarritoSolicitudDestino_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1207,6 +1443,12 @@ public partial class MainWindow : FluentWindow
             CboProdCategoria.SelectedItem = cat;
             ActualizarEtiquetasFichaPorCategoria(cat);
         }
+        if (CboProdFamilia != null)
+        {
+            CboProdFamilia.Text = !string.IsNullOrWhiteSpace(p.Familia)
+                ? p.Familia
+                : DatabaseService.ExtraerFamiliaSugerida(p.Nombre);
+        }
 
         ImgPreviewProducto.Source = ImageStandardizerService.CargarImagenSegura(p.ImagenRuta);
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(p.CodigoEfectivo);
@@ -1221,6 +1463,7 @@ public partial class MainWindow : FluentWindow
         TxtProdCodigoInterno.Text = sig;
         TxtProdCodigoBarras.Text = sig;
         TxtProdNombre.Text = string.Empty;
+        if (CboProdFamilia != null) CboProdFamilia.Text = string.Empty;
         TxtProdMarca.Text = string.Empty;
         TxtProdModelo.Text = string.Empty;
         TxtProdMedidas.Text = string.Empty;
@@ -1327,6 +1570,9 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.Nombre = TxtProdNombre.Text.Trim();
         _productoEnEdicion.CategoriaId = (CboProdCategoria.SelectedItem as Categoria)?.Id ?? 1;
         _productoEnEdicion.Marca = TxtProdMarca.Text.Trim();
+        _productoEnEdicion.Familia = !string.IsNullOrWhiteSpace(CboProdFamilia?.Text)
+            ? CboProdFamilia.Text.Trim().ToUpperInvariant()
+            : DatabaseService.ExtraerFamiliaSugerida(_productoEnEdicion.Nombre);
         _productoEnEdicion.Modelo = TxtProdModelo.Text.Trim();
         _productoEnEdicion.Medidas = TxtProdMedidas.Text.Trim();
         _productoEnEdicion.CapacidadElectrica = TxtProdCapacidadElectrica.Text.Trim();
@@ -1523,6 +1769,7 @@ public partial class MainWindow : FluentWindow
                     p.CodigoBarras.Contains(qNorm, StringComparison.OrdinalIgnoreCase))) ||
                 terminos.All(t =>
                     p.Nombre.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    p.Familia.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                     p.CodigoInterno.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                     p.CodigoBarras.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                     p.CategoriaNombre.Contains(t, StringComparison.OrdinalIgnoreCase) ||
@@ -1536,7 +1783,9 @@ public partial class MainWindow : FluentWindow
             ).ToList();
 
             if (TxtContadorFiltroProductoSol != null)
-                TxtContadorFiltroProductoSol.Text = $"{filtrados.Count} coincidencias";
+                TxtContadorFiltroProductoSol.Text = filtrados.Count > 0
+                    ? $"{filtrados.Count} coincidencias (o clic en '➕ Concepto Abierto')"
+                    : "0 en catálogo (clic en '➕ Concepto Abierto' o Enter)";
         }
 
         CboSolProductoAgregar.ItemsSource = filtrados;
@@ -1585,6 +1834,15 @@ public partial class MainWindow : FluentWindow
             {
                 AgregarProductoAPartidasSolicitud(prodSel, cant, "Buscador de Solicitud");
                 TxtBuscarProductoSolicitud.SelectAll();
+                e.Handled = true;
+                return;
+            }
+
+            // Si no existe en el catálogo pero el usuario escribió un concepto y presionó Enter, agregarlo como Concepto Abierto
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                AgregarConceptoLibreAPartidasSolicitud(raw, cant, "Concepto Abierto (Buscador)");
+                TxtBuscarProductoSolicitud.Clear();
                 e.Handled = true;
             }
         }
@@ -1666,6 +1924,8 @@ public partial class MainWindow : FluentWindow
                 ProductoId = p.ProductoId,
                 ProductoCodigo = p.ProductoCodigo,
                 ProductoNombre = p.ProductoNombre,
+                DescripcionLibre = p.DescripcionLibre,
+                Familia = p.Familia,
                 UnidadCompra = p.UnidadCompra,
                 CantidadSolicitada = p.CantidadSolicitada,
                 StockActualAlmacen = p.StockActualAlmacen,
@@ -1849,6 +2109,7 @@ public partial class MainWindow : FluentWindow
                 ProductoId = prod.Id,
                 ProductoCodigo = prod.CodigoInterno,
                 ProductoNombre = prod.Nombre,
+                Familia = prod.Familia,
                 UnidadCompra = prod.UnidadCompra,
                 CantidadSolicitada = cant,
                 StockActualAlmacen = prod.StockActual,
@@ -1859,13 +2120,78 @@ public partial class MainWindow : FluentWindow
         PersistirCambioSiSolicitudEnEdicion();
     }
 
-    private void BtnAgregarPartidaSolicitud_Click(object sender, RoutedEventArgs e)
+    private void AgregarConceptoLibreAPartidasSolicitud(string concepto, decimal cant, string notas = "Concepto Abierto")
     {
-        if (CboSolProductoAgregar.SelectedItem is not Producto prod)
+        string desc = concepto.Trim();
+        if (string.IsNullOrWhiteSpace(desc))
             return;
 
+        if (cant <= 0) cant = 1m;
+        if (!VerificarPermisoEdicionSolicitudActual()) return;
+
+        var existente = _partidasNuevaSolicitud.FirstOrDefault(x =>
+            x.ProductoId <= 0 &&
+            string.Equals(x.ProductoNombre, desc, StringComparison.OrdinalIgnoreCase));
+
+        if (existente != null)
+        {
+            existente.CantidadSolicitada += cant;
+            DgPartidasNuevaSolicitud.Items.Refresh();
+        }
+        else
+        {
+            string famSug = DatabaseService.ExtraerFamiliaSugerida(desc);
+            _partidasNuevaSolicitud.Add(new SolicitudPartida
+            {
+                ProductoId = 0,
+                ProductoCodigo = "CONCEPTO",
+                ProductoNombre = desc.ToUpperInvariant(),
+                DescripcionLibre = desc.ToUpperInvariant(),
+                Familia = famSug,
+                UnidadCompra = "Pieza",
+                CantidadSolicitada = cant,
+                StockActualAlmacen = 0m,
+                NotasPartida = notas
+            });
+        }
+
+        PersistirCambioSiSolicitudEnEdicion();
+    }
+
+    private void BtnAgregarPartidaSolicitud_Click(object sender, RoutedEventArgs e)
+    {
         decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
-        AgregarProductoAPartidasSolicitud(prod, cant, "Manual");
+        if (CboSolProductoAgregar.SelectedItem is Producto prod)
+        {
+            AgregarProductoAPartidasSolicitud(prod, cant, "Manual");
+            return;
+        }
+
+        string texto = TxtBuscarProductoSolicitud?.Text?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(texto))
+        {
+            AgregarConceptoLibreAPartidasSolicitud(texto, cant, "Concepto Abierto");
+            TxtBuscarProductoSolicitud?.Clear();
+        }
+    }
+
+    private void BtnAgregarConceptoLibreSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        string texto = TxtBuscarProductoSolicitud?.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            System.Windows.MessageBox.Show(this,
+                "Escriba primero en el buscador el concepto genérico o artículo nuevo que desea solicitar (por ejemplo: 'Jabón', 'Gas R-32', 'Toalla microfibra') y luego presione '➕ Concepto Abierto'.\n\nAsí se agregará a la solicitud para cotizarlo con proveedores sin ensuciar el catálogo hasta concretar la compra.",
+                "Escriba el Concepto Abierto",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            TxtBuscarProductoSolicitud?.Focus();
+            return;
+        }
+
+        decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
+        AgregarConceptoLibreAPartidasSolicitud(texto, cant, "Concepto Abierto (Se dará de alta al comprar)");
+        TxtBuscarProductoSolicitud?.Clear();
     }
 
     private void BtnDisminuirPartidaSolicitud_Click(object sender, RoutedEventArgs e)
@@ -2123,12 +2449,19 @@ public partial class MainWindow : FluentWindow
                         ProductoId = p.Id,
                         ProductoCodigo = p.CodigoInterno,
                         ProductoNombre = p.Nombre,
+                        Familia = p.Familia,
                         UnidadCompra = p.UnidadCompra,
                         CantidadSolicitada = cant,
                         StockActualAlmacen = p.StockActual,
                         NotasPartida = $"WhatsApp: {l}"
                     });
                 }
+                agregados++;
+            }
+            else if (!string.IsNullOrWhiteSpace(textoBusqueda))
+            {
+                // Si no coincide con ningún producto del catálogo, agregar como Concepto Abierto
+                AgregarConceptoLibreAPartidasSolicitud(textoBusqueda, cant, $"WhatsApp (Concepto Abierto): {l}");
                 agregados++;
             }
         }
@@ -2323,7 +2656,7 @@ public partial class MainWindow : FluentWindow
         if (CboCompSolicitud.SelectedItem is not Solicitud sol)
             return;
 
-        int prevProdId = (DgComparativa.SelectedItem as CotizacionRenglonComparativo)?.ProductoId ?? 0;
+        int prevPartidaId = (DgComparativa.SelectedItem as CotizacionRenglonComparativo)?.SolicitudPartidaId ?? 0;
 
         TxtCompInfoSolicitud.Text = $"Solicitud: {sol.Folio} | Depto: {sol.DepartamentoNombre} | Solicitante: {sol.EncargadoNombre} | Proyecto: {sol.ProyectoNombre} | Estatus: {sol.Estatus}";
         _renglonesComparativa.Clear();
@@ -2336,8 +2669,11 @@ public partial class MainWindow : FluentWindow
         {
             productos.TryGetValue(part.ProductoId, out var pObj);
             decimal ultimoCostoConIva = pObj?.UltimoCostoCompra ?? 0m;
+            string familiaEfectiva = !string.IsNullOrWhiteSpace(part.Familia)
+                ? part.Familia
+                : (!string.IsNullOrWhiteSpace(pObj?.Familia) ? pObj.Familia : DatabaseService.ExtraerFamiliaSugerida(part.ProductoNombre));
 
-            var (sugerencias, refHist) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(part.ProductoId);
+            var (sugerencias, refHist) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(part.ProductoId, part.ProductoNombre, familiaEfectiva);
 
             int pv1 = part.Proveedor1Id;
             decimal pr1 = part.PrecioSinIva1;
@@ -2391,6 +2727,8 @@ public partial class MainWindow : FluentWindow
                 ProductoId = part.ProductoId,
                 ProductoCodigo = part.ProductoCodigo,
                 ProductoNombre = part.ProductoNombre,
+                DescripcionLibre = part.DescripcionLibre,
+                Familia = familiaEfectiva,
                 UnidadCompra = part.UnidadCompra,
                 Cantidad = part.CantidadSolicitada,
                 StockActualAlmacen = part.StockActualAlmacen,
@@ -2434,7 +2772,7 @@ public partial class MainWindow : FluentWindow
 
         if (_renglonesComparativa.Count > 0)
         {
-            var aSeleccionar = _renglonesComparativa.FirstOrDefault(r => r.ProductoId == prevProdId) ?? _renglonesComparativa[0];
+            var aSeleccionar = _renglonesComparativa.FirstOrDefault(r => r.SolicitudPartidaId == prevPartidaId) ?? _renglonesComparativa[0];
             DgComparativa.SelectedItem = aSeleccionar;
             CargarProductoEnTarjetasComparativa(aSeleccionar);
         }
@@ -2465,13 +2803,23 @@ public partial class MainWindow : FluentWindow
                 TxtCompProdSubtitulo.Text = "No hay producto seleccionado.";
                 TxtCompProdHistorial.Text = "";
                 TxtCompProdCantidad.Text = "1";
+                if (CboCompReferenciasSimilares != null) CboCompReferenciasSimilares.ItemsSource = null;
                 return;
             }
 
+            string famBadge = !string.IsNullOrWhiteSpace(r.Familia) ? $" | Familia: {r.Familia}" : string.Empty;
             TxtCompProdTitulo.Text = $"{r.ProductoCodigo} — {r.ProductoNombre}";
-            TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra} | Stock actual en almacén: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")}";
+            TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")}";
             TxtCompProdHistorial.Text = r.ReferenciaHistorica;
             TxtCompProdCantidad.Text = r.Cantidad.ToString("0.##", CultureInfo.InvariantCulture);
+
+            if (CboCompReferenciasSimilares != null)
+            {
+                var refsSimilares = DatabaseService.ObtenerReferenciasSimilaresParaComparativa(r.ProductoId, r.ProductoNombre, r.Familia);
+                CboCompReferenciasSimilares.ItemsSource = refsSimilares;
+                if (refsSimilares.Count > 0)
+                    CboCompReferenciasSimilares.SelectedIndex = 0;
+            }
 
             var proveedores = CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores();
             CboCompProv1.SelectedItem = r.Proveedor1Id > 0 ? proveedores.FirstOrDefault(p => p.Id == r.Proveedor1Id) : null;
@@ -2555,8 +2903,8 @@ public partial class MainWindow : FluentWindow
 
         r.NumeroOpcionesVisibles++;
 
-        // Si existen más sugerencias históricas para este producto, podemos sugerir la siguiente opción histórica
-        var (sugerencias, _) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(r.ProductoId);
+        // Si existen más sugerencias históricas para este producto o su familia, podemos sugerir la siguiente opción histórica
+        var (sugerencias, _) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(r.ProductoId, r.ProductoNombre, r.Familia);
         var provDict = (CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores()).ToDictionary(p => p.Id);
 
         if (r.NumeroOpcionesVisibles == 2 && r.Proveedor2Id == 0 && sugerencias.Count >= 2)
@@ -2588,6 +2936,75 @@ public partial class MainWindow : FluentWindow
 
         CargarProductoEnTarjetasComparativa(r);
         RecalcularTotalesComparativa();
+    }
+
+    private void BtnAplicarReferenciaSimilarOp1_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+            return;
+        if (CboCompReferenciasSimilares?.SelectedItem is not ReferenciaSimilarHistorica refSim)
+        {
+            System.Windows.MessageBox.Show(this, "No hay referencias históricas de compras similares para este artículo.", "Sin referencias similares", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var provDict = (CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores()).ToDictionary(p => p.Id);
+        r.Proveedor1Id = refSim.ProveedorId;
+        r.Proveedor1Nombre = provDict.TryGetValue(refSim.ProveedorId, out var p1) ? p1.NombreMostrar : refSim.ProveedorNombre;
+        r.PrecioSinIva1 = refSim.PrecioSinIva;
+        r.DiasEntrega1 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 2;
+        r.NotasCotizacion1 = refSim.ReferenciaOrigen;
+
+        DatabaseService.GuardarCotizacionPartida(r);
+        CargarProductoEnTarjetasComparativa(r);
+        RecalcularTotalesComparativa();
+        DgComparativa.Items.Refresh();
+    }
+
+    private void BtnAplicarReferenciaSimilarNuevaOp_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+            return;
+        if (CboCompReferenciasSimilares?.SelectedItem is not ReferenciaSimilarHistorica refSim)
+        {
+            System.Windows.MessageBox.Show(this, "No hay referencias históricas de compras similares para este artículo.", "Sin referencias similares", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var provDict = (CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores()).ToDictionary(p => p.Id);
+        string provNombre = provDict.TryGetValue(refSim.ProveedorId, out var pObj) ? pObj.NombreMostrar : refSim.ProveedorNombre;
+
+        if (r.Proveedor1Id == 0 && r.PrecioSinIva1 <= 0)
+        {
+            r.Proveedor1Id = refSim.ProveedorId;
+            r.Proveedor1Nombre = provNombre;
+            r.PrecioSinIva1 = refSim.PrecioSinIva;
+            r.DiasEntrega1 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 2;
+            r.NotasCotizacion1 = refSim.ReferenciaOrigen;
+        }
+        else if (r.NumeroOpcionesVisibles < 2 || (r.Proveedor2Id == 0 && r.PrecioSinIva2 <= 0))
+        {
+            if (r.NumeroOpcionesVisibles < 2) r.NumeroOpcionesVisibles = 2;
+            r.Proveedor2Id = refSim.ProveedorId;
+            r.Proveedor2Nombre = provNombre;
+            r.PrecioSinIva2 = refSim.PrecioSinIva;
+            r.DiasEntrega2 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 3;
+            r.NotasCotizacion2 = refSim.ReferenciaOrigen;
+        }
+        else
+        {
+            r.NumeroOpcionesVisibles = 3;
+            r.Proveedor3Id = refSim.ProveedorId;
+            r.Proveedor3Nombre = provNombre;
+            r.PrecioSinIva3 = refSim.PrecioSinIva;
+            r.DiasEntrega3 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 1;
+            r.NotasCotizacion3 = refSim.ReferenciaOrigen;
+        }
+
+        DatabaseService.GuardarCotizacionPartida(r);
+        CargarProductoEnTarjetasComparativa(r);
+        RecalcularTotalesComparativa();
+        DgComparativa.Items.Refresh();
     }
 
     private void BtnQuitarOpcion2Comp_Click(object sender, RoutedEventArgs e)

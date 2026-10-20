@@ -61,6 +61,7 @@ public class Producto : INotifyPropertyChanged
     public string Descripcion { get; set; } = string.Empty;
     public int CategoriaId { get; set; }
     public string CategoriaNombre { get; set; } = string.Empty;
+    public string Familia { get; set; } = string.Empty;       // Ej. Jabón y Limpiadores, Gas Refrigerante R-32, Cinta de Aislar
     public string Marca { get; set; } = string.Empty;
     public string Modelo { get; set; } = string.Empty;
     public string Medidas { get; set; } = string.Empty;
@@ -101,6 +102,7 @@ public class Producto : INotifyPropertyChanged
         get
         {
             var partes = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Familia)) partes.Add($"[{Familia}]");
             if (!string.IsNullOrWhiteSpace(Marca)) partes.Add(Marca);
             if (!string.IsNullOrWhiteSpace(Modelo)) partes.Add($"Mod: {Modelo}");
             if (!string.IsNullOrWhiteSpace(Medidas)) partes.Add(Medidas);
@@ -196,6 +198,9 @@ public class SolicitudPartida
     public int ProductoId { get; set; }
     public string ProductoCodigo { get; set; } = string.Empty;
     public string ProductoNombre { get; set; } = string.Empty;
+    public string DescripcionLibre { get; set; } = string.Empty;
+    public string Familia { get; set; } = string.Empty;
+    public bool EsConceptoLibre => ProductoId <= 0;
     public string UnidadCompra { get; set; } = "Pieza";
     public decimal CantidadSolicitada { get; set; } = 1m;
     public decimal StockActualAlmacen { get; set; }
@@ -246,6 +251,8 @@ public class CotizacionRenglonComparativo
     public int ProductoId { get; set; }
     public string ProductoCodigo { get; set; } = string.Empty;
     public string ProductoNombre { get; set; } = string.Empty;
+    public string DescripcionLibre { get; set; } = string.Empty;
+    public string Familia { get; set; } = string.Empty;
     public string UnidadCompra { get; set; } = "Pieza";
     public decimal Cantidad { get; set; } = 1m;
     public decimal StockActualAlmacen { get; set; }
@@ -423,6 +430,7 @@ public class OrdenCompraPartida
     public int ProductoId { get; set; }
     public string ProductoCodigo { get; set; } = string.Empty;
     public string ProductoNombre { get; set; } = string.Empty;
+    public string DescripcionLibre { get; set; } = string.Empty;
     public string UnidadCompra { get; set; } = "Pieza";
     public string UnidadAlmacen { get; set; } = "Pieza";
     public decimal FactorConversion { get; set; } = 1m;
@@ -639,4 +647,20 @@ public class PartidaCompraSinFactura
     public decimal ImporteSinIva => ImporteSubtotal;
     public decimal Importe => ImporteSubtotal;
     public decimal ImporteConIva => Math.Round(ImporteSubtotal * 1.16m, 2);
+}
+
+public class ReferenciaSimilarHistorica
+{
+    public int ProductoId { get; set; }
+    public string ProductoCodigo { get; set; } = string.Empty;
+    public string ProductoNombre { get; set; } = string.Empty;
+    public string Familia { get; set; } = string.Empty;
+    public int ProveedorId { get; set; }
+    public string ProveedorNombre { get; set; } = string.Empty;
+    public decimal PrecioSinIva { get; set; }
+    public decimal PrecioConIva => Math.Round(PrecioSinIva * 1.16m, 2);
+    public int DiasEntrega { get; set; } = 2;
+    public string ReferenciaOrigen { get; set; } = string.Empty;
+    public string EtiquetaCombo => $"{ProveedorNombre} | ${PrecioSinIva:N2} s/IVA (${PrecioConIva:N2} c/IVA) — [{ProductoCodigo}] {ProductoNombre}";
+    public override string ToString() => EtiquetaCombo;
 }
