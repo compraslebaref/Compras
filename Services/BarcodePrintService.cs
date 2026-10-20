@@ -167,9 +167,8 @@ public static class BarcodePrintService
             (idx + 1).ToString(),
             p.ProductoCodigo,
             p.ProductoNombre,
-            $"{p.CantidadEntregada:0.##} {p.UnidadAlmacen}",
-            $"${p.CostoUnitarioAlmacen:N2}",
-            $"${p.ImporteCosto:N2}"
+            $"{p.CantidadEntregada:0.##}",
+            p.UnidadAlmacen
         }).ToList();
 
         var metadatos = new List<(string etiq, string val)>
@@ -185,9 +184,13 @@ public static class BarcodePrintService
             folioCodigoBarras: sal.Folio,
             fecha: sal.Fecha,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Descripción", "Cantidad", "Costo Unit.", "Importe" },
+            encabezadosTabla: new[] { "#", "Código", "Descripción", "Cantidad", "Unidad" },
             filasTabla: filas,
-            totales: new List<(string, string)> { ("Total:", $"${sal.CostoTotalEstimado:N2}") },
+            totales: new List<(string, string)>
+            {
+                ("Total Partidas:", sal.Partidas.Count.ToString()),
+                ("Total Unidades:", $"{sal.Partidas.Sum(x => x.CantidadEntregada):0.##}")
+            },
             notas: sal.Notas,
             firmaIzquierda: $"Aprobó: {sal.DepartamentoNombre}",
             firmaDerecha: $"Recibió: {sal.PersonaRecibeEfectiva}");
