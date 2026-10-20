@@ -296,6 +296,7 @@ public class CotizacionRenglonComparativo
 
     // Proveedor ganador elegido para este producto (0 = Sin decidir, 1 = Opción 1, 2 = Opción 2, 3 = Opción 3)
     public int ProveedorGanadorIndice { get; set; }
+    public int NumeroOpcionesVisibles { get; set; } = 1;
     public int OrdenCompraId { get; set; }
     public string OrdenCompraFolio { get; set; } = string.Empty;
     public bool TieneOcGenerada => OrdenCompraId > 0 || !string.IsNullOrWhiteSpace(OrdenCompraFolio);
@@ -397,9 +398,21 @@ public class OrdenCompra
     public decimal Subtotal { get; set; }
     public decimal Iva { get; set; }
     public decimal TotalConIva { get; set; }
-    public string Estatus { get; set; } = "Emitida"; // Emitida, Recibida Parcialmente, Recibida Completa, Cancelada
+    public string Estatus { get; set; } = "Emitida"; // Emitida, Recibida Parcialmente, Recibida Completa, Cerrada Parcial (Admin), Cancelada
     public string Notas { get; set; } = string.Empty;
     public List<OrdenCompraPartida> Partidas { get; set; } = new();
+    public decimal TotalUnidadesPedidas => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadPedida) : 0m;
+    public decimal TotalUnidadesRecibidas => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadRecibida) : 0m;
+    public string AvanceRecepcionTexto
+    {
+        get
+        {
+            if (TotalUnidadesPedidas <= 0)
+                return Estatus == "Recibida Completa" ? "100%" : "0%";
+            decimal pct = Math.Min(100m, Math.Round((TotalUnidadesRecibidas / TotalUnidadesPedidas) * 100m, 0));
+            return $"{pct:0}% ({TotalUnidadesRecibidas:0.##}/{TotalUnidadesPedidas:0.##})";
+        }
+    }
     public override string ToString() => Id == 0 ? Folio : $"{Folio} - {ProveedorNombre} ({Estatus}) - ${TotalConIva:N2}";
 }
 
@@ -435,6 +448,7 @@ public class EntradaAlmacen
     public string TipoEntrada { get; set; } = "Recepción OC"; // Recepción OC, Recepción Parcial OC, Entrada Directa / Ajuste
     public string FacturaUuid { get; set; } = string.Empty;
     public string Notas { get; set; } = string.Empty;
+    public string FacturaReferencia => !string.IsNullOrWhiteSpace(FacturaUuid) ? FacturaUuid : Notas;
     public List<EntradaPartida> Partidas { get; set; } = new();
 }
 
@@ -462,6 +476,8 @@ public class SalidaAlmacen
     public string DepartamentoNombre { get; set; } = string.Empty;
     public int EncargadoId { get; set; }
     public string EncargadoNombre { get; set; } = string.Empty;
+    public string PersonaRecibe { get; set; } = string.Empty;
+    public string PersonaRecibeEfectiva => !string.IsNullOrWhiteSpace(PersonaRecibe) ? PersonaRecibe : EncargadoNombre;
     public int ProyectoId { get; set; }
     public string ProyectoNombre { get; set; } = string.Empty;
     public decimal CostoTotalEstimado { get; set; }
@@ -488,15 +504,19 @@ public class PrestamoHerramienta
     public string Folio { get; set; } = string.Empty; // PRE-2026-0001
     public string FechaSalida { get; set; } = string.Empty;
     public string FechaDevolucion { get; set; } = string.Empty;
+    public string FechaCompromiso { get; set; } = string.Empty;
     public int DepartamentoId { get; set; }
     public string DepartamentoNombre { get; set; } = string.Empty;
     public int EncargadoId { get; set; }
     public string EncargadoNombre { get; set; } = string.Empty;
+    public string PersonaRecibe { get; set; } = string.Empty;
+    public string PersonaRecibeEfectiva => !string.IsNullOrWhiteSpace(PersonaRecibe) ? PersonaRecibe : EncargadoNombre;
     public int ProyectoId { get; set; }
     public string ProyectoNombre { get; set; } = string.Empty;
     public string Estatus { get; set; } = "Activo"; // Activo, Devuelto Completo, Devuelto con Incidencia
     public string Notas { get; set; } = string.Empty;
     public List<PrestamoPartida> Partidas { get; set; } = new();
+    public string ResumenHerramientas => Partidas.Count > 0 ? string.Join(", ", Partidas.Select(p => $"{p.CodigoIndividual} {p.ProductoNombre}")) : Notas;
 }
 
 public class PrestamoPartida
@@ -533,6 +553,11 @@ public class FacturaXml
     public int? ProyectoId { get; set; }
     public string ProyectoNombre { get; set; } = string.Empty;
     public string RutaArchivoXml { get; set; } = string.Empty;
+    public bool EsNotaSinFactura =>
+        Uuid.StartsWith("NOTA-", StringComparison.OrdinalIgnoreCase) ||
+        Uuid.StartsWith("SIN-FACTURA", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(RutaArchivoXml, "SIN_FACTURA", StringComparison.OrdinalIgnoreCase);
+    public string TipoComprobante => EsNotaSinFactura ? "Nota / Sin Factura" : "Factura CFDI XML";
     public List<FacturaConcepto> Conceptos { get; set; } = new();
 }
 
@@ -551,4 +576,67 @@ public class FacturaConcepto
     public decimal TotalConIva => Math.Round(Importe + IvaConcepto, 2);
     public int? ProductoIdVinculado { get; set; }
     public string ProductoVinculadoNombre { get; set; } = string.Empty;
+}
+
+public class EventoCalendario
+{
+    public int Id { get; set; }
+    public string Fecha { get; set; } = string.Empty; // yyyy-MM-dd
+    public string Titulo { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+    public string Categoria { get; set; } = "Recordatorio"; // Recordatorio, Entrega OC, Herramienta, Vencimiento Pago, Inventario
+    public string Prioridad { get; set; } = "Normal";       // Alta, Normal, Baja
+    public bool Completado { get; set; }
+    public string Notas { get; set; } = string.Empty;
+    public bool EsAutomatico { get; set; }
+    public bool EsManual => !EsAutomatico;
+    public string OrigenFolio { get; set; } = string.Empty;
+    public string ReferenciaFolio
+    {
+        get => !string.IsNullOrWhiteSpace(OrigenFolio) ? OrigenFolio : string.Empty;
+        set => OrigenFolio = value;
+    }
+    public string EstadoTiempoTexto { get; set; } = string.Empty;
+    public string EstatusMostrar => Completado ? "✔ Completado" : EstadoTiempoTexto;
+}
+
+public class PuntoHistorialCompraProducto
+{
+    public int ProductoId { get; set; }
+    public string ProductoCodigo { get; set; } = string.Empty;
+    public string ProductoNombre { get; set; } = string.Empty;
+    public DateTime Fecha { get; set; } = DateTime.Now;
+    public string FechaTexto { get; set; } = string.Empty;
+    public DateTime FechaOrden { get; set; }
+    public int ProveedorId { get; set; }
+    public string ProveedorNombre { get; set; } = string.Empty;
+    public string FolioDocumento { get; set; } = string.Empty;
+    public string TipoDocumento { get; set; } = "OC";
+    public decimal Cantidad { get; set; }
+    public string Unidad { get; set; } = "Pieza";
+    public decimal PrecioUnitarioSinIva { get; set; }
+    public decimal PrecioUnitarioConIva => Math.Round(PrecioUnitarioSinIva * 1.16m, 2);
+    public decimal ImporteSinIva => Math.Round(Cantidad * PrecioUnitarioSinIva, 2);
+    public decimal ImporteConIva => Math.Round(ImporteSinIva * 1.16m, 2);
+}
+
+public class PartidaCompraSinFactura
+{
+    public int ProductoId { get; set; }
+    public string ProductoCodigo { get; set; } = string.Empty;
+    public string ProductoNombre { get; set; } = string.Empty;
+    public string UnidadCompra { get; set; } = "Pieza";
+    public string Unidad => UnidadCompra;
+    public decimal Cantidad { get; set; } = 1m;
+    public decimal PrecioUnitarioSinIva { get; set; }
+    public decimal PrecioUnitario
+    {
+        get => PrecioUnitarioSinIva;
+        set => PrecioUnitarioSinIva = value;
+    }
+    public decimal PrecioUnitarioConIva => Math.Round(PrecioUnitarioSinIva * 1.16m, 2);
+    public decimal ImporteSubtotal => Math.Round(Cantidad * PrecioUnitarioSinIva, 2);
+    public decimal ImporteSinIva => ImporteSubtotal;
+    public decimal Importe => ImporteSubtotal;
+    public decimal ImporteConIva => Math.Round(ImporteSubtotal * 1.16m, 2);
 }

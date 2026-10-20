@@ -174,8 +174,8 @@ public static class BarcodePrintService
 
         var metadatos = new List<(string etiq, string val)>
         {
-            ("Departamento:", sal.DepartamentoNombre),
-            ("Recibe:", sal.EncargadoNombre),
+            ("Depto. que Aprueba:", sal.DepartamentoNombre),
+            ("Persona que Recibe:", sal.PersonaRecibeEfectiva),
             ("Proyecto:", sal.ProyectoNombre)
         };
 
@@ -189,8 +189,8 @@ public static class BarcodePrintService
             filasTabla: filas,
             totales: new List<(string, string)> { ("Total:", $"${sal.CostoTotalEstimado:N2}") },
             notas: sal.Notas,
-            firmaIzquierda: "Entregó Almacén",
-            firmaDerecha: $"Recibió: {sal.EncargadoNombre}");
+            firmaIzquierda: $"Aprobó: {sal.DepartamentoNombre}",
+            firmaDerecha: $"Recibió: {sal.PersonaRecibeEfectiva}");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Salida {sal.Folio}", hoja);
     }
@@ -210,9 +210,10 @@ public static class BarcodePrintService
 
         var metadatos = new List<(string etiq, string val)>
         {
-            ("Departamento:", pre.DepartamentoNombre),
-            ("Responsable:", pre.EncargadoNombre),
+            ("Depto. que Aprueba:", pre.DepartamentoNombre),
+            ("Persona que Recibe:", pre.PersonaRecibeEfectiva),
             ("Proyecto:", pre.ProyectoNombre),
+            ("Fecha Compromiso:", string.IsNullOrWhiteSpace(pre.FechaCompromiso) ? "N/A" : pre.FechaCompromiso),
             ("Estatus:", pre.Estatus)
         };
 
@@ -226,8 +227,8 @@ public static class BarcodePrintService
             filasTabla: filas,
             totales: new List<(string, string)> { ("Total Herramientas:", pre.Partidas.Count.ToString()) },
             notas: pre.Notas,
-            firmaIzquierda: $"Recibió: {pre.EncargadoNombre}",
-            firmaDerecha: "Devolución en Almacén");
+            firmaIzquierda: $"Recibió: {pre.PersonaRecibeEfectiva}",
+            firmaDerecha: $"Aprobó: {pre.DepartamentoNombre}");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Préstamo {pre.Folio}", hoja);
     }

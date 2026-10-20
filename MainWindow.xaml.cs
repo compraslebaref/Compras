@@ -14,16 +14,21 @@ using SistemaComprasAlmacen.Data;
 using SistemaComprasAlmacen.Models;
 using SistemaComprasAlmacen.Services;
 using System.Windows.Threading;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 using MessageBoxButton = System.Windows.MessageBoxButton;
+using TextBlock = System.Windows.Controls.TextBlock;
 
 namespace SistemaComprasAlmacen;
 
 public partial class MainWindow : FluentWindow
 {
     private const int CatalogoTamanoLote = 48;
-    private bool _temaOscuro = false;
+    private bool _sesionAdminActiva = false;
+    private string? _filtroFechaAgendaDashboard = null;
+    private bool _sincronizandoProductoAnalisis = false;
     private Producto _productoEnEdicion = new();
     private List<Producto> _cacheProductos = new();
     private List<Producto> _catalogoFiltrado = new();
@@ -43,6 +48,7 @@ public partial class MainWindow : FluentWindow
     private readonly ObservableCollection<SolicitudPartida> _partidasNuevaSolicitud = new();
     private readonly ObservableCollection<CotizacionRenglonComparativo> _renglonesComparativa = new();
     private readonly ObservableCollection<SalidaPartida> _partidasSalidaPos = new();
+    private readonly ObservableCollection<PartidaCompraSinFactura> _partidasCompraSinFactura = new();
     private List<PrestamoVistaFila> _todosPrestamosFilas = new();
     private List<MovimientoAlmacenFila> _todosMovimientosAlmacen = new();
     private FacturaXml? _facturaXmlEnPantalla;
@@ -56,6 +62,7 @@ public partial class MainWindow : FluentWindow
         public string FolioVale { get; set; } = string.Empty;
         public string CodigoIndividual { get; set; } = string.Empty;
         public string HerramientaDescripcion { get; set; } = string.Empty;
+        public string DepartamentoNombre { get; set; } = string.Empty;
         public string EncargadoNombre { get; set; } = string.Empty;
         public string ProyectoNombre { get; set; } = string.Empty;
         public string EstadoDevolucion { get; set; } = string.Empty;
@@ -78,10 +85,17 @@ public partial class MainWindow : FluentWindow
     {
         InitializeComponent();
 
+        // Fijar tema claro (Blanco) permanentemente
+        ApplicationThemeManager.Apply(ApplicationTheme.Light, WindowBackdropType.Mica, false);
+
         IcCatalogoVisual.ItemsSource = _catalogoVisible;
         DgPartidasNuevaSolicitud.ItemsSource = _partidasNuevaSolicitud;
         DgComparativa.ItemsSource = _renglonesComparativa;
         DgPartidasSalidaPos.ItemsSource = _partidasSalidaPos;
+        DgPartidasCompraSinFactura.ItemsSource = _partidasCompraSinFactura;
+
+        if (DpEventoFecha != null) DpEventoFecha.SelectedDate = DateTime.Today;
+        if (DpPreFechaCompromiso != null) DpPreFechaCompromiso.SelectedDate = DateTime.Today.AddDays(7);
 
         _timerBusquedaCatalogo = new DispatcherTimer
         {
@@ -179,21 +193,44 @@ public partial class MainWindow : FluentWindow
         if (CboSolProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSolProyecto.SelectedIndex = 0;
         FiltrarComboProductoSolicitud();
 
-        // Comparativa proveedores
+        // Comparativa proveedores (no preseleccionar proveedores por defecto si no hay histórico)
         CboCompProv1.ItemsSource = proveedores;
         CboCompProv2.ItemsSource = proveedores;
         CboCompProv3.ItemsSource = proveedores;
-        if (proveedores.Count >= 1 && CboCompProv1.SelectedIndex < 0) CboCompProv1.SelectedIndex = 0;
-        if (proveedores.Count >= 2 && CboCompProv2.SelectedIndex < 0) CboCompProv2.SelectedIndex = 1;
-        if (proveedores.Count >= 3 && CboCompProv3.SelectedIndex < 0) CboCompProv3.SelectedIndex = 2;
 
-        // Almacén POS
+        // Almacén POS (Salida de Material y Préstamo de Herramienta)
         CboSalDepartamento.ItemsSource = deptos;
         if (CboSalDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSalDepartamento.SelectedIndex = 0;
         CboSalProyecto.ItemsSource = proyectos;
         if (CboSalProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSalProyecto.SelectedIndex = 0;
         CboSalProductoPos.ItemsSource = productos.Where(p => !p.EsHerramienta).ToList();
         if (CboSalProductoPos.SelectedIndex < 0) CboSalProductoPos.SelectedIndex = 0;
+
+        if (CboPreDepartamento != null)
+        {
+            CboPreDepartamento.ItemsSource = deptos;
+            if (CboPreDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboPreDepartamento.SelectedIndex = 0;
+        }
+        if (CboPreProyecto != null)
+        {
+            CboPreProyecto.ItemsSource = proyectos;
+            if (CboPreProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboPreProyecto.SelectedIndex = 0;
+        }
+
+        // Compras sin Factura (Nota / Ticket)
+        if (CboSinFacProveedor != null)
+        {
+            CboSinFacProveedor.ItemsSource = proveedores;
+            if (CboSinFacProveedor.SelectedIndex < 0 && proveedores.Count > 0) CboSinFacProveedor.SelectedIndex = 0;
+        }
+        if (CboSinFacProyecto != null)
+        {
+            CboSinFacProyecto.ItemsSource = proyectos;
+            var proyStock = proyectos.FirstOrDefault(p => p.EsStockGeneral) ?? proyectos.FirstOrDefault();
+            if (CboSinFacProyecto.SelectedIndex < 0 && proyStock != null) CboSinFacProyecto.SelectedItem = proyStock;
+        }
+        FiltrarComboProductoSinFactura();
+        FiltrarComboProductoAnalisis();
 
         // XML y Directorios
         CboXmlVincularProducto.ItemsSource = productos;
@@ -204,7 +241,7 @@ public partial class MainWindow : FluentWindow
         if (CboDirHerProducto.SelectedIndex < 0 && CboDirHerProducto.Items.Count > 0) CboDirHerProducto.SelectedIndex = 0;
     }
 
-    // ==================== NAVEGACIÓN Y TEMA WINDOWS 11 ====================
+    // ==================== NAVEGACIÓN Y PERFIL ADMINISTRADOR ====================
 
     private void CambiarSeccion(int index)
     {
@@ -224,14 +261,231 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void BtnCambiarTema_Click(object sender, RoutedEventArgs e)
-    {
-        _temaOscuro = !_temaOscuro;
-        ApplicationThemeManager.Apply(_temaOscuro ? ApplicationTheme.Dark : ApplicationTheme.Light, WindowBackdropType.Mica, false);
-    }
-
     private void BtnIrRecepciones_Click(object sender, RoutedEventArgs e) => CambiarSeccion(4);
     private void BtnIrAlmacenPos_Click(object sender, RoutedEventArgs e) => CambiarSeccion(5);
+
+    private void BtnPerfilAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sesionAdminActiva)
+        {
+            var resp = System.Windows.MessageBox.Show(this,
+                "La sesión de Perfil Administrador se encuentra ACTIVA (desbloqueada).\n\n¿Desea bloquear nuevamente la sesión de Administrador para que vuelva a solicitar el PIN en acciones críticas?",
+                "Perfil Administrador Activo",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (resp == System.Windows.MessageBoxResult.Yes)
+            {
+                _sesionAdminActiva = false;
+                if (BtnPerfilAdmin != null)
+                {
+                    BtnPerfilAdmin.Content = "🔒 Perfil: Administrador";
+                    BtnPerfilAdmin.Appearance = ControlAppearance.Secondary;
+                }
+            }
+            return;
+        }
+
+        if (SolicitarAutorizacionAdmin("Activar sesión de Perfil Administrador", false))
+        {
+            _sesionAdminActiva = true;
+            if (BtnPerfilAdmin != null)
+            {
+                BtnPerfilAdmin.Content = "🔓 Admin Activo";
+                BtnPerfilAdmin.Appearance = ControlAppearance.Primary;
+            }
+        }
+    }
+
+    private void BtnCambiarPinAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        if (!SolicitarAutorizacionAdmin("Autorizar cambio de PIN de Administrador", false))
+            return;
+
+        var win = new Window
+        {
+            Title = "Cambiar PIN de Administrador",
+            Width = 390,
+            Height = 250,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "🔑 Definir Nuevo PIN de Administrador",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Ingrese la nueva clave o PIN (mínimo 4 caracteres):",
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var pwdBox = new System.Windows.Controls.PasswordBox
+        {
+            FontSize = 15,
+            Padding = new Thickness(8, 6, 8, 6),
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        root.Children.Add(pwdBox);
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button
+        {
+            Content = "Cancelar",
+            Padding = new Thickness(14, 6, 14, 6),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var btnSave = new System.Windows.Controls.Button
+        {
+            Content = "Guardar Nuevo PIN",
+            Padding = new Thickness(14, 6, 14, 6),
+            FontWeight = FontWeights.SemiBold
+        };
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnSave.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(pwdBox.Password) || pwdBox.Password.Trim().Length < 4)
+            {
+                System.Windows.MessageBox.Show(win, "El PIN debe tener al menos 4 caracteres.", "PIN inválido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            DatabaseService.CambiarPinAdministrador(pwdBox.Password.Trim());
+            DatabaseService.RegistrarBitacoraAdmin("Cambio de PIN", "ConfiguracionSistema", "El Administrador actualizó el PIN de seguridad.");
+            win.DialogResult = true;
+        };
+
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnSave);
+        root.Children.Add(btnPanel);
+        win.Content = root;
+        win.Loaded += (_, _) => pwdBox.Focus();
+
+        if (win.ShowDialog() == true)
+        {
+            System.Windows.MessageBox.Show(this, "El PIN de Administrador se actualizó correctamente.", "PIN Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private bool SolicitarAutorizacionAdmin(string accionDescripcion, bool permitirSesionActiva = true)
+    {
+        if (permitirSesionActiva && _sesionAdminActiva)
+        {
+            DatabaseService.RegistrarBitacoraAdmin(accionDescripcion, "Sesión Admin Activa", "Autorizado con sesión de Administrador desbloqueada.");
+            return true;
+        }
+
+        var win = new Window
+        {
+            Title = "Autorización de Administrador Requerida",
+            Width = 420,
+            Height = 275,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "🔒 Clave de Administrador",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(30, 58, 138)),
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = $"Acción: {accionDescripcion}",
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Ingrese el PIN de Administrador para continuar (PIN inicial por defecto: 1234):",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var pwdBox = new System.Windows.Controls.PasswordBox
+        {
+            FontSize = 16,
+            Padding = new Thickness(8, 6, 8, 6),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(pwdBox);
+
+        var chkMantener = new CheckBox
+        {
+            Content = "Mantener sesión de Administrador desbloqueada durante esta sesión",
+            FontSize = 11.5,
+            IsChecked = true,
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(chkMantener);
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button
+        {
+            Content = "Cancelar",
+            Padding = new Thickness(14, 6, 14, 6),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var btnOk = new System.Windows.Controls.Button
+        {
+            Content = "Autorizar",
+            Padding = new Thickness(16, 6, 16, 6),
+            FontWeight = FontWeights.Bold,
+            IsDefault = true
+        };
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnOk.Click += (_, _) =>
+        {
+            if (!DatabaseService.ValidarPinAdministrador(pwdBox.Password))
+            {
+                System.Windows.MessageBox.Show(win, "PIN de Administrador incorrecto.", "Acceso denegado", MessageBoxButton.OK, MessageBoxImage.Error);
+                pwdBox.Clear();
+                pwdBox.Focus();
+                return;
+            }
+
+            if (chkMantener.IsChecked == true)
+            {
+                _sesionAdminActiva = true;
+                if (BtnPerfilAdmin != null)
+                {
+                    BtnPerfilAdmin.Content = "🔓 Admin Activo";
+                    BtnPerfilAdmin.Appearance = ControlAppearance.Primary;
+                }
+            }
+
+            DatabaseService.RegistrarBitacoraAdmin(accionDescripcion, "PIN Admin", "Autorizado mediante PIN de Administrador.");
+            win.DialogResult = true;
+        };
+
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnOk);
+        root.Children.Add(btnPanel);
+        win.Content = root;
+        win.Loaded += (_, _) => pwdBox.Focus();
+
+        return win.ShowDialog() == true;
+    }
 
     // ==================== OMNIBARRA DE ESCANEO INTELIGENTE (DATAMAX S30W) ====================
 
@@ -473,7 +727,7 @@ public partial class MainWindow : FluentWindow
             "Código no registrado", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    // ==================== TAB 0: DASHBOARD ====================
+    // ==================== TAB 0: DASHBOARD Y CALENDARIO DE EVENTOS ====================
 
     private void RefrescarDashboard()
     {
@@ -483,13 +737,109 @@ public partial class MainWindow : FluentWindow
         var her = DatabaseService.ObtenerHerramientas();
 
         KpiSolicitudes.Text = sols.Count(s => s.Estatus == "Pendiente").ToString();
-        KpiOcsAbiertas.Text = ocs.Count(o => o.Estatus != "Recibida Completa").ToString();
+        KpiOcsAbiertas.Text = ocs.Count(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva").ToString();
         KpiStockBajo.Text = prods.Count(p => p.StockBajo).ToString();
         KpiHerramientasPrestadas.Text = her.Count(h => h.Estado == "En Préstamo").ToString();
-        KpiGastoTotal.Text = ocs.Sum(o => o.TotalConIva).ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
+        KpiGastoTotal.Text = ocs.Where(o => o.Estatus != "Cancelada").Sum(o => o.TotalConIva).ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
 
-        DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa").ToList();
+        DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva").ToList();
         DgDashboardAlertas.ItemsSource = prods.Where(p => p.StockBajo).ToList();
+
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void RefrescarCalendarioYAgendaDashboard()
+    {
+        if (DgDashboardAgenda == null) return;
+        var eventos = DatabaseService.ObtenerEventosCalendarioUnificados(_filtroFechaAgendaDashboard);
+        DgDashboardAgenda.ItemsSource = eventos;
+    }
+
+    private void CalDashboard_SelectedDatesChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        if (CalDashboard.SelectedDate.HasValue)
+        {
+            _filtroFechaAgendaDashboard = CalDashboard.SelectedDate.Value.ToString("yyyy-MM-dd");
+            if (DpEventoFecha != null)
+                DpEventoFecha.SelectedDate = CalDashboard.SelectedDate.Value;
+        }
+        else
+        {
+            _filtroFechaAgendaDashboard = null;
+        }
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void BtnVerTodasFechasCalendario_Click(object sender, RoutedEventArgs e)
+    {
+        _filtroFechaAgendaDashboard = null;
+        if (CalDashboard != null) CalDashboard.SelectedDate = null;
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void BtnAgregarEventoCalendario_Click(object sender, RoutedEventArgs e)
+    {
+        string titulo = TxtEventoTitulo?.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(titulo))
+        {
+            System.Windows.MessageBox.Show(this, "Escriba el título o descripción del recordatorio o evento.", "Falta descripción", MessageBoxButton.OK, MessageBoxImage.Information);
+            TxtEventoTitulo?.Focus();
+            return;
+        }
+
+        string fecha = (DpEventoFecha?.SelectedDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+        string categoria = (CboEventoCategoria?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Recordatorio";
+        string prioridad = (CboEventoPrioridad?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Media";
+
+        DatabaseService.GuardarEventoCalendario(new EventoCalendario
+        {
+            Fecha = fecha,
+            Titulo = titulo,
+            Categoria = categoria,
+            Prioridad = prioridad
+        });
+
+        TxtEventoTitulo?.Clear();
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void BtnCompletarEventoCalendario_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: EventoCalendario ev }) return;
+
+        if (!ev.EsManual)
+        {
+            if (ev.ReferenciaFolio.StartsWith("OC-", StringComparison.OrdinalIgnoreCase))
+            {
+                ProcesarCodigoEscaneado(ev.ReferenciaFolio);
+            }
+            else if (ev.ReferenciaFolio.StartsWith("PRE-", StringComparison.OrdinalIgnoreCase))
+            {
+                ProcesarCodigoEscaneado(ev.ReferenciaFolio);
+            }
+            return;
+        }
+
+        DatabaseService.AlternarCompletadoEventoCalendario(ev.Id, !ev.Completado);
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void BtnEliminarEventoCalendario_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: EventoCalendario ev }) return;
+
+        if (!ev.EsManual)
+        {
+            System.Windows.MessageBox.Show(this, "Los eventos automáticos de Órdenes de Compra o Préstamos se actualizan automáticamente al recibir la OC o devolver la herramienta.", "Evento automático", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!SolicitarAutorizacionAdmin($"Eliminar recordatorio '{ev.Titulo}' del calendario"))
+            return;
+
+        DatabaseService.EliminarEventoCalendario(ev.Id);
+        RefrescarCalendarioYAgendaDashboard();
     }
 
     // ==================== TAB 1: CATÁLOGO VISUAL Y EDITOR ====================
@@ -805,12 +1155,13 @@ public partial class MainWindow : FluentWindow
         ImgPreviewProducto.Source = ImageStandardizerService.CargarImagenSegura(p.ImagenRuta);
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(p.CodigoEfectivo);
         ActualizarSeleccionCatalogo();
+        ActualizarBannerModoEditorProducto(p);
     }
 
     private void LimpiarEditorProducto()
     {
         string sig = DatabaseService.GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
-        _productoEnEdicion = new Producto { CodigoInterno = sig, CodigoBarras = sig };
+        _productoEnEdicion = new Producto { Id = 0, CodigoInterno = sig, CodigoBarras = sig };
         TxtProdCodigoInterno.Text = sig;
         TxtProdCodigoBarras.Text = sig;
         TxtProdNombre.Text = string.Empty;
@@ -833,9 +1184,43 @@ public partial class MainWindow : FluentWindow
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(sig);
         ActualizarEtiquetasFichaPorCategoria(CboProdCategoria?.SelectedItem as Categoria);
         ActualizarSeleccionCatalogo();
+        ActualizarBannerModoEditorProducto(null);
     }
 
-    private void BtnNuevoProducto_Click(object sender, RoutedEventArgs e) => LimpiarEditorProducto();
+    private void ActualizarBannerModoEditorProducto(Producto? prodEditando)
+    {
+        if (BdrModoEditorProducto == null || TxtModoEditorProductoTitulo == null || TxtModoEditorProductoSubtitulo == null || BtnGuardarProductoCatalogo == null)
+            return;
+
+        if (prodEditando == null || prodEditando.Id == 0)
+        {
+            string codigoNuevo = TxtProdCodigoInterno?.Text ?? "PRD-NUEVO";
+            BdrModoEditorProducto.Background = new SolidColorBrush(Color.FromRgb(239, 246, 255));
+            BdrModoEditorProducto.BorderBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246));
+            TxtModoEditorProductoTitulo.Foreground = new SolidColorBrush(Color.FromRgb(29, 78, 216));
+            TxtModoEditorProductoSubtitulo.Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175));
+            TxtModoEditorProductoTitulo.Text = $"✨ MODO: ALTA DE NUEVO PRODUCTO ({codigoNuevo})";
+            TxtModoEditorProductoSubtitulo.Text = "1. Escriba el Nombre  •  2. Elija Categoría y llene especificaciones  •  3. Presione 'Crear Producto Nuevo en Catálogo'";
+            BtnGuardarProductoCatalogo.Content = "➕ Crear Producto Nuevo en Catálogo";
+        }
+        else
+        {
+            BdrModoEditorProducto.Background = new SolidColorBrush(Color.FromRgb(254, 243, 199));
+            BdrModoEditorProducto.BorderBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11));
+            TxtModoEditorProductoTitulo.Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9));
+            TxtModoEditorProductoSubtitulo.Foreground = new SolidColorBrush(Color.FromRgb(146, 64, 14));
+            TxtModoEditorProductoTitulo.Text = $"✏️ EDITANDO PRODUCTO EXISTENTE: {prodEditando.CodigoInterno}";
+            TxtModoEditorProductoSubtitulo.Text = $"Modificando '{prodEditando.Nombre}'. Para registrar un artículo distinto presione '+ Nuevo Producto'.";
+            BtnGuardarProductoCatalogo.Content = $"💾 Guardar Cambios en {prodEditando.CodigoInterno}";
+        }
+    }
+
+    private void BtnNuevoProducto_Click(object sender, RoutedEventArgs e)
+    {
+        LimpiarEditorProducto();
+        SvEditorProducto?.ScrollToTop();
+        TxtProdNombre?.Focus();
+    }
 
     private void PegarFotoEnProductoActual()
     {
@@ -931,6 +1316,9 @@ public partial class MainWindow : FluentWindow
 
     private async Task EliminarProductoConConfirmacionAsync(Producto prod)
     {
+        if (!SolicitarAutorizacionAdmin($"Eliminar producto [{prod.CodigoInterno}] {prod.Nombre}"))
+            return;
+
         if (System.Windows.MessageBox.Show(this, $"¿Desea eliminar el producto '[{prod.CodigoInterno}] {prod.Nombre}' del catálogo?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
@@ -1600,6 +1988,9 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        if (!SolicitarAutorizacionAdmin($"Eliminar carrito/solicitud {sol.Folio}"))
+            return;
+
         var resp = System.Windows.MessageBox.Show(this,
             $"¿Está seguro de eliminar el carrito/solicitud {sol.Folio} ({sol.ProyectoNombre}) con {sol.TotalSkus} partidas?",
             "Confirmar eliminación",
@@ -1889,7 +2280,6 @@ public partial class MainWindow : FluentWindow
         {
             productos.TryGetValue(part.ProductoId, out var pObj);
             decimal ultimoCostoConIva = pObj?.UltimoCostoCompra ?? 0m;
-            decimal precioBaseSinIva = ultimoCostoConIva > 0 ? Math.Round(ultimoCostoConIva / 1.16m, 2) : 0m;
 
             var (sugerencias, refHist) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(part.ProductoId);
 
@@ -1908,48 +2298,36 @@ public partial class MainWindow : FluentWindow
             int d3 = part.DiasEntrega3 > 0 ? part.DiasEntrega3 : 1;
             string nc3 = part.NotasCotizacion3;
 
-            bool sinProveedoresGuardados = pv1 == 0 && pv2 == 0 && pv3 == 0;
+            bool sinProveedoresGuardados = pv1 == 0 && pv2 == 0 && pv3 == 0 && pr1 <= 0 && pr2 <= 0 && pr3 <= 0;
             if (sinProveedoresGuardados)
             {
-                // Pre-llenar automáticamente con proveedores que ya han vendido este producto antes, o del catálogo
-                var usados = new HashSet<int>();
+                // Regla solicitada: Empezar por defecto SOLO con 1 opción.
+                // Si el producto tiene histórico de compras, pre-llenar la Opción 1 con la mejor opción histórica;
+                // de no tener histórico de compras, dejar la Opción 1 completamente en blanco.
                 if (sugerencias.Count >= 1)
                 {
                     pv1 = sugerencias[0].proveedorId;
-                    if (pr1 <= 0) pr1 = sugerencias[0].precioSinIva;
-                    d1 = sugerencias[0].diasEntrega;
-                    if (string.IsNullOrWhiteSpace(nc1)) nc1 = sugerencias[0].notaSugerida;
-                    usados.Add(pv1);
+                    pr1 = sugerencias[0].precioSinIva;
+                    d1 = sugerencias[0].diasEntrega > 0 ? sugerencias[0].diasEntrega : 2;
+                    nc1 = sugerencias[0].notaSugerida;
                 }
-                if (sugerencias.Count >= 2)
+                else
                 {
-                    pv2 = sugerencias[1].proveedorId;
-                    if (pr2 <= 0) pr2 = sugerencias[1].precioSinIva;
-                    d2 = sugerencias[1].diasEntrega;
-                    if (string.IsNullOrWhiteSpace(nc2)) nc2 = sugerencias[1].notaSugerida;
-                    usados.Add(pv2);
-                }
-                if (sugerencias.Count >= 3)
-                {
-                    pv3 = sugerencias[2].proveedorId;
-                    if (pr3 <= 0) pr3 = sugerencias[2].precioSinIva;
-                    d3 = sugerencias[2].diasEntrega;
-                    if (string.IsNullOrWhiteSpace(nc3)) nc3 = sugerencias[2].notaSugerida;
-                    usados.Add(pv3);
+                    pv1 = 0;
+                    pr1 = 0m;
+                    d1 = 2;
+                    nc1 = string.Empty;
                 }
 
-                // Completar opciones vacías con proveedores generales disponibles
-                foreach (var provCat in proveedores)
-                {
-                    if (usados.Contains(provCat.Id)) continue;
-                    if (pv1 == 0) { pv1 = provCat.Id; d1 = provCat.DiasEntregaPromedio > 0 ? provCat.DiasEntregaPromedio : 2; usados.Add(pv1); }
-                    else if (pv2 == 0) { pv2 = provCat.Id; d2 = provCat.DiasEntregaPromedio > 0 ? provCat.DiasEntregaPromedio : 3; usados.Add(pv2); }
-                    else if (pv3 == 0) { pv3 = provCat.Id; d3 = provCat.DiasEntregaPromedio > 0 ? provCat.DiasEntregaPromedio : 1; usados.Add(pv3); break; }
-                }
-
-                if (pr1 <= 0 && precioBaseSinIva > 0)
-                    pr1 = precioBaseSinIva;
+                pv2 = 0; pr2 = 0m; d2 = 3; nc2 = string.Empty;
+                pv3 = 0; pr3 = 0m; d3 = 1; nc3 = string.Empty;
             }
+
+            int numOpcionesVisibles = 1;
+            if (pv3 > 0 || pr3 > 0 || part.ProveedorGanadorIndice == 3)
+                numOpcionesVisibles = 3;
+            else if (pv2 > 0 || pr2 > 0 || part.ProveedorGanadorIndice == 2)
+                numOpcionesVisibles = 2;
 
             var renglon = new CotizacionRenglonComparativo
             {
@@ -1962,6 +2340,7 @@ public partial class MainWindow : FluentWindow
                 StockActualAlmacen = part.StockActualAlmacen,
                 UltimoCostoCompraConIva = ultimoCostoConIva,
                 ReferenciaHistorica = refHist,
+                NumeroOpcionesVisibles = numOpcionesVisibles,
 
                 Proveedor1Id = pv1,
                 Proveedor1Nombre = provDict.TryGetValue(pv1, out var p1Obj) ? p1Obj.NombreMostrar : "Sin asignar",
@@ -1989,7 +2368,7 @@ public partial class MainWindow : FluentWindow
                 OrdenCompraFolio = part.OrdenCompraFolio
             };
 
-            if (sinProveedoresGuardados && renglon.SolicitudPartidaId > 0)
+            if (sinProveedoresGuardados && pv1 > 0 && renglon.SolicitudPartidaId > 0)
             {
                 DatabaseService.GuardarCotizacionPartida(renglon);
             }
@@ -2039,9 +2418,9 @@ public partial class MainWindow : FluentWindow
             TxtCompProdCantidad.Text = r.Cantidad.ToString("0.##", CultureInfo.InvariantCulture);
 
             var proveedores = CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores();
-            CboCompProv1.SelectedItem = proveedores.FirstOrDefault(p => p.Id == r.Proveedor1Id);
-            CboCompProv2.SelectedItem = proveedores.FirstOrDefault(p => p.Id == r.Proveedor2Id);
-            CboCompProv3.SelectedItem = proveedores.FirstOrDefault(p => p.Id == r.Proveedor3Id);
+            CboCompProv1.SelectedItem = r.Proveedor1Id > 0 ? proveedores.FirstOrDefault(p => p.Id == r.Proveedor1Id) : null;
+            CboCompProv2.SelectedItem = r.Proveedor2Id > 0 ? proveedores.FirstOrDefault(p => p.Id == r.Proveedor2Id) : null;
+            CboCompProv3.SelectedItem = r.Proveedor3Id > 0 ? proveedores.FirstOrDefault(p => p.Id == r.Proveedor3Id) : null;
 
             TxtCompPrecioSinIva1.Text = r.PrecioSinIva1 > 0 ? r.PrecioSinIva1.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
             TxtCompPrecioConIva1.Text = r.PrecioSinIva1 > 0 ? r.PrecioConIva1.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
@@ -2085,12 +2464,137 @@ public partial class MainWindow : FluentWindow
             BtnElegirGanador2.IsEnabled = editable;
             BtnElegirGanador3.IsEnabled = editable;
 
+            ActualizarVisibilidadTarjetasComparativa(r);
             ActualizarResumenYAparienciaTarjetasProducto(r);
         }
         finally
         {
             _cargandoDetalleComparativa = false;
         }
+    }
+
+    private void ActualizarVisibilidadTarjetasComparativa(CotizacionRenglonComparativo r)
+    {
+        if (BdrCompCard2 == null || BdrCompCard3 == null || BtnAgregarOpcionProveedorComp == null)
+            return;
+
+        int n = Math.Clamp(r.NumeroOpcionesVisibles, 1, 3);
+        BdrCompCard2.Visibility = n >= 2 ? Visibility.Visible : Visibility.Collapsed;
+        BdrCompCard3.Visibility = n >= 3 ? Visibility.Visible : Visibility.Collapsed;
+
+        bool editable = !r.TieneOcGenerada;
+        BtnAgregarOpcionProveedorComp.IsEnabled = editable && n < 3;
+        BtnAgregarOpcionProveedorComp.Content = n < 3
+            ? $"➕ Añadir Opción {n + 1} de Proveedor"
+            : "✔ 3 Opciones Activas";
+    }
+
+    private void BtnAgregarOpcionProveedorComp_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+            return;
+
+        if (r.NumeroOpcionesVisibles >= 3)
+            return;
+
+        r.NumeroOpcionesVisibles++;
+
+        // Si existen más sugerencias históricas para este producto, podemos sugerir la siguiente opción histórica
+        var (sugerencias, _) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(r.ProductoId);
+        var provDict = (CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores()).ToDictionary(p => p.Id);
+
+        if (r.NumeroOpcionesVisibles == 2 && r.Proveedor2Id == 0 && sugerencias.Count >= 2)
+        {
+            var sug2 = sugerencias.FirstOrDefault(s => s.proveedorId != r.Proveedor1Id);
+            if (sug2.proveedorId > 0)
+            {
+                r.Proveedor2Id = sug2.proveedorId;
+                r.Proveedor2Nombre = provDict.TryGetValue(r.Proveedor2Id, out var p2) ? p2.NombreMostrar : "Sin asignar";
+                r.PrecioSinIva2 = sug2.precioSinIva;
+                r.DiasEntrega2 = sug2.diasEntrega > 0 ? sug2.diasEntrega : 3;
+                r.NotasCotizacion2 = sug2.notaSugerida;
+                DatabaseService.GuardarCotizacionPartida(r);
+            }
+        }
+        else if (r.NumeroOpcionesVisibles == 3 && r.Proveedor3Id == 0 && sugerencias.Count >= 3)
+        {
+            var sug3 = sugerencias.FirstOrDefault(s => s.proveedorId != r.Proveedor1Id && s.proveedorId != r.Proveedor2Id);
+            if (sug3.proveedorId > 0)
+            {
+                r.Proveedor3Id = sug3.proveedorId;
+                r.Proveedor3Nombre = provDict.TryGetValue(r.Proveedor3Id, out var p3) ? p3.NombreMostrar : "Sin asignar";
+                r.PrecioSinIva3 = sug3.precioSinIva;
+                r.DiasEntrega3 = sug3.diasEntrega > 0 ? sug3.diasEntrega : 1;
+                r.NotasCotizacion3 = sug3.notaSugerida;
+                DatabaseService.GuardarCotizacionPartida(r);
+            }
+        }
+
+        CargarProductoEnTarjetasComparativa(r);
+        RecalcularTotalesComparativa();
+    }
+
+    private void BtnQuitarOpcion2Comp_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+            return;
+
+        if (r.NumeroOpcionesVisibles == 3)
+        {
+            // Mover la opción 3 al lugar de la opción 2
+            r.Proveedor2Id = r.Proveedor3Id;
+            r.Proveedor2Nombre = r.Proveedor3Nombre;
+            r.PrecioSinIva2 = r.PrecioSinIva3;
+            r.FleteConIva2 = r.FleteConIva3;
+            r.DiasEntrega2 = r.DiasEntrega3;
+            r.NotasCotizacion2 = r.NotasCotizacion3;
+
+            r.Proveedor3Id = 0;
+            r.Proveedor3Nombre = "Sin asignar";
+            r.PrecioSinIva3 = 0m;
+            r.FleteConIva3 = 0m;
+            r.DiasEntrega3 = 1;
+            r.NotasCotizacion3 = string.Empty;
+
+            if (r.ProveedorGanadorIndice == 2) r.ProveedorGanadorIndice = 0;
+            else if (r.ProveedorGanadorIndice == 3) r.ProveedorGanadorIndice = 2;
+
+            r.NumeroOpcionesVisibles = 2;
+        }
+        else
+        {
+            r.Proveedor2Id = 0;
+            r.Proveedor2Nombre = "Sin asignar";
+            r.PrecioSinIva2 = 0m;
+            r.FleteConIva2 = 0m;
+            r.DiasEntrega2 = 3;
+            r.NotasCotizacion2 = string.Empty;
+            if (r.ProveedorGanadorIndice == 2) r.ProveedorGanadorIndice = 0;
+            r.NumeroOpcionesVisibles = 1;
+        }
+
+        DatabaseService.GuardarCotizacionPartida(r);
+        CargarProductoEnTarjetasComparativa(r);
+        RecalcularTotalesComparativa();
+    }
+
+    private void BtnQuitarOpcion3Comp_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+            return;
+
+        r.Proveedor3Id = 0;
+        r.Proveedor3Nombre = "Sin asignar";
+        r.PrecioSinIva3 = 0m;
+        r.FleteConIva3 = 0m;
+        r.DiasEntrega3 = 1;
+        r.NotasCotizacion3 = string.Empty;
+        if (r.ProveedorGanadorIndice == 3) r.ProveedorGanadorIndice = 0;
+        r.NumeroOpcionesVisibles = 2;
+
+        DatabaseService.GuardarCotizacionPartida(r);
+        CargarProductoEnTarjetasComparativa(r);
+        RecalcularTotalesComparativa();
     }
 
     private void ActualizarResumenYAparienciaTarjetasProducto(CotizacionRenglonComparativo r)
@@ -2135,32 +2639,49 @@ public partial class MainWindow : FluentWindow
             r.Proveedor1Id = p1.Id;
             r.Proveedor1Nombre = p1.NombreMostrar;
         }
-        if (CboCompProv2.SelectedItem is Proveedor p2)
+        else
+        {
+            r.Proveedor1Id = 0;
+            r.Proveedor1Nombre = "Sin asignar";
+        }
+
+        if (r.NumeroOpcionesVisibles >= 2 && CboCompProv2.SelectedItem is Proveedor p2)
         {
             r.Proveedor2Id = p2.Id;
             r.Proveedor2Nombre = p2.NombreMostrar;
         }
-        if (CboCompProv3.SelectedItem is Proveedor p3)
+        else if (r.NumeroOpcionesVisibles < 2)
+        {
+            r.Proveedor2Id = 0;
+            r.Proveedor2Nombre = "Sin asignar";
+        }
+
+        if (r.NumeroOpcionesVisibles >= 3 && CboCompProv3.SelectedItem is Proveedor p3)
         {
             r.Proveedor3Id = p3.Id;
             r.Proveedor3Nombre = p3.NombreMostrar;
         }
+        else if (r.NumeroOpcionesVisibles < 3)
+        {
+            r.Proveedor3Id = 0;
+            r.Proveedor3Nombre = "Sin asignar";
+        }
 
         r.PrecioSinIva1 = ParseDecimal(TxtCompPrecioSinIva1.Text, 0m);
-        r.PrecioSinIva2 = ParseDecimal(TxtCompPrecioSinIva2.Text, 0m);
-        r.PrecioSinIva3 = ParseDecimal(TxtCompPrecioSinIva3.Text, 0m);
+        r.PrecioSinIva2 = r.NumeroOpcionesVisibles >= 2 ? ParseDecimal(TxtCompPrecioSinIva2.Text, 0m) : 0m;
+        r.PrecioSinIva3 = r.NumeroOpcionesVisibles >= 3 ? ParseDecimal(TxtCompPrecioSinIva3.Text, 0m) : 0m;
 
         r.FleteConIva1 = ParseDecimal(TxtCompFlete1.Text, 0m);
-        r.FleteConIva2 = ParseDecimal(TxtCompFlete2.Text, 0m);
-        r.FleteConIva3 = ParseDecimal(TxtCompFlete3.Text, 0m);
+        r.FleteConIva2 = r.NumeroOpcionesVisibles >= 2 ? ParseDecimal(TxtCompFlete2.Text, 0m) : 0m;
+        r.FleteConIva3 = r.NumeroOpcionesVisibles >= 3 ? ParseDecimal(TxtCompFlete3.Text, 0m) : 0m;
 
         r.DiasEntrega1 = Math.Max(1, (int)ParseDecimal(TxtCompDias1.Text, 2m));
         r.DiasEntrega2 = Math.Max(1, (int)ParseDecimal(TxtCompDias2.Text, 3m));
         r.DiasEntrega3 = Math.Max(1, (int)ParseDecimal(TxtCompDias3.Text, 1m));
 
         r.NotasCotizacion1 = TxtCompNotas1.Text ?? string.Empty;
-        r.NotasCotizacion2 = TxtCompNotas2.Text ?? string.Empty;
-        r.NotasCotizacion3 = TxtCompNotas3.Text ?? string.Empty;
+        r.NotasCotizacion2 = r.NumeroOpcionesVisibles >= 2 ? (TxtCompNotas2.Text ?? string.Empty) : string.Empty;
+        r.NotasCotizacion3 = r.NumeroOpcionesVisibles >= 3 ? (TxtCompNotas3.Text ?? string.Empty) : string.Empty;
 
         DatabaseService.GuardarCotizacionPartida(r);
         ActualizarResumenYAparienciaTarjetasProducto(r);
@@ -2501,21 +3022,65 @@ public partial class MainWindow : FluentWindow
 
     private void RefrescarOrdenesYEntradas()
     {
+        int prevOcId = (DgOrdenesCompra.SelectedItem as OrdenCompra)?.Id ?? 0;
         var ocs = DatabaseService.ObtenerOrdenesCompra();
         DgOrdenesCompra.ItemsSource = ocs;
+        if (prevOcId > 0)
+        {
+            var match = ocs.FirstOrDefault(o => o.Id == prevOcId);
+            if (match != null) DgOrdenesCompra.SelectedItem = match;
+        }
         if (DgOrdenesCompra.SelectedIndex < 0 && ocs.Count > 0)
             DgOrdenesCompra.SelectedIndex = 0;
 
-        DgEntradasHistorial.ItemsSource = DatabaseService.ObtenerEntradasAlmacen();
+        RefrescarHistorialEntradasOc();
+    }
+
+    private void RefrescarHistorialEntradasOc()
+    {
+        if (DgEntradasHistorial == null) return;
+        var entradas = DatabaseService.ObtenerEntradasAlmacen();
+        if (ChkFiltrarEntradasPorOc?.IsChecked == true && DgOrdenesCompra.SelectedItem is OrdenCompra ocSel)
+        {
+            entradas = entradas.Where(e => e.OrdenCompraId == ocSel.Id || string.Equals(e.OrdenCompraFolio, ocSel.Folio, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+        DgEntradasHistorial.ItemsSource = entradas;
+    }
+
+    private void ChkFiltrarEntradasPorOc_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        RefrescarHistorialEntradasOc();
     }
 
     private void DgOrdenesCompra_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
         {
-            TxtTituloRecepcionOc.Text = $"Recepción — {oc.Folio}";
+            TxtTituloRecepcionOc.Text = $"Recepción — {oc.Folio} ({oc.AvanceRecepcionTexto})";
             DgPartidasRecepcionOc.ItemsSource = oc.Partidas;
+            RefrescarHistorialEntradasOc();
         }
+    }
+
+    private void BtnRecibirTodoPendienteOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc) return;
+        foreach (var p in oc.Partidas)
+        {
+            p.CantidadRecibirAhora = Math.Max(0m, p.CantidadPendiente);
+        }
+        DgPartidasRecepcionOc.Items.Refresh();
+    }
+
+    private void BtnLimpiarCantidadesRecepcionOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc) return;
+        foreach (var p in oc.Partidas)
+        {
+            p.CantidadRecibirAhora = 0m;
+        }
+        DgPartidasRecepcionOc.Items.Refresh();
     }
 
     private void BtnImprimirOcSeleccionada_Click(object sender, RoutedEventArgs e)
@@ -2531,6 +3096,12 @@ public partial class MainWindow : FluentWindow
         if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
             return;
 
+        if (oc.Estatus == "Cancelada")
+        {
+            System.Windows.MessageBox.Show(this, "Esta Orden de Compra se encuentra Cancelada y no admite recepciones.", "OC Cancelada", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var aRecibir = oc.Partidas
             .Where(p => p.CantidadRecibirAhora > 0)
             .Select(p => (p, p.CantidadRecibirAhora))
@@ -2538,15 +3109,207 @@ public partial class MainWindow : FluentWindow
 
         if (aRecibir.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Indique en la columna 'Recibir Hoy' al menos una cantidad mayor a 0.", "Sin cantidades por recibir", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(this, "Indique en la columna 'Recibir Hoy' al menos una cantidad mayor a 0 (puede recibir entregas parciales o usar el botón 'Recibir Todo lo Pendiente').", "Sin cantidades por recibir", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(oc, aRecibir, TxtNotasRecepcionOc.Text);
+        string remision = TxtFolioRemisionRecepcionOc?.Text?.Trim() ?? string.Empty;
+        string notas = TxtNotasRecepcionOc.Text?.Trim() ?? string.Empty;
+        string notasCompletas = !string.IsNullOrWhiteSpace(remision)
+            ? (string.IsNullOrWhiteSpace(notas) ? $"Remisión/Nota Proveedor: {remision}" : $"Remisión/Nota: {remision} | {notas}")
+            : notas;
+
+        var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(oc, aRecibir, notasCompletas);
         TxtNotasRecepcionOc.Clear();
+        TxtFolioRemisionRecepcionOc?.Clear();
         CargarTodoElSistema();
 
         BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, entrada);
+    }
+
+    private void BtnForzarEstatusOcAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione primero una Orden de Compra de la lista.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!SolicitarAutorizacionAdmin($"Forzar estatus o cierre de {oc.Folio} ({oc.ProveedorNombre})"))
+            return;
+
+        var win = new Window
+        {
+            Title = $"Forzar Estatus de Orden de Compra — {oc.Folio}",
+            Width = 500,
+            Height = 365,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = $"⚡ Cambiar / Forzar Estatus de {oc.Folio}",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9)),
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = $"Proveedor: {oc.ProveedorNombre}  |  Estatus actual: {oc.Estatus}  |  Avance: {oc.AvanceRecepcionTexto}",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        root.Children.Add(new TextBlock { Text = "Seleccione la acción administrativa a aplicar:", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        var cboModo = new ComboBox { Margin = new Thickness(0, 0, 0, 12) };
+        cboModo.Items.Add("1. Marcar Recibida Completa e ingresar pendientes automáticamente al Stock");
+        cboModo.Items.Add("2. Marcar Recibida Completa SIN afectar Stock de Almacén (Entregado directo en obra/servicio)");
+        cboModo.Items.Add("3. Cerrar Parcialmente como Definitiva (El proveedor ya no surtirá el resto pendiente)");
+        cboModo.Items.Add("4. Cancelar Orden de Compra");
+        cboModo.SelectedIndex = 0;
+        root.Children.Add(cboModo);
+
+        root.Children.Add(new TextBlock { Text = "Motivo / Justificación (obligatorio para bitácora):", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        var txtMotivo = new System.Windows.Controls.TextBox
+        {
+            Height = 64,
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            Text = "Autorizado por Administración: material entregado directamente en proyecto / cierre administrativo.",
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(txtMotivo);
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnApply = new System.Windows.Controls.Button { Content = "Aplicar Cambio Administrativo", Padding = new Thickness(14, 6, 14, 6), FontWeight = FontWeights.Bold };
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnApply.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(txtMotivo.Text))
+            {
+                System.Windows.MessageBox.Show(win, "Escriba el motivo del cambio administrativo.", "Motivo requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            int idx = cboModo.SelectedIndex;
+            string modoAccion = idx switch
+            {
+                0 => "Recibida Completa (Ingresar pendientes al Stock)",
+                1 => "Recibida Completa (Sin afectar Stock)",
+                2 => "Cerrada Parcial Definitiva",
+                3 => "Cancelar OC",
+                _ => "Recibida Completa (Ingresar pendientes al Stock)"
+            };
+
+            DatabaseService.ForzarEstatusOrdenCompraAdmin(oc.Id, modoAccion, txtMotivo.Text.Trim());
+            win.DialogResult = true;
+        };
+
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnApply);
+        root.Children.Add(btnPanel);
+        win.Content = root;
+
+        if (win.ShowDialog() == true)
+        {
+            CargarTodoElSistema();
+            System.Windows.MessageBox.Show(this, $"Se actualizó el estatus de la Orden de Compra {oc.Folio} y se registró en la Bitácora de Administrador.", "Estatus Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnLiquidarOcSinFactura_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione primero una Orden de Compra de la lista.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!SolicitarAutorizacionAdmin($"Liquidar OC {oc.Folio} con Nota/Ticket sin Factura XML"))
+            return;
+
+        var win = new Window
+        {
+            Title = $"Liquidar OC sin Factura XML — {oc.Folio}",
+            Width = 460,
+            Height = 310,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = $"🧾 Registrar Nota / Ticket de Compra para {oc.Folio}",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = $"Proveedor: {oc.ProveedorNombre}\nTotal de la OC: {oc.TotalConIva:C2}\nSe generará un comprobante interno vinculado a esta OC para el historial de compras y análisis.",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        root.Children.Add(new TextBlock { Text = "Folio de Nota / Ticket / Remisión:", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        var txtFolioNota = new System.Windows.Controls.TextBox
+        {
+            Text = $"NOTA-{oc.Folio}",
+            Padding = new Thickness(8, 5, 8, 5),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(txtFolioNota);
+
+        root.Children.Add(new TextBlock { Text = "Observaciones:", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        var txtNotas = new System.Windows.Controls.TextBox
+        {
+            Text = "Compra liquidada con nota de remisión / ticket (sin CFDI XML)",
+            Padding = new Thickness(8, 5, 8, 5),
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(txtNotas);
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnOk = new System.Windows.Controls.Button { Content = "Registrar Nota sin Factura", Padding = new Thickness(14, 6, 14, 6), FontWeight = FontWeights.Bold };
+
+        FacturaXml? comprobanteCreado = null;
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnOk.Click += (_, _) =>
+        {
+            comprobanteCreado = DatabaseService.LiquidarOrdenCompraSinFactura(
+                oc.Id,
+                txtFolioNota.Text.Trim(),
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+                txtNotas.Text.Trim());
+            win.DialogResult = true;
+        };
+
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnOk);
+        root.Children.Add(btnPanel);
+        win.Content = root;
+
+        if (win.ShowDialog() == true && comprobanteCreado != null)
+        {
+            CargarTodoElSistema();
+            System.Windows.MessageBox.Show(this,
+                $"Se registró la nota/comprobante '{comprobanteCreado.SerieFolio}' para la Orden de Compra {oc.Folio}.\n\nPuede consultarla en la pestaña '6. Facturas y Notas' y en las gráficas de '7. Análisis'.",
+                "OC Liquidada sin Factura", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     private void BtnImprimirEntradaSeleccionada_Click(object sender, RoutedEventArgs e)
@@ -2566,6 +3329,16 @@ public partial class MainWindow : FluentWindow
             var encs = DatabaseService.ObtenerEncargados(dep.Id);
             CboSalEncargado.ItemsSource = encs;
             if (encs.Count > 0) CboSalEncargado.SelectedIndex = 0;
+        }
+    }
+
+    private void CboPreDepartamento_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CboPreDepartamento?.SelectedItem is Departamento dep && CboPrePersonaRecibe != null)
+        {
+            var encs = DatabaseService.ObtenerEncargados(dep.Id);
+            CboPrePersonaRecibe.ItemsSource = encs;
+            if (encs.Count > 0) CboPrePersonaRecibe.SelectedIndex = 0;
         }
     }
 
@@ -2590,7 +3363,8 @@ public partial class MainWindow : FluentWindow
                     FolioVale = pre.Folio,
                     CodigoIndividual = part.CodigoIndividual,
                     HerramientaDescripcion = $"{part.ProductoNombre} ({part.MarcaModelo})",
-                    EncargadoNombre = pre.EncargadoNombre,
+                    DepartamentoNombre = pre.DepartamentoNombre,
+                    EncargadoNombre = pre.PersonaRecibeEfectiva,
                     ProyectoNombre = pre.ProyectoNombre,
                     EstadoDevolucion = part.EstadoDevolucion,
                     PrestamoOriginal = pre
@@ -2631,7 +3405,7 @@ public partial class MainWindow : FluentWindow
                 TipoMovimiento = "SALIDA",
                 Folio = sal.Folio,
                 Fecha = sal.Fecha,
-                ResponsableOProveedor = $"{sal.EncargadoNombre} ({sal.DepartamentoNombre})",
+                ResponsableOProveedor = $"{sal.PersonaRecibeEfectiva} (Aprueba: {sal.DepartamentoNombre})",
                 ProyectoNombre = sal.ProyectoNombre,
                 DetalleResumen = detalle,
                 SalidaOriginal = sal
@@ -2847,10 +3621,20 @@ public partial class MainWindow : FluentWindow
     private void BtnRegistrarSalidaAlmacen_Click(object sender, RoutedEventArgs e)
     {
         if (CboSalDepartamento.SelectedItem is not Departamento dep ||
-            CboSalEncargado.SelectedItem is not Encargado enc ||
             CboSalProyecto.SelectedItem is not Proyecto proy)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione Departamento, Encargado y Proyecto.", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba la Salida y el Proyecto Destino.", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string personaRecibe = (CboSalEncargado.SelectedItem as Encargado)?.Nombre
+                               ?? CboSalEncargado.Text?.Trim()
+                               ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(personaRecibe))
+        {
+            System.Windows.MessageBox.Show(this, "Escriba o seleccione el nombre de la Persona que Recibe el material.", "Falta persona que recibe", MessageBoxButton.OK, MessageBoxImage.Warning);
+            CboSalEncargado.Focus();
             return;
         }
 
@@ -2860,7 +3644,11 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        var salida = DatabaseService.RegistrarSalidaAlmacen(dep.Id, enc.Id, proy.Id, TxtSalNotas.Text, _partidasSalidaPos.ToList());
+        int encId = (CboSalEncargado.SelectedItem as Encargado)?.Id
+                    ?? DatabaseService.ObtenerEncargados(dep.Id).FirstOrDefault()?.Id
+                    ?? 1;
+
+        var salida = DatabaseService.RegistrarSalidaAlmacen(dep.Id, encId, proy.Id, TxtSalNotas.Text, _partidasSalidaPos.ToList(), personaRecibe);
         _partidasSalidaPos.Clear();
         TxtSalNotas.Clear();
         CargarTodoElSistema();
@@ -2870,11 +3658,25 @@ public partial class MainWindow : FluentWindow
 
     private void BtnPrestarHerramienta_Click(object sender, RoutedEventArgs e)
     {
-        if (CboSalDepartamento.SelectedItem is not Departamento dep ||
-            CboSalEncargado.SelectedItem is not Encargado enc ||
-            CboSalProyecto.SelectedItem is not Proyecto proy)
+        var dep = CboPreDepartamento?.SelectedItem as Departamento ?? CboSalDepartamento.SelectedItem as Departamento;
+        var proy = CboPreProyecto?.SelectedItem as Proyecto ?? CboSalProyecto.SelectedItem as Proyecto;
+
+        if (dep == null || proy == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione a la izquierda el Departamento, Encargado y Proyecto al que se le prestará la herramienta.", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba el Préstamo y el Proyecto Destino.", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string personaRecibe = (CboPrePersonaRecibe?.SelectedItem as Encargado)?.Nombre
+                               ?? CboPrePersonaRecibe?.Text?.Trim()
+                               ?? (CboSalEncargado.SelectedItem as Encargado)?.Nombre
+                               ?? CboSalEncargado.Text?.Trim()
+                               ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(personaRecibe))
+        {
+            System.Windows.MessageBox.Show(this, "Escriba o seleccione el nombre de la Persona que Recibe la herramienta.", "Falta persona que recibe", MessageBoxButton.OK, MessageBoxImage.Warning);
+            CboPrePersonaRecibe?.Focus();
             return;
         }
 
@@ -2884,7 +3686,13 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, enc.Id, proy.Id, TxtSalNotas.Text, new List<HerramientaActivo> { her });
+        int encId = (CboPrePersonaRecibe?.SelectedItem as Encargado)?.Id
+                    ?? DatabaseService.ObtenerEncargados(dep.Id).FirstOrDefault()?.Id
+                    ?? 1;
+
+        string fechaCompromiso = (DpPreFechaCompromiso?.SelectedDate ?? DateTime.Today.AddDays(7)).ToString("yyyy-MM-dd");
+
+        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proy.Id, TxtSalNotas.Text, new List<HerramientaActivo> { her }, personaRecibe, fechaCompromiso);
         CargarTodoElSistema();
 
         BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, prestamo);
@@ -3233,8 +4041,11 @@ public partial class MainWindow : FluentWindow
     {
         if (DgFacturasRegistradas.SelectedItem is FacturaXml fac)
         {
+            if (!SolicitarAutorizacionAdmin($"Eliminar comprobante/factura {fac.SerieFolio} ({fac.EmisorNombre})"))
+                return;
+
             var resp = System.Windows.MessageBox.Show(this,
-                $"¿Desea eliminar la factura {fac.SerieFolio} (UUID: {fac.Uuid}) del proveedor '{fac.EmisorNombre}' por {fac.Total:C2}?",
+                $"¿Desea eliminar el comprobante {fac.SerieFolio} (UUID/Folio: {fac.Uuid}) del proveedor '{fac.EmisorNombre}' por {fac.Total:C2}?",
                 "Confirmar eliminación de factura",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
@@ -3248,7 +4059,7 @@ public partial class MainWindow : FluentWindow
                 if (_facturaXmlEnPantalla == null)
                 {
                     DgXmlConceptosActual.ItemsSource = null;
-                    TxtXmlResumenActual.Text = "Factura eliminada correctamente.";
+                    TxtXmlResumenActual.Text = "Comprobante eliminado correctamente.";
                 }
                 CargarTodoElSistema();
             });
@@ -3273,7 +4084,7 @@ public partial class MainWindow : FluentWindow
         }
 
         System.Windows.MessageBox.Show(this,
-            "Seleccione una factura en la tabla 'Facturas Registradas' para eliminarla.",
+            "Seleccione una factura en la tabla 'Facturas y Notas Registradas' para eliminarla.",
             "Factura no seleccionada",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -3335,12 +4146,291 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    // ==================== TAB 7: ANÁLISIS Y CATÁLOGOS BASE ====================
+    // --- 6.2 COMPRA DIRECTA SIN FACTURA (NOTA / TICKET / REMISIÓN) ---
+
+    private void FiltrarComboProductoSinFactura()
+    {
+        if (CboSinFacProducto == null) return;
+        var baseProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
+        string q = TxtBuscarProdSinFac?.Text?.Trim() ?? string.Empty;
+        int prevId = (CboSinFacProducto.SelectedItem as Producto)?.Id ?? 0;
+
+        var filtrados = string.IsNullOrWhiteSpace(q)
+            ? baseProds
+            : baseProds.Where(p =>
+                p.Nombre.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoInterno.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoBarras.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.Marca.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.Modelo.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        CboSinFacProducto.ItemsSource = filtrados;
+        if (filtrados.Count > 0)
+        {
+            CboSinFacProducto.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+        }
+    }
+
+    private void TxtBuscarProdSinFac_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        FiltrarComboProductoSinFactura();
+    }
+
+    private void CboSinFacProducto_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        if (CboSinFacProducto.SelectedItem is Producto prod && TxtSinFacPrecioUnitario != null)
+        {
+            decimal precioSugerido = prod.UltimoCostoCompra > 0
+                ? (ChkSinFacMasIva?.IsChecked == true ? Math.Round(prod.UltimoCostoCompra / 1.16m, 2) : prod.UltimoCostoCompra)
+                : 0m;
+            TxtSinFacPrecioUnitario.Text = precioSugerido.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+    }
+
+    private void BtnAgregarPartidaSinFactura_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboSinFacProducto.SelectedItem is not Producto prod)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un producto del catálogo para agregarlo a la nota.", "Producto requerido", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        decimal cant = ParseDecimal(TxtSinFacCantidad.Text, 1m);
+        decimal precio = ParseDecimal(TxtSinFacPrecioUnitario.Text, 0m);
+        if (cant <= 0 || precio <= 0)
+        {
+            System.Windows.MessageBox.Show(this, "Capture una cantidad y un precio unitario mayores a 0.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var existente = _partidasCompraSinFactura.FirstOrDefault(x => x.ProductoId == prod.Id);
+        if (existente != null)
+        {
+            existente.Cantidad += cant;
+            existente.PrecioUnitario = precio;
+        }
+        else
+        {
+            _partidasCompraSinFactura.Add(new PartidaCompraSinFactura
+            {
+                ProductoId = prod.Id,
+                ProductoCodigo = prod.CodigoInterno,
+                ProductoNombre = prod.Nombre,
+                UnidadCompra = prod.UnidadCompra,
+                Cantidad = cant,
+                PrecioUnitario = precio
+            });
+        }
+
+        DgPartidasCompraSinFactura.Items.Refresh();
+        RecalcularTotalCompraSinFactura();
+    }
+
+    private void BtnQuitarPartidaSinFactura_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: PartidaCompraSinFactura item })
+        {
+            _partidasCompraSinFactura.Remove(item);
+            DgPartidasCompraSinFactura.Items.Refresh();
+            RecalcularTotalCompraSinFactura();
+        }
+    }
+
+    private void ChkSinFacMasIva_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        RecalcularTotalCompraSinFactura();
+    }
+
+    private void RecalcularTotalCompraSinFactura()
+    {
+        if (TxtSinFacResumenTotal == null) return;
+        decimal sub = _partidasCompraSinFactura.Sum(p => p.Importe);
+        bool masIva = ChkSinFacMasIva?.IsChecked == true;
+        decimal iva = masIva ? Math.Round(sub * 0.16m, 2) : 0m;
+        decimal total = Math.Round(sub + iva, 2);
+        TxtSinFacResumenTotal.Text = masIva
+            ? $"Partidas: {_partidasCompraSinFactura.Count} | Subtotal: {sub:C2} + IVA: {iva:C2} = Total: {total:C2}"
+            : $"Partidas: {_partidasCompraSinFactura.Count} | Total Neto: {total:C2}";
+    }
+
+    private void BtnLimpiarCompraSinFactura_Click(object sender, RoutedEventArgs e)
+    {
+        _partidasCompraSinFactura.Clear();
+        TxtSinFacFolioNota?.Clear();
+        TxtSinFacNotas?.Clear();
+        DgPartidasCompraSinFactura?.Items.Refresh();
+        RecalcularTotalCompraSinFactura();
+    }
+
+    private void BtnRegistrarCompraSinFactura_Click(object sender, RoutedEventArgs e)
+    {
+        var provSel = CboSinFacProveedor.SelectedItem as Proveedor;
+        string provTexto = CboSinFacProveedor.Text?.Trim() ?? string.Empty;
+        if (provSel == null && string.IsNullOrWhiteSpace(provTexto))
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione o escriba el nombre del Proveedor.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (CboSinFacProyecto.SelectedItem is not Proyecto proy)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione el Proyecto destino.", "Proyecto requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (_partidasCompraSinFactura.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Agregue al menos un artículo a la nota de compra.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string nombreProvMostrar = provSel?.NombreMostrar ?? provTexto;
+        if (!SolicitarAutorizacionAdmin($"Registrar compra sin factura XML con '{nombreProvMostrar}'"))
+            return;
+
+        string folioNota = TxtSinFacFolioNota.Text?.Trim() ?? string.Empty;
+        string notas = TxtSinFacNotas.Text?.Trim() ?? string.Empty;
+        bool masIva = ChkSinFacMasIva.IsChecked == true;
+        bool ingresarAlmacen = ChkSinFacIngresarAlmacen.IsChecked == true;
+
+        var (comprobante, folioOc, folioEntrada) = DatabaseService.RegistrarCompraDirectaSinFactura(
+            provSel?.Id ?? 0,
+            provTexto,
+            proy.Id,
+            folioNota,
+            DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            masIva,
+            ingresarAlmacen,
+            "Almacén / Compras",
+            notas,
+            _partidasCompraSinFactura.ToList());
+
+        BtnLimpiarCompraSinFactura_Click(sender, e);
+        CargarTodoElSistema();
+
+        if (!string.IsNullOrWhiteSpace(folioEntrada))
+        {
+            var ent = DatabaseService.ObtenerEntradasAlmacen().FirstOrDefault(x => x.Folio == folioEntrada);
+            if (ent != null)
+            {
+                BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent);
+                return;
+            }
+        }
+
+        var ocCreada = DatabaseService.ObtenerOrdenesCompra().FirstOrDefault(x => x.Folio == folioOc);
+        if (ocCreada != null)
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirOrdenCompra(this, ocCreada);
+        }
+    }
+
+    // ==================== TAB 7: ANÁLISIS Y GRÁFICAS DE PRODUCTO ====================
+
+    private class FilaAnalisisProducto
+    {
+        public int ProductoId { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Producto { get; set; } = string.Empty;
+        public string Frecuencia { get; set; } = string.Empty;
+        public string CantidadTotal { get; set; } = string.Empty;
+        public decimal ImporteTotal { get; set; }
+    }
+
+    private void FiltrarComboProductoAnalisis()
+    {
+        if (CboProductoAnalisis == null) return;
+        var baseProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
+        string q = TxtBuscarProductoAnalisis?.Text?.Trim() ?? string.Empty;
+        int prevId = (CboProductoAnalisis.SelectedItem as Producto)?.Id ?? 0;
+
+        var filtrados = string.IsNullOrWhiteSpace(q)
+            ? baseProds
+            : baseProds.Where(p =>
+                p.Nombre.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoInterno.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.Marca.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                p.CategoriaNombre.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        _sincronizandoProductoAnalisis = true;
+        try
+        {
+            CboProductoAnalisis.ItemsSource = filtrados;
+            if (filtrados.Count > 0)
+            {
+                CboProductoAnalisis.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+            }
+        }
+        finally
+        {
+            _sincronizandoProductoAnalisis = false;
+        }
+    }
+
+    private void TxtBuscarProductoAnalisis_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        FiltrarComboProductoAnalisis();
+        RenderizarGraficasProductoAnalisis();
+    }
+
+    private void CboProductoAnalisis_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _sincronizandoProductoAnalisis) return;
+        RenderizarGraficasProductoAnalisis();
+    }
+
+    private void CboMetricaBarrasAnalisis_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        RenderizarGraficasProductoAnalisis();
+    }
+
+    private void DgAnalisisProductos_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _sincronizandoProductoAnalisis) return;
+        if (DgAnalisisProductos.SelectedItem is FilaAnalisisProducto fila && CboProductoAnalisis != null)
+        {
+            _sincronizandoProductoAnalisis = true;
+            try
+            {
+                if (CboProductoAnalisis.ItemsSource is IEnumerable<Producto> items)
+                {
+                    var match = items.FirstOrDefault(p => p.Id == fila.ProductoId);
+                    if (match != null)
+                    {
+                        CboProductoAnalisis.SelectedItem = match;
+                    }
+                    else
+                    {
+                        TxtBuscarProductoAnalisis?.Clear();
+                        FiltrarComboProductoAnalisis();
+                        if (CboProductoAnalisis.ItemsSource is IEnumerable<Producto> todos)
+                            CboProductoAnalisis.SelectedItem = todos.FirstOrDefault(p => p.Id == fila.ProductoId);
+                    }
+                }
+            }
+            finally
+            {
+                _sincronizandoProductoAnalisis = false;
+            }
+            RenderizarGraficasProductoAnalisis();
+        }
+    }
+
+    private void CanvasGraficasProducto_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        RenderizarGraficasProductoAnalisis();
+    }
 
     private void RefrescarAnalisis()
     {
         var proveedores = DatabaseService.ObtenerProveedores();
-        var ocs = DatabaseService.ObtenerOrdenesCompra();
+        var ocs = DatabaseService.ObtenerOrdenesCompra().Where(o => o.Estatus != "Cancelada").ToList();
         var salidas = DatabaseService.ObtenerSalidasAlmacen();
         var proyectos = DatabaseService.ObtenerProyectos();
 
@@ -3367,8 +4457,9 @@ public partial class MainWindow : FluentWindow
             {
                 var primero = g.First();
                 int numOcs = g.Select(x => x.OrdenCompraId).Distinct().Count();
-                return new
+                return new FilaAnalisisProducto
                 {
+                    ProductoId = primero.ProductoId,
                     Codigo = primero.ProductoCodigo,
                     Producto = primero.ProductoNombre,
                     Frecuencia = $"{numOcs} OC{(numOcs == 1 ? "" : "s")}",
@@ -3379,6 +4470,28 @@ public partial class MainWindow : FluentWindow
             .OrderByDescending(x => x.ImporteTotal)
             .ToList();
         DgAnalisisProductos.ItemsSource = prodStats;
+
+        // Si el combo de análisis no tiene un producto con historial seleccionado y prodStats tiene elementos, seleccionar el primero con compras
+        if (CboProductoAnalisis != null && prodStats.Count > 0)
+        {
+            var actual = CboProductoAnalisis.SelectedItem as Producto;
+            if (actual == null || !prodStats.Any(x => x.ProductoId == actual.Id))
+            {
+                _sincronizandoProductoAnalisis = true;
+                try
+                {
+                    if (CboProductoAnalisis.ItemsSource is IEnumerable<Producto> lista)
+                    {
+                        var topProd = lista.FirstOrDefault(p => p.Id == prodStats[0].ProductoId);
+                        if (topProd != null) CboProductoAnalisis.SelectedItem = topProd;
+                    }
+                }
+                finally
+                {
+                    _sincronizandoProductoAnalisis = false;
+                }
+            }
+        }
 
         // 3. Gasto por Proyecto y Departamento
         var proyStats = proyectos.Select(pr =>
@@ -3397,6 +4510,342 @@ public partial class MainWindow : FluentWindow
             };
         }).OrderByDescending(x => x.TotalCompras).ToList();
         DgAnalisisProyectos.ItemsSource = proyStats;
+
+        RenderizarGraficasProductoAnalisis();
+    }
+
+    private void RenderizarGraficasProductoAnalisis()
+    {
+        if (CanvasDispersionProducto == null || CanvasBarrasProducto == null)
+            return;
+
+        CanvasDispersionProducto.Children.Clear();
+        CanvasBarrasProducto.Children.Clear();
+
+        if (CboProductoAnalisis?.SelectedItem is not Producto prod)
+        {
+            if (TxtResumenGraficaProducto != null)
+                TxtResumenGraficaProducto.Text = "Seleccione un producto para visualizar sus gráficas de dispersión y barras.";
+            return;
+        }
+
+        var puntos = DatabaseService.ObtenerHistorialComprasProductoParaAnalisis(prod.Id);
+        if (puntos.Count == 0)
+        {
+            if (TxtResumenGraficaProducto != null)
+                TxtResumenGraficaProducto.Text = $"[{prod.CodigoInterno}] {prod.Nombre} — Sin compras registradas aún. Último costo catálogo: {prod.UltimoCostoCompra:C2}";
+
+            DibujarMensajeSinDatosCanvas(CanvasDispersionProducto, "Sin historial de compras para graficar dispersión");
+            DibujarMensajeSinDatosCanvas(CanvasBarrasProducto, "Sin historial de compras para graficar barras");
+            return;
+        }
+
+        decimal minPrecio = puntos.Min(x => x.PrecioUnitarioSinIva);
+        decimal maxPrecio = puntos.Max(x => x.PrecioUnitarioSinIva);
+        decimal promPrecio = Math.Round(puntos.Average(x => x.PrecioUnitarioSinIva), 2);
+        decimal totalGastado = puntos.Sum(x => x.ImporteConIva);
+        decimal totalUnidades = puntos.Sum(x => x.Cantidad);
+
+        if (TxtResumenGraficaProducto != null)
+        {
+            TxtResumenGraficaProducto.Text =
+                $"[{prod.CodigoInterno}] {prod.Nombre} — {puntos.Count} compra(s) | " +
+                $"Mín s/IVA: {minPrecio:C2} | Prom s/IVA: {promPrecio:C2} | Máx s/IVA: {maxPrecio:C2} | " +
+                $"Volumen Total: {totalUnidades:0.##} {prod.UnidadCompra} ({totalGastado:C2} c/IVA)";
+        }
+
+        DibujarGraficaDispersion(CanvasDispersionProducto, puntos, promPrecio);
+        DibujarGraficaBarras(CanvasBarrasProducto, puntos, prod.UnidadCompra);
+    }
+
+    private static void DibujarMensajeSinDatosCanvas(Canvas canvas, string mensaje)
+    {
+        double w = canvas.ActualWidth > 40 ? canvas.ActualWidth : 420;
+        double h = canvas.ActualHeight > 40 ? canvas.ActualHeight : 190;
+        var tb = new TextBlock
+        {
+            Text = mensaje,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175))
+        };
+        Canvas.SetLeft(tb, Math.Max(16, (w - 260) / 2));
+        Canvas.SetTop(tb, Math.Max(16, (h - 20) / 2));
+        canvas.Children.Add(tb);
+    }
+
+    private void DibujarGraficaDispersion(Canvas canvas, List<PuntoHistorialCompraProducto> puntos, decimal promPrecio)
+    {
+        double w = canvas.ActualWidth > 60 ? canvas.ActualWidth : 460;
+        double h = canvas.ActualHeight > 60 ? canvas.ActualHeight : 195;
+
+        double padLeft = 58, padRight = 22, padTop = 18, padBottom = 34;
+        double plotW = Math.Max(40, w - padLeft - padRight);
+        double plotH = Math.Max(40, h - padTop - padBottom);
+
+        // Ejes
+        var ejeY = new Line { X1 = padLeft, Y1 = padTop, X2 = padLeft, Y2 = padTop + plotH, Stroke = new SolidColorBrush(Color.FromRgb(209, 213, 219)), StrokeThickness = 1.2 };
+        var ejeX = new Line { X1 = padLeft, Y1 = padTop + plotH, X2 = padLeft + plotW, Y2 = padTop + plotH, Stroke = new SolidColorBrush(Color.FromRgb(209, 213, 219)), StrokeThickness = 1.2 };
+        canvas.Children.Add(ejeY);
+        canvas.Children.Add(ejeX);
+
+        double minY = (double)puntos.Min(p => p.PrecioUnitarioSinIva);
+        double maxY = (double)puntos.Max(p => p.PrecioUnitarioSinIva);
+        if (Math.Abs(maxY - minY) < 0.01)
+        {
+            minY *= 0.85;
+            maxY *= 1.15;
+            if (maxY <= 0) maxY = 10;
+        }
+        else
+        {
+            double extra = (maxY - minY) * 0.15;
+            minY = Math.Max(0, minY - extra);
+            maxY += extra;
+        }
+
+        // Líneas guía horizontales
+        for (int i = 0; i <= 3; i++)
+        {
+            double frac = i / 3.0;
+            double y = padTop + plotH - (frac * plotH);
+            double val = minY + (frac * (maxY - minY));
+
+            var gridLine = new Line
+            {
+                X1 = padLeft,
+                Y1 = y,
+                X2 = padLeft + plotW,
+                Y2 = y,
+                Stroke = new SolidColorBrush(Color.FromRgb(243, 244, 246)),
+                StrokeThickness = 1
+            };
+            canvas.Children.Add(gridLine);
+
+            var lblY = new TextBlock
+            {
+                Text = $"${val:N0}",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+            };
+            Canvas.SetLeft(lblY, 4);
+            Canvas.SetTop(lblY, y - 7);
+            canvas.Children.Add(lblY);
+        }
+
+        // Línea punteada de precio promedio
+        double yProm = padTop + plotH - (((double)promPrecio - minY) / (maxY - minY) * plotH);
+        if (yProm >= padTop && yProm <= padTop + plotH)
+        {
+            var promLine = new Line
+            {
+                X1 = padLeft,
+                Y1 = yProm,
+                X2 = padLeft + plotW,
+                Y2 = yProm,
+                Stroke = new SolidColorBrush(Color.FromRgb(245, 158, 11)),
+                StrokeThickness = 1.5,
+                StrokeDashArray = new DoubleCollection { 4, 3 }
+            };
+            canvas.Children.Add(promLine);
+        }
+
+        var paleta = new[]
+        {
+            Color.FromRgb(37, 99, 235),
+            Color.FromRgb(5, 150, 105),
+            Color.FromRgb(217, 119, 6),
+            Color.FromRgb(124, 58, 237),
+            Color.FromRgb(220, 38, 38),
+            Color.FromRgb(13, 148, 136)
+        };
+        var provs = puntos.Select(p => p.ProveedorNombre).Distinct().ToList();
+        var colorPorProv = new Dictionary<string, Color>();
+        for (int i = 0; i < provs.Count; i++)
+        {
+            colorPorProv[provs[i]] = paleta[i % paleta.Length];
+        }
+
+        // Línea conectora de tendencia y puntos de dispersión
+        var polyline = new Polyline
+        {
+            Stroke = new SolidColorBrush(Color.FromArgb(95, 59, 130, 246)),
+            StrokeThickness = 1.6
+        };
+
+        int n = puntos.Count;
+        for (int i = 0; i < n; i++)
+        {
+            var pt = puntos[i];
+            double x = n == 1
+                ? padLeft + (plotW / 2.0)
+                : padLeft + (i / (double)(n - 1) * plotW);
+            double y = padTop + plotH - (((double)pt.PrecioUnitarioSinIva - minY) / (maxY - minY) * plotH);
+            polyline.Points.Add(new Point(x, y));
+        }
+        if (n > 1) canvas.Children.Add(polyline);
+
+        for (int i = 0; i < n; i++)
+        {
+            var pt = puntos[i];
+            double x = n == 1
+                ? padLeft + (plotW / 2.0)
+                : padLeft + (i / (double)(n - 1) * plotW);
+            double y = padTop + plotH - (((double)pt.PrecioUnitarioSinIva - minY) / (maxY - minY) * plotH);
+
+            var col = colorPorProv[pt.ProveedorNombre];
+            var dot = new Ellipse
+            {
+                Width = 11,
+                Height = 11,
+                Fill = new SolidColorBrush(col),
+                Stroke = Brushes.White,
+                StrokeThickness = 2,
+                Cursor = Cursors.Hand,
+                ToolTip = $"{pt.FolioDocumento} ({pt.Fecha:yyyy-MM-dd})\nProveedor: {pt.ProveedorNombre}\nPrecio Unit. s/IVA: {pt.PrecioUnitarioSinIva:C2} ({pt.PrecioUnitarioConIva:C2} c/IVA)\nCantidad: {pt.Cantidad:0.##}"
+            };
+            Canvas.SetLeft(dot, x - 5.5);
+            Canvas.SetTop(dot, y - 5.5);
+            canvas.Children.Add(dot);
+
+            if (n <= 6 || i == 0 || i == n - 1 || i == n / 2)
+            {
+                var lblX = new TextBlock
+                {
+                    Text = pt.Fecha.ToString("dd/MMM", CultureInfo.GetCultureInfo("es-MX")),
+                    FontSize = 9.5,
+                    Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                };
+                Canvas.SetLeft(lblX, Math.Clamp(x - 18, padLeft - 8, padLeft + plotW - 32));
+                Canvas.SetTop(lblX, padTop + plotH + 6);
+                canvas.Children.Add(lblX);
+            }
+        }
+    }
+
+    private void DibujarGraficaBarras(Canvas canvas, List<PuntoHistorialCompraProducto> puntos, string unidad)
+    {
+        double w = canvas.ActualWidth > 60 ? canvas.ActualWidth : 460;
+        double h = canvas.ActualHeight > 60 ? canvas.ActualHeight : 195;
+
+        double padLeft = 18, padRight = 18, padTop = 22, padBottom = 38;
+        double plotW = Math.Max(40, w - padLeft - padRight);
+        double plotH = Math.Max(40, h - padTop - padBottom);
+
+        int modo = CboMetricaBarrasAnalisis?.SelectedIndex ?? 0;
+
+        List<(string etiqueta, decimal valor, string textoValor, string tooltip)> barras;
+        if (modo == 1)
+        {
+            barras = puntos
+                .GroupBy(p => p.ProveedorNombre)
+                .Select(g =>
+                {
+                    decimal cant = g.Sum(x => x.Cantidad);
+                    return (g.Key, cant, $"{cant:0.##} {unidad}", $"Proveedor: {g.Key}\nCantidad Total: {cant:0.##} {unidad}\nCompras: {g.Count()}");
+                })
+                .OrderByDescending(x => x.cant)
+                .Take(6)
+                .ToList();
+        }
+        else if (modo == 2)
+        {
+            barras = puntos
+                .GroupBy(p => p.Fecha.ToString("yyyy-MM"))
+                .OrderBy(g => g.Key)
+                .Select(g =>
+                {
+                    decimal imp = g.Sum(x => x.ImporteConIva);
+                    return (g.Key, imp, $"{imp:C0}", $"Periodo: {g.Key}\nGasto c/IVA: {imp:C2}\nCantidad: {g.Sum(x => x.Cantidad):0.##} {unidad}");
+                })
+                .TakeLast(6)
+                .ToList();
+        }
+        else
+        {
+            barras = puntos
+                .GroupBy(p => p.ProveedorNombre)
+                .Select(g =>
+                {
+                    decimal imp = g.Sum(x => x.ImporteConIva);
+                    return (g.Key, imp, $"{imp:C0}", $"Proveedor: {g.Key}\nImporte Total c/IVA: {imp:C2}\nPrecio Prom. s/IVA: {g.Average(x => x.PrecioUnitarioSinIva):C2}");
+                })
+                .OrderByDescending(x => x.imp)
+                .Take(6)
+                .ToList();
+        }
+
+        var ejeX = new Line
+        {
+            X1 = padLeft,
+            Y1 = padTop + plotH,
+            X2 = padLeft + plotW,
+            Y2 = padTop + plotH,
+            Stroke = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            StrokeThickness = 1.2
+        };
+        canvas.Children.Add(ejeX);
+
+        if (barras.Count == 0) return;
+
+        double maxVal = (double)barras.Max(b => b.valor);
+        if (maxVal <= 0) maxVal = 1;
+
+        var colores = new[]
+        {
+            Color.FromRgb(37, 99, 235),
+            Color.FromRgb(5, 150, 105),
+            Color.FromRgb(217, 119, 6),
+            Color.FromRgb(124, 58, 237),
+            Color.FromRgb(13, 148, 136),
+            Color.FromRgb(220, 38, 38)
+        };
+
+        double slotW = plotW / barras.Count;
+        double barW = Math.Min(54, Math.Max(18, slotW * 0.56));
+
+        for (int i = 0; i < barras.Count; i++)
+        {
+            var b = barras[i];
+            double barH = Math.Max(4, ((double)b.valor / maxVal) * (plotH - 14));
+            double x = padLeft + (i * slotW) + ((slotW - barW) / 2.0);
+            double y = padTop + plotH - barH;
+
+            var rect = new Border
+            {
+                Width = barW,
+                Height = barH,
+                Background = new SolidColorBrush(colores[i % colores.Length]),
+                CornerRadius = new CornerRadius(5, 5, 0, 0),
+                ToolTip = b.tooltip,
+                Cursor = Cursors.Hand
+            };
+            Canvas.SetLeft(rect, x);
+            Canvas.SetTop(rect, y);
+            canvas.Children.Add(rect);
+
+            var lblVal = new TextBlock
+            {
+                Text = b.textoValor,
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(31, 41, 55))
+            };
+            Canvas.SetLeft(lblVal, x + Math.Max(-8, (barW - 44) / 2.0));
+            Canvas.SetTop(lblVal, Math.Max(2, y - 16));
+            canvas.Children.Add(lblVal);
+
+            string etqCorta = b.etiqueta.Length > 13 ? b.etiqueta[..12] + "…" : b.etiqueta;
+            var lblEtq = new TextBlock
+            {
+                Text = etqCorta,
+                FontSize = 9.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+                ToolTip = b.etiqueta
+            };
+            Canvas.SetLeft(lblEtq, x + Math.Max(-12, (barW - 56) / 2.0));
+            Canvas.SetTop(lblEtq, padTop + plotH + 6);
+            canvas.Children.Add(lblEtq);
+        }
     }
 
     // =====================================================================
@@ -3512,6 +4961,9 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        if (!SolicitarAutorizacionAdmin($"Eliminar proveedor '{TxtProvComercial.Text}'"))
+            return;
+
         if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este proveedor del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
@@ -3625,6 +5077,9 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        if (!SolicitarAutorizacionAdmin($"Eliminar proyecto '{TxtProyCodigo.Text}'"))
+            return;
+
         if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este proyecto?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
@@ -3727,6 +5182,9 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        if (!SolicitarAutorizacionAdmin($"Eliminar personal '{TxtAltaEncargadoNombre.Text}'"))
+            return;
+
         if (System.Windows.MessageBox.Show(this, "¿Desea eliminar a esta persona del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
@@ -3778,6 +5236,9 @@ public partial class MainWindow : FluentWindow
             System.Windows.MessageBox.Show(this, "Seleccione un departamento para eliminarlo.", "Departamento no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
+
+        if (!SolicitarAutorizacionAdmin($"Eliminar departamento '{TxtDeptoNombre.Text}'"))
+            return;
 
         if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este departamento?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
@@ -3867,6 +5328,9 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        if (!SolicitarAutorizacionAdmin($"Eliminar herramienta individual '{TxtDirHerCodigo.Text}'"))
+            return;
+
         if (System.Windows.MessageBox.Show(this, "¿Desea eliminar esta herramienta individual?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
@@ -3927,6 +5391,9 @@ public partial class MainWindow : FluentWindow
             System.Windows.MessageBox.Show(this, "Seleccione una categoría para eliminarla.", "Categoría no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
+
+        if (!SolicitarAutorizacionAdmin($"Eliminar categoría '{TxtDirCatNombre.Text}'"))
+            return;
 
         if (System.Windows.MessageBox.Show(this, "¿Desea eliminar esta categoría?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
