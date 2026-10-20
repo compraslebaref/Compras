@@ -27,6 +27,7 @@ public partial class MainWindow : FluentWindow
 {
     private const int CatalogoTamanoLote = 48;
     private bool _sesionAdminActiva = false;
+    private bool _actualizandoCombosBase = false;
     private string? _filtroFechaAgendaDashboard = null;
     private bool _sincronizandoProductoAnalisis = false;
     private Producto _productoEnEdicion = new();
@@ -154,11 +155,11 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void CargarTodoElSistema()
+    private void CargarTodoElSistema(bool conservarPosicionCatalogo = false)
     {
         CargarCombosBase();
         RefrescarDashboard();
-        RefrescarCatalogoVisual();
+        RefrescarCatalogoVisual(conservarPosicionCatalogo);
         RefrescarSolicitudes();
         RefrescarOrdenesYEntradas();
         RefrescarAlmacenPosYPrestamos();
@@ -169,76 +170,84 @@ public partial class MainWindow : FluentWindow
 
     private void CargarCombosBase()
     {
-        var deptos = DatabaseService.ObtenerDepartamentos();
-        var proyectos = DatabaseService.ObtenerProyectos();
-        var categorias = DatabaseService.ObtenerCategorias();
-        var proveedores = DatabaseService.ObtenerProveedores();
-        _cacheProductos = DatabaseService.ObtenerProductos();
-        var productos = _cacheProductos;
-
-        // Filtro categorías en catálogo
-        int catFiltroPrevio = (CboFiltroCategoria.SelectedItem as Categoria)?.Id ?? 0;
-        var catsConTodas = new List<Categoria> { new() { Id = 0, Nombre = "Todas las categorías" } };
-        catsConTodas.AddRange(categorias);
-        CboFiltroCategoria.ItemsSource = catsConTodas;
-        CboFiltroCategoria.SelectedItem = catsConTodas.FirstOrDefault(c => c.Id == catFiltroPrevio) ?? catsConTodas[0];
-
-        CboProdCategoria.ItemsSource = categorias;
-        if (CboProdCategoria.SelectedIndex < 0) CboProdCategoria.SelectedIndex = 0;
-
-        // Solicitudes
-        CboSolDepartamento.ItemsSource = deptos;
-        if (CboSolDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSolDepartamento.SelectedIndex = 0;
-        CboSolProyecto.ItemsSource = proyectos;
-        if (CboSolProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSolProyecto.SelectedIndex = 0;
-        FiltrarComboProductoSolicitud();
-
-        // Comparativa proveedores (no preseleccionar proveedores por defecto si no hay histórico)
-        CboCompProv1.ItemsSource = proveedores;
-        CboCompProv2.ItemsSource = proveedores;
-        CboCompProv3.ItemsSource = proveedores;
-
-        // Almacén POS (Salida de Material y Préstamo de Herramienta)
-        CboSalDepartamento.ItemsSource = deptos;
-        if (CboSalDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSalDepartamento.SelectedIndex = 0;
-        CboSalProyecto.ItemsSource = proyectos;
-        if (CboSalProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSalProyecto.SelectedIndex = 0;
-        CboSalProductoPos.ItemsSource = productos.Where(p => !p.EsHerramienta).ToList();
-        if (CboSalProductoPos.SelectedIndex < 0) CboSalProductoPos.SelectedIndex = 0;
-
-        if (CboPreDepartamento != null)
+        _actualizandoCombosBase = true;
+        try
         {
-            CboPreDepartamento.ItemsSource = deptos;
-            if (CboPreDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboPreDepartamento.SelectedIndex = 0;
-        }
-        if (CboPreProyecto != null)
-        {
-            CboPreProyecto.ItemsSource = proyectos;
-            if (CboPreProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboPreProyecto.SelectedIndex = 0;
-        }
+            var deptos = DatabaseService.ObtenerDepartamentos();
+            var proyectos = DatabaseService.ObtenerProyectos();
+            var categorias = DatabaseService.ObtenerCategorias();
+            var proveedores = DatabaseService.ObtenerProveedores();
+            _cacheProductos = DatabaseService.ObtenerProductos();
+            var productos = _cacheProductos;
 
-        // Compras sin Factura (Nota / Ticket)
-        if (CboSinFacProveedor != null)
-        {
-            CboSinFacProveedor.ItemsSource = proveedores;
-            if (CboSinFacProveedor.SelectedIndex < 0 && proveedores.Count > 0) CboSinFacProveedor.SelectedIndex = 0;
-        }
-        if (CboSinFacProyecto != null)
-        {
-            CboSinFacProyecto.ItemsSource = proyectos;
-            var proyStock = proyectos.FirstOrDefault(p => p.EsStockGeneral) ?? proyectos.FirstOrDefault();
-            if (CboSinFacProyecto.SelectedIndex < 0 && proyStock != null) CboSinFacProyecto.SelectedItem = proyStock;
-        }
-        FiltrarComboProductoSinFactura();
-        FiltrarComboProductoAnalisis();
+            // Filtro categorías en catálogo
+            int catFiltroPrevio = (CboFiltroCategoria.SelectedItem as Categoria)?.Id ?? 0;
+            var catsConTodas = new List<Categoria> { new() { Id = 0, Nombre = "Todas las categorías" } };
+            catsConTodas.AddRange(categorias);
+            CboFiltroCategoria.ItemsSource = catsConTodas;
+            CboFiltroCategoria.SelectedItem = catsConTodas.FirstOrDefault(c => c.Id == catFiltroPrevio) ?? catsConTodas[0];
 
-        // XML y Directorios
-        CboXmlVincularProducto.ItemsSource = productos;
-        if (CboXmlVincularProducto.SelectedIndex < 0 && productos.Count > 0) CboXmlVincularProducto.SelectedIndex = 0;
-        CboAltaEncargadoDepto.ItemsSource = deptos;
-        if (CboAltaEncargadoDepto.SelectedIndex < 0 && deptos.Count > 0) CboAltaEncargadoDepto.SelectedIndex = 0;
-        CboDirHerProducto.ItemsSource = productos.Where(p => p.EsHerramienta).ToList();
-        if (CboDirHerProducto.SelectedIndex < 0 && CboDirHerProducto.Items.Count > 0) CboDirHerProducto.SelectedIndex = 0;
+            CboProdCategoria.ItemsSource = categorias;
+            if (CboProdCategoria.SelectedIndex < 0) CboProdCategoria.SelectedIndex = 0;
+
+            // Solicitudes
+            CboSolDepartamento.ItemsSource = deptos;
+            if (CboSolDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSolDepartamento.SelectedIndex = 0;
+            CboSolProyecto.ItemsSource = proyectos;
+            if (CboSolProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSolProyecto.SelectedIndex = 0;
+            FiltrarComboProductoSolicitud();
+
+            // Comparativa proveedores (no preseleccionar proveedores por defecto si no hay histórico)
+            CboCompProv1.ItemsSource = proveedores;
+            CboCompProv2.ItemsSource = proveedores;
+            CboCompProv3.ItemsSource = proveedores;
+
+            // Almacén POS (Salida de Material y Préstamo de Herramienta)
+            CboSalDepartamento.ItemsSource = deptos;
+            if (CboSalDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSalDepartamento.SelectedIndex = 0;
+            CboSalProyecto.ItemsSource = proyectos;
+            if (CboSalProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSalProyecto.SelectedIndex = 0;
+            CboSalProductoPos.ItemsSource = productos.Where(p => !p.EsHerramienta).ToList();
+            if (CboSalProductoPos.SelectedIndex < 0) CboSalProductoPos.SelectedIndex = 0;
+
+            if (CboPreDepartamento != null)
+            {
+                CboPreDepartamento.ItemsSource = deptos;
+                if (CboPreDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboPreDepartamento.SelectedIndex = 0;
+            }
+            if (CboPreProyecto != null)
+            {
+                CboPreProyecto.ItemsSource = proyectos;
+                if (CboPreProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboPreProyecto.SelectedIndex = 0;
+            }
+
+            // Compras sin Factura (Nota / Ticket)
+            if (CboSinFacProveedor != null)
+            {
+                CboSinFacProveedor.ItemsSource = proveedores;
+                if (CboSinFacProveedor.SelectedIndex < 0 && proveedores.Count > 0) CboSinFacProveedor.SelectedIndex = 0;
+            }
+            if (CboSinFacProyecto != null)
+            {
+                CboSinFacProyecto.ItemsSource = proyectos;
+                var proyStock = proyectos.FirstOrDefault(p => p.EsStockGeneral) ?? proyectos.FirstOrDefault();
+                if (CboSinFacProyecto.SelectedIndex < 0 && proyStock != null) CboSinFacProyecto.SelectedItem = proyStock;
+            }
+            FiltrarComboProductoSinFactura();
+            FiltrarComboProductoAnalisis();
+
+            // XML y Directorios
+            CboXmlVincularProducto.ItemsSource = productos;
+            if (CboXmlVincularProducto.SelectedIndex < 0 && productos.Count > 0) CboXmlVincularProducto.SelectedIndex = 0;
+            CboAltaEncargadoDepto.ItemsSource = deptos;
+            if (CboAltaEncargadoDepto.SelectedIndex < 0 && deptos.Count > 0) CboAltaEncargadoDepto.SelectedIndex = 0;
+            CboDirHerProducto.ItemsSource = productos.Where(p => p.EsHerramienta).ToList();
+            if (CboDirHerProducto.SelectedIndex < 0 && CboDirHerProducto.Items.Count > 0) CboDirHerProducto.SelectedIndex = 0;
+        }
+        finally
+        {
+            _actualizandoCombosBase = false;
+        }
     }
 
     // ==================== NAVEGACIÓN Y PERFIL ADMINISTRADOR ====================
@@ -844,12 +853,15 @@ public partial class MainWindow : FluentWindow
 
     // ==================== TAB 1: CATÁLOGO VISUAL Y EDITOR ====================
 
-    private void RefrescarCatalogoVisual()
+    private void RefrescarCatalogoVisual(bool conservarPosicion = false)
     {
         if (_cacheProductos.Count == 0)
         {
             _cacheProductos = DatabaseService.ObtenerProductos();
         }
+
+        double offsetPrevio = SvCatalogoVisual?.VerticalOffset ?? 0;
+        int cantidadPrevia = _catalogoVisible.Count;
 
         string filtroRaw = TxtBuscarCatalogo?.Text?.Trim() ?? string.Empty;
         string filtroNorm = NormalizarCodigoEscaneado(filtroRaw);
@@ -899,6 +911,50 @@ public partial class MainWindow : FluentWindow
 
         _catalogoFiltrado = query.ToList();
         ActualizarSeleccionCatalogo();
+
+        if (conservarPosicion && _catalogoVisible.Count > 0)
+        {
+            int idxSel = _productoEnEdicion.Id > 0
+                ? _catalogoFiltrado.FindIndex(p => p.Id == _productoEnEdicion.Id)
+                : -1;
+            int metaVisibles = Math.Min(
+                _catalogoFiltrado.Count,
+                Math.Max(Math.Max(CatalogoTamanoLote, cantidadPrevia), idxSel >= 0 ? idxSel + 12 : 0));
+
+            bool mismosIdsEnCabeza = _catalogoVisible.Count <= metaVisibles &&
+                                     _catalogoVisible.Select((p, idx) => _catalogoFiltrado[idx].Id == p.Id).All(x => x);
+
+            if (mismosIdsEnCabeza)
+            {
+                for (int i = 0; i < _catalogoVisible.Count; i++)
+                {
+                    if (!ReferenceEquals(_catalogoVisible[i], _catalogoFiltrado[i]))
+                    {
+                        _catalogoVisible[i] = _catalogoFiltrado[i];
+                    }
+                }
+                for (int i = _catalogoVisible.Count; i < metaVisibles; i++)
+                {
+                    _catalogoVisible.Add(_catalogoFiltrado[i]);
+                }
+            }
+            else
+            {
+                _catalogoVisible.Clear();
+                for (int i = 0; i < metaVisibles; i++)
+                {
+                    _catalogoVisible.Add(_catalogoFiltrado[i]);
+                }
+            }
+
+            ActualizarTextoContadorCatalogo();
+            SvCatalogoVisual?.ScrollToVerticalOffset(offsetPrevio);
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                SvCatalogoVisual?.ScrollToVerticalOffset(offsetPrevio);
+            }));
+            return;
+        }
 
         _catalogoVisible.Clear();
         int cantidadInicial = Math.Min(CatalogoTamanoLote, _catalogoFiltrado.Count);
@@ -995,7 +1051,7 @@ public partial class MainWindow : FluentWindow
 
     private void CboFiltroCategoria_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!IsLoaded) return;
+        if (!IsLoaded || _actualizandoCombosBase) return;
         RefrescarCatalogoVisual();
     }
 
@@ -1289,7 +1345,7 @@ public partial class MainWindow : FluentWindow
         await EjecutarConIndicadorCargaAsync("Guardando producto...", () =>
         {
             DatabaseService.GuardarProducto(_productoEnEdicion);
-            CargarTodoElSistema();
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
             var actualizado = _cacheProductos.FirstOrDefault(x => x.Id == _productoEnEdicion.Id) ?? _productoEnEdicion;
             CargarProductoEnEditor(actualizado);
         });
