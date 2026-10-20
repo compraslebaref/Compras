@@ -284,16 +284,20 @@ CREATE TABLE IF NOT EXISTS EventosCalendario (
     Id INTEGER PRIMARY KEY AUTOINCREMENT,
     Fecha TEXT NOT NULL,
     Titulo TEXT NOT NULL,
+    Descripcion TEXT NOT NULL DEFAULT '',
     Categoria TEXT NOT NULL DEFAULT 'Recordatorio',
     Prioridad TEXT NOT NULL DEFAULT 'Normal',
     Completado INTEGER NOT NULL DEFAULT 0,
-    Notas TEXT NOT NULL DEFAULT ''
+    Notas TEXT NOT NULL DEFAULT '',
+    ReferenciaFolio TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS BitacoraAdministrador (
     Id INTEGER PRIMARY KEY AUTOINCREMENT,
     Fecha TEXT NOT NULL,
     Accion TEXT NOT NULL,
+    Referencia TEXT NOT NULL DEFAULT '',
+    Motivo TEXT NOT NULL DEFAULT '',
     Detalle TEXT NOT NULL DEFAULT ''
 );
 
@@ -344,6 +348,12 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         AsegurarColumnaExiste(conn, "SalidasAlmacen", "PersonaRecibe", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "PrestamosHerramienta", "PersonaRecibe", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "PrestamosHerramienta", "FechaCompromiso", "TEXT NOT NULL DEFAULT ''");
+
+        // Columnas de EventosCalendario y BitacoraAdministrador
+        AsegurarColumnaExiste(conn, "EventosCalendario", "Descripcion", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "EventosCalendario", "ReferenciaFolio", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "BitacoraAdministrador", "Referencia", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "BitacoraAdministrador", "Motivo", "TEXT NOT NULL DEFAULT ''");
 
         using (var pinCmd = conn.CreateCommand())
         {
