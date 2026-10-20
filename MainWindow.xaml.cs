@@ -54,6 +54,9 @@ public partial class MainWindow : FluentWindow
     private List<MovimientoAlmacenFila> _todosMovimientosAlmacen = new();
     private FacturaXml? _facturaXmlEnPantalla;
     private bool _actualizandoCombosXml = false;
+    private bool _modoAltaNuevoProducto = false;
+    private readonly Dictionary<ComboBox, string> _placeholdersCombos = new();
+    private readonly Dictionary<ComboBox, TextBlock> _textBlocksPlaceholderCombos = new();
 
     public class PrestamoVistaFila
     {
@@ -113,11 +116,167 @@ public partial class MainWindow : FluentWindow
         {
             await EjecutarConIndicadorCargaAsync("Cargando sistema y catálogos...", () =>
             {
+                ConfigurarPlaceholdersInicialesCombos();
                 CargarTodoElSistema();
-                LimpiarEditorProducto();
+                PonerEditorProductoEnReposo();
+                IniciarNuevaSolicitudVacia();
+                PonerFormulariosDirectoriosEnBlanco();
             });
             TxtOmniScanner.Focus();
         };
+    }
+
+    private void ConfigurarPlaceholdersInicialesCombos()
+    {
+        // Tab 1: Catálogo
+        EstablecerPlaceholderCombo(CboProdCategoria, "Seleccione la categoría del artículo...");
+        EstablecerPlaceholderCombo(CboProdFamilia, "Seleccione o escriba familia (ej. JABON, MICROFIBRA)...");
+
+        // Tab 2: Solicitudes
+        EstablecerPlaceholderCombo(CboSolDepartamento, "Seleccione departamento solicitante...");
+        EstablecerPlaceholderCombo(CboSolEncargado, "Seleccione primero un departamento...");
+        EstablecerPlaceholderCombo(CboSolProyecto, "Seleccione proyecto o área destino...");
+        EstablecerPlaceholderCombo(CboSolProductoAgregar, "Busque arriba o despliegue para elegir artículo del catálogo...");
+
+        // Tab 3: Comparativa
+        EstablecerPlaceholderCombo(CboCompSolicitud, "Seleccione una Solicitud / Carrito para cotizar...");
+        EstablecerPlaceholderCombo(CboCompReferenciasSimilares, "Seleccione una compra previa similar si desea aplicarla...");
+        EstablecerPlaceholderCombo(CboCompProv1, "Seleccione proveedor para Opción 1...");
+        EstablecerPlaceholderCombo(CboCompProv2, "Seleccione proveedor para Opción 2...");
+        EstablecerPlaceholderCombo(CboCompProv3, "Seleccione proveedor para Opción 3...");
+
+        // Tab 5: Almacén POS y Préstamos
+        EstablecerPlaceholderCombo(CboSalDepartamento, "Seleccione depto. que aprueba...");
+        EstablecerPlaceholderCombo(CboSalEncargado, "Seleccione o escriba quién recibe...");
+        EstablecerPlaceholderCombo(CboSalProyecto, "Seleccione proyecto destino...");
+        EstablecerPlaceholderCombo(CboSalProductoPos, "Escanee código o seleccione material de almacén...");
+        EstablecerPlaceholderCombo(CboPreDepartamento, "Seleccione depto. que aprueba...");
+        EstablecerPlaceholderCombo(CboPrePersonaRecibe, "Seleccione o escriba quién recibe...");
+        EstablecerPlaceholderCombo(CboPreProyecto, "Seleccione proyecto destino...");
+        EstablecerPlaceholderCombo(CboHerramientaDisponible, "Seleccione herramienta disponible (HER-xxxx)...");
+
+        // Tab 6: Facturas XML y Compras sin Factura
+        EstablecerPlaceholderCombo(CboXmlProyecto, "Seleccione proyecto destino...");
+        EstablecerPlaceholderCombo(CboXmlOrdenCompra, "Seleccione OC o crear nueva al cargar XML...");
+        EstablecerPlaceholderCombo(CboXmlVincularProducto, "Seleccione producto del catálogo para vincular...");
+        EstablecerPlaceholderCombo(CboSinFacProveedor, "Seleccione o escriba el proveedor de la nota/ticket...");
+        EstablecerPlaceholderCombo(CboSinFacProyecto, "Seleccione proyecto destino o Stock General...");
+        EstablecerPlaceholderCombo(CboSinFacProducto, "Busque arriba o seleccione el artículo comprado...");
+
+        // Tab 7: Análisis
+        EstablecerPlaceholderCombo(CboProductoAnalisis, "Busque o seleccione un producto para graficar su historial...");
+
+        // Tab 8: Directorios
+        EstablecerPlaceholderCombo(CboProyEstatus, "Seleccione estatus (Activo / Pausado / Cerrado)...");
+        EstablecerPlaceholderCombo(CboAltaEncargadoDepto, "Seleccione departamento al que pertenece...");
+        EstablecerPlaceholderCombo(CboDirHerProducto, "Seleccione producto base (herramienta)...");
+        EstablecerPlaceholderCombo(CboDirHerEstado, "Seleccione estado físico de la herramienta...");
+    }
+
+    private void EstablecerPlaceholderCombo(ComboBox? combo, string placeholder)
+    {
+        if (combo == null) return;
+
+        bool yaRegistrado = _placeholdersCombos.ContainsKey(combo);
+        _placeholdersCombos[combo] = placeholder;
+
+        if (_textBlocksPlaceholderCombos.TryGetValue(combo, out var tbExistente))
+        {
+            tbExistente.Text = placeholder;
+            ActualizarVisibilidadPlaceholderCombo(combo);
+            return;
+        }
+
+        if (!yaRegistrado)
+        {
+            combo.Loaded += (_, _) => AsegurarTextBlockPlaceholderEnCombo(combo);
+            combo.SelectionChanged += (_, _) => ActualizarVisibilidadPlaceholderCombo(combo);
+            combo.DropDownOpened += (_, _) => ActualizarVisibilidadPlaceholderCombo(combo);
+            combo.DropDownClosed += (_, _) => ActualizarVisibilidadPlaceholderCombo(combo);
+            combo.GotKeyboardFocus += (_, _) => ActualizarVisibilidadPlaceholderCombo(combo);
+            combo.LostKeyboardFocus += (_, _) => ActualizarVisibilidadPlaceholderCombo(combo);
+            combo.IsVisibleChanged += (_, _) =>
+            {
+                if (combo.IsVisible) AsegurarTextBlockPlaceholderEnCombo(combo);
+            };
+            combo.AddHandler(
+                System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent,
+                new TextChangedEventHandler((_, _) => ActualizarVisibilidadPlaceholderCombo(combo)));
+        }
+
+        if (combo.IsLoaded)
+        {
+            AsegurarTextBlockPlaceholderEnCombo(combo);
+        }
+    }
+
+    private void AsegurarTextBlockPlaceholderEnCombo(ComboBox combo)
+    {
+        if (!_textBlocksPlaceholderCombos.TryGetValue(combo, out var tb))
+        {
+            combo.ApplyTemplate();
+            var grid = BuscarPrimerGridEnVisualTree(combo);
+            if (grid == null) return;
+
+            tb = new TextBlock
+            {
+                Text = _placeholdersCombos.GetValueOrDefault(combo, string.Empty),
+                Foreground = new SolidColorBrush(Color.FromRgb(125, 135, 150)),
+                FontStyle = FontStyles.Italic,
+                FontSize = combo.FontSize > 0 ? Math.Min(12, combo.FontSize) : 11.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(11, 0, 30, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                IsHitTestVisible = false
+            };
+
+            Grid.SetColumn(tb, 0);
+            if (grid.ColumnDefinitions.Count > 1)
+                Grid.SetColumnSpan(tb, grid.ColumnDefinitions.Count - 1);
+            Panel.SetZIndex(tb, 50);
+
+            grid.Children.Add(tb);
+            _textBlocksPlaceholderCombos[combo] = tb;
+        }
+        else if (VisualTreeHelper.GetParent(tb) == null)
+        {
+            _textBlocksPlaceholderCombos.Remove(combo);
+            AsegurarTextBlockPlaceholderEnCombo(combo);
+            return;
+        }
+
+        tb.Text = _placeholdersCombos.GetValueOrDefault(combo, string.Empty);
+        ActualizarVisibilidadPlaceholderCombo(combo);
+    }
+
+    private static Grid? BuscarPrimerGridEnVisualTree(DependencyObject parent)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is Grid g)
+                return g;
+            var sub = BuscarPrimerGridEnVisualTree(child);
+            if (sub != null)
+                return sub;
+        }
+        return null;
+    }
+
+    private void ActualizarVisibilidadPlaceholderCombo(ComboBox? combo)
+    {
+        if (combo == null || !_textBlocksPlaceholderCombos.TryGetValue(combo, out var tb))
+            return;
+
+        bool sinItem = combo.SelectedItem == null && combo.SelectedIndex < 0;
+        bool sinTexto = string.IsNullOrWhiteSpace(combo.Text);
+        bool focoEnEditable = combo.IsEditable && combo.IsKeyboardFocusWithin;
+
+        tb.Visibility = (sinItem && sinTexto && !focoEnEditable)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private async Task EjecutarConIndicadorCargaAsync(string mensaje, Action accion)
@@ -187,8 +346,9 @@ public partial class MainWindow : FluentWindow
             CboFiltroCategoria.ItemsSource = catsConTodas;
             CboFiltroCategoria.SelectedItem = catsConTodas.FirstOrDefault(c => c.Id == catFiltroPrevio) ?? catsConTodas[0];
 
+            int catProdPrevia = (CboProdCategoria.SelectedItem as Categoria)?.Id ?? 0;
             CboProdCategoria.ItemsSource = categorias;
-            if (CboProdCategoria.SelectedIndex < 0) CboProdCategoria.SelectedIndex = 0;
+            CboProdCategoria.SelectedItem = catProdPrevia > 0 ? categorias.FirstOrDefault(c => c.Id == catProdPrevia) : null;
 
             // Familias / Agrupadores genéricos de productos
             var familias = DatabaseService.ObtenerFamiliasProductos();
@@ -204,62 +364,80 @@ public partial class MainWindow : FluentWindow
             {
                 string textoFamActual = CboProdFamilia.Text;
                 CboProdFamilia.ItemsSource = familias;
+                CboProdFamilia.SelectedIndex = -1;
                 CboProdFamilia.Text = textoFamActual;
             }
 
-            // Solicitudes
+            // Solicitudes (en blanco por defecto si no se está editando)
+            int solDepPrev = (CboSolDepartamento.SelectedItem as Departamento)?.Id ?? 0;
+            int solProyPrev = (CboSolProyecto.SelectedItem as Proyecto)?.Id ?? 0;
             CboSolDepartamento.ItemsSource = deptos;
-            if (CboSolDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSolDepartamento.SelectedIndex = 0;
+            CboSolDepartamento.SelectedItem = solDepPrev > 0 ? deptos.FirstOrDefault(d => d.Id == solDepPrev) : null;
             CboSolProyecto.ItemsSource = proyectos;
-            if (CboSolProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSolProyecto.SelectedIndex = 0;
+            CboSolProyecto.SelectedItem = solProyPrev > 0 ? proyectos.FirstOrDefault(p => p.Id == solProyPrev) : null;
             FiltrarComboProductoSolicitud();
 
-            // Comparativa proveedores (no preseleccionar proveedores por defecto si no hay histórico)
+            // Comparativa proveedores (en blanco por defecto si no hay opción asignada)
             CboCompProv1.ItemsSource = proveedores;
             CboCompProv2.ItemsSource = proveedores;
             CboCompProv3.ItemsSource = proveedores;
 
-            // Almacén POS (Salida de Material y Préstamo de Herramienta)
+            // Almacén POS (Salida de Material y Préstamo de Herramienta - en blanco por defecto)
+            int salDepPrev = (CboSalDepartamento.SelectedItem as Departamento)?.Id ?? 0;
+            int salProyPrev = (CboSalProyecto.SelectedItem as Proyecto)?.Id ?? 0;
+            int salProdPrev = (CboSalProductoPos.SelectedItem as Producto)?.Id ?? 0;
             CboSalDepartamento.ItemsSource = deptos;
-            if (CboSalDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboSalDepartamento.SelectedIndex = 0;
+            CboSalDepartamento.SelectedItem = salDepPrev > 0 ? deptos.FirstOrDefault(d => d.Id == salDepPrev) : null;
             CboSalProyecto.ItemsSource = proyectos;
-            if (CboSalProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboSalProyecto.SelectedIndex = 0;
-            CboSalProductoPos.ItemsSource = productos.Where(p => !p.EsHerramienta).ToList();
-            if (CboSalProductoPos.SelectedIndex < 0) CboSalProductoPos.SelectedIndex = 0;
+            CboSalProyecto.SelectedItem = salProyPrev > 0 ? proyectos.FirstOrDefault(p => p.Id == salProyPrev) : null;
+            var prodsNoHer = productos.Where(p => !p.EsHerramienta).ToList();
+            CboSalProductoPos.ItemsSource = prodsNoHer;
+            CboSalProductoPos.SelectedItem = salProdPrev > 0 ? prodsNoHer.FirstOrDefault(p => p.Id == salProdPrev) : null;
 
             if (CboPreDepartamento != null)
             {
+                int preDepPrev = (CboPreDepartamento.SelectedItem as Departamento)?.Id ?? 0;
                 CboPreDepartamento.ItemsSource = deptos;
-                if (CboPreDepartamento.SelectedIndex < 0 && deptos.Count > 0) CboPreDepartamento.SelectedIndex = 0;
+                CboPreDepartamento.SelectedItem = preDepPrev > 0 ? deptos.FirstOrDefault(d => d.Id == preDepPrev) : null;
             }
             if (CboPreProyecto != null)
             {
+                int preProyPrev = (CboPreProyecto.SelectedItem as Proyecto)?.Id ?? 0;
                 CboPreProyecto.ItemsSource = proyectos;
-                if (CboPreProyecto.SelectedIndex < 0 && proyectos.Count > 0) CboPreProyecto.SelectedIndex = 0;
+                CboPreProyecto.SelectedItem = preProyPrev > 0 ? proyectos.FirstOrDefault(p => p.Id == preProyPrev) : null;
             }
 
-            // Compras sin Factura (Nota / Ticket)
+            // Compras sin Factura (Nota / Ticket - en blanco por defecto)
             if (CboSinFacProveedor != null)
             {
+                int sfProvPrev = (CboSinFacProveedor.SelectedItem as Proveedor)?.Id ?? 0;
+                string sfProvTxt = CboSinFacProveedor.Text;
                 CboSinFacProveedor.ItemsSource = proveedores;
-                if (CboSinFacProveedor.SelectedIndex < 0 && proveedores.Count > 0) CboSinFacProveedor.SelectedIndex = 0;
+                CboSinFacProveedor.SelectedItem = sfProvPrev > 0 ? proveedores.FirstOrDefault(p => p.Id == sfProvPrev) : null;
+                if (sfProvPrev == 0) CboSinFacProveedor.Text = sfProvTxt;
             }
             if (CboSinFacProyecto != null)
             {
+                int sfProyPrev = (CboSinFacProyecto.SelectedItem as Proyecto)?.Id ?? 0;
                 CboSinFacProyecto.ItemsSource = proyectos;
-                var proyStock = proyectos.FirstOrDefault(p => p.EsStockGeneral) ?? proyectos.FirstOrDefault();
-                if (CboSinFacProyecto.SelectedIndex < 0 && proyStock != null) CboSinFacProyecto.SelectedItem = proyStock;
+                CboSinFacProyecto.SelectedItem = sfProyPrev > 0 ? proyectos.FirstOrDefault(p => p.Id == sfProyPrev) : null;
             }
             FiltrarComboProductoSinFactura();
             FiltrarComboProductoAnalisis();
 
-            // XML y Directorios
+            // XML y Directorios (en blanco por defecto cuando no se está editando)
+            int xmlProdPrev = (CboXmlVincularProducto.SelectedItem as Producto)?.Id ?? 0;
             CboXmlVincularProducto.ItemsSource = productos;
-            if (CboXmlVincularProducto.SelectedIndex < 0 && productos.Count > 0) CboXmlVincularProducto.SelectedIndex = 0;
+            CboXmlVincularProducto.SelectedItem = xmlProdPrev > 0 ? productos.FirstOrDefault(p => p.Id == xmlProdPrev) : null;
+
+            int encDepPrev = (CboAltaEncargadoDepto.SelectedItem as Departamento)?.Id ?? 0;
             CboAltaEncargadoDepto.ItemsSource = deptos;
-            if (CboAltaEncargadoDepto.SelectedIndex < 0 && deptos.Count > 0) CboAltaEncargadoDepto.SelectedIndex = 0;
-            CboDirHerProducto.ItemsSource = productos.Where(p => p.EsHerramienta).ToList();
-            if (CboDirHerProducto.SelectedIndex < 0 && CboDirHerProducto.Items.Count > 0) CboDirHerProducto.SelectedIndex = 0;
+            CboAltaEncargadoDepto.SelectedItem = (_encargadoEditandoId > 0 && encDepPrev > 0) ? deptos.FirstOrDefault(d => d.Id == encDepPrev) : null;
+
+            int dirHerProdPrev = (CboDirHerProducto.SelectedItem as Producto)?.Id ?? 0;
+            var prodsHer = productos.Where(p => p.EsHerramienta).ToList();
+            CboDirHerProducto.ItemsSource = prodsHer;
+            CboDirHerProducto.SelectedItem = (_herramientaEditandoId > 0 && dirHerProdPrev > 0) ? prodsHer.FirstOrDefault(p => p.Id == dirHerProdPrev) : null;
         }
         finally
         {
@@ -1417,6 +1595,7 @@ public partial class MainWindow : FluentWindow
 
     private void CargarProductoEnEditor(Producto p)
     {
+        _modoAltaNuevoProducto = false;
         _productoEnEdicion = p;
         TxtProdCodigoInterno.Text = p.CodigoInterno;
         TxtProdCodigoBarras.Text = p.CodigoBarras;
@@ -1438,11 +1617,9 @@ public partial class MainWindow : FluentWindow
         ChkProdEsHerramienta.IsChecked = p.EsHerramienta;
 
         var cat = CboProdCategoria.Items.Cast<Categoria>().FirstOrDefault(c => c.Id == p.CategoriaId);
-        if (cat != null)
-        {
-            CboProdCategoria.SelectedItem = cat;
-            ActualizarEtiquetasFichaPorCategoria(cat);
-        }
+        CboProdCategoria.SelectedItem = cat;
+        ActualizarEtiquetasFichaPorCategoria(cat);
+
         if (CboProdFamilia != null)
         {
             CboProdFamilia.Text = !string.IsNullOrWhiteSpace(p.Familia)
@@ -1456,14 +1633,19 @@ public partial class MainWindow : FluentWindow
         ActualizarBannerModoEditorProducto(p);
     }
 
-    private void LimpiarEditorProducto()
+    private void PonerEditorProductoEnReposo()
     {
-        string sig = DatabaseService.GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
-        _productoEnEdicion = new Producto { Id = 0, CodigoInterno = sig, CodigoBarras = sig };
-        TxtProdCodigoInterno.Text = sig;
-        TxtProdCodigoBarras.Text = sig;
+        _modoAltaNuevoProducto = false;
+        _productoEnEdicion = new Producto { Id = 0 };
+        TxtProdCodigoInterno.Text = string.Empty;
+        TxtProdCodigoBarras.Text = string.Empty;
         TxtProdNombre.Text = string.Empty;
-        if (CboProdFamilia != null) CboProdFamilia.Text = string.Empty;
+        if (CboProdCategoria != null) CboProdCategoria.SelectedIndex = -1;
+        if (CboProdFamilia != null)
+        {
+            CboProdFamilia.SelectedIndex = -1;
+            CboProdFamilia.Text = string.Empty;
+        }
         TxtProdMarca.Text = string.Empty;
         TxtProdModelo.Text = string.Empty;
         TxtProdMedidas.Text = string.Empty;
@@ -1471,17 +1653,53 @@ public partial class MainWindow : FluentWindow
         TxtProdEspecificacion1.Text = string.Empty;
         TxtProdEspecificacion2.Text = string.Empty;
         TxtProdDescripcion.Text = string.Empty;
-        TxtProdUnidadCompra.Text = "Pieza";
-        TxtProdUnidadAlmacen.Text = "Pieza";
-        TxtProdFactor.Text = "1";
-        TxtProdStock.Text = "0";
-        TxtProdStockMin.Text = "5";
-        TxtProdCosto.Text = "0.00";
-        TxtProdUbicacion.Text = "A-01";
+        TxtProdUnidadCompra.Text = string.Empty;
+        TxtProdUnidadAlmacen.Text = string.Empty;
+        TxtProdFactor.Text = string.Empty;
+        TxtProdStock.Text = string.Empty;
+        TxtProdStockMin.Text = string.Empty;
+        TxtProdCosto.Text = string.Empty;
+        TxtProdUbicacion.Text = string.Empty;
+        ChkProdEsHerramienta.IsChecked = false;
+        ImgPreviewProducto.Source = null;
+        ImgBarcodeProductoEditor.Source = null;
+        ActualizarEtiquetasFichaPorCategoria(null);
+        ActualizarSeleccionCatalogo();
+        ActualizarBannerModoEditorProducto(null);
+    }
+
+    private void LimpiarEditorProducto()
+    {
+        _modoAltaNuevoProducto = true;
+        string sig = DatabaseService.GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
+        _productoEnEdicion = new Producto { Id = 0, CodigoInterno = sig, CodigoBarras = sig };
+        TxtProdCodigoInterno.Text = sig;
+        TxtProdCodigoBarras.Text = sig;
+        TxtProdNombre.Text = string.Empty;
+        if (CboProdCategoria != null) CboProdCategoria.SelectedIndex = -1;
+        if (CboProdFamilia != null)
+        {
+            CboProdFamilia.SelectedIndex = -1;
+            CboProdFamilia.Text = string.Empty;
+        }
+        TxtProdMarca.Text = string.Empty;
+        TxtProdModelo.Text = string.Empty;
+        TxtProdMedidas.Text = string.Empty;
+        TxtProdCapacidadElectrica.Text = string.Empty;
+        TxtProdEspecificacion1.Text = string.Empty;
+        TxtProdEspecificacion2.Text = string.Empty;
+        TxtProdDescripcion.Text = string.Empty;
+        TxtProdUnidadCompra.Text = string.Empty;
+        TxtProdUnidadAlmacen.Text = string.Empty;
+        TxtProdFactor.Text = string.Empty;
+        TxtProdStock.Text = string.Empty;
+        TxtProdStockMin.Text = string.Empty;
+        TxtProdCosto.Text = string.Empty;
+        TxtProdUbicacion.Text = string.Empty;
         ChkProdEsHerramienta.IsChecked = false;
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(sig);
-        ActualizarEtiquetasFichaPorCategoria(CboProdCategoria?.SelectedItem as Categoria);
+        ActualizarEtiquetasFichaPorCategoria(null);
         ActualizarSeleccionCatalogo();
         ActualizarBannerModoEditorProducto(null);
     }
@@ -1491,7 +1709,17 @@ public partial class MainWindow : FluentWindow
         if (BdrModoEditorProducto == null || TxtModoEditorProductoTitulo == null || TxtModoEditorProductoSubtitulo == null || BtnGuardarProductoCatalogo == null)
             return;
 
-        if (prodEditando == null || prodEditando.Id == 0)
+        if ((prodEditando == null || prodEditando.Id == 0) && !_modoAltaNuevoProducto)
+        {
+            BdrModoEditorProducto.Background = new SolidColorBrush(Color.FromRgb(243, 244, 246));
+            BdrModoEditorProducto.BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219));
+            TxtModoEditorProductoTitulo.Foreground = new SolidColorBrush(Color.FromRgb(55, 65, 81));
+            TxtModoEditorProductoSubtitulo.Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99));
+            TxtModoEditorProductoTitulo.Text = "ℹ️ SIN PRODUCTO SELECCIONADO";
+            TxtModoEditorProductoSubtitulo.Text = "Seleccione una tarjeta del catálogo a la izquierda para editarla, o presione '+ Nuevo Producto' para iniciar un alta nueva.";
+            BtnGuardarProductoCatalogo.Content = "➕ Crear Producto Nuevo en Catálogo";
+        }
+        else if (prodEditando == null || prodEditando.Id == 0)
         {
             string codigoNuevo = TxtProdCodigoInterno?.Text ?? "PRD-NUEVO";
             BdrModoEditorProducto.Background = new SolidColorBrush(Color.FromRgb(239, 246, 255));
@@ -1499,7 +1727,7 @@ public partial class MainWindow : FluentWindow
             TxtModoEditorProductoTitulo.Foreground = new SolidColorBrush(Color.FromRgb(29, 78, 216));
             TxtModoEditorProductoSubtitulo.Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175));
             TxtModoEditorProductoTitulo.Text = $"✨ MODO: ALTA DE NUEVO PRODUCTO ({codigoNuevo})";
-            TxtModoEditorProductoSubtitulo.Text = "1. Escriba el Nombre  •  2. Elija Categoría y llene especificaciones  •  3. Presione 'Crear Producto Nuevo en Catálogo'";
+            TxtModoEditorProductoSubtitulo.Text = "1. Escriba el Nombre  •  2. Elija Categoría y Familia (o Autocompletar)  •  3. Presione 'Crear Producto Nuevo'";
             BtnGuardarProductoCatalogo.Content = "➕ Crear Producto Nuevo en Catálogo";
         }
         else
@@ -1561,14 +1789,29 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrWhiteSpace(TxtProdNombre.Text))
         {
-            System.Windows.MessageBox.Show(this, "Escriba el nombre del producto.", "Falta nombre", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, "Seleccione un producto del catálogo para editarlo o escriba el nombre del producto nuevo.", "Falta nombre", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        _productoEnEdicion.CodigoInterno = TxtProdCodigoInterno.Text.Trim();
-        _productoEnEdicion.CodigoBarras = TxtProdCodigoBarras.Text.Trim();
+        string codInterno = TxtProdCodigoInterno.Text.Trim();
+        if (string.IsNullOrWhiteSpace(codInterno))
+        {
+            codInterno = DatabaseService.GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
+            TxtProdCodigoInterno.Text = codInterno;
+        }
+        string codBarras = string.IsNullOrWhiteSpace(TxtProdCodigoBarras.Text) ? codInterno : TxtProdCodigoBarras.Text.Trim();
+
+        int catId = (CboProdCategoria.SelectedItem as Categoria)?.Id ?? 0;
+        if (catId <= 0)
+        {
+            var autoInfo = DatabaseService.ClasificarYExtraerEspecificacionesProducto(TxtProdNombre.Text.Trim(), TxtProdDescripcion.Text.Trim());
+            catId = autoInfo.CategoriaId > 0 ? autoInfo.CategoriaId : 1;
+        }
+
+        _productoEnEdicion.CodigoInterno = codInterno;
+        _productoEnEdicion.CodigoBarras = codBarras;
         _productoEnEdicion.Nombre = TxtProdNombre.Text.Trim();
-        _productoEnEdicion.CategoriaId = (CboProdCategoria.SelectedItem as Categoria)?.Id ?? 1;
+        _productoEnEdicion.CategoriaId = catId;
         _productoEnEdicion.Marca = TxtProdMarca.Text.Trim();
         _productoEnEdicion.Familia = !string.IsNullOrWhiteSpace(CboProdFamilia?.Text)
             ? CboProdFamilia.Text.Trim().ToUpperInvariant()
@@ -1585,7 +1828,7 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.StockActual = ParseDecimal(TxtProdStock.Text, 0m);
         _productoEnEdicion.StockMinimo = ParseDecimal(TxtProdStockMin.Text, 5m);
         _productoEnEdicion.UltimoCostoCompra = ParseDecimal(TxtProdCosto.Text, 0m);
-        _productoEnEdicion.Ubicacion = TxtProdUbicacion.Text.Trim();
+        _productoEnEdicion.Ubicacion = string.IsNullOrWhiteSpace(TxtProdUbicacion.Text) ? "A-01" : TxtProdUbicacion.Text.Trim();
         _productoEnEdicion.EsHerramienta = ChkProdEsHerramienta.IsChecked == true;
 
         await EjecutarConIndicadorCargaAsync("Guardando producto...", () =>
@@ -1633,7 +1876,7 @@ public partial class MainWindow : FluentWindow
                 TxtStatusCarrito.Text = $"Carrito: {_carritoTienda.Sum(x => x.cantidad):0.##} artículos";
                 if (_productoEnEdicion.Id == prod.Id)
                 {
-                    LimpiarEditorProducto();
+                    PonerEditorProductoEnReposo();
                 }
                 CargarTodoElSistema();
             });
@@ -1739,7 +1982,14 @@ public partial class MainWindow : FluentWindow
         {
             var encs = DatabaseService.ObtenerEncargados(dep.Id);
             CboSolEncargado.ItemsSource = encs;
-            if (encs.Count > 0) CboSolEncargado.SelectedIndex = 0;
+            CboSolEncargado.SelectedIndex = -1;
+            EstablecerPlaceholderCombo(CboSolEncargado, "Seleccione la persona solicitante...");
+        }
+        else if (CboSolEncargado != null)
+        {
+            CboSolEncargado.ItemsSource = null;
+            CboSolEncargado.SelectedIndex = -1;
+            EstablecerPlaceholderCombo(CboSolEncargado, "Seleccione primero un departamento...");
         }
     }
 
@@ -1759,6 +2009,10 @@ public partial class MainWindow : FluentWindow
             filtrados = baseProds;
             if (TxtContadorFiltroProductoSol != null)
                 TxtContadorFiltroProductoSol.Text = $"{baseProds.Count} artículos en catálogo";
+
+            CboSolProductoAgregar.ItemsSource = filtrados;
+            CboSolProductoAgregar.SelectedItem = prevId > 0 ? filtrados.FirstOrDefault(p => p.Id == prevId) : null;
+            return;
         }
         else
         {
@@ -1792,6 +2046,10 @@ public partial class MainWindow : FluentWindow
         if (filtrados.Count > 0)
         {
             CboSolProductoAgregar.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+        }
+        else
+        {
+            CboSolProductoAgregar.SelectedIndex = -1;
         }
     }
 
@@ -1878,10 +2136,16 @@ public partial class MainWindow : FluentWindow
                     CboCompSolicitud.SelectedItem = matchComp;
                     CboCompSolicitud_SelectionChanged(CboCompSolicitud, null!);
                 }
+                else
+                {
+                    CboCompSolicitud.SelectedIndex = -1;
+                    CboCompSolicitud_SelectionChanged(CboCompSolicitud, null!);
+                }
             }
-            else if (CboCompSolicitud.SelectedIndex < 0 && sols.Count > 0)
+            else
             {
-                CboCompSolicitud.SelectedIndex = 0;
+                CboCompSolicitud.SelectedIndex = -1;
+                CboCompSolicitud_SelectionChanged(CboCompSolicitud, null!);
             }
 
             if (CboCarritoSolicitudDestino != null)
@@ -2006,6 +2270,17 @@ public partial class MainWindow : FluentWindow
         }
 
         _partidasNuevaSolicitud.Clear();
+        if (CboSolDepartamento != null) CboSolDepartamento.SelectedIndex = -1;
+        if (CboSolEncargado != null)
+        {
+            CboSolEncargado.ItemsSource = null;
+            CboSolEncargado.SelectedIndex = -1;
+            EstablecerPlaceholderCombo(CboSolEncargado, "Seleccione primero un departamento...");
+        }
+        if (CboSolProyecto != null) CboSolProyecto.SelectedIndex = -1;
+        if (CboSolProductoAgregar != null) CboSolProductoAgregar.SelectedIndex = -1;
+        TxtBuscarProductoSolicitud?.Clear();
+        TxtSolCantidadAgregar?.Clear();
         TxtSolNotas.Clear();
         DgPartidasNuevaSolicitud.Items.Refresh();
         ActualizarEncabezadoEditorSolicitud(null);
@@ -2654,7 +2929,14 @@ public partial class MainWindow : FluentWindow
     private void CboCompSolicitud_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (CboCompSolicitud.SelectedItem is not Solicitud sol)
+        {
+            if (TxtCompInfoSolicitud != null)
+                TxtCompInfoSolicitud.Text = "Seleccione una Solicitud / Carrito en la lista desplegable superior para iniciar o editar su comparativa de proveedores.";
+            _renglonesComparativa.Clear();
+            CargarProductoEnTarjetasComparativa(null);
+            RecalcularTotalesComparativa();
             return;
+        }
 
         int prevPartidaId = (DgComparativa.SelectedItem as CotizacionRenglonComparativo)?.SolicitudPartidaId ?? 0;
 
@@ -2799,11 +3081,19 @@ public partial class MainWindow : FluentWindow
         {
             if (r == null)
             {
-                TxtCompProdTitulo.Text = "2. Seleccione un producto de la lista";
-                TxtCompProdSubtitulo.Text = "No hay producto seleccionado.";
+                TxtCompProdTitulo.Text = "2. Seleccione un artículo de la lista izquierda";
+                TxtCompProdSubtitulo.Text = "Seleccione primero una Solicitud arriba y luego un artículo de la tabla para cotizarlo.";
                 TxtCompProdHistorial.Text = "";
-                TxtCompProdCantidad.Text = "1";
-                if (CboCompReferenciasSimilares != null) CboCompReferenciasSimilares.ItemsSource = null;
+                TxtCompProdCantidad.Text = "";
+                if (CboCompReferenciasSimilares != null)
+                {
+                    CboCompReferenciasSimilares.ItemsSource = null;
+                    CboCompReferenciasSimilares.SelectedIndex = -1;
+                    EstablecerPlaceholderCombo(CboCompReferenciasSimilares, "Seleccione un artículo para consultar compras similares...");
+                }
+                if (CboCompProv1 != null) CboCompProv1.SelectedIndex = -1;
+                if (CboCompProv2 != null) CboCompProv2.SelectedIndex = -1;
+                if (CboCompProv3 != null) CboCompProv3.SelectedIndex = -1;
                 return;
             }
 
@@ -2817,8 +3107,12 @@ public partial class MainWindow : FluentWindow
             {
                 var refsSimilares = DatabaseService.ObtenerReferenciasSimilaresParaComparativa(r.ProductoId, r.ProductoNombre, r.Familia);
                 CboCompReferenciasSimilares.ItemsSource = refsSimilares;
-                if (refsSimilares.Count > 0)
-                    CboCompReferenciasSimilares.SelectedIndex = 0;
+                CboCompReferenciasSimilares.SelectedIndex = -1;
+                EstablecerPlaceholderCombo(
+                    CboCompReferenciasSimilares,
+                    refsSimilares.Count > 0
+                        ? $"🔎 {refsSimilares.Count} compra(s) similares encontradas — despliegue para elegir..."
+                        : "Sin compras históricas similares registradas para esta familia/concepto");
             }
 
             var proveedores = CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores();
@@ -3800,8 +4094,17 @@ public partial class MainWindow : FluentWindow
         if (CboSalDepartamento.SelectedItem is Departamento dep)
         {
             var encs = DatabaseService.ObtenerEncargados(dep.Id);
+            string txtPrev = CboSalEncargado.Text;
             CboSalEncargado.ItemsSource = encs;
-            if (encs.Count > 0) CboSalEncargado.SelectedIndex = 0;
+            CboSalEncargado.SelectedIndex = -1;
+            CboSalEncargado.Text = txtPrev;
+        }
+        else if (CboSalEncargado != null)
+        {
+            string txtPrev = CboSalEncargado.Text;
+            CboSalEncargado.ItemsSource = null;
+            CboSalEncargado.SelectedIndex = -1;
+            CboSalEncargado.Text = txtPrev;
         }
     }
 
@@ -3810,17 +4113,26 @@ public partial class MainWindow : FluentWindow
         if (CboPreDepartamento?.SelectedItem is Departamento dep && CboPrePersonaRecibe != null)
         {
             var encs = DatabaseService.ObtenerEncargados(dep.Id);
+            string txtPrev = CboPrePersonaRecibe.Text;
             CboPrePersonaRecibe.ItemsSource = encs;
-            if (encs.Count > 0) CboPrePersonaRecibe.SelectedIndex = 0;
+            CboPrePersonaRecibe.SelectedIndex = -1;
+            CboPrePersonaRecibe.Text = txtPrev;
+        }
+        else if (CboPrePersonaRecibe != null)
+        {
+            string txtPrev = CboPrePersonaRecibe.Text;
+            CboPrePersonaRecibe.ItemsSource = null;
+            CboPrePersonaRecibe.SelectedIndex = -1;
+            CboPrePersonaRecibe.Text = txtPrev;
         }
     }
 
     private void RefrescarAlmacenPosYPrestamos()
     {
-        var herramientas = DatabaseService.ObtenerHerramientas();
-        CboHerramientaDisponible.ItemsSource = herramientas.Where(h => h.Estado == "Disponible").ToList();
-        if (CboHerramientaDisponible.Items.Count > 0 && CboHerramientaDisponible.SelectedIndex < 0)
-            CboHerramientaDisponible.SelectedIndex = 0;
+        int herPrevId = (CboHerramientaDisponible.SelectedItem as HerramientaActivo)?.Id ?? 0;
+        var herramientasDisp = DatabaseService.ObtenerHerramientas().Where(h => h.Estado == "Disponible").ToList();
+        CboHerramientaDisponible.ItemsSource = herramientasDisp;
+        CboHerramientaDisponible.SelectedItem = herPrevId > 0 ? herramientasDisp.FirstOrDefault(h => h.Id == herPrevId) : null;
 
         var prestamos = DatabaseService.ObtenerPrestamosHerramienta();
         var filas = new List<PrestamoVistaFila>();
@@ -3902,9 +4214,10 @@ public partial class MainWindow : FluentWindow
 
         if (string.IsNullOrWhiteSpace(raw))
         {
-            CboSalProductoPos.ItemsSource = todosProds;
-            if (CboSalProductoPos.Items.Count > 0 && CboSalProductoPos.SelectedIndex < 0)
-                CboSalProductoPos.SelectedIndex = 0;
+            int prodPrevId = (CboSalProductoPos.SelectedItem as Producto)?.Id ?? 0;
+            var prodsNoHer = todosProds.Where(p => !p.EsHerramienta).ToList();
+            CboSalProductoPos.ItemsSource = prodsNoHer;
+            CboSalProductoPos.SelectedItem = prodPrevId > 0 ? prodsNoHer.FirstOrDefault(p => p.Id == prodPrevId) : null;
 
             DgPrestamosHerramientas.ItemsSource = _todosPrestamosFilas;
             DgMovimientosAlmacen.ItemsSource = _todosMovimientosAlmacen;
@@ -4089,7 +4402,16 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void BtnLimpiarSalidaPos_Click(object sender, RoutedEventArgs e) => _partidasSalidaPos.Clear();
+    private void BtnLimpiarSalidaPos_Click(object sender, RoutedEventArgs e)
+    {
+        _partidasSalidaPos.Clear();
+        if (CboSalDepartamento != null) CboSalDepartamento.SelectedIndex = -1;
+        if (CboSalEncargado != null) { CboSalEncargado.SelectedIndex = -1; CboSalEncargado.Text = string.Empty; }
+        if (CboSalProyecto != null) CboSalProyecto.SelectedIndex = -1;
+        if (CboSalProductoPos != null) CboSalProductoPos.SelectedIndex = -1;
+        TxtSalCantidadPos?.Clear();
+        TxtSalNotas?.Clear();
+    }
 
     private void BtnRegistrarSalidaAlmacen_Click(object sender, RoutedEventArgs e)
     {
@@ -4122,8 +4444,7 @@ public partial class MainWindow : FluentWindow
                     ?? 1;
 
         var salida = DatabaseService.RegistrarSalidaAlmacen(dep.Id, encId, proy.Id, TxtSalNotas.Text, _partidasSalidaPos.ToList(), personaRecibe);
-        _partidasSalidaPos.Clear();
-        TxtSalNotas.Clear();
+        BtnLimpiarSalidaPos_Click(sender, e);
         CargarTodoElSistema();
 
         BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, salida);
@@ -4166,6 +4487,10 @@ public partial class MainWindow : FluentWindow
         string fechaCompromiso = (DpPreFechaCompromiso?.SelectedDate ?? DateTime.Today.AddDays(7)).ToString("yyyy-MM-dd");
 
         var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proy.Id, TxtSalNotas.Text, new List<HerramientaActivo> { her }, personaRecibe, fechaCompromiso);
+        if (CboPreDepartamento != null) CboPreDepartamento.SelectedIndex = -1;
+        if (CboPrePersonaRecibe != null) { CboPrePersonaRecibe.SelectedIndex = -1; CboPrePersonaRecibe.Text = string.Empty; }
+        if (CboPreProyecto != null) CboPreProyecto.SelectedIndex = -1;
+        if (CboHerramientaDisponible != null) CboHerramientaDisponible.SelectedIndex = -1;
         CargarTodoElSistema();
 
         BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, prestamo);
@@ -4226,10 +4551,6 @@ public partial class MainWindow : FluentWindow
             var proyectos = DatabaseService.ObtenerProyectos();
             int? proyIdPrevio = (CboXmlProyecto.SelectedItem as Proyecto)?.Id;
             CboXmlProyecto.ItemsSource = proyectos;
-            var proyDefault = proyectos.FirstOrDefault(p => proyIdPrevio.HasValue && p.Id == proyIdPrevio.Value)
-                ?? proyectos.FirstOrDefault(p => p.EsStockGeneral)
-                ?? proyectos.FirstOrDefault();
-            CboXmlProyecto.SelectedItem = proyDefault;
 
             var ocs = new List<OrdenCompra>
             {
@@ -4237,8 +4558,6 @@ public partial class MainWindow : FluentWindow
             };
             ocs.AddRange(DatabaseService.ObtenerOrdenesCompra());
             CboXmlOrdenCompra.ItemsSource = ocs;
-            if (CboXmlOrdenCompra.SelectedIndex < 0)
-                CboXmlOrdenCompra.SelectedIndex = 0;
 
             int? facIdSeleccionada = (DgFacturasRegistradas.SelectedItem as FacturaXml)?.Id;
             var facturas = DatabaseService.ObtenerFacturasXml();
@@ -4250,7 +4569,16 @@ public partial class MainWindow : FluentWindow
                 {
                     DgFacturasRegistradas.SelectedItem = reSel;
                     DgXmlConceptosActual.ItemsSource = reSel.Conceptos;
+                    CboXmlProyecto.SelectedItem = proyIdPrevio.HasValue
+                        ? proyectos.FirstOrDefault(p => p.Id == proyIdPrevio.Value)
+                        : null;
                 }
+            }
+            else if (_facturaXmlEnPantalla == null)
+            {
+                CboXmlProyecto.SelectedIndex = -1;
+                CboXmlOrdenCompra.SelectedIndex = -1;
+                CboXmlVincularProducto.SelectedIndex = -1;
             }
         }
         finally
@@ -4638,9 +4966,17 @@ public partial class MainWindow : FluentWindow
                 p.Modelo.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
 
         CboSinFacProducto.ItemsSource = filtrados;
-        if (filtrados.Count > 0)
+        if (!string.IsNullOrWhiteSpace(q) && filtrados.Count > 0)
         {
             CboSinFacProducto.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+        }
+        else if (prevId > 0)
+        {
+            CboSinFacProducto.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId);
+        }
+        else
+        {
+            CboSinFacProducto.SelectedIndex = -1;
         }
     }
 
@@ -4732,8 +5068,18 @@ public partial class MainWindow : FluentWindow
     private void BtnLimpiarCompraSinFactura_Click(object sender, RoutedEventArgs e)
     {
         _partidasCompraSinFactura.Clear();
+        if (CboSinFacProveedor != null)
+        {
+            CboSinFacProveedor.SelectedIndex = -1;
+            CboSinFacProveedor.Text = string.Empty;
+        }
+        if (CboSinFacProyecto != null) CboSinFacProyecto.SelectedIndex = -1;
         TxtSinFacFolioNota?.Clear();
         TxtSinFacNotas?.Clear();
+        TxtBuscarProdSinFac?.Clear();
+        if (CboSinFacProducto != null) CboSinFacProducto.SelectedIndex = -1;
+        TxtSinFacCantidad?.Clear();
+        TxtSinFacPrecioUnitario?.Clear();
         DgPartidasCompraSinFactura?.Items.Refresh();
         RecalcularTotalCompraSinFactura();
     }
@@ -4832,9 +5178,17 @@ public partial class MainWindow : FluentWindow
         try
         {
             CboProductoAnalisis.ItemsSource = filtrados;
-            if (filtrados.Count > 0)
+            if (!string.IsNullOrWhiteSpace(q) && filtrados.Count > 0)
             {
                 CboProductoAnalisis.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+            }
+            else if (prevId > 0)
+            {
+                CboProductoAnalisis.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId);
+            }
+            else
+            {
+                CboProductoAnalisis.SelectedIndex = -1;
             }
         }
         finally
@@ -4944,28 +5298,6 @@ public partial class MainWindow : FluentWindow
             .ToList();
         DgAnalisisProductos.ItemsSource = prodStats;
 
-        // Si el combo de análisis no tiene un producto con historial seleccionado y prodStats tiene elementos, seleccionar el primero con compras
-        if (CboProductoAnalisis != null && prodStats.Count > 0)
-        {
-            var actual = CboProductoAnalisis.SelectedItem as Producto;
-            if (actual == null || !prodStats.Any(x => x.ProductoId == actual.Id))
-            {
-                _sincronizandoProductoAnalisis = true;
-                try
-                {
-                    if (CboProductoAnalisis.ItemsSource is IEnumerable<Producto> lista)
-                    {
-                        var topProd = lista.FirstOrDefault(p => p.Id == prodStats[0].ProductoId);
-                        if (topProd != null) CboProductoAnalisis.SelectedItem = topProd;
-                    }
-                }
-                finally
-                {
-                    _sincronizandoProductoAnalisis = false;
-                }
-            }
-        }
-
         // 3. Gasto por Proyecto y Departamento
         var proyStats = proyectos.Select(pr =>
         {
@@ -4998,7 +5330,9 @@ public partial class MainWindow : FluentWindow
         if (CboProductoAnalisis?.SelectedItem is not Producto prod)
         {
             if (TxtResumenGraficaProducto != null)
-                TxtResumenGraficaProducto.Text = "Seleccione un producto para visualizar sus gráficas de dispersión y barras.";
+                TxtResumenGraficaProducto.Text = "Seleccione un producto en el desplegable o en la tabla superior para visualizar sus gráficas de dispersión y barras.";
+            DibujarMensajeSinDatosCanvas(CanvasDispersionProducto, "Seleccione un producto arriba o en la tabla superior para graficar");
+            DibujarMensajeSinDatosCanvas(CanvasBarrasProducto, "Seleccione un producto arriba o en la tabla superior para graficar");
             return;
         }
 
@@ -5334,6 +5668,16 @@ public partial class MainWindow : FluentWindow
         DgDirCategorias.ItemsSource = DatabaseService.ObtenerCategorias();
     }
 
+    private void PonerFormulariosDirectoriosEnBlanco()
+    {
+        BtnNuevoProveedor_Click(this, new RoutedEventArgs());
+        BtnNuevoProyecto_Click(this, new RoutedEventArgs());
+        BtnNuevoEncargado_Click(this, new RoutedEventArgs());
+        BtnNuevoDepartamento_Click(this, new RoutedEventArgs());
+        BtnNuevaHerramientaDir_Click(this, new RoutedEventArgs());
+        BtnNuevaCategoriaDir_Click(this, new RoutedEventArgs());
+    }
+
     // --- 8.1 PROVEEDORES ---
     private void DgDirProveedores_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -5393,8 +5737,8 @@ public partial class MainWindow : FluentWindow
         TxtProvContacto.Clear();
         TxtProvTelefono.Clear();
         TxtProvCorreo.Clear();
-        TxtProvCondiciones.Text = "Contado";
-        TxtProvDias.Text = "3";
+        TxtProvCondiciones.Clear();
+        TxtProvDias.Clear();
         TxtProvNotas.Clear();
         TxtDesgloseProveedorTitulo.Text = "Seleccione un proveedor para consultar sus órdenes de compra y facturas";
         DgDesgloseProveedor.ItemsSource = null;
@@ -5523,7 +5867,7 @@ public partial class MainWindow : FluentWindow
         TxtProyCodigo.Clear();
         TxtProyNombre.Clear();
         TxtProyArea.Clear();
-        CboProyEstatus.SelectedIndex = 0;
+        CboProyEstatus.SelectedIndex = -1;
         TxtDesgloseProyectoTitulo.Text = "Seleccione un proyecto para consultar sus solicitudes, órdenes de compra y salidas de almacén";
         DgDesgloseProyecto.ItemsSource = null;
     }
@@ -5627,6 +5971,7 @@ public partial class MainWindow : FluentWindow
     {
         _encargadoEditandoId = 0;
         DgDirPersonal.SelectedItem = null;
+        if (CboAltaEncargadoDepto != null) CboAltaEncargadoDepto.SelectedIndex = -1;
         TxtAltaEncargadoNombre.Clear();
         TxtAltaEncargadoPuesto.Clear();
         TxtAltaEncargadoTelefono.Clear();
@@ -5756,11 +6101,12 @@ public partial class MainWindow : FluentWindow
     {
         _herramientaEditandoId = 0;
         DgDirHerramientas.SelectedItem = null;
-        TxtDirHerCodigo.Text = DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
+        if (CboDirHerProducto != null) CboDirHerProducto.SelectedIndex = -1;
+        TxtDirHerCodigo.Clear();
         TxtDirHerSerie.Clear();
         TxtDirHerMarca.Clear();
-        CboDirHerEstado.SelectedIndex = 0;
-        TxtDirHerUbicacion.Text = "Almacén Herramientas";
+        CboDirHerEstado.SelectedIndex = -1;
+        TxtDirHerUbicacion.Clear();
         TxtDirHerNotas.Clear();
     }
 
@@ -5834,9 +6180,9 @@ public partial class MainWindow : FluentWindow
         _categoriaEditandoId = 0;
         DgDirCategorias.SelectedItem = null;
         TxtDirCatNombre.Clear();
-        TxtDirCatCampo1.Text = "Capacidad Eléctrica / Tipo";
-        TxtDirCatCampo2.Text = "Especificación / Material";
-        TxtDirCatCampo3.Text = "Detalle Adicional / Color";
+        TxtDirCatCampo1.Clear();
+        TxtDirCatCampo2.Clear();
+        TxtDirCatCampo3.Clear();
     }
 
     private void BtnGuardarCategoriaDir_Click(object sender, RoutedEventArgs e)
@@ -5847,12 +6193,16 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        string c1 = string.IsNullOrWhiteSpace(TxtDirCatCampo1.Text) ? "Capacidad Eléctrica / Tipo" : TxtDirCatCampo1.Text.Trim();
+        string c2 = string.IsNullOrWhiteSpace(TxtDirCatCampo2.Text) ? "Especificación / Material" : TxtDirCatCampo2.Text.Trim();
+        string c3 = string.IsNullOrWhiteSpace(TxtDirCatCampo3.Text) ? "Detalle Adicional / Color" : TxtDirCatCampo3.Text.Trim();
+
         DatabaseService.GuardarCategoria(
             TxtDirCatNombre.Text,
             _categoriaEditandoId,
-            TxtDirCatCampo1.Text,
-            TxtDirCatCampo2.Text,
-            TxtDirCatCampo3.Text);
+            c1,
+            c2,
+            c3);
         BtnNuevaCategoriaDir_Click(sender, e);
         CargarTodoElSistema();
     }
