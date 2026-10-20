@@ -2746,11 +2746,21 @@ LIMIT 1";
             if (porNombreExacto != null)
                 return porNombreExacto;
 
-            var porCoincidencia = todosProductos.FirstOrDefault(p =>
-                (p.Nombre.Length >= 6 && desc.Contains(p.Nombre, StringComparison.OrdinalIgnoreCase)) ||
-                (desc.Length >= 6 && p.Nombre.Contains(desc, StringComparison.OrdinalIgnoreCase)));
-            if (porCoincidencia != null)
-                return porCoincidencia;
+            // Solo permitir coincidencia parcial por subcadena cuando ambos nombres son suficientemente descriptivos (>= 14 caracteres)
+            // y no tienen códigos de barras de proveedor distintos entre sí.
+            if (desc.Length >= 14)
+            {
+                var porCoincidencia = todosProductos.FirstOrDefault(p =>
+                    p.Nombre.Length >= 14 &&
+                    (desc.Contains(p.Nombre, StringComparison.OrdinalIgnoreCase) ||
+                     p.Nombre.Contains(desc, StringComparison.OrdinalIgnoreCase)) &&
+                    (noId.Length < 4 ||
+                     string.IsNullOrWhiteSpace(p.CodigoBarras) ||
+                     p.CodigoBarras.Equals(p.CodigoInterno, StringComparison.OrdinalIgnoreCase) ||
+                     p.CodigoBarras.Equals(noId, StringComparison.OrdinalIgnoreCase)));
+                if (porCoincidencia != null)
+                    return porCoincidencia;
+            }
         }
 
         return null;
