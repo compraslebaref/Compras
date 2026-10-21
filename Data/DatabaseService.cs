@@ -999,6 +999,24 @@ ORDER BY p.CodigoInterno";
 
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
+
+        using (var cmdCustom = conn.CreateCommand())
+        {
+            cmdCustom.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave = 'FamiliasPersonalizadas' LIMIT 1";
+            var val = cmdCustom.ExecuteScalar()?.ToString();
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                foreach (var f in val.Split('|', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string clean = f.Trim();
+                    if (!string.IsNullOrWhiteSpace(clean) && !baseFamilias.Any(x => x.Equals(clean, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        baseFamilias.Add(clean);
+                    }
+                }
+            }
+        }
+
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT DISTINCT TRIM(Familia) FROM Productos WHERE TRIM(COALESCE(Familia, '')) <> '' ORDER BY Familia";
         using var r = cmd.ExecuteReader();
@@ -1014,16 +1032,72 @@ ORDER BY p.CodigoInterno";
         return baseFamilias.OrderBy(x => x).ToList();
     }
 
+    public static void GuardarFamiliaPersonalizada(string? familia)
+    {
+        string clean = (familia ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(clean)) return;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        var actuales = new List<string>();
+        using (var sel = conn.CreateCommand())
+        {
+            sel.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave = 'FamiliasPersonalizadas' LIMIT 1";
+            var val = sel.ExecuteScalar()?.ToString();
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                actuales.AddRange(val.Split('|', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()));
+            }
+        }
+
+        if (!actuales.Any(x => x.Equals(clean, StringComparison.OrdinalIgnoreCase)))
+        {
+            actuales.Add(clean);
+            using var up = conn.CreateCommand();
+            up.CommandText = @"
+INSERT INTO ConfiguracionSistema (Clave, Valor) VALUES ('FamiliasPersonalizadas', $val)
+ON CONFLICT(Clave) DO UPDATE SET Valor = $val";
+            up.Parameters.AddWithValue("$val", string.Join("|", actuales));
+            up.ExecuteNonQuery();
+        }
+    }
+
     public static int RenombrarFamiliaMasivo(string familiaActual, string nuevaFamilia)
     {
         if (string.IsNullOrWhiteSpace(familiaActual))
             return 0;
 
+        string nuevaClean = (nuevaFamilia ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(nuevaClean))
+        {
+            GuardarFamiliaPersonalizada(nuevaClean);
+        }
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
+
+        using (var sel = conn.CreateCommand())
+        {
+            sel.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave = 'FamiliasPersonalizadas' LIMIT 1";
+            var val = sel.ExecuteScalar()?.ToString();
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                var lista = val.Split('|', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(x => x.Trim().Equals(familiaActual.Trim(), StringComparison.OrdinalIgnoreCase) ? nuevaClean : x.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                using var upConf = conn.CreateCommand();
+                upConf.CommandText = "UPDATE ConfiguracionSistema SET Valor = $v WHERE Clave = 'FamiliasPersonalizadas'";
+                upConf.Parameters.AddWithValue("$v", string.Join("|", lista));
+                upConf.ExecuteNonQuery();
+            }
+        }
+
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE Productos SET Familia = $nueva WHERE LOWER(TRIM(Familia)) = LOWER(TRIM($actual))";
-        cmd.Parameters.AddWithValue("$nueva", (nuevaFamilia ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$nueva", nuevaClean);
         cmd.Parameters.AddWithValue("$actual", familiaActual.Trim());
         return cmd.ExecuteNonQuery();
     }
@@ -2497,17 +2571,23 @@ WHERE Id = $spid";
                 int nuevoProdId = GuardarProducto(nuevoProd);
                 partida.ProductoId = nuevoProdId;
                 partida.ProductoCodigo = nuevoProd.CodigoInterno;
+                partida.ProductoNombre = nuevoProd.Nombre;
+
+                if (!string.IsNullOrWhiteSpace(oc.ProveedorRfc) && partida.PrecioUnitarioSinIva > 0m)
+                {
+                    GuardarMapaProductoProveedor(oc.ProveedorRfc, nuevoProd.CodigoInterno, nuevoProd.Nombre, nuevoProdId, partida.PrecioUnitarioSinIva);
+                }
 
                 using var connUp = new SqliteConnection(ConnectionString);
                 connUp.Open();
                 using var upOcp = connUp.CreateCommand();
                 upOcp.CommandText = @"
-UPDATE OrdenCompraPartidas SET ProductoId = $pid WHERE Id = $id;
-UPDATE SolicitudPartidas SET ProductoId = $pid WHERE OrdenCompraId = $ocid AND ProductoId <= 0 AND LOWER(TRIM(DescripcionLibre)) = LOWER(TRIM($dlib));";
+UPDATE OrdenCompraPartidas SET ProductoId = $pid, DescripcionLibre = $nom WHERE Id = $id;
+UPDATE SolicitudPartidas SET ProductoId = $pid WHERE OrdenCompraId = $ocid AND ProductoId <= 0;";
                 upOcp.Parameters.AddWithValue("$pid", nuevoProdId);
+                upOcp.Parameters.AddWithValue("$nom", nombreReal);
                 upOcp.Parameters.AddWithValue("$id", partida.Id);
                 upOcp.Parameters.AddWithValue("$ocid", oc.Id);
-                upOcp.Parameters.AddWithValue("$dlib", nombreReal);
                 upOcp.ExecuteNonQuery();
             }
         }
@@ -2917,9 +2997,17 @@ WHERE Id = $hid";
         int pend = Convert.ToInt32(chk.ExecuteScalar());
         if (pend == 0)
         {
+            using var chkInc = conn.CreateCommand();
+            chkInc.Transaction = tx;
+            chkInc.CommandText = "SELECT COUNT(*) FROM PrestamoPartidas WHERE PrestamoHerramientaId = $pid AND EstadoDevolucion IN ('Dañado', 'Extraviado')";
+            chkInc.Parameters.AddWithValue("$pid", prestamoId);
+            int incidencias = Convert.ToInt32(chkInc.ExecuteScalar());
+            string estatusFinal = incidencias > 0 ? "Devuelto con Incidencia" : "Devuelto Completo";
+
             using var upPre = conn.CreateCommand();
             upPre.Transaction = tx;
-            upPre.CommandText = "UPDATE PrestamosHerramienta SET Estatus = 'Devuelto Completo', FechaDevolucion = $fec WHERE Id = $pid";
+            upPre.CommandText = "UPDATE PrestamosHerramienta SET Estatus = $estF, FechaDevolucion = $fec WHERE Id = $pid";
+            upPre.Parameters.AddWithValue("$estF", estatusFinal);
             upPre.Parameters.AddWithValue("$fec", fecha);
             upPre.Parameters.AddWithValue("$pid", prestamoId);
             upPre.ExecuteNonQuery();
@@ -4358,7 +4446,7 @@ ORDER BY Fecha ASC, Id DESC";
 
         // 2. Eventos automáticos: Llegada estimada de Órdenes de Compra pendientes/parciales
         var ocsPendientes = ObtenerOrdenesCompra()
-            .Where(o => o.Estatus == "Emitida" || o.Estatus == "Recibida Parcial")
+            .Where(o => o.Estatus == "Emitida" || o.Estatus == "Recibida Parcial" || o.Estatus == "Recibida Parcialmente")
             .ToList();
 
         foreach (var oc in ocsPendientes)
@@ -4386,7 +4474,7 @@ ORDER BY Fecha ASC, Id DESC";
 
         // 3. Eventos automáticos: Devolución compromiso de Préstamos de Herramienta activos
         var prestamosActivos = ObtenerPrestamosHerramienta()
-            .Where(p => p.Estatus == "En Préstamo")
+            .Where(p => p.Estatus == "Activo" || p.Estatus == "En Préstamo")
             .ToList();
 
         foreach (var pre in prestamosActivos)

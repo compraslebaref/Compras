@@ -941,12 +941,12 @@ public partial class MainWindow : FluentWindow
         var her = DatabaseService.ObtenerHerramientas();
 
         KpiSolicitudes.Text = sols.Count(s => s.Estatus == "Pendiente").ToString();
-        KpiOcsAbiertas.Text = ocs.Count(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva").ToString();
+        KpiOcsAbiertas.Text = ocs.Count(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToString();
         KpiStockBajo.Text = prods.Count(p => p.StockBajo).ToString();
         KpiHerramientasPrestadas.Text = her.Count(h => h.Estado == "En Préstamo").ToString();
         KpiGastoTotal.Text = ocs.Where(o => o.Estatus != "Cancelada").Sum(o => o.TotalConIva).ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
 
-        DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva").ToList();
+        DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToList();
         DgDashboardAlertas.ItemsSource = prods.Where(p => p.StockBajo).ToList();
 
         RefrescarCalendarioYAgendaDashboard();
@@ -1419,15 +1419,10 @@ public partial class MainWindow : FluentWindow
                 System.Windows.MessageBox.Show(win, "Escriba el nombre de la familia.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            DatabaseService.GuardarFamiliaPersonalizada(fam);
+            CargarCombosBase();
             if (CboProdFamilia != null)
             {
-                var lista = (CboProdFamilia.ItemsSource as IEnumerable<string>)?.ToList() ?? new List<string>();
-                if (!lista.Any(x => x.Equals(fam, StringComparison.OrdinalIgnoreCase)))
-                {
-                    lista.Add(fam);
-                    lista.Sort(StringComparer.OrdinalIgnoreCase);
-                    CboProdFamilia.ItemsSource = lista;
-                }
                 CboProdFamilia.Text = fam;
             }
             if (_productoEnEdicion.Id > 0)
@@ -1435,7 +1430,11 @@ public partial class MainWindow : FluentWindow
                 _productoEnEdicion.Familia = fam;
                 DatabaseService.GuardarProducto(_productoEnEdicion);
                 CargarTodoElSistema(conservarPosicionCatalogo: true);
-                System.Windows.MessageBox.Show(win, $"Se asignó y guardó la familia '{fam}' en el producto {_productoEnEdicion.CodigoInterno}.", "Familia Asignada", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show(win, $"Se guardó la familia '{fam}' y se asignó al producto {_productoEnEdicion.CodigoInterno}.", "Familia Guardada", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                System.Windows.MessageBox.Show(win, $"Se creó y guardó la familia '{fam}' en el catálogo de familias.", "Familia Creada", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             win.Close();
         };
@@ -2628,6 +2627,20 @@ public partial class MainWindow : FluentWindow
         CambiarSeccion(1);
     }
 
+    private void BtnImprimirSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = DgHistorialSolicitudes.SelectedItem as Solicitud
+                  ?? DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+
+        if (sol == null)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione o guarde primero una Solicitud para abrir su vista previa de impresión.", "Solicitud no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        BarcodePrintService.MostrarVistaPreviaEImprimirSolicitud(this, sol);
+    }
+
     private void BtnEliminarSolicitud_Click(object sender, RoutedEventArgs e)
     {
         var sol = DgHistorialSolicitudes.SelectedItem as Solicitud
@@ -2812,12 +2825,17 @@ public partial class MainWindow : FluentWindow
                             ProductoId = prod.Id,
                             ProductoCodigo = prod.CodigoInterno,
                             ProductoNombre = prod.Nombre,
+                            Familia = prod.Familia,
                             UnidadCompra = prod.UnidadCompra,
                             CantidadSolicitada = cant,
                             StockActualAlmacen = prod.StockActual,
                             NotasPartida = nota
                         });
                     }
+                }
+                else if (!string.IsNullOrWhiteSpace(clave))
+                {
+                    AgregarConceptoLibreAPartidasSolicitud(clave, cant, nota);
                 }
             }
             DgPartidasNuevaSolicitud.Items.Refresh();
@@ -3880,6 +3898,13 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        var conceptosAbiertosPorRecibir = aRecibir.Where(x => x.p.ProductoId <= 0).Select(x => x.p).ToList();
+        if (conceptosAbiertosPorRecibir.Count > 0)
+        {
+            if (!ConfirmarNombresConceptosAbiertosEnRecepcion(oc, conceptosAbiertosPorRecibir))
+                return;
+        }
+
         string remision = TxtFolioRemisionRecepcionOc?.Text?.Trim() ?? string.Empty;
         string notas = TxtNotasRecepcionOc.Text?.Trim() ?? string.Empty;
         string notasCompletas = !string.IsNullOrWhiteSpace(remision)
@@ -3892,6 +3917,130 @@ public partial class MainWindow : FluentWindow
         CargarTodoElSistema();
 
         BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, entrada);
+    }
+
+    private bool ConfirmarNombresConceptosAbiertosEnRecepcion(OrdenCompra oc, List<OrdenCompraPartida> conceptosAbiertos)
+    {
+        var win = new Window
+        {
+            Title = $"Confirmar Alta en Catálogo de Conceptos Abiertos — {oc.Folio}",
+            Width = 560,
+            Height = Math.Min(540, 230 + conceptosAbiertos.Count * 86),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new DockPanel { Margin = new Thickness(18) };
+        var topStack = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        topStack.Children.Add(new TextBlock
+        {
+            Text = "✨ Definir Nombre Específico para el Catálogo (PRD-xxxx)",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold
+        });
+        topStack.Children.Add(new TextBlock
+        {
+            Text = $"Esta Orden de Compra ({oc.ProveedorNombre}) incluye {conceptosAbiertos.Count} concepto(s) abierto(s). Puede confirmar o detallar el nombre/marca real comprado para que se registre correctamente en el Catálogo:",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+        DockPanel.SetDock(topStack, Dock.Top);
+        root.Children.Add(topStack);
+
+        var btnPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        var btnCancelar = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnConfirmar = new System.Windows.Controls.Button { Content = "Confirmar y Crear en Catálogo", Padding = new Thickness(16, 6, 16, 6), FontWeight = FontWeights.Bold };
+        btnPanel.Children.Add(btnCancelar);
+        btnPanel.Children.Add(btnConfirmar);
+        DockPanel.SetDock(btnPanel, Dock.Bottom);
+        root.Children.Add(btnPanel);
+
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var itemsPanel = new StackPanel();
+        var editores = new List<(OrdenCompraPartida partida, System.Windows.Controls.TextBox txtNombre, System.Windows.Controls.TextBox txtUnidad)>();
+
+        foreach (var part in conceptosAbiertos)
+        {
+            var card = new Border
+            {
+                Padding = new Thickness(10),
+                Margin = new Thickness(0, 0, 0, 8),
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+                BorderThickness = new Thickness(1)
+            };
+            var sp = new StackPanel();
+            sp.Children.Add(new TextBlock
+            {
+                Text = $"Concepto solicitado: {part.ProductoNombre} ({part.CantidadRecibirAhora:0.##} {part.UnidadCompra} a {part.PrecioUnitarioConIva:C2} c/IVA)",
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+
+            var rowGrid = new Grid();
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+
+            var txtNom = new System.Windows.Controls.TextBox
+            {
+                Text = !string.IsNullOrWhiteSpace(part.DescripcionLibre) ? part.DescripcionLibre : part.ProductoNombre,
+                Padding = new Thickness(6, 4, 6, 4),
+                Margin = new Thickness(0, 0, 8, 0),
+                ToolTip = "Nombre específico del artículo (ej. Jabón Líquido Salvo 900ml)"
+            };
+            var txtUni = new System.Windows.Controls.TextBox
+            {
+                Text = string.IsNullOrWhiteSpace(part.UnidadCompra) ? "Pieza" : part.UnidadCompra,
+                Padding = new Thickness(6, 4, 6, 4),
+                ToolTip = "Unidad de compra/almacén"
+            };
+            Grid.SetColumn(txtNom, 0);
+            Grid.SetColumn(txtUni, 1);
+            rowGrid.Children.Add(txtNom);
+            rowGrid.Children.Add(txtUni);
+            sp.Children.Add(rowGrid);
+            card.Child = sp;
+            itemsPanel.Children.Add(card);
+            editores.Add((part, txtNom, txtUni));
+        }
+
+        scroll.Content = itemsPanel;
+        root.Children.Add(scroll);
+
+        btnCancelar.Click += (_, _) => win.DialogResult = false;
+        btnConfirmar.Click += (_, _) =>
+        {
+            foreach (var (partida, txtNombre, txtUnidad) in editores)
+            {
+                string nom = txtNombre.Text.Trim();
+                if (!string.IsNullOrWhiteSpace(nom))
+                {
+                    partida.DescripcionLibre = nom;
+                    partida.ProductoNombre = nom;
+                }
+                string uni = txtUnidad.Text.Trim();
+                if (!string.IsNullOrWhiteSpace(uni))
+                {
+                    partida.UnidadCompra = uni;
+                    partida.UnidadAlmacen = uni;
+                }
+            }
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        return win.ShowDialog() == true;
     }
 
     private void BtnForzarEstatusOcAdmin_Click(object sender, RoutedEventArgs e)
@@ -4437,6 +4586,28 @@ public partial class MainWindow : FluentWindow
         {
             System.Windows.MessageBox.Show(this, "Agregue o escanee al menos un material para el vale de salida.", "Vale vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
+        }
+
+        var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var sinStockSuficiente = _partidasSalidaPos
+            .Where(part => prodsDict.TryGetValue(part.ProductoId, out var p) && part.CantidadEntregada > p.StockActual)
+            .Select(part =>
+            {
+                decimal stockDisp = prodsDict.TryGetValue(part.ProductoId, out var p) ? p.StockActual : 0m;
+                return $"• [{part.ProductoCodigo}] {part.ProductoNombre}: solicita {part.CantidadEntregada:0.##} {part.UnidadAlmacen} (Stock actual: {stockDisp:0.##})";
+            })
+            .ToList();
+
+        if (sinStockSuficiente.Count > 0)
+        {
+            var confirmarStock = System.Windows.MessageBox.Show(this,
+                $"Los siguientes artículos superan la existencia registrada en almacén:\n\n{string.Join("\n", sinStockSuficiente)}\n\n¿Desea registrar la salida de todas formas (el stock quedará en 0)?",
+                "Advertencia de Stock Insuficiente",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (confirmarStock != System.Windows.MessageBoxResult.Yes)
+                return;
         }
 
         int encId = (CboSalEncargado.SelectedItem as Encargado)?.Id

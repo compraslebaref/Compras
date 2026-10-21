@@ -895,6 +895,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <ui:Button Grid.Column="0"
                                                    Margin="0,0,6,0"
@@ -902,6 +903,11 @@
                                                    Content="Ir al Catálogo con esta Solicitud"
                                                    Click="BtnIrCatalogoConSolicitud_Click" />
                                         <ui:Button Grid.Column="1"
+                                                   Margin="0,0,6,0"
+                                                   Content="🖨️ Imprimir"
+                                                   ToolTip="Vista previa e impresión de la Solicitud seleccionada (sin precios)"
+                                                   Click="BtnImprimirSolicitud_Click" />
+                                        <ui:Button Grid.Column="2"
                                                    Content="Eliminar Carrito"
                                                    Click="BtnEliminarSolicitud_Click" />
                                     </Grid>

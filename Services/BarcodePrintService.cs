@@ -77,6 +77,47 @@ public static class BarcodePrintService
         return img;
     }
 
+    public static void MostrarVistaPreviaEImprimirSolicitud(Window owner, Solicitud sol)
+    {
+        var filas = sol.Partidas.Select((p, idx) => new[]
+        {
+            (idx + 1).ToString(),
+            string.IsNullOrWhiteSpace(p.ProductoCodigo) ? "CONCEPTO" : p.ProductoCodigo,
+            p.ProductoNombre,
+            $"{p.CantidadSolicitada:0.##}",
+            p.UnidadCompra,
+            string.IsNullOrWhiteSpace(p.NotasPartida) ? "-" : p.NotasPartida
+        }).ToList();
+
+        var metadatos = new List<(string etiq, string val)>
+        {
+            ("Departamento Solicitante:", sol.DepartamentoNombre),
+            ("Persona Solicitante:", sol.EncargadoNombre),
+            ("Proyecto Destino:", sol.ProyectoNombre),
+            ("Origen:", sol.Origen),
+            ("Estatus:", sol.Estatus)
+        };
+
+        var hoja = ConstruirHojaCartaDocumento(
+            tituloDocumento: "SOLICITUD DE MATERIAL / COMPRA",
+            subtitulo: "Lebaref | Departamento de Compras",
+            folioCodigoBarras: sol.Folio,
+            fecha: sol.Fecha,
+            metadatos: metadatos,
+            encabezadosTabla: new[] { "#", "Código", "Descripción / Concepto", "Cant.", "Unidad", "Observación" },
+            filasTabla: filas,
+            totales: new List<(string, string)>
+            {
+                ("Total Partidas:", sol.Partidas.Count.ToString()),
+                ("Total Unidades:", $"{sol.TotalArticulos:0.##}")
+            },
+            notas: sol.Notas,
+            firmaIzquierda: $"Solicitó: {sol.EncargadoNombre}",
+            firmaDerecha: "Recibió Compras / Almacén");
+
+        AbrirVentanaVistaPreviaCarta(owner, $"Solicitud {sol.Folio}", hoja);
+    }
+
     public static void MostrarVistaPreviaEImprimirOrdenCompra(Window owner, OrdenCompra oc)
     {
         var filas = oc.Partidas.Select((p, idx) => new[]
