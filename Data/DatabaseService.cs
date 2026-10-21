@@ -353,6 +353,7 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
 
         // Columnas de persona abierta que recibe y fecha compromiso en Salidas y Préstamos
         AsegurarColumnaExiste(conn, "SalidasAlmacen", "PersonaRecibe", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "SalidaPartidas", "CantidadDevuelta", "REAL NOT NULL DEFAULT 0");
         AsegurarColumnaExiste(conn, "PrestamosHerramienta", "PersonaRecibe", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "PrestamosHerramienta", "FechaCompromiso", "TEXT NOT NULL DEFAULT ''");
 
@@ -2851,7 +2852,7 @@ ORDER BY s.Id DESC";
             using var pCmd = conn.CreateCommand();
             pCmd.CommandText = @"
 SELECT sp.Id, sp.SalidaAlmacenId, sp.ProductoId, COALESCE(p.CodigoInterno, 'PRD'), COALESCE(p.Nombre, 'Producto'),
-       sp.CantidadEntregada, sp.UnidadAlmacen, sp.CostoUnitarioAlmacen
+       sp.CantidadEntregada, sp.UnidadAlmacen, sp.CostoUnitarioAlmacen, COALESCE(sp.CantidadDevuelta, 0)
 FROM SalidaPartidas sp
 LEFT JOIN Productos p ON p.Id = sp.ProductoId
 WHERE sp.SalidaAlmacenId = $sid";
@@ -2868,11 +2869,146 @@ WHERE sp.SalidaAlmacenId = $sid";
                     ProductoNombre = pr.GetString(4),
                     CantidadEntregada = Convert.ToDecimal(pr.GetDouble(5)),
                     UnidadAlmacen = pr.GetString(6),
-                    CostoUnitarioAlmacen = Convert.ToDecimal(pr.GetDouble(7))
+                    CostoUnitarioAlmacen = Convert.ToDecimal(pr.GetDouble(7)),
+                    CantidadDevuelta = Convert.ToDecimal(pr.GetDouble(8)),
+                    CantidadDevolverAhora = 0m
                 });
             }
         }
         return list;
+    }
+
+    public static (SalidaAlmacen SalidaActualizada, EntradaAlmacen EntradaDevolucion) RegistrarDevolucionMaterialSalida(
+        int salidaId,
+        List<(int SalidaPartidaId, int ProductoId, decimal CantidadDevolver)> devoluciones,
+        string observaciones = "")
+    {
+        var salPrevia = ObtenerSalidasAlmacen().FirstOrDefault(s => s.Id == salidaId)
+            ?? throw new InvalidOperationException("No se encontró el vale de salida especificado.");
+
+        var devValidas = devoluciones.Where(d => d.CantidadDevolver > 0).ToList();
+        if (devValidas.Count == 0)
+            throw new InvalidOperationException("Debes indicar al menos un artículo con cantidad a devolver mayor a cero.");
+
+        string folioEnt = GenerarSiguienteFolio("ENT", "EntradasAlmacen");
+        string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        foreach (var dev in devValidas)
+        {
+            var partOrig = salPrevia.Partidas.FirstOrDefault(p => p.Id == dev.SalidaPartidaId);
+            if (partOrig == null) continue;
+
+            decimal maxDevolver = Math.Max(0m, partOrig.CantidadEntregada - partOrig.CantidadDevuelta);
+            decimal cantReal = Math.Min(dev.CantidadDevolver, maxDevolver);
+            if (cantReal <= 0) continue;
+
+            using var upPart = conn.CreateCommand();
+            upPart.Transaction = tx;
+            upPart.CommandText = @"
+UPDATE SalidaPartidas
+SET CantidadDevuelta = COALESCE(CantidadDevuelta, 0) + $cdev
+WHERE Id = $spid";
+            upPart.Parameters.AddWithValue("$cdev", (double)cantReal);
+            upPart.Parameters.AddWithValue("$spid", partOrig.Id);
+            upPart.ExecuteNonQuery();
+
+            using var upProd = conn.CreateCommand();
+            upProd.Transaction = tx;
+            upProd.CommandText = @"
+UPDATE Productos
+SET StockActual = StockActual + $cdev
+WHERE Id = $pid";
+            upProd.Parameters.AddWithValue("$cdev", (double)cantReal);
+            upProd.Parameters.AddWithValue("$pid", partOrig.ProductoId);
+            upProd.ExecuteNonQuery();
+        }
+
+        // Recalcular si la devolución de la salida es parcial o completa y su costo neto consumido
+        decimal totalEntregado = 0m;
+        decimal totalDevuelto = 0m;
+        decimal nuevoCostoNeto = 0m;
+
+        using (var qCmd = conn.CreateCommand())
+        {
+            qCmd.Transaction = tx;
+            qCmd.CommandText = "SELECT CantidadEntregada, COALESCE(CantidadDevuelta, 0), CostoUnitarioAlmacen FROM SalidaPartidas WHERE SalidaAlmacenId = $sid";
+            qCmd.Parameters.AddWithValue("$sid", salidaId);
+            using var qr = qCmd.ExecuteReader();
+            while (qr.Read())
+            {
+                decimal ce = Convert.ToDecimal(qr.GetDouble(0));
+                decimal cd = Convert.ToDecimal(qr.GetDouble(1));
+                decimal cu = Convert.ToDecimal(qr.GetDouble(2));
+                totalEntregado += ce;
+                totalDevuelto += cd;
+                nuevoCostoNeto += Math.Max(0m, ce - cd) * cu;
+            }
+        }
+
+        bool esDevolucionCompleta = totalEntregado > 0 && totalDevuelto >= totalEntregado - 0.001m;
+        string tipoEntrada = esDevolucionCompleta ? "Devolución Completa Material" : "Devolución Parcial Material";
+        string notaDevolucion = string.IsNullOrWhiteSpace(observaciones)
+            ? $"Reingreso por {tipoEntrada} del vale {salPrevia.Folio} ({salPrevia.PersonaRecibeEfectiva})"
+            : $"Reingreso por {tipoEntrada} del vale {salPrevia.Folio}: {observaciones.Trim()}";
+
+        using (var upSal = conn.CreateCommand())
+        {
+            upSal.Transaction = tx;
+            upSal.CommandText = "UPDATE SalidasAlmacen SET CostoTotalEstimado = $cneto WHERE Id = $sid";
+            upSal.Parameters.AddWithValue("$cneto", (double)nuevoCostoNeto);
+            upSal.Parameters.AddWithValue("$sid", salidaId);
+            upSal.ExecuteNonQuery();
+        }
+
+        // Crear registro trazable en EntradasAlmacen
+        int entId;
+        using (var insEnt = conn.CreateCommand())
+        {
+            insEnt.Transaction = tx;
+            insEnt.CommandText = @"
+INSERT INTO EntradasAlmacen (Folio, Fecha, OrdenCompraId, OrdenCompraFolio, ProveedorNombre, ProyectoNombre, TipoEntrada, FacturaUuid, Notas)
+VALUES ($fol, $fec, NULL, $ocf, $prov, $proy, $tipo, '', $not);
+SELECT last_insert_rowid();";
+            insEnt.Parameters.AddWithValue("$fol", folioEnt);
+            insEnt.Parameters.AddWithValue("$fec", fecha);
+            insEnt.Parameters.AddWithValue("$ocf", salPrevia.Folio);
+            insEnt.Parameters.AddWithValue("$prov", $"Devolución: {salPrevia.PersonaRecibeEfectiva} ({salPrevia.DepartamentoNombre})");
+            insEnt.Parameters.AddWithValue("$proy", salPrevia.ProyectoNombre);
+            insEnt.Parameters.AddWithValue("$tipo", tipoEntrada);
+            insEnt.Parameters.AddWithValue("$not", notaDevolucion);
+            entId = Convert.ToInt32(insEnt.ExecuteScalar());
+        }
+
+        foreach (var dev in devValidas)
+        {
+            var partOrig = salPrevia.Partidas.FirstOrDefault(p => p.Id == dev.SalidaPartidaId);
+            if (partOrig == null) continue;
+            decimal maxDevolver = Math.Max(0m, partOrig.CantidadEntregada - partOrig.CantidadDevuelta);
+            decimal cantReal = Math.Min(dev.CantidadDevolver, maxDevolver);
+            if (cantReal <= 0) continue;
+
+            using var insEp = conn.CreateCommand();
+            insEp.Transaction = tx;
+            insEp.CommandText = @"
+INSERT INTO EntradaPartidas (EntradaAlmacenId, ProductoId, CantidadCompraRecibida, UnidadCompra, FactorConversion, CantidadIngresadaAlmacen, UnidadAlmacen, CostoUnitarioCompraConIva)
+VALUES ($eid, $pid, $cant, $ua, 1, $cant, $ua, $costo)";
+            insEp.Parameters.AddWithValue("$eid", entId);
+            insEp.Parameters.AddWithValue("$pid", partOrig.ProductoId);
+            insEp.Parameters.AddWithValue("$cant", (double)cantReal);
+            insEp.Parameters.AddWithValue("$ua", partOrig.UnidadAlmacen);
+            insEp.Parameters.AddWithValue("$costo", (double)partOrig.CostoUnitarioAlmacen);
+            insEp.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+
+        var salActualizada = ObtenerSalidasAlmacen().First(s => s.Id == salidaId);
+        var entCreada = ObtenerEntradasAlmacen().First(e => e.Id == entId);
+        return (salActualizada, entCreada);
     }
 
     // ==================== PRÉSTAMO Y DEVOLUCIÓN DE HERRAMIENTAS ====================
@@ -2956,7 +3092,8 @@ WHERE Id = $hid";
         string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
         string nuevoEstadoHerramienta = estadoRetorno switch
         {
-            "Bueno" => "Disponible",
+            "Bueno" or "Bueno (Completo)" => "Disponible",
+            "Incompleto / Falta Pieza" => "Disponible (Incompleta)",
             "Dañado" => "Dañada",
             "Extraviado" => "Extraviada / Baja",
             _ => "Disponible"
@@ -2989,7 +3126,7 @@ WHERE Id = $hid";
         upHer.Parameters.AddWithValue("$hid", herramientaId);
         upHer.ExecuteNonQuery();
 
-        // Revisar si todas las herramientas del préstamo ya fueron devueltas
+        // Revisar si todas las herramientas del préstamo ya fueron devueltas o si es devolución parcial
         using var chk = conn.CreateCommand();
         chk.Transaction = tx;
         chk.CommandText = "SELECT COUNT(*) FROM PrestamoPartidas WHERE PrestamoHerramientaId = $pid AND EstadoDevolucion = 'Pendiente'";
@@ -2999,7 +3136,7 @@ WHERE Id = $hid";
         {
             using var chkInc = conn.CreateCommand();
             chkInc.Transaction = tx;
-            chkInc.CommandText = "SELECT COUNT(*) FROM PrestamoPartidas WHERE PrestamoHerramientaId = $pid AND EstadoDevolucion IN ('Dañado', 'Extraviado')";
+            chkInc.CommandText = "SELECT COUNT(*) FROM PrestamoPartidas WHERE PrestamoHerramientaId = $pid AND EstadoDevolucion IN ('Incompleto / Falta Pieza', 'Dañado', 'Extraviado')";
             chkInc.Parameters.AddWithValue("$pid", prestamoId);
             int incidencias = Convert.ToInt32(chkInc.ExecuteScalar());
             string estatusFinal = incidencias > 0 ? "Devuelto con Incidencia" : "Devuelto Completo";
@@ -3011,6 +3148,15 @@ WHERE Id = $hid";
             upPre.Parameters.AddWithValue("$fec", fecha);
             upPre.Parameters.AddWithValue("$pid", prestamoId);
             upPre.ExecuteNonQuery();
+        }
+        else
+        {
+            using var upPreParcial = conn.CreateCommand();
+            upPreParcial.Transaction = tx;
+            upPreParcial.CommandText = "UPDATE PrestamosHerramienta SET Estatus = 'Devuelto Parcial', FechaDevolucion = $fec WHERE Id = $pid";
+            upPreParcial.Parameters.AddWithValue("$fec", fecha);
+            upPreParcial.Parameters.AddWithValue("$pid", prestamoId);
+            upPreParcial.ExecuteNonQuery();
         }
 
         tx.Commit();
@@ -4472,9 +4618,9 @@ ORDER BY Fecha ASC, Id DESC";
             });
         }
 
-        // 3. Eventos automáticos: Devolución compromiso de Préstamos de Herramienta activos
+        // 3. Eventos automáticos: Devolución compromiso de Préstamos de Herramienta activos o parciales
         var prestamosActivos = ObtenerPrestamosHerramienta()
-            .Where(p => p.Estatus == "Activo" || p.Estatus == "En Préstamo")
+            .Where(p => p.Estatus == "Activo" || p.Estatus == "En Préstamo" || p.Estatus == "Devuelto Parcial")
             .ToList();
 
         foreach (var pre in prestamosActivos)

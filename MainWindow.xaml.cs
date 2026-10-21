@@ -4311,18 +4311,20 @@ public partial class MainWindow : FluentWindow
         var entradas = DatabaseService.ObtenerEntradasAlmacen();
         foreach (var ent in entradas)
         {
+            bool esDevolucionMat = !string.IsNullOrWhiteSpace(ent.TipoEntrada) &&
+                                   ent.TipoEntrada.Contains("Devolución", StringComparison.OrdinalIgnoreCase);
             string detalle = ent.Partidas.Count > 0
-                ? string.Join(", ", ent.Partidas.Select(p => $"{p.CantidadIngresadaAlmacen:0.##} {p.UnidadAlmacen} {p.ProductoNombre}"))
+                ? string.Join(", ", ent.Partidas.Select(p => $"+{p.CantidadIngresadaAlmacen:0.##} {p.UnidadAlmacen} {p.ProductoNombre}"))
                 : ent.Notas;
             movs.Add(new MovimientoAlmacenFila
             {
-                TipoMovimiento = "ENTRADA",
+                TipoMovimiento = esDevolucionMat ? "DEVOLUCIÓN" : "ENTRADA",
                 Folio = ent.Folio,
                 Fecha = ent.Fecha,
                 ResponsableOProveedor = ent.ProveedorNombre,
                 ProyectoNombre = string.IsNullOrWhiteSpace(ent.OrdenCompraFolio)
                     ? "Almacén General"
-                    : $"OC: {ent.OrdenCompraFolio}",
+                    : (esDevolucionMat ? $"Vale: {ent.OrdenCompraFolio} ({ent.TipoEntrada})" : $"OC: {ent.OrdenCompraFolio}"),
                 DetalleResumen = detalle,
                 EntradaOriginal = ent
             });
@@ -4331,12 +4333,20 @@ public partial class MainWindow : FluentWindow
         var salidas = DatabaseService.ObtenerSalidasAlmacen();
         foreach (var sal in salidas)
         {
+            string prefijoDev = sal.TotalUnidadesDevueltas > 0
+                ? $"[{sal.EstatusDevolucionTexto}: {sal.TotalUnidadesDevueltas:0.##}/{sal.TotalUnidadesEntregadas:0.##} dev.] "
+                : string.Empty;
             string detalle = sal.Partidas.Count > 0
-                ? string.Join(", ", sal.Partidas.Select(p => $"{p.CantidadEntregada:0.##} {p.UnidadAlmacen} {p.ProductoNombre}"))
+                ? prefijoDev + string.Join(", ", sal.Partidas.Select(p =>
+                    p.CantidadDevuelta > 0
+                        ? $"{p.CantidadEntregada:0.##} {p.UnidadAlmacen} {p.ProductoNombre} (Dev: {p.CantidadDevuelta:0.##}, Neto: {p.CantidadNetaConsumida:0.##})"
+                        : $"{p.CantidadEntregada:0.##} {p.UnidadAlmacen} {p.ProductoNombre}"))
                 : sal.Notas;
             movs.Add(new MovimientoAlmacenFila
             {
-                TipoMovimiento = "SALIDA",
+                TipoMovimiento = sal.TotalUnidadesDevueltas > 0
+                    ? (sal.TotalUnidadesDevueltas >= sal.TotalUnidadesEntregadas - 0.001m ? "SALIDA (DEV. 100%)" : "SALIDA (DEV. PARC.)")
+                    : "SALIDA",
                 Folio = sal.Folio,
                 Fecha = sal.Fecha,
                 ResponsableOProveedor = $"{sal.PersonaRecibeEfectiva} (Aprueba: {sal.DepartamentoNombre})",
@@ -4675,14 +4685,22 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        string estado = (CboEstadoRetornoHerramienta.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Bueno";
+        string estado = (CboEstadoRetornoHerramienta.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Bueno (Completo)";
         DatabaseService.DevolverHerramientaPartida(fila.PrestamoPartidaId, fila.HerramientaId, fila.PrestamoId, estado, TxtObsRetornoHerramienta.Text);
         TxtObsRetornoHerramienta.Clear();
         CargarTodoElSistema();
 
-        System.Windows.MessageBox.Show(this,
-            $"Devolución registrada para {fila.CodigoIndividual} con estado '{estado}'.",
-            "Herramienta Devuelta", MessageBoxButton.OK, MessageBoxImage.Information);
+        var prestamoActualizado = DatabaseService.ObtenerPrestamosHerramienta().FirstOrDefault(p => p.Id == fila.PrestamoId);
+        if (prestamoActualizado != null)
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, prestamoActualizado);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this,
+                $"Devolución registrada para {fila.CodigoIndividual} con estado '{estado}'.",
+                "Herramienta Devuelta", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     private void BtnReimprimirValePrestamo_Click(object sender, RoutedEventArgs e)
@@ -4692,6 +4710,300 @@ public partial class MainWindow : FluentWindow
             var actualizado = DatabaseService.ObtenerPrestamosHerramienta().FirstOrDefault(p => p.Id == fila.PrestamoId) ?? fila.PrestamoOriginal;
             BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, actualizado);
         }
+        else
+        {
+            System.Windows.MessageBox.Show(this,
+                "Seleccione primero una herramienta o préstamo de la tabla para abrir e imprimir su Hoja de Préstamo / Devolución.",
+                "Seleccione un préstamo", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnDevolverMaterialSalida_Click(object sender, RoutedEventArgs e)
+    {
+        SalidaAlmacen? salidaInicial = null;
+        if (DgMovimientosAlmacen.SelectedItem is MovimientoAlmacenFila filaMov)
+        {
+            if (filaMov.SalidaOriginal != null)
+            {
+                salidaInicial = DatabaseService.ObtenerSalidasAlmacen().FirstOrDefault(s => s.Id == filaMov.SalidaOriginal.Id);
+            }
+            else if (filaMov.EntradaOriginal != null &&
+                     !string.IsNullOrWhiteSpace(filaMov.EntradaOriginal.OrdenCompraFolio) &&
+                     filaMov.EntradaOriginal.OrdenCompraFolio.StartsWith("SAL-", StringComparison.OrdinalIgnoreCase))
+            {
+                salidaInicial = DatabaseService.ObtenerSalidasAlmacen()
+                    .FirstOrDefault(s => s.Folio.Equals(filaMov.EntradaOriginal.OrdenCompraFolio, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        MostrarModalDevolucionMaterialSalida(salidaInicial);
+    }
+
+    private void MostrarModalDevolucionMaterialSalida(SalidaAlmacen? salidaPreseleccionada)
+    {
+        var todasSalidas = DatabaseService.ObtenerSalidasAlmacen();
+        if (todasSalidas.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this,
+                "Aún no existen Vales de Salida de Material (SAL-xxxx) registrados en el sistema.",
+                "Sin salidas registradas", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Devolución / Reingreso de Material a Almacén (Completa o Parcial)",
+            Width = 860,
+            Height = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+        };
+
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        // Encabezado e selector de Vale de Salida
+        var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "Registrar Devolución de Material Sobrante a Almacén",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+        });
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "Seleccione el Vale de Salida (SAL-xxxx), indique la cantidad devuelta por partida (parcial o completa) y genere el Comprobante Imprimible de Devolución sin precios.",
+            FontSize = 11.5,
+            Foreground = Brushes.DimGray,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var selGrid = new Grid();
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        selGrid.Children.Add(new TextBlock
+        {
+            Text = "Vale de Salida (SAL-xxxx):",
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+
+        var cboSalidas = new ComboBox
+        {
+            Margin = new Thickness(0, 0, 8, 0),
+            ItemsSource = todasSalidas
+        };
+        Grid.SetColumn(cboSalidas, 1);
+        selGrid.Children.Add(cboSalidas);
+
+        var btnDevolverTodo = new System.Windows.Controls.Button
+        {
+            Content = "🔄 Devolver Todo (Completo)",
+            Padding = new Thickness(10, 5, 10, 5),
+            Margin = new Thickness(0, 0, 6, 0),
+            Cursor = Cursors.Hand
+        };
+        Grid.SetColumn(btnDevolverTodo, 2);
+        selGrid.Children.Add(btnDevolverTodo);
+
+        var btnLimpiarCant = new System.Windows.Controls.Button
+        {
+            Content = "🧹 Poner en 0",
+            Padding = new Thickness(10, 5, 10, 5),
+            Cursor = Cursors.Hand
+        };
+        Grid.SetColumn(btnLimpiarCant, 3);
+        selGrid.Children.Add(btnLimpiarCant);
+
+        topPanel.Children.Add(selGrid);
+        Grid.SetRow(topPanel, 0);
+        root.Children.Add(topPanel);
+
+        // Resumen del vale seleccionado
+        var infoBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var txtInfoSalida = new TextBlock
+        {
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            Text = "Seleccione un vale de salida..."
+        };
+        infoBorder.Child = txtInfoSalida;
+        Grid.SetRow(infoBorder, 1);
+        root.Children.Add(infoBorder);
+
+        // Tabla editable de partidas a devolver
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            Background = Brushes.White,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 90 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Material / Artículo", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 75 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Entregado", Binding = new System.Windows.Data.Binding("CantidadEntregada") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 90 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Ya Devuelto", Binding = new System.Windows.Data.Binding("CantidadDevuelta") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 95 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Pendiente Máx.", Binding = new System.Windows.Data.Binding("CantidadPendienteDevolver") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 105 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Devolver Hoy", Binding = new System.Windows.Data.Binding("CantidadDevolverAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 115 });
+
+        Grid.SetRow(dg, 2);
+        root.Children.Add(dg);
+
+        // Observaciones
+        var obsStack = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        obsStack.Children.Add(new TextBlock
+        {
+            Text = "Motivo / Observaciones de la Devolución:",
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.DarkSlateGray,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        var txtObs = new System.Windows.Controls.TextBox
+        {
+            Padding = new Thickness(8, 6, 8, 6),
+            Text = "Sobrante de material en obra / proyecto reingresado en buen estado a almacén."
+        };
+        obsStack.Children.Add(txtObs);
+        Grid.SetRow(obsStack, 3);
+        root.Children.Add(obsStack);
+
+        // Botones inferiores
+        var bottomPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancelar = new System.Windows.Controls.Button
+        {
+            Content = "Cancelar",
+            Padding = new Thickness(14, 7, 14, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            Cursor = Cursors.Hand
+        };
+        var btnConfirmar = new System.Windows.Controls.Button
+        {
+            Content = "✅ Registrar Devolución e Imprimir Comprobante",
+            Padding = new Thickness(16, 7, 16, 7),
+            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.Bold,
+            Cursor = Cursors.Hand
+        };
+        bottomPanel.Children.Add(btnCancelar);
+        bottomPanel.Children.Add(btnConfirmar);
+        Grid.SetRow(bottomPanel, 4);
+        root.Children.Add(bottomPanel);
+
+        void CargarPartidasDeSalida(SalidaAlmacen? sal)
+        {
+            if (sal == null)
+            {
+                txtInfoSalida.Text = "Seleccione un vale de salida...";
+                dg.ItemsSource = null;
+                return;
+            }
+
+            foreach (var p in sal.Partidas)
+            {
+                p.CantidadDevolverAhora = p.CantidadPendienteDevolver;
+            }
+            txtInfoSalida.Text = $"Folio: {sal.Folio}  |  Recibió: {sal.PersonaRecibeEfectiva} ({sal.DepartamentoNombre})  |  Proyecto: {sal.ProyectoNombre}  |  Estado actual: {sal.EstatusDevolucionTexto}";
+            dg.ItemsSource = null;
+            dg.ItemsSource = sal.Partidas;
+        }
+
+        cboSalidas.SelectionChanged += (_, _) =>
+        {
+            CargarPartidasDeSalida(cboSalidas.SelectedItem as SalidaAlmacen);
+        };
+
+        btnDevolverTodo.Click += (_, _) =>
+        {
+            if (cboSalidas.SelectedItem is SalidaAlmacen sal)
+            {
+                foreach (var p in sal.Partidas)
+                    p.CantidadDevolverAhora = p.CantidadPendienteDevolver;
+                dg.Items.Refresh();
+            }
+        };
+
+        btnLimpiarCant.Click += (_, _) =>
+        {
+            if (cboSalidas.SelectedItem is SalidaAlmacen sal)
+            {
+                foreach (var p in sal.Partidas)
+                    p.CantidadDevolverAhora = 0m;
+                dg.Items.Refresh();
+            }
+        };
+
+        btnCancelar.Click += (_, _) => win.Close();
+
+        btnConfirmar.Click += (_, _) =>
+        {
+            dg.CommitEdit(DataGridEditingUnit.Cell, true);
+            dg.CommitEdit(DataGridEditingUnit.Row, true);
+
+            if (cboSalidas.SelectedItem is not SalidaAlmacen salSel)
+            {
+                System.Windows.MessageBox.Show(win, "Seleccione un Vale de Salida (SAL-xxxx).", "Falta vale", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var devoluciones = salSel.Partidas
+                .Where(p => p.CantidadDevolverAhora > 0)
+                .Select(p => (p.Id, p.ProductoId, Math.Min(p.CantidadDevolverAhora, p.CantidadPendienteDevolver)))
+                .Where(x => x.Item3 > 0)
+                .ToList();
+
+            if (devoluciones.Count == 0)
+            {
+                System.Windows.MessageBox.Show(win,
+                    "Indique una cantidad a devolver mayor a 0 en al menos una partida (o verifique que el vale aún tenga unidades pendientes por devolver).",
+                    "Sin unidades a devolver", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                var (salActualizada, entDevolucion) = DatabaseService.RegistrarDevolucionMaterialSalida(salSel.Id, devoluciones, txtObs.Text);
+                CargarTodoElSistema();
+                win.Close();
+                BarcodePrintService.MostrarVistaPreviaEImprimirDevolucionMaterial(this, salActualizada, entDevolucion);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(win, ex.Message, "Error al registrar devolución", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        };
+
+        var inicial = salidaPreseleccionada != null
+            ? todasSalidas.FirstOrDefault(s => s.Id == salidaPreseleccionada.Id)
+            : todasSalidas.FirstOrDefault(s => s.TotalUnidadesDevueltas < s.TotalUnidadesEntregadas) ?? todasSalidas.FirstOrDefault();
+
+        cboSalidas.SelectedItem = inicial;
+        CargarPartidasDeSalida(inicial);
+
+        win.Content = root;
+        win.ShowDialog();
     }
 
     private void BtnNuevaHerramientaIndividual_Click(object sender, RoutedEventArgs e)

@@ -167,6 +167,20 @@ public static class BarcodePrintService
 
     public static void MostrarVistaPreviaEImprimirEntrada(Window owner, EntradaAlmacen ent)
     {
+        if (!string.IsNullOrWhiteSpace(ent.TipoEntrada) &&
+            ent.TipoEntrada.Contains("Devolución", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(ent.OrdenCompraFolio) &&
+            ent.OrdenCompraFolio.StartsWith("SAL-", StringComparison.OrdinalIgnoreCase))
+        {
+            var salVinculada = Data.DatabaseService.ObtenerSalidasAlmacen()
+                .FirstOrDefault(s => s.Folio.Equals(ent.OrdenCompraFolio, StringComparison.OrdinalIgnoreCase));
+            if (salVinculada != null)
+            {
+                MostrarVistaPreviaEImprimirDevolucionMaterial(owner, salVinculada, ent);
+                return;
+            }
+        }
+
         var filas = ent.Partidas.Select((p, idx) => new[]
         {
             (idx + 1).ToString(),
@@ -203,35 +217,70 @@ public static class BarcodePrintService
 
     public static void MostrarVistaPreviaEImprimirSalida(Window owner, SalidaAlmacen sal)
     {
-        var filas = sal.Partidas.Select((p, idx) => new[]
+        bool tieneDevoluciones = sal.TotalUnidadesDevueltas > 0;
+
+        List<string[]> filas;
+        string[] encabezados;
+        List<(string, string)> totales;
+
+        if (tieneDevoluciones)
         {
-            (idx + 1).ToString(),
-            p.ProductoCodigo,
-            p.ProductoNombre,
-            $"{p.CantidadEntregada:0.##}",
-            p.UnidadAlmacen
-        }).ToList();
+            encabezados = new[] { "#", "Código", "Descripción", "Entregado", "Devuelto", "Consumo Neto", "Unidad" };
+            filas = sal.Partidas.Select((p, idx) => new[]
+            {
+                (idx + 1).ToString(),
+                p.ProductoCodigo,
+                p.ProductoNombre,
+                $"{p.CantidadEntregada:0.##}",
+                $"{p.CantidadDevuelta:0.##}",
+                $"{p.CantidadNetaConsumida:0.##}",
+                p.UnidadAlmacen
+            }).ToList();
+
+            totales = new List<(string, string)>
+            {
+                ("Total Partidas:", sal.Partidas.Count.ToString()),
+                ("Unidades Entregadas:", $"{sal.TotalUnidadesEntregadas:0.##}"),
+                ("Unidades Devueltas:", $"{sal.TotalUnidadesDevueltas:0.##}"),
+                ("Consumo Neto:", $"{(sal.TotalUnidadesEntregadas - sal.TotalUnidadesDevueltas):0.##}")
+            };
+        }
+        else
+        {
+            encabezados = new[] { "#", "Código", "Descripción", "Cantidad", "Unidad" };
+            filas = sal.Partidas.Select((p, idx) => new[]
+            {
+                (idx + 1).ToString(),
+                p.ProductoCodigo,
+                p.ProductoNombre,
+                $"{p.CantidadEntregada:0.##}",
+                p.UnidadAlmacen
+            }).ToList();
+
+            totales = new List<(string, string)>
+            {
+                ("Total Partidas:", sal.Partidas.Count.ToString()),
+                ("Total Unidades:", $"{sal.TotalUnidadesEntregadas:0.##}")
+            };
+        }
 
         var metadatos = new List<(string etiq, string val)>
         {
             ("Depto. que Aprueba:", sal.DepartamentoNombre),
             ("Persona que Recibe:", sal.PersonaRecibeEfectiva),
-            ("Proyecto:", sal.ProyectoNombre)
+            ("Proyecto:", sal.ProyectoNombre),
+            ("Estatus:", sal.EstatusDevolucionTexto)
         };
 
         var hoja = ConstruirHojaCartaDocumento(
-            tituloDocumento: "VALE DE ENTREGA DE MATERIAL",
+            tituloDocumento: tieneDevoluciones ? "VALE DE ENTREGA Y DEVOLUCIÓN DE MATERIAL" : "VALE DE ENTREGA DE MATERIAL",
             subtitulo: "Lebaref | Departamento de Compras",
             folioCodigoBarras: sal.Folio,
             fecha: sal.Fecha,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Descripción", "Cantidad", "Unidad" },
+            encabezadosTabla: encabezados,
             filasTabla: filas,
-            totales: new List<(string, string)>
-            {
-                ("Total Partidas:", sal.Partidas.Count.ToString()),
-                ("Total Unidades:", $"{sal.Partidas.Sum(x => x.CantidadEntregada):0.##}")
-            },
+            totales: totales,
             notas: sal.Notas,
             firmaIzquierda: $"Aprobó: {sal.DepartamentoNombre}",
             firmaDerecha: $"Recibió: {sal.PersonaRecibeEfectiva}");
@@ -239,42 +288,114 @@ public static class BarcodePrintService
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Salida {sal.Folio}", hoja);
     }
 
+    public static void MostrarVistaPreviaEImprimirDevolucionMaterial(Window owner, SalidaAlmacen sal, EntradaAlmacen entDevolucion)
+    {
+        var filas = sal.Partidas.Select((p, idx) =>
+        {
+            var partHoy = entDevolucion.Partidas.FirstOrDefault(ep => ep.ProductoId == p.ProductoId);
+            decimal devHoy = partHoy?.CantidadIngresadaAlmacen ?? 0m;
+            return new[]
+            {
+                (idx + 1).ToString(),
+                p.ProductoCodigo,
+                p.ProductoNombre,
+                $"{p.CantidadEntregada:0.##}",
+                devHoy > 0 ? $"+{devHoy:0.##}" : "0",
+                $"{p.CantidadDevuelta:0.##}",
+                $"{p.CantidadNetaConsumida:0.##}",
+                p.UnidadAlmacen
+            };
+        }).ToList();
+
+        var metadatos = new List<(string etiq, string val)>
+        {
+            ("Vale de Salida Origen:", $"{sal.Folio} (Fecha salida: {sal.Fecha})"),
+            ("Tipo de Reingreso:", $"{entDevolucion.TipoEntrada} ({sal.EstatusDevolucionTexto})"),
+            ("Persona que Devuelve:", sal.PersonaRecibeEfectiva),
+            ("Departamento:", sal.DepartamentoNombre),
+            ("Proyecto:", sal.ProyectoNombre)
+        };
+
+        decimal totalDevHoy = entDevolucion.Partidas.Sum(x => x.CantidadIngresadaAlmacen);
+
+        var hoja = ConstruirHojaCartaDocumento(
+            tituloDocumento: "VALE DE DEVOLUCIÓN DE MATERIAL A ALMACÉN",
+            subtitulo: "Lebaref | Comprobante de Reingreso de Material (Sin Precios)",
+            folioCodigoBarras: entDevolucion.Folio,
+            fecha: entDevolucion.Fecha,
+            metadatos: metadatos,
+            encabezadosTabla: new[] { "#", "Código", "Descripción", "Entregado", "Devuelto Hoy", "Total Dev.", "Consumo Neto", "Unidad" },
+            filasTabla: filas,
+            totales: new List<(string, string)>
+            {
+                ("Entregado Orig.:", $"{sal.TotalUnidadesEntregadas:0.##}"),
+                ("Devuelto en Vale:", $"{totalDevHoy:0.##}"),
+                ("Total Devuelto:", $"{sal.TotalUnidadesDevueltas:0.##}"),
+                ("Consumo Neto:", $"{(sal.TotalUnidadesEntregadas - sal.TotalUnidadesDevueltas):0.##}")
+            },
+            notas: entDevolucion.Notas,
+            firmaIzquierda: $"Entregó / Devolvió: {sal.PersonaRecibeEfectiva}",
+            firmaDerecha: "Recibió Almacén (Conformidad)");
+
+        AbrirVentanaVistaPreviaCarta(owner, $"Vale de Devolución de Material {entDevolucion.Folio} ({sal.Folio})", hoja);
+    }
+
     public static void MostrarVistaPreviaEImprimirPrestamo(Window owner, PrestamoHerramienta pre)
     {
+        bool tieneDevolucion = pre.Partidas.Any(p => !string.Equals(p.EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase));
+        int devueltasCount = pre.Partidas.Count(p => !string.Equals(p.EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase));
+        int pendientesCount = pre.Partidas.Count - devueltasCount;
+
         var filas = pre.Partidas.Select((p, idx) => new[]
         {
             (idx + 1).ToString(),
             p.CodigoIndividual,
             p.ProductoNombre,
-            p.MarcaModelo,
-            string.IsNullOrWhiteSpace(p.NumeroSerie) ? "S/N" : p.NumeroSerie,
+            string.IsNullOrWhiteSpace(p.NumeroSerie) ? p.MarcaModelo : $"{p.MarcaModelo} (S/N: {p.NumeroSerie})",
             p.EstadoSalida,
-            p.EstadoDevolucion
+            p.EstadoDevolucion,
+            string.IsNullOrWhiteSpace(p.FechaDevuelto)
+                ? (string.IsNullOrWhiteSpace(p.Observaciones) ? "En préstamo" : p.Observaciones)
+                : $"{p.FechaDevuelto}{(string.IsNullOrWhiteSpace(p.Observaciones) ? "" : " | " + p.Observaciones)}"
         }).ToList();
 
         var metadatos = new List<(string etiq, string val)>
         {
             ("Depto. que Aprueba:", pre.DepartamentoNombre),
-            ("Persona que Recibe:", pre.PersonaRecibeEfectiva),
+            ("Persona Responsable:", pre.PersonaRecibeEfectiva),
             ("Proyecto:", pre.ProyectoNombre),
-            ("Fecha Compromiso:", string.IsNullOrWhiteSpace(pre.FechaCompromiso) ? "N/A" : pre.FechaCompromiso),
-            ("Estatus:", pre.Estatus)
+            ("Fecha Salida / Compromiso:", $"{pre.FechaSalida}  |  Compromiso: {(string.IsNullOrWhiteSpace(pre.FechaCompromiso) ? "N/A" : pre.FechaCompromiso)}"),
+            ("Estatus del Préstamo:", $"{pre.Estatus} ({devueltasCount} de {pre.Partidas.Count} devueltas)")
+        };
+
+        if (!string.IsNullOrWhiteSpace(pre.FechaDevolucion))
+        {
+            metadatos.Add(("Última Fecha Devolución:", pre.FechaDevolucion));
+        }
+
+        var totales = new List<(string, string)>
+        {
+            ("Total Herramientas:", pre.Partidas.Count.ToString()),
+            ("Devueltas a Almacén:", devueltasCount.ToString()),
+            ("Pendientes por Devolver:", pendientesCount.ToString())
         };
 
         var hoja = ConstruirHojaCartaDocumento(
-            tituloDocumento: "VALE DE PRÉSTAMO DE HERRAMIENTA",
-            subtitulo: "Lebaref | Departamento de Compras",
+            tituloDocumento: tieneDevolucion
+                ? "VALE DE DEVOLUCIÓN / RESGUARDO DE HERRAMIENTA"
+                : "VALE DE PRÉSTAMO DE HERRAMIENTA",
+            subtitulo: "Lebaref | Control de Activos y Herramientas de Almacén",
             folioCodigoBarras: pre.Folio,
-            fecha: pre.FechaSalida,
+            fecha: tieneDevolucion && !string.IsNullOrWhiteSpace(pre.FechaDevolucion) ? pre.FechaDevolucion : pre.FechaSalida,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Herramienta", "Marca / Modelo", "Núm. Serie", "Estado Salida", "Estado Retorno" },
+            encabezadosTabla: new[] { "#", "Código", "Herramienta", "Marca / Serie", "Estado Salida", "Estado Retorno", "Fecha Retorno / Obs." },
             filasTabla: filas,
-            totales: new List<(string, string)> { ("Total Herramientas:", pre.Partidas.Count.ToString()) },
+            totales: totales,
             notas: pre.Notas,
-            firmaIzquierda: $"Recibió: {pre.PersonaRecibeEfectiva}",
-            firmaDerecha: $"Aprobó: {pre.DepartamentoNombre}");
+            firmaIzquierda: tieneDevolucion ? $"Devolvió: {pre.PersonaRecibeEfectiva}" : $"Recibió: {pre.PersonaRecibeEfectiva}",
+            firmaDerecha: tieneDevolucion ? "Recibió Almacén (Devolución)" : $"Aprobó: {pre.DepartamentoNombre}");
 
-        AbrirVentanaVistaPreviaCarta(owner, $"Vale de Préstamo {pre.Folio}", hoja);
+        AbrirVentanaVistaPreviaCarta(owner, tieneDevolucion ? $"Vale de Devolución de Herramienta {pre.Folio}" : $"Vale de Préstamo {pre.Folio}", hoja);
     }
 
     public static void MostrarVistaPreviaCatalogoCodigosCarta(Window owner, List<Producto> productos, List<HerramientaActivo> herramientas)

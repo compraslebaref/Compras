@@ -491,6 +491,17 @@ public class SalidaAlmacen
     public decimal CostoTotalEstimado { get; set; }
     public string Notas { get; set; } = string.Empty;
     public List<SalidaPartida> Partidas { get; set; } = new();
+    public decimal TotalUnidadesEntregadas => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadEntregada) : 0m;
+    public decimal TotalUnidadesDevueltas => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadDevuelta) : 0m;
+    public string EstatusDevolucionTexto
+    {
+        get
+        {
+            if (TotalUnidadesDevueltas <= 0m) return "Entregado (Sin devolución)";
+            if (TotalUnidadesDevueltas >= TotalUnidadesEntregadas - 0.001m) return "Devuelto Completo";
+            return $"Devuelto Parcial ({TotalUnidadesDevueltas:0.##}/{TotalUnidadesEntregadas:0.##})";
+        }
+    }
 }
 
 public class SalidaPartida
@@ -501,9 +512,13 @@ public class SalidaPartida
     public string ProductoCodigo { get; set; } = string.Empty;
     public string ProductoNombre { get; set; } = string.Empty;
     public decimal CantidadEntregada { get; set; }
+    public decimal CantidadDevuelta { get; set; }
+    public decimal CantidadNetaConsumida => Math.Max(0m, CantidadEntregada - CantidadDevuelta);
+    public decimal CantidadPendienteDevolver => Math.Max(0m, CantidadEntregada - CantidadDevuelta);
+    public decimal CantidadDevolverAhora { get; set; }
     public string UnidadAlmacen { get; set; } = "Pieza";
     public decimal CostoUnitarioAlmacen { get; set; }
-    public decimal ImporteCosto => Math.Round(CantidadEntregada * CostoUnitarioAlmacen, 2);
+    public decimal ImporteCosto => Math.Round(CantidadNetaConsumida * CostoUnitarioAlmacen, 2);
 }
 
 public class PrestamoHerramienta

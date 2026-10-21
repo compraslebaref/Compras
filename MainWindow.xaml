@@ -1477,7 +1477,13 @@
                             <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Top">
-                                        <TextBlock Text="Salida de Material" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+                                        <DockPanel Margin="0,0,0,8">
+                                            <TextBlock Text="Salida de Material" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
+                                            <ui:Button Content="↩️ Devolver Material (Parcial / Completo)"
+                                                       HorizontalAlignment="Right"
+                                                       ToolTip="Registrar reingreso total o parcial de material sobrante de una Salida de Almacén y generar su hoja de devolución"
+                                                       Click="BtnDevolverMaterialSalida_Click" />
+                                        </DockPanel>
 
                                         <Grid Margin="0,0,0,8">
                                             <Grid.ColumnDefinitions>
@@ -1579,22 +1585,23 @@
                                     <!-- Devolución -->
                                     <Border DockPanel.Dock="Bottom" Padding="10" CornerRadius="6" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                         <StackPanel>
-                                            <TextBlock Text="Devolución de Herramienta" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                            <TextBlock Text="Devolución de Herramienta (Completa, Parcial o con Incidencia)" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="135" />
+                                                    <ColumnDefinition Width="165" />
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
                                                 <ComboBox x:Name="CboEstadoRetornoHerramienta" Grid.Column="0" SelectedIndex="0" Margin="0,0,6,0">
-                                                    <ComboBoxItem Content="Bueno" />
+                                                    <ComboBoxItem Content="Bueno (Completo)" />
+                                                    <ComboBoxItem Content="Incompleto / Falta Pieza" />
                                                     <ComboBoxItem Content="Dañado" />
                                                     <ComboBoxItem Content="Extraviado" />
                                                 </ComboBox>
-                                                <ui:TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" PlaceholderText="Observaciones al devolver..." />
+                                                <ui:TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" PlaceholderText="Observaciones al devolver (ej. faltó accesorio, se devuelve 1 de 2)..." />
                                                 <ui:Button Grid.Column="2" Content="Registrar Devolución" Appearance="Primary" Margin="0,0,6,0" Click="BtnRegistrarDevolucionHerramienta_Click" />
-                                                <ui:Button Grid.Column="3" Content="Imprimir" Click="BtnReimprimirValePrestamo_Click" />
+                                                <ui:Button Grid.Column="3" Content="Imprimir Hoja" Click="BtnReimprimirValePrestamo_Click" />
                                             </Grid>
                                         </StackPanel>
                                     </Border>
@@ -1617,8 +1624,14 @@
                         <Border Grid.Row="2" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                    <TextBlock Text="Historial de Entradas y Salidas de Almacén" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
-                                    <ui:Button Content="Ver / Imprimir Vale" Icon="{ui:SymbolIcon Print24}" HorizontalAlignment="Right" Click="BtnImprimirMovimientoAlmacen_Click" />
+                                    <TextBlock Text="Historial de Entradas, Salidas y Devoluciones de Almacén" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <ui:Button Content="↩️ Devolver Material de Salida"
+                                                   Margin="0,0,8,0"
+                                                   ToolTip="Selecciona un vale SAL-xxxx para registrar devolución parcial o completa de material e imprimir el comprobante"
+                                                   Click="BtnDevolverMaterialSalida_Click" />
+                                        <ui:Button Content="Ver / Imprimir Vale" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirMovimientoAlmacen_Click" />
+                                    </StackPanel>
                                 </DockPanel>
                                 <DataGrid x:Name="DgMovimientosAlmacen" AutoGenerateColumns="False" IsReadOnly="True">
                                     <DataGrid.Columns>
