@@ -1178,13 +1178,95 @@ ON CONFLICT(Clave) DO UPDATE SET Valor = $val";
         tx.Commit();
     }
 
+    private static string NormalizarTextoCodigo(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return string.Empty;
+
+        string s = input.Trim().ToUpperInvariant()
+            .Replace('\'', '-')
+            .Replace('’', '-')
+            .Replace('´', '-')
+            .Replace('`', '-')
+            .Replace('/', '-')
+            .Replace('?', '-')
+            .Replace('_', '-');
+
+        while (s.Contains("--"))
+            s = s.Replace("--", "-");
+
+        return s;
+    }
+
     public static Producto? BuscarProductoPorCodigo(string codigo)
     {
         if (string.IsNullOrWhiteSpace(codigo)) return null;
         string clean = codigo.Trim();
-        return ObtenerProductos().FirstOrDefault(p =>
-            string.Equals(p.CodigoInterno, clean, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.CodigoBarras, clean, StringComparison.OrdinalIgnoreCase));
+        string norm = NormalizarTextoCodigo(clean);
+        string cleanSinCeros = clean.TrimStart('0');
+        string normSinCeros = norm.TrimStart('0');
+
+        var productos = ObtenerProductos();
+
+        // 1. Coincidencia exacta o normalizada por CodigoInterno, CodigoBarras o CodigoEfectivo
+        var matchDirecto = productos.FirstOrDefault(p =>
+            string.Equals(p.CodigoInterno?.Trim(), clean, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.CodigoBarras?.Trim(), clean, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.CodigoEfectivo?.Trim(), clean, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(NormalizarTextoCodigo(p.CodigoInterno), norm, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(NormalizarTextoCodigo(p.CodigoBarras), norm, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(NormalizarTextoCodigo(p.CodigoEfectivo), norm, StringComparison.OrdinalIgnoreCase));
+
+        if (matchDirecto != null)
+            return matchDirecto;
+
+        // 2. Coincidencia ignorando ceros a la izquierda en códigos de barras numéricos (EAN/UPC)
+        if (!string.IsNullOrWhiteSpace(cleanSinCeros) && cleanSinCeros.Length >= 4)
+        {
+            var matchSinCeros = productos.FirstOrDefault(p =>
+                (!string.IsNullOrWhiteSpace(p.CodigoBarras) &&
+                 string.Equals(p.CodigoBarras.Trim().TrimStart('0'), cleanSinCeros, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(p.CodigoBarras) &&
+                 string.Equals(NormalizarTextoCodigo(p.CodigoBarras).TrimStart('0'), normSinCeros, StringComparison.OrdinalIgnoreCase)));
+
+            if (matchSinCeros != null)
+                return matchSinCeros;
+        }
+
+        // 3. Coincidencia flexible tipo PRD-1 -> PRD-0001
+        var partesC = norm.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        if (partesC.Length == 2 && partesC[0].Equals("PRD", StringComparison.OrdinalIgnoreCase) && int.TryParse(partesC[1], out int numBuscado))
+        {
+            var matchPrd = productos.FirstOrDefault(p =>
+            {
+                var partesP = NormalizarTextoCodigo(p.CodigoInterno).Split('-', StringSplitOptions.RemoveEmptyEntries);
+                return partesP.Length == 2 &&
+                       partesP[0].Equals("PRD", StringComparison.OrdinalIgnoreCase) &&
+                       int.TryParse(partesP[1], out int numP) &&
+                       numP == numBuscado;
+            });
+            if (matchPrd != null)
+                return matchPrd;
+        }
+
+        // 4. Coincidencia por ClaveProveedor en ProductoProveedorMapa (ej. código de fabricante escaneado)
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+SELECT ProductoId FROM ProductoProveedorMapa
+WHERE UPPER(TRIM(ClaveProveedor)) = $c OR UPPER(TRIM(ClaveProveedor)) = $n
+LIMIT 1";
+        cmd.Parameters.AddWithValue("$c", clean.ToUpperInvariant());
+        cmd.Parameters.AddWithValue("$n", norm);
+        var pidObj = cmd.ExecuteScalar();
+        if (pidObj != null && pidObj != DBNull.Value)
+        {
+            int pid = Convert.ToInt32(pidObj);
+            return productos.FirstOrDefault(p => p.Id == pid);
+        }
+
+        return null;
     }
 
     public static int GuardarProducto(Producto p)

@@ -56,7 +56,8 @@
                             VerticalContentAlignment="Center"
                             FontSize="13"
                             FontFamily="Consolas"
-                            KeyDown="TxtOmniScanner_KeyDown" />
+                            PreviewKeyDown="TxtOmniScanner_KeyDown"
+                            TextChanged="TxtOmniScanner_TextChanged" />
 
                 <ui:Button Grid.Column="2"
                            Margin="8,0,0,0"
@@ -1449,7 +1450,7 @@
                                             PlaceholderText="Buscar en Almacén o escanear código de barras (Producto, Entrada ENT-..., Salida SAL-..., Herramienta HER-... o Préstamo PRE-...)..."
                                             VerticalContentAlignment="Center"
                                             FontSize="13"
-                                            KeyDown="TxtBuscarAlmacen_KeyDown"
+                                            PreviewKeyDown="TxtBuscarAlmacen_KeyDown"
                                             TextChanged="TxtBuscarAlmacen_TextChanged" />
 
                                 <ui:Button Grid.Column="2"
@@ -1497,24 +1498,46 @@
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Margin="4,0,4,0">
                                                 <TextBlock Text="Persona que Recibe (Abierto) *" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                <ComboBox x:Name="CboSalEncargado" IsEditable="True" ToolTip="Seleccione del directorio o escriba libremente el nombre de quien recibe" />
+                                                <ComboBox x:Name="CboSalEncargado" IsEditable="True" PreviewKeyDown="CboSalEncargado_PreviewKeyDown" ToolTip="Seleccione del directorio o escriba libremente el nombre de quien recibe" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Margin="4,0,0,0">
                                                 <TextBlock Text="Proyecto Destino" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                <ComboBox x:Name="CboSalProyecto" />
+                                                <ComboBox x:Name="CboSalProyecto" SelectionChanged="CboSalProyecto_SelectionChanged" />
                                             </StackPanel>
                                         </Grid>
 
-                                        <Grid Margin="0,0,0,8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="90" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <ComboBox x:Name="CboSalProductoPos" Grid.Column="0" Margin="0,0,6,0" />
-                                            <ui:TextBox x:Name="TxtSalCantidadPos" Grid.Column="1" PlaceholderText="Cant. (1)" Margin="0,0,6,0" VerticalContentAlignment="Center" />
-                                            <ui:Button Grid.Column="2" Content="Agregar" Click="BtnAgregarPartidaSalidaPos_Click" />
-                                        </Grid>
+                                        <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <TextBlock Text="Buscar Artículo o Escanear con Pistola" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="TxtContadorFiltroProductoSal" Text="" FontSize="11" Opacity="0.7" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <ui:TextBox x:Name="TxtSalBuscarProductoPos"
+                                                            Margin="0,0,0,6"
+                                                            PlaceholderText="Escriba nombre, código, marca o escanee código de barras (Enter agrega directo)..."
+                                                            VerticalContentAlignment="Center"
+                                                            TextChanged="TxtSalBuscarProductoPos_TextChanged"
+                                                            PreviewKeyDown="TxtSalBuscarProductoPos_KeyDown" />
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="85" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox x:Name="CboSalProductoPos"
+                                                              Grid.Column="0"
+                                                              Margin="0,0,6,0"
+                                                              PreviewKeyDown="CboSalProductoPos_PreviewKeyDown" />
+                                                    <ui:TextBox x:Name="TxtSalCantidadPos"
+                                                                Grid.Column="1"
+                                                                PlaceholderText="Cant. (1)"
+                                                                Margin="0,0,6,0"
+                                                                VerticalContentAlignment="Center"
+                                                                PreviewKeyDown="TxtSalCantidadPos_KeyDown" />
+                                                    <ui:Button Grid.Column="2" Appearance="Primary" Content="+ Agregar" Click="BtnAgregarPartidaSalidaPos_Click" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
 
                                     <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -1530,9 +1553,19 @@
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="85" />
                                             <DataGridTextColumn Header="Material" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                            <DataGridTextColumn Header="Cantidad" Binding="{Binding CantidadEntregada}" Width="95" />
-                                            <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" IsReadOnly="True" Width="75" />
-                                            <DataGridTextColumn Header="Importe" Binding="{Binding ImporteCosto, StringFormat={}{0:C2}}" IsReadOnly="True" Width="85" />
+                                            <DataGridTextColumn Header="Cantidad" Binding="{Binding CantidadEntregada}" Width="80" />
+                                            <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" IsReadOnly="True" Width="70" />
+                                            <DataGridTemplateColumn Header="Acciones" Width="105">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                            <Button Content="-" Padding="6,1" Margin="0,0,3,0" Click="BtnDisminuirPartidaSalidaPos_Click" ToolTip="Disminuir 1" />
+                                                            <Button Content="+" Padding="6,1" Margin="0,0,3,0" Click="BtnAumentarPartidaSalidaPos_Click" ToolTip="Aumentar 1" />
+                                                            <Button Content="✕" Padding="6,1" Foreground="#DC2626" Click="BtnQuitarPartidaSalidaPos_Click" ToolTip="Quitar de la salida" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -1577,7 +1610,7 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <ComboBox x:Name="CboHerramientaDisponible" Grid.Column="0" Margin="0,0,6,0" />
+                                            <ComboBox x:Name="CboHerramientaDisponible" Grid.Column="0" Margin="0,0,6,0" IsEditable="True" IsTextSearchEnabled="True" />
                                             <ui:Button Grid.Column="1" Appearance="Primary" Content="Registrar Préstamo" Click="BtnPrestarHerramienta_Click" />
                                         </Grid>
                                     </StackPanel>

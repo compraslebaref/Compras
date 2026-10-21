@@ -57,6 +57,10 @@ public partial class MainWindow : FluentWindow
     private bool _modoAltaNuevoProducto = false;
     private readonly Dictionary<ComboBox, string> _placeholdersCombos = new();
     private readonly Dictionary<ComboBox, TextBlock> _textBlocksPlaceholderCombos = new();
+    private readonly DispatcherTimer _timerAutoEscaneoPistola;
+    private DateTime _ultimoPulsoPistolaUtc = DateTime.MinValue;
+    private int _rachaPulsosRapidosPistola = 0;
+    private string _origenAutoEscaneo = string.Empty;
 
     public class PrestamoVistaFila
     {
@@ -111,7 +115,18 @@ public partial class MainWindow : FluentWindow
             RefrescarCatalogoVisual();
         };
 
+        _timerAutoEscaneoPistola = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(220)
+        };
+        _timerAutoEscaneoPistola.Tick += (_, _) =>
+        {
+            _timerAutoEscaneoPistola.Stop();
+            EjecutarAutoEscaneoPistolaSinEnter();
+        };
+
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        PreviewTextInput += MainWindow_PreviewTextInput;
         Loaded += async (_, _) =>
         {
             await EjecutarConIndicadorCargaAsync("Cargando sistema y catálogos...", () =>
@@ -300,8 +315,16 @@ public partial class MainWindow : FluentWindow
     {
         if (e.Key == Key.F2)
         {
-            TxtOmniScanner.Focus();
-            TxtOmniScanner.SelectAll();
+            if (MainTabControl.SelectedIndex == 5 && TxtSalBuscarProductoPos != null)
+            {
+                TxtSalBuscarProductoPos.Focus();
+                TxtSalBuscarProductoPos.SelectAll();
+            }
+            else
+            {
+                TxtOmniScanner.Focus();
+                TxtOmniScanner.SelectAll();
+            }
             e.Handled = true;
         }
         else if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && MainTabControl.SelectedIndex == 1)
@@ -311,6 +334,52 @@ public partial class MainWindow : FluentWindow
                 PegarFotoEnProductoActual();
                 e.Handled = true;
             }
+        }
+    }
+
+    private void MainWindow_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0]))
+            return;
+
+        if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0)
+            return;
+
+        // Si el foco ya está en un TextBox (o en el TextBox interno de un ComboBox editable) o PasswordBox, dejar que escriba normal
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase ||
+            Keyboard.FocusedElement is System.Windows.Controls.PasswordBox)
+        {
+            return;
+        }
+
+        // Si ningún campo de texto tiene el foco (ej. al disparar con la pistola lectora de código de barras o empezar a teclear directo en la pestaña):
+        if (MainTabControl.SelectedIndex == 5 && TxtSalBuscarProductoPos != null)
+        {
+            TxtSalBuscarProductoPos.Focus();
+            TxtSalBuscarProductoPos.Text += e.Text;
+            TxtSalBuscarProductoPos.CaretIndex = TxtSalBuscarProductoPos.Text.Length;
+            e.Handled = true;
+        }
+        else if (MainTabControl.SelectedIndex == 2 && TxtBuscarProductoSolicitud != null)
+        {
+            TxtBuscarProductoSolicitud.Focus();
+            TxtBuscarProductoSolicitud.Text += e.Text;
+            TxtBuscarProductoSolicitud.CaretIndex = TxtBuscarProductoSolicitud.Text.Length;
+            e.Handled = true;
+        }
+        else if (MainTabControl.SelectedIndex == 1 && TxtBuscarCatalogo != null)
+        {
+            TxtBuscarCatalogo.Focus();
+            TxtBuscarCatalogo.Text += e.Text;
+            TxtBuscarCatalogo.CaretIndex = TxtBuscarCatalogo.Text.Length;
+            e.Handled = true;
+        }
+        else if (TxtOmniScanner != null)
+        {
+            TxtOmniScanner.Focus();
+            TxtOmniScanner.Text += e.Text;
+            TxtOmniScanner.CaretIndex = TxtOmniScanner.Text.Length;
+            e.Handled = true;
         }
     }
 
@@ -385,14 +454,11 @@ public partial class MainWindow : FluentWindow
             // Almacén POS (Salida de Material y Préstamo de Herramienta - en blanco por defecto)
             int salDepPrev = (CboSalDepartamento.SelectedItem as Departamento)?.Id ?? 0;
             int salProyPrev = (CboSalProyecto.SelectedItem as Proyecto)?.Id ?? 0;
-            int salProdPrev = (CboSalProductoPos.SelectedItem as Producto)?.Id ?? 0;
             CboSalDepartamento.ItemsSource = deptos;
             CboSalDepartamento.SelectedItem = salDepPrev > 0 ? deptos.FirstOrDefault(d => d.Id == salDepPrev) : null;
             CboSalProyecto.ItemsSource = proyectos;
             CboSalProyecto.SelectedItem = salProyPrev > 0 ? proyectos.FirstOrDefault(p => p.Id == salProyPrev) : null;
-            var prodsNoHer = productos.Where(p => !p.EsHerramienta).ToList();
-            CboSalProductoPos.ItemsSource = prodsNoHer;
-            CboSalProductoPos.SelectedItem = salProdPrev > 0 ? prodsNoHer.FirstOrDefault(p => p.Id == salProdPrev) : null;
+            FiltrarComboProductoSalidaPos();
 
             if (CboPreDepartamento != null)
             {
@@ -454,6 +520,14 @@ public partial class MainWindow : FluentWindow
         for (int i = 0; i < botones.Length; i++)
         {
             botones[i].Appearance = i == index ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        }
+
+        if (index == 5)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                TxtSalBuscarProductoPos?.Focus();
+            }), DispatcherPriority.Input);
         }
     }
 
@@ -693,10 +767,83 @@ public partial class MainWindow : FluentWindow
 
     // ==================== OMNIBARRA DE ESCANEO INTELIGENTE (DATAMAX S30W) ====================
 
+    private void RegistrarPulsoScannerPistola(string origen, string? textoActual)
+    {
+        var ahora = DateTime.UtcNow;
+        double ms = (ahora - _ultimoPulsoPistolaUtc).TotalMilliseconds;
+        _ultimoPulsoPistolaUtc = ahora;
+
+        if (ms <= 55)
+            _rachaPulsosRapidosPistola++;
+        else
+            _rachaPulsosRapidosPistola = 1;
+
+        _origenAutoEscaneo = origen;
+        _timerAutoEscaneoPistola.Stop();
+
+        string txt = textoActual?.Trim() ?? string.Empty;
+        if (txt.Length >= 4 && _rachaPulsosRapidosPistola >= 3)
+        {
+            _timerAutoEscaneoPistola.Start();
+        }
+    }
+
+    private void EjecutarAutoEscaneoPistolaSinEnter()
+    {
+        if (_rachaPulsosRapidosPistola < 3)
+            return;
+
+        _rachaPulsosRapidosPistola = 0;
+
+        if (_origenAutoEscaneo == "SalidaPos" && TxtSalBuscarProductoPos != null)
+        {
+            string raw = TxtSalBuscarProductoPos.Text?.Trim() ?? string.Empty;
+            string code = NormalizarCodigoEscaneado(raw);
+            if (!string.IsNullOrWhiteSpace(code) &&
+                (EsPrefijoDocumento(code) || DatabaseService.BuscarProductoPorCodigo(code) != null || DatabaseService.BuscarProductoPorCodigo(raw) != null))
+            {
+                if (ProcesarBusquedaOEscaneoSalidaPos(raw))
+                {
+                    TxtSalBuscarProductoPos.Clear();
+                    FiltrarComboProductoSalidaPos();
+                    TxtSalBuscarProductoPos.Focus();
+                }
+            }
+        }
+        else if (_origenAutoEscaneo == "AlmacenTop" && TxtBuscarAlmacen != null)
+        {
+            string raw = TxtBuscarAlmacen.Text?.Trim() ?? string.Empty;
+            string code = NormalizarCodigoEscaneado(raw);
+            if (!string.IsNullOrWhiteSpace(code) &&
+                (EsPrefijoDocumento(code) || DatabaseService.BuscarProductoPorCodigo(code) != null || DatabaseService.BuscarProductoPorCodigo(raw) != null))
+            {
+                EjecutarAccionBuscadorAlmacen();
+            }
+        }
+        else if (_origenAutoEscaneo == "Omni" && TxtOmniScanner != null)
+        {
+            string raw = TxtOmniScanner.Text?.Trim() ?? string.Empty;
+            string code = NormalizarCodigoEscaneado(raw);
+            if (!string.IsNullOrWhiteSpace(code) &&
+                (EsPrefijoDocumento(code) || DatabaseService.BuscarProductoPorCodigo(code) != null || DatabaseService.BuscarProductoPorCodigo(raw) != null))
+            {
+                ProcesarCodigoEscaneado(raw);
+            }
+        }
+    }
+
+    private void TxtOmniScanner_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        RegistrarPulsoScannerPistola("Omni", TxtOmniScanner.Text);
+    }
+
     private void TxtOmniScanner_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter)
+        if (e.Key == Key.Enter || (e.Key == Key.Tab && _rachaPulsosRapidosPistola >= 3))
         {
+            _timerAutoEscaneoPistola.Stop();
+            _rachaPulsosRapidosPistola = 0;
             ProcesarCodigoEscaneado(TxtOmniScanner.Text);
             e.Handled = true;
         }
@@ -903,8 +1050,10 @@ public partial class MainWindow : FluentWindow
             // Si estamos en Almacén POS (Tab 5), agregar directo como caja registradora
             if (MainTabControl.SelectedIndex == 5)
             {
+                decimal cant = ParseDecimal(TxtSalCantidadPos?.Text, 1m);
                 CboSalProductoPos.SelectedItem = CboSalProductoPos.Items.Cast<Producto>().FirstOrDefault(x => x.Id == prod.Id);
-                AgregarProductoAValeSalidaPos(prod, 1m);
+                AgregarProductoAValeSalidaPos(prod, cant);
+                TxtUltimoEscaneo.Text = $"Agregado a Salida: [{prod.CodigoInterno}] {prod.Nombre} (x{cant:0.##})";
                 return;
             }
 
@@ -4364,44 +4513,270 @@ public partial class MainWindow : FluentWindow
         AplicarFiltroAlmacen();
     }
 
+    private void FiltrarComboProductoSalidaPos()
+    {
+        if (CboSalProductoPos == null) return;
+
+        var todosProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
+        var baseProds = todosProds.Where(p => !p.EsHerramienta).ToList();
+
+        string q = TxtSalBuscarProductoPos?.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(q))
+            q = TxtBuscarAlmacen?.Text?.Trim() ?? string.Empty;
+
+        string qNorm = NormalizarCodigoEscaneado(q);
+        int prevId = (CboSalProductoPos.SelectedItem as Producto)?.Id ?? 0;
+
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            if (TxtContadorFiltroProductoSal != null)
+                TxtContadorFiltroProductoSal.Text = $"{baseProds.Count} artículos disponibles";
+
+            CboSalProductoPos.ItemsSource = baseProds;
+            CboSalProductoPos.SelectedItem = prevId > 0 ? baseProds.FirstOrDefault(p => p.Id == prevId) : null;
+            if (prevId <= 0)
+                CboSalProductoPos.Text = string.Empty;
+            return;
+        }
+
+        var terminos = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var filtrados = baseProds.Where(p =>
+            (!string.IsNullOrEmpty(qNorm) && (
+                p.CodigoInterno.Contains(qNorm, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoBarras.Contains(qNorm, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoEfectivo.Contains(qNorm, StringComparison.OrdinalIgnoreCase))) ||
+            terminos.All(t =>
+                p.Nombre.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.Familia.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoInterno.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoBarras.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.CategoriaNombre.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.Marca.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.Modelo.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.Medidas.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.CapacidadElectrica.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.Especificacion1.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.Especificacion2.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                p.Descripcion.Contains(t, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+
+        if (TxtContadorFiltroProductoSal != null)
+            TxtContadorFiltroProductoSal.Text = $"{filtrados.Count} coincidencias (Enter para agregar)";
+
+        CboSalProductoPos.ItemsSource = filtrados;
+        if (filtrados.Count > 0)
+        {
+            CboSalProductoPos.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+        }
+        else
+        {
+            CboSalProductoPos.SelectedIndex = -1;
+            CboSalProductoPos.Text = string.Empty;
+        }
+    }
+
+    private void TxtSalBuscarProductoPos_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        FiltrarComboProductoSalidaPos();
+        RegistrarPulsoScannerPistola("SalidaPos", TxtSalBuscarProductoPos?.Text);
+    }
+
+    private void TxtSalBuscarProductoPos_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Down && CboSalProductoPos.Items.Count > 0)
+        {
+            int idx = CboSalProductoPos.SelectedIndex;
+            if (idx < CboSalProductoPos.Items.Count - 1)
+                CboSalProductoPos.SelectedIndex = idx + 1;
+            else
+                CboSalProductoPos.SelectedIndex = 0;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Up && CboSalProductoPos.Items.Count > 0)
+        {
+            int idx = CboSalProductoPos.SelectedIndex;
+            if (idx > 0)
+                CboSalProductoPos.SelectedIndex = idx - 1;
+            else
+                CboSalProductoPos.SelectedIndex = CboSalProductoPos.Items.Count - 1;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter || (e.Key == Key.Tab && _rachaPulsosRapidosPistola >= 3))
+        {
+            _timerAutoEscaneoPistola.Stop();
+            _rachaPulsosRapidosPistola = 0;
+            string raw = TxtSalBuscarProductoPos?.Text?.Trim() ?? string.Empty;
+            if (ProcesarBusquedaOEscaneoSalidaPos(raw))
+            {
+                TxtSalBuscarProductoPos?.Clear();
+                FiltrarComboProductoSalidaPos();
+                TxtSalBuscarProductoPos?.Focus();
+            }
+            e.Handled = true;
+        }
+    }
+
+    private void CboSalEncargado_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            string txt = CboSalEncargado.Text?.Trim() ?? string.Empty;
+            string code = NormalizarCodigoEscaneado(txt);
+
+            // Si por error el cursor estaba en 'Persona que Recibe' cuando se disparó con la pistola de código de barras
+            if (!string.IsNullOrWhiteSpace(code) &&
+                (EsPrefijoDocumento(code) || DatabaseService.BuscarProductoPorCodigo(code) != null || DatabaseService.BuscarProductoPorCodigo(txt) != null))
+            {
+                CboSalEncargado.SelectedIndex = -1;
+                CboSalEncargado.Text = string.Empty;
+                ProcesarBusquedaOEscaneoSalidaPos(txt);
+                TxtSalBuscarProductoPos?.Focus();
+                e.Handled = true;
+                return;
+            }
+
+            TxtSalBuscarProductoPos?.Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void CboSalProyecto_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _actualizandoCombosBase) return;
+        if (CboSalProyecto.SelectedItem != null)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                TxtSalBuscarProductoPos?.Focus();
+            }), DispatcherPriority.Input);
+        }
+    }
+
+    private void CboSalProductoPos_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            decimal cant = ParseDecimal(TxtSalCantidadPos?.Text, 1m);
+            if (CboSalProductoPos.SelectedItem is Producto prodSel)
+            {
+                AgregarProductoAValeSalidaPos(prodSel, cant);
+                TxtSalBuscarProductoPos?.Clear();
+                CboSalProductoPos.SelectedIndex = -1;
+                CboSalProductoPos.Text = string.Empty;
+                FiltrarComboProductoSalidaPos();
+                TxtSalBuscarProductoPos?.Focus();
+                e.Handled = true;
+                return;
+            }
+
+            string raw = CboSalProductoPos.Text?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(raw) && ProcesarBusquedaOEscaneoSalidaPos(raw))
+            {
+                TxtSalBuscarProductoPos?.Clear();
+                CboSalProductoPos.SelectedIndex = -1;
+                CboSalProductoPos.Text = string.Empty;
+                FiltrarComboProductoSalidaPos();
+                TxtSalBuscarProductoPos?.Focus();
+            }
+            e.Handled = true;
+        }
+    }
+
+    private void TxtSalCantidadPos_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            string rawCant = TxtSalCantidadPos?.Text?.Trim() ?? string.Empty;
+            string code = NormalizarCodigoEscaneado(rawCant);
+
+            // Si el usuario tenía el foco en Cantidad y disparó con la pistola lectora de código de barras
+            if (!string.IsNullOrWhiteSpace(code) &&
+                !decimal.TryParse(rawCant, NumberStyles.Any, CultureInfo.InvariantCulture, out _) &&
+                (EsPrefijoDocumento(code) || DatabaseService.BuscarProductoPorCodigo(code) != null || DatabaseService.BuscarProductoPorCodigo(rawCant) != null))
+            {
+                TxtSalCantidadPos!.Text = "1";
+                ProcesarBusquedaOEscaneoSalidaPos(rawCant);
+                TxtSalBuscarProductoPos?.Focus();
+                e.Handled = true;
+                return;
+            }
+
+            BtnAgregarPartidaSalidaPos_Click(sender, e);
+            e.Handled = true;
+        }
+    }
+
+    private bool ProcesarBusquedaOEscaneoSalidaPos(string? rawInput)
+    {
+        string raw = rawInput?.Trim() ?? string.Empty;
+        string code = NormalizarCodigoEscaneado(raw);
+        if (string.IsNullOrWhiteSpace(code))
+            return false;
+
+        // 1. Si escaneó un folio de documento o herramienta (ENT-, SAL-, OC-, PRE-, HER-, SOL-)
+        if (EsPrefijoDocumento(code))
+        {
+            ProcesarCodigoEscaneado(code);
+            return true;
+        }
+
+        decimal cant = ParseDecimal(TxtSalCantidadPos?.Text, 1m);
+
+        // 2. Si coincide con el código de barras o código interno de un producto
+        var prodExacto = DatabaseService.BuscarProductoPorCodigo(code) ?? DatabaseService.BuscarProductoPorCodigo(raw);
+        if (prodExacto != null)
+        {
+            AgregarProductoAValeSalidaPos(prodExacto, cant);
+            TxtUltimoEscaneo.Text = $"Agregado a Salida: [{prodExacto.CodigoInterno}] {prodExacto.Nombre} (x{cant:0.##})";
+            return true;
+        }
+
+        // 3. Si hay un producto filtrado/seleccionado en CboSalProductoPos
+        if (CboSalProductoPos.SelectedItem is Producto prodSel)
+        {
+            AgregarProductoAValeSalidaPos(prodSel, cant);
+            TxtUltimoEscaneo.Text = $"Agregado a Salida: [{prodSel.CodigoInterno}] {prodSel.Nombre} (x{cant:0.##})";
+            return true;
+        }
+
+        // 4. Buscar por coincidencia parcial en nombre/código/marca
+        var todosProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
+        var matchParcial = todosProds.FirstOrDefault(p =>
+            !p.EsHerramienta && (
+                p.Nombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoInterno.Contains(code, StringComparison.OrdinalIgnoreCase) ||
+                p.CodigoBarras.Contains(code, StringComparison.OrdinalIgnoreCase)));
+
+        if (matchParcial != null)
+        {
+            AgregarProductoAValeSalidaPos(matchParcial, cant);
+            TxtUltimoEscaneo.Text = $"Agregado a Salida: [{matchParcial.CodigoInterno}] {matchParcial.Nombre} (x{cant:0.##})";
+            return true;
+        }
+
+        System.Windows.MessageBox.Show(this,
+            $"No se encontró ningún material en almacén que coincida con '{raw}'.\n\nVerifique el código de barras o escriba parte del nombre del artículo.",
+            "Artículo no encontrado", MessageBoxButton.OK, MessageBoxImage.Warning);
+        return false;
+    }
+
     private void AplicarFiltroAlmacen()
     {
         string raw = TxtBuscarAlmacen?.Text?.Trim() ?? string.Empty;
         string norm = NormalizarCodigoEscaneado(raw);
 
-        var todosProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
+        FiltrarComboProductoSalidaPos();
 
         if (string.IsNullOrWhiteSpace(raw))
         {
-            int prodPrevId = (CboSalProductoPos.SelectedItem as Producto)?.Id ?? 0;
-            var prodsNoHer = todosProds.Where(p => !p.EsHerramienta).ToList();
-            CboSalProductoPos.ItemsSource = prodsNoHer;
-            CboSalProductoPos.SelectedItem = prodPrevId > 0 ? prodsNoHer.FirstOrDefault(p => p.Id == prodPrevId) : null;
-
             DgPrestamosHerramientas.ItemsSource = _todosPrestamosFilas;
             DgMovimientosAlmacen.ItemsSource = _todosMovimientosAlmacen;
             return;
-        }
-
-        var prodsFiltrados = todosProds.Where(p =>
-            p.Nombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.CodigoInterno.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.CodigoInterno.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
-            p.CodigoBarras.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.CodigoBarras.Contains(norm, StringComparison.OrdinalIgnoreCase) ||
-            p.Marca.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.Modelo.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.Medidas.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.CapacidadElectrica.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.Especificacion1.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.Especificacion2.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.CategoriaNombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
-            p.Descripcion.Contains(raw, StringComparison.OrdinalIgnoreCase)).ToList();
-
-        if (prodsFiltrados.Count > 0)
-        {
-            CboSalProductoPos.ItemsSource = prodsFiltrados;
-            CboSalProductoPos.SelectedIndex = 0;
         }
 
         var prestamosFiltrados = _todosPrestamosFilas.Where(f =>
@@ -4437,12 +4812,15 @@ public partial class MainWindow : FluentWindow
     {
         if (!IsLoaded) return;
         AplicarFiltroAlmacen();
+        RegistrarPulsoScannerPistola("AlmacenTop", TxtBuscarAlmacen?.Text);
     }
 
     private void TxtBuscarAlmacen_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter)
+        if (e.Key == Key.Enter || (e.Key == Key.Tab && _rachaPulsosRapidosPistola >= 3))
         {
+            _timerAutoEscaneoPistola.Stop();
+            _rachaPulsosRapidosPistola = 0;
             EjecutarAccionBuscadorAlmacen();
             e.Handled = true;
         }
@@ -4457,7 +4835,7 @@ public partial class MainWindow : FluentWindow
     {
         TxtBuscarAlmacen.Clear();
         AplicarFiltroAlmacen();
-        TxtBuscarAlmacen.Focus();
+        TxtSalBuscarProductoPos?.Focus();
     }
 
     private void EjecutarAccionBuscadorAlmacen()
@@ -4482,13 +4860,13 @@ public partial class MainWindow : FluentWindow
         {
             TxtBuscarAlmacen!.Clear();
             AplicarFiltroAlmacen();
-            CboSalProductoPos.SelectedItem = CboSalProductoPos.Items.Cast<Producto>().FirstOrDefault(x => x.Id == prodExacto.Id);
             decimal cant = ParseDecimal(TxtSalCantidadPos.Text, 1m);
             AgregarProductoAValeSalidaPos(prodExacto, cant);
+            TxtUltimoEscaneo.Text = $"Agregado a Salida: [{prodExacto.CodigoInterno}] {prodExacto.Nombre} (x{cant:0.##})";
             return;
         }
 
-        // 3. Si al filtrar por texto queda exactamente 1 movimiento (Entrada o Salida) y ningún producto exacto, abrir su vista previa
+        // 3. Si al filtrar por texto queda exactamente 1 movimiento (Entrada o Salida) y ningún producto seleccionado, abrir su vista previa
         AplicarFiltroAlmacen();
         if (DgMovimientosAlmacen.Items.Count == 1 && DgMovimientosAlmacen.Items[0] is MovimientoAlmacenFila unicoMov &&
             (unicoMov.Folio.Contains(code, StringComparison.OrdinalIgnoreCase) || CoincideFolioFlexible(unicoMov.Folio, code)))
@@ -4497,10 +4875,13 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        // 4. Si al filtrar por texto coincide con 1 único producto en el combo POS, seleccionarlo listo para agregar
-        if (CboSalProductoPos.Items.Count == 1 && CboSalProductoPos.Items[0] is Producto unicoProd)
+        // 4. Si hay un producto seleccionado en el combo POS tras filtrar por texto, agregarlo directo al vale de salida
+        if (CboSalProductoPos.SelectedItem is Producto prodFiltrado)
         {
-            CboSalProductoPos.SelectedItem = unicoProd;
+            decimal cant = ParseDecimal(TxtSalCantidadPos.Text, 1m);
+            AgregarProductoAValeSalidaPos(prodFiltrado, cant);
+            TxtBuscarAlmacen!.Clear();
+            AplicarFiltroAlmacen();
         }
     }
 
@@ -4532,6 +4913,7 @@ public partial class MainWindow : FluentWindow
 
     private void AgregarProductoAValeSalidaPos(Producto prod, decimal cantidadMenudeo)
     {
+        if (cantidadMenudeo <= 0) cantidadMenudeo = 1m;
         var existente = _partidasSalidaPos.FirstOrDefault(x => x.ProductoId == prod.Id);
         if (existente != null)
         {
@@ -4549,15 +4931,71 @@ public partial class MainWindow : FluentWindow
                 UnidadAlmacen = prod.UnidadAlmacen,
                 CostoUnitarioAlmacen = prod.CostoUnitarioAlmacen
             });
+            DgPartidasSalidaPos.Items.Refresh();
         }
+    }
+
+    private void BtnDisminuirPartidaSalidaPos_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not SalidaPartida partida)
+            return;
+
+        if (partida.CantidadEntregada > 1)
+        {
+            partida.CantidadEntregada -= 1;
+            DgPartidasSalidaPos.Items.Refresh();
+        }
+        else
+        {
+            _partidasSalidaPos.Remove(partida);
+        }
+    }
+
+    private void BtnAumentarPartidaSalidaPos_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not SalidaPartida partida)
+            return;
+
+        partida.CantidadEntregada += 1;
+        DgPartidasSalidaPos.Items.Refresh();
+    }
+
+    private void BtnQuitarPartidaSalidaPos_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not SalidaPartida partida)
+            return;
+
+        _partidasSalidaPos.Remove(partida);
     }
 
     private void BtnAgregarPartidaSalidaPos_Click(object sender, RoutedEventArgs e)
     {
+        decimal cant = ParseDecimal(TxtSalCantidadPos.Text, 1m);
         if (CboSalProductoPos.SelectedItem is Producto prod)
         {
-            decimal cant = ParseDecimal(TxtSalCantidadPos.Text, 1m);
             AgregarProductoAValeSalidaPos(prod, cant);
+            TxtSalBuscarProductoPos?.Clear();
+            CboSalProductoPos.SelectedIndex = -1;
+            CboSalProductoPos.Text = string.Empty;
+            FiltrarComboProductoSalidaPos();
+            TxtSalBuscarProductoPos?.Focus();
+            return;
+        }
+
+        string texto = !string.IsNullOrWhiteSpace(TxtSalBuscarProductoPos?.Text)
+            ? TxtSalBuscarProductoPos!.Text.Trim()
+            : (CboSalProductoPos.Text?.Trim() ?? string.Empty);
+
+        if (!string.IsNullOrWhiteSpace(texto))
+        {
+            if (ProcesarBusquedaOEscaneoSalidaPos(texto))
+            {
+                TxtSalBuscarProductoPos?.Clear();
+                CboSalProductoPos.SelectedIndex = -1;
+                CboSalProductoPos.Text = string.Empty;
+                FiltrarComboProductoSalidaPos();
+                TxtSalBuscarProductoPos?.Focus();
+            }
         }
     }
 
@@ -4567,7 +5005,9 @@ public partial class MainWindow : FluentWindow
         if (CboSalDepartamento != null) CboSalDepartamento.SelectedIndex = -1;
         if (CboSalEncargado != null) { CboSalEncargado.SelectedIndex = -1; CboSalEncargado.Text = string.Empty; }
         if (CboSalProyecto != null) CboSalProyecto.SelectedIndex = -1;
-        if (CboSalProductoPos != null) CboSalProductoPos.SelectedIndex = -1;
+        TxtSalBuscarProductoPos?.Clear();
+        if (CboSalProductoPos != null) { CboSalProductoPos.SelectedIndex = -1; CboSalProductoPos.Text = string.Empty; }
+        FiltrarComboProductoSalidaPos();
         TxtSalCantidadPos?.Clear();
         TxtSalNotas?.Clear();
     }
