@@ -1233,9 +1233,14 @@ ON CONFLICT(Clave) DO UPDATE SET Valor = $val";
                 return matchSinCeros;
         }
 
-        // 3. Coincidencia flexible tipo PRD-1 -> PRD-0001
+        // 3. Coincidencia flexible tipo PRD-1 -> PRD-0001 o escribir solo el número "441" -> PRD-0441
         var partesC = norm.Split('-', StringSplitOptions.RemoveEmptyEntries);
-        if (partesC.Length == 2 && partesC[0].Equals("PRD", StringComparison.OrdinalIgnoreCase) && int.TryParse(partesC[1], out int numBuscado))
+        int numBuscado = -1;
+        bool buscarPorNumeroPrd =
+            (partesC.Length == 2 && partesC[0].Equals("PRD", StringComparison.OrdinalIgnoreCase) && int.TryParse(partesC[1], out numBuscado)) ||
+            (partesC.Length == 1 && clean.Length <= 4 && int.TryParse(clean, out numBuscado) && numBuscado > 0);
+
+        if (buscarPorNumeroPrd && numBuscado > 0)
         {
             var matchPrd = productos.FirstOrDefault(p =>
             {
@@ -1424,6 +1429,19 @@ WHERE Id = $id;";
             mark.Transaction = tx;
             mark.CommandText = "INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ('Reclasificacion11CategoriasV1', '1');";
             mark.ExecuteNonQuery();
+        }
+
+        // Asegurar que artículos consumibles, EPP, limpieza o papelería (Categoría <> 4) que no tienen activos individuales HER-xxxx no queden marcados como EsHerramienta=1 por error
+        using (var fixHer = conn.CreateCommand())
+        {
+            fixHer.Transaction = tx;
+            fixHer.CommandText = @"
+UPDATE Productos
+SET EsHerramienta = 0
+WHERE CategoriaId <> 4
+  AND EsHerramienta = 1
+  AND Id NOT IN (SELECT DISTINCT ProductoId FROM HerramientasActivos);";
+            fixHer.ExecuteNonQuery();
         }
 
         tx.Commit();

@@ -2093,7 +2093,7 @@ public partial class MainWindow : FluentWindow
                 var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
                 foreach (var part in sol.Partidas)
                 {
-                    if (prodsDict.TryGetValue(part.ProductoId, out var prod) && !prod.EsHerramienta)
+                    if (prodsDict.TryGetValue(part.ProductoId, out var prod))
                     {
                         AgregarProductoAValeSalidaPos(prod, part.CantidadSolicitada);
                     }
@@ -2182,7 +2182,10 @@ public partial class MainWindow : FluentWindow
                     p.Especificacion1.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                     p.Especificacion2.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                     p.Descripcion.Contains(t, StringComparison.OrdinalIgnoreCase))
-            ).ToList();
+            )
+            .OrderByDescending(p => CalcularPrioridadBusquedaProducto(p, q, qNorm))
+            .ThenBy(p => p.CodigoInterno)
+            .ToList();
 
             if (TxtContadorFiltroProductoSol != null)
                 TxtContadorFiltroProductoSol.Text = filtrados.Count > 0
@@ -2193,7 +2196,7 @@ public partial class MainWindow : FluentWindow
         CboSolProductoAgregar.ItemsSource = filtrados;
         if (filtrados.Count > 0)
         {
-            CboSolProductoAgregar.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+            CboSolProductoAgregar.SelectedItem = filtrados[0];
         }
         else
         {
@@ -4513,12 +4516,55 @@ public partial class MainWindow : FluentWindow
         AplicarFiltroAlmacen();
     }
 
+    private static int CalcularPrioridadBusquedaProducto(Producto p, string q, string qNorm)
+    {
+        if (string.IsNullOrWhiteSpace(q)) return 0;
+
+        if (string.Equals(p.CodigoInterno, q, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.CodigoInterno, qNorm, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.CodigoBarras, q, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.CodigoBarras, qNorm, StringComparison.OrdinalIgnoreCase))
+        {
+            return 100;
+        }
+
+        // Si el usuario escribe solo el número (ej. "441" o "0441") o "PRD-441", priorizar PRD-0441 en primer lugar
+        var partesQ = qNorm.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        int numBuscado = -1;
+        bool esNumeroPrd =
+            (partesQ.Length == 2 && partesQ[0].Equals("PRD", StringComparison.OrdinalIgnoreCase) && int.TryParse(partesQ[1], out numBuscado)) ||
+            (partesQ.Length == 1 && q.Length <= 4 && int.TryParse(q, out numBuscado) && numBuscado > 0);
+
+        if (esNumeroPrd && numBuscado > 0)
+        {
+            var partesP = NormalizarCodigoEscaneado(p.CodigoInterno).Split('-', StringSplitOptions.RemoveEmptyEntries);
+            if (partesP.Length == 2 &&
+                partesP[0].Equals("PRD", StringComparison.OrdinalIgnoreCase) &&
+                int.TryParse(partesP[1], out int numP) &&
+                numP == numBuscado)
+            {
+                return 95;
+            }
+        }
+
+        if (p.CodigoInterno.Contains(qNorm, StringComparison.OrdinalIgnoreCase))
+            return 80;
+
+        if (p.Nombre.StartsWith(q, StringComparison.OrdinalIgnoreCase))
+            return 70;
+
+        if (p.Nombre.Contains(q, StringComparison.OrdinalIgnoreCase))
+            return 60;
+
+        return 10;
+    }
+
     private void FiltrarComboProductoSalidaPos()
     {
         if (CboSalProductoPos == null) return;
 
         var todosProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
-        var baseProds = todosProds.Where(p => !p.EsHerramienta).ToList();
+        var baseProds = todosProds.ToList();
 
         string q = TxtSalBuscarProductoPos?.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(q))
@@ -4558,7 +4604,10 @@ public partial class MainWindow : FluentWindow
                 p.Especificacion1.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                 p.Especificacion2.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                 p.Descripcion.Contains(t, StringComparison.OrdinalIgnoreCase))
-        ).ToList();
+        )
+        .OrderByDescending(p => CalcularPrioridadBusquedaProducto(p, q, qNorm))
+        .ThenBy(p => p.CodigoInterno)
+        .ToList();
 
         if (TxtContadorFiltroProductoSal != null)
             TxtContadorFiltroProductoSal.Text = $"{filtrados.Count} coincidencias (Enter para agregar)";
@@ -4566,7 +4615,7 @@ public partial class MainWindow : FluentWindow
         CboSalProductoPos.ItemsSource = filtrados;
         if (filtrados.Count > 0)
         {
-            CboSalProductoPos.SelectedItem = filtrados.FirstOrDefault(p => p.Id == prevId) ?? filtrados[0];
+            CboSalProductoPos.SelectedItem = filtrados[0];
         }
         else
         {
@@ -4746,11 +4795,13 @@ public partial class MainWindow : FluentWindow
 
         // 4. Buscar por coincidencia parcial en nombre/código/marca
         var todosProds = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
-        var matchParcial = todosProds.FirstOrDefault(p =>
-            !p.EsHerramienta && (
+        var matchParcial = todosProds
+            .Where(p =>
                 p.Nombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoInterno.Contains(code, StringComparison.OrdinalIgnoreCase) ||
-                p.CodigoBarras.Contains(code, StringComparison.OrdinalIgnoreCase)));
+                p.CodigoBarras.Contains(code, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(p => CalcularPrioridadBusquedaProducto(p, raw, code))
+            .FirstOrDefault();
 
         if (matchParcial != null)
         {
