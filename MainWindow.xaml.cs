@@ -150,7 +150,7 @@ public partial class MainWindow : FluentWindow
         // Tab 2: Solicitudes
         EstablecerPlaceholderCombo(CboSolDepartamento, "Seleccione departamento solicitante...");
         EstablecerPlaceholderCombo(CboSolEncargado, "Seleccione primero un departamento...");
-        EstablecerPlaceholderCombo(CboSolProyecto, "Seleccione proyecto o área destino...");
+        EstablecerPlaceholderCombo(CboSolProyecto, "Opcional: Proyecto destino (en blanco = Consumo Interno)...");
         EstablecerPlaceholderCombo(CboSolProductoAgregar, "Busque arriba o despliegue para elegir artículo del catálogo...");
 
         // Tab 3: Comparativa
@@ -163,11 +163,11 @@ public partial class MainWindow : FluentWindow
         // Tab 5: Almacén POS y Préstamos
         EstablecerPlaceholderCombo(CboSalDepartamento, "Seleccione depto. que aprueba...");
         EstablecerPlaceholderCombo(CboSalEncargado, "Seleccione o escriba quién recibe...");
-        EstablecerPlaceholderCombo(CboSalProyecto, "Seleccione proyecto destino...");
+        EstablecerPlaceholderCombo(CboSalProyecto, "Opcional: Proyecto destino (en blanco = Consumo Interno)...");
         EstablecerPlaceholderCombo(CboSalProductoPos, "Escanee código o seleccione material de almacén...");
         EstablecerPlaceholderCombo(CboPreDepartamento, "Seleccione depto. que aprueba...");
         EstablecerPlaceholderCombo(CboPrePersonaRecibe, "Seleccione o escriba quién recibe...");
-        EstablecerPlaceholderCombo(CboPreProyecto, "Seleccione proyecto destino...");
+        EstablecerPlaceholderCombo(CboPreProyecto, "Opcional: Proyecto destino (en blanco = Uso Interno)...");
         EstablecerPlaceholderCombo(CboHerramientaDisponible, "Seleccione herramienta disponible (HER-xxxx)...");
 
         // Tab 6: Facturas XML y Compras sin Factura
@@ -557,7 +557,7 @@ public partial class MainWindow : FluentWindow
                 _sesionAdminActiva = false;
                 if (BtnPerfilAdmin != null)
                 {
-                    BtnPerfilAdmin.Content = "🔒 Perfil: Administrador";
+                    BtnPerfilAdmin.Content = "Perfil: Administrador";
                     BtnPerfilAdmin.Appearance = ControlAppearance.Secondary;
                 }
             }
@@ -569,7 +569,7 @@ public partial class MainWindow : FluentWindow
             _sesionAdminActiva = true;
             if (BtnPerfilAdmin != null)
             {
-                BtnPerfilAdmin.Content = "🔓 Admin Activo";
+                BtnPerfilAdmin.Content = "Admin Activo";
                 BtnPerfilAdmin.Appearance = ControlAppearance.Primary;
             }
         }
@@ -594,7 +594,7 @@ public partial class MainWindow : FluentWindow
         var root = new StackPanel { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock
         {
-            Text = "🔑 Definir Nuevo PIN de Administrador",
+            Text = "Definir Nuevo PIN de Administrador",
             FontSize = 15,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 8)
@@ -676,7 +676,7 @@ public partial class MainWindow : FluentWindow
         var root = new StackPanel { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock
         {
-            Text = "🔒 Clave de Administrador",
+            Text = "Clave de Administrador",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(Color.FromRgb(30, 58, 138)),
@@ -747,7 +747,7 @@ public partial class MainWindow : FluentWindow
                 _sesionAdminActiva = true;
                 if (BtnPerfilAdmin != null)
                 {
-                    BtnPerfilAdmin.Content = "🔓 Admin Activo";
+                    BtnPerfilAdmin.Content = "Admin Activo";
                     BtnPerfilAdmin.Appearance = ControlAppearance.Primary;
                 }
             }
@@ -2362,7 +2362,10 @@ public partial class MainWindow : FluentWindow
                 NotasCotizacion3 = p.NotasCotizacion3,
                 ProveedorGanadorIndice = p.ProveedorGanadorIndice,
                 OrdenCompraId = p.OrdenCompraId,
-                OrdenCompraFolio = p.OrdenCompraFolio
+                OrdenCompraFolio = p.OrdenCompraFolio,
+                IncluirEnCotizacion = p.IncluirEnCotizacion,
+                DiasVigenciaCotizacion = p.DiasVigenciaCotizacion > 0 ? p.DiasVigenciaCotizacion : 15,
+                FechaCotizacion = p.FechaCotizacion
             });
         }
         DgPartidasNuevaSolicitud.Items.Refresh();
@@ -2429,6 +2432,7 @@ public partial class MainWindow : FluentWindow
             EstablecerPlaceholderCombo(CboSolEncargado, "Seleccione primero un departamento...");
         }
         if (CboSolProyecto != null) CboSolProyecto.SelectedIndex = -1;
+        if (CboSolTipoSolicitud != null) CboSolTipoSolicitud.SelectedIndex = 0;
         if (CboSolProductoAgregar != null) CboSolProductoAgregar.SelectedIndex = -1;
         TxtBuscarProductoSolicitud?.Clear();
         TxtSolCantidadAgregar?.Clear();
@@ -2452,8 +2456,17 @@ public partial class MainWindow : FluentWindow
             if (enc != null) CboSolEncargado.SelectedItem = enc;
         }
 
-        var proy = CboSolProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == sol.ProyectoId);
-        if (proy != null) CboSolProyecto.SelectedItem = proy;
+        if (CboSolProyecto != null)
+        {
+            var proy = sol.ProyectoId > 0 ? CboSolProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == sol.ProyectoId) : null;
+            CboSolProyecto.SelectedItem = proy;
+            if (proy == null) CboSolProyecto.SelectedIndex = -1;
+        }
+
+        if (CboSolTipoSolicitud != null)
+        {
+            CboSolTipoSolicitud.SelectedIndex = sol.EsSoloCotizacion ? 1 : 0;
+        }
 
         TxtSolNotas.Text = sol.Notas;
         SincronizarPartidasEditorDesdeSolicitud(sol);
@@ -2492,8 +2505,9 @@ public partial class MainWindow : FluentWindow
 
         int depId = (CboSolDepartamento.SelectedItem as Departamento)?.Id ?? solActual.DepartamentoId;
         int encId = (CboSolEncargado.SelectedItem as Encargado)?.Id ?? solActual.EncargadoId;
-        int proyId = (CboSolProyecto.SelectedItem as Proyecto)?.Id ?? solActual.ProyectoId;
+        int proyId = (CboSolProyecto.SelectedItem as Proyecto)?.Id ?? 0;
         string origen = string.IsNullOrWhiteSpace(solActual.Origen) ? "Catálogo" : solActual.Origen;
+        string tipoSol = (CboSolTipoSolicitud?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? solActual.TipoSolicitud;
 
         DatabaseService.ActualizarSolicitudExistente(
             _solicitudEditandoId,
@@ -2502,7 +2516,8 @@ public partial class MainWindow : FluentWindow
             proyId,
             origen,
             TxtSolNotas.Text,
-            _partidasNuevaSolicitud.ToList());
+            _partidasNuevaSolicitud.ToList(),
+            tipoSol);
 
         RefrescarSolicitudes(_solicitudEditandoId);
         RefrescarDashboard();
@@ -2719,12 +2734,14 @@ public partial class MainWindow : FluentWindow
     private void BtnCrearCarritoEIrCatalogo_Click(object sender, RoutedEventArgs e)
     {
         if (CboSolDepartamento.SelectedItem is not Departamento dep ||
-            CboSolEncargado.SelectedItem is not Encargado enc ||
-            CboSolProyecto.SelectedItem is not Proyecto proy)
+            CboSolEncargado.SelectedItem is not Encargado enc)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione Departamento, Solicitante y Proyecto para crear o vincular el Carrito de Solicitud.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, "Seleccione Departamento y Solicitante para crear o vincular el Carrito de Solicitud (el Proyecto es opcional).", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+
+        int proyId = (CboSolProyecto.SelectedItem as Proyecto)?.Id ?? 0;
+        string tipoSol = (CboSolTipoSolicitud?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Requerimiento de Compra";
 
         Solicitud carritoActivo;
         if (_solicitudEditandoId > 0)
@@ -2736,19 +2753,20 @@ public partial class MainWindow : FluentWindow
                     _solicitudEditandoId,
                     dep.Id,
                     enc.Id,
-                    proy.Id,
+                    proyId,
                     solExistente.Origen,
                     TxtSolNotas.Text,
-                    _partidasNuevaSolicitud.ToList());
+                    _partidasNuevaSolicitud.ToList(),
+                    tipoSol);
             }
             else
             {
-                carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proy.Id, "Catálogo", TxtSolNotas.Text, new List<SolicitudPartida>());
+                carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proyId, "Catálogo", TxtSolNotas.Text, new List<SolicitudPartida>(), tipoSol);
             }
         }
         else
         {
-            carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proy.Id, "Catálogo", TxtSolNotas.Text, _partidasNuevaSolicitud.ToList());
+            carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proyId, "Catálogo", TxtSolNotas.Text, _partidasNuevaSolicitud.ToList(), tipoSol);
         }
 
         _solicitudEditandoId = carritoActivo.Id;
@@ -3015,16 +3033,109 @@ public partial class MainWindow : FluentWindow
         PersistirCambioSiSolicitudEnEdicion();
     }
 
-    private void BtnGuardarSolicitud_Click(object sender, RoutedEventArgs e)
+    private void BtnExportarExistenciasCatalogo_Click(object sender, RoutedEventArgs e)
     {
-        if (CboSolDepartamento.SelectedItem is not Departamento dep ||
-            CboSolEncargado.SelectedItem is not Encargado enc ||
-            CboSolProyecto.SelectedItem is not Proyecto proy)
+        var dlg = new SaveFileDialog
         {
-            System.Windows.MessageBox.Show(this, "Seleccione Departamento, Encargado y Proyecto.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Title = "Exportar Reporte de Existencias de Almacén (Excel CSV)",
+            FileName = $"Existencias_Almacen_{DateTime.Now:yyyyMMdd}.csv",
+            Filter = "Archivo CSV para Excel (*.csv)|*.csv"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("CodigoInterno,CodigoBarras,Familia,Categoria,Articulo,Marca,Modelo,UnidadAlmacen,StockActual,StockMinimo,Ubicacion");
+            foreach (var p in DatabaseService.ObtenerProductos().OrderBy(x => x.CategoriaNombre).ThenBy(x => x.Nombre))
+            {
+                string nom = p.Nombre.Replace(",", " ");
+                string cat = p.CategoriaNombre.Replace(",", " ");
+                string fam = p.Familia.Replace(",", " ");
+                sb.AppendLine($"{p.CodigoInterno},{p.CodigoBarras},{fam},{cat},{nom},{p.Marca},{p.Modelo},{p.UnidadAlmacen},{p.StockActual:0.##},{p.StockMinimo:0.##},{p.Ubicacion}");
+            }
+            File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8);
+            System.Windows.MessageBox.Show(this,
+                $"Reporte de existencias exportado en:\n{dlg.FileName}\n\nPuede compartirlo con las Gerencias de Área para consulta de stock disponible.",
+                "Existencias Exportadas", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnGenerarSalidaStockSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (_partidasNuevaSolicitud.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Agregue artículos a la solicitud para verificar cuáles cuentan con existencia disponible en almacén.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
+        var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var conStock = new List<(Producto prod, decimal cantSurtiendo, SolicitudPartida part)>();
+
+        foreach (var part in _partidasNuevaSolicitud)
+        {
+            if (part.ProductoId > 0 && prodsDict.TryGetValue(part.ProductoId, out var prod) && prod.StockActual > 0)
+            {
+                decimal cantSurtir = Math.Min(part.CantidadSolicitada, prod.StockActual);
+                if (cantSurtir > 0)
+                    conStock.Add((prod, cantSurtir, part));
+            }
+        }
+
+        if (conStock.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Ninguno de los artículos de esta solicitud tiene existencia disponible actualmente en Almacén.", "Sin stock disponible", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        _partidasSalidaPos.Clear();
+        foreach (var item in conStock)
+        {
+            AgregarProductoAValeSalidaPos(item.prod, item.cantSurtiendo);
+        }
+
+        if (CboSolDepartamento.SelectedItem is Departamento dep && CboSalDepartamento != null)
+        {
+            CboSalDepartamento.SelectedItem = CboSalDepartamento.Items.Cast<Departamento>().FirstOrDefault(d => d.Id == dep.Id);
+        }
+        if (CboSolEncargado.SelectedItem is Encargado enc && CboSalEncargado != null)
+        {
+            CboSalEncargado.Text = enc.Nombre;
+        }
+        if (CboSolProyecto.SelectedItem is Proyecto proy && CboSalProyecto != null)
+        {
+            CboSalProyecto.SelectedItem = CboSalProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == proy.Id);
+        }
+
+        var preguntarDesmarcar = System.Windows.MessageBox.Show(this,
+            $"Se cargaron {conStock.Count} artículo(s) con existencia disponible en la pestaña '5. Almacén -> Salida de Material'.\n\n¿Desea desmarcar la casilla 'Cotizar' en los artículos que ya quedan cubiertos al 100% con el stock de almacén? (Si elige 'No', permanecerán marcados por si desea cotizarlos de todas formas para actualizar precios).",
+            "Artículos Cargados en Salida de Almacén",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (preguntarDesmarcar == System.Windows.MessageBoxResult.Yes)
+        {
+            foreach (var item in conStock)
+            {
+                if (item.cantSurtiendo >= item.part.CantidadSolicitada)
+                    item.part.IncluirEnCotizacion = false;
+            }
+            DgPartidasNuevaSolicitud.Items.Refresh();
+            PersistirCambioSiSolicitudEnEdicion();
+        }
+
+        CambiarSeccion(5);
+    }
+
+    private void BtnGuardarSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboSolDepartamento.SelectedItem is not Departamento dep ||
+            CboSolEncargado.SelectedItem is not Encargado enc)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione Departamento y Solicitante (el Proyecto Destino es opcional).", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        int proyId = (CboSolProyecto.SelectedItem as Proyecto)?.Id ?? 0;
+        string tipoSol = (CboSolTipoSolicitud?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Requerimiento de Compra";
         string origen = _partidasNuevaSolicitud.Any(p => (p.NotasPartida ?? "").StartsWith("WhatsApp")) ? "WhatsApp" : "Catálogo";
         Solicitud guardada;
 
@@ -3035,20 +3146,22 @@ public partial class MainWindow : FluentWindow
                 _solicitudEditandoId,
                 dep.Id,
                 enc.Id,
-                proy.Id,
+                proyId,
                 origen,
                 TxtSolNotas.Text,
-                _partidasNuevaSolicitud.ToList());
+                _partidasNuevaSolicitud.ToList(),
+                tipoSol);
         }
         else
         {
             guardada = DatabaseService.CrearSolicitud(
                 dep.Id,
                 enc.Id,
-                proy.Id,
+                proyId,
                 origen,
                 TxtSolNotas.Text,
-                _partidasNuevaSolicitud.ToList());
+                _partidasNuevaSolicitud.ToList(),
+                tipoSol);
             _solicitudEditandoId = guardada.Id;
         }
 
@@ -3058,7 +3171,7 @@ public partial class MainWindow : FluentWindow
         if (guardada.Partidas.Count == 0)
         {
             var irCat = System.Windows.MessageBox.Show(this,
-                $"Se creó el carrito de solicitud abierto {guardada.Folio} para el proyecto '{guardada.ProyectoNombre}'.\n\n¿Desea ir ahora al Catálogo Visual para escoger y agregar artículos a este carrito?",
+                $"Se creó el carrito de solicitud abierto {guardada.Folio} ({guardada.ProyectoMostrar}).\n\n¿Desea ir ahora al Catálogo Visual para escoger y agregar artículos a este carrito?",
                 "Carrito de Solicitud Creado",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Information);
@@ -3110,14 +3223,24 @@ public partial class MainWindow : FluentWindow
 
         int prevPartidaId = (DgComparativa.SelectedItem as CotizacionRenglonComparativo)?.SolicitudPartidaId ?? 0;
 
-        TxtCompInfoSolicitud.Text = $"Solicitud: {sol.Folio} | Depto: {sol.DepartamentoNombre} | Solicitante: {sol.EncargadoNombre} | Proyecto: {sol.ProyectoNombre} | Estatus: {sol.Estatus}";
+        TxtCompInfoSolicitud.Text = $"Solicitud: {sol.Folio} | Tipo: {sol.TipoSolicitud} | Depto: {sol.DepartamentoNombre} | Solicitante: {sol.EncargadoNombre} | Destino: {sol.ProyectoMostrar} | Estatus: {sol.Estatus}";
+        if (BtnConvertirPresupuestoEnCompra != null)
+        {
+            BtnConvertirPresupuestoEnCompra.Content = sol.EsSoloCotizacion
+                ? "Finalizar Cotización / Convertir a Compra"
+                : "Convertir a Solo Cotización";
+        }
         _renglonesComparativa.Clear();
 
         var productos = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
         var proveedores = DatabaseService.ObtenerProveedores();
         var provDict = proveedores.ToDictionary(p => p.Id);
 
-        foreach (var part in sol.Partidas)
+        var partidasParaCotizar = sol.Partidas.Any(p => p.IncluirEnCotizacion || p.TieneOcGenerada)
+            ? sol.Partidas.Where(p => p.IncluirEnCotizacion || p.TieneOcGenerada).ToList()
+            : sol.Partidas;
+
+        foreach (var part in partidasParaCotizar)
         {
             productos.TryGetValue(part.ProductoId, out var pObj);
             decimal ultimoCostoConIva = pObj?.UltimoCostoCompra ?? 0m;
@@ -3126,6 +3249,7 @@ public partial class MainWindow : FluentWindow
                 : (!string.IsNullOrWhiteSpace(pObj?.Familia) ? pObj.Familia : DatabaseService.ExtraerFamiliaSugerida(part.ProductoNombre));
 
             var (sugerencias, refHist) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(part.ProductoId, part.ProductoNombre, familiaEfectiva);
+            var provsExtra = part.Id > 0 ? DatabaseService.ObtenerProveedoresExtraPartida(part.Id) : new List<CotizacionProveedorExtra>();
 
             int pv1 = part.Proveedor1Id;
             decimal pr1 = part.PrecioSinIva1;
@@ -3142,12 +3266,9 @@ public partial class MainWindow : FluentWindow
             int d3 = part.DiasEntrega3 > 0 ? part.DiasEntrega3 : 1;
             string nc3 = part.NotasCotizacion3;
 
-            bool sinProveedoresGuardados = pv1 == 0 && pv2 == 0 && pv3 == 0 && pr1 <= 0 && pr2 <= 0 && pr3 <= 0;
+            bool sinProveedoresGuardados = pv1 == 0 && pv2 == 0 && pv3 == 0 && pr1 <= 0 && pr2 <= 0 && pr3 <= 0 && provsExtra.Count == 0;
             if (sinProveedoresGuardados)
             {
-                // Regla solicitada: Empezar por defecto SOLO con 1 opción.
-                // Si el producto tiene histórico de compras, pre-llenar la Opción 1 con la mejor opción histórica;
-                // de no tener histórico de compras, dejar la Opción 1 completamente en blanco.
                 if (sugerencias.Count >= 1)
                 {
                     pv1 = sugerencias[0].proveedorId;
@@ -3168,7 +3289,7 @@ public partial class MainWindow : FluentWindow
             }
 
             int numOpcionesVisibles = 1;
-            if (pv3 > 0 || pr3 > 0 || part.ProveedorGanadorIndice == 3)
+            if (pv3 > 0 || pr3 > 0 || part.ProveedorGanadorIndice >= 3 || provsExtra.Count > 0)
                 numOpcionesVisibles = 3;
             else if (pv2 > 0 || pr2 > 0 || part.ProveedorGanadorIndice == 2)
                 numOpcionesVisibles = 2;
@@ -3187,6 +3308,9 @@ public partial class MainWindow : FluentWindow
                 UltimoCostoCompraConIva = ultimoCostoConIva,
                 ReferenciaHistorica = refHist,
                 NumeroOpcionesVisibles = numOpcionesVisibles,
+                DiasVigenciaCotizacion = part.DiasVigenciaCotizacion > 0 ? part.DiasVigenciaCotizacion : 15,
+                FechaCotizacion = part.FechaCotizacion,
+                ProveedoresExtra = provsExtra,
 
                 Proveedor1Id = pv1,
                 Proveedor1Nombre = provDict.TryGetValue(pv1, out var p1Obj) ? p1Obj.NombreMostrar : "Sin asignar",
@@ -3269,9 +3393,11 @@ public partial class MainWindow : FluentWindow
 
             string famBadge = !string.IsNullOrWhiteSpace(r.Familia) ? $" | Familia: {r.Familia}" : string.Empty;
             TxtCompProdTitulo.Text = $"{r.ProductoCodigo} — {r.ProductoNombre}";
-            TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")}";
+            TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")} | Vigencia: {r.VigenciaEstadoTexto}";
             TxtCompProdHistorial.Text = r.ReferenciaHistorica;
             TxtCompProdCantidad.Text = r.Cantidad.ToString("0.##", CultureInfo.InvariantCulture);
+            if (TxtCompDiasVigencia != null)
+                TxtCompDiasVigencia.Text = (r.DiasVigenciaCotizacion > 0 ? r.DiasVigenciaCotizacion : 15).ToString();
 
             if (CboCompReferenciasSimilares != null)
             {
@@ -3281,7 +3407,7 @@ public partial class MainWindow : FluentWindow
                 EstablecerPlaceholderCombo(
                     CboCompReferenciasSimilares,
                     refsSimilares.Count > 0
-                        ? $"🔎 {refsSimilares.Count} compra(s) similares encontradas — despliegue para elegir..."
+                        ? $"{refsSimilares.Count} compra(s) / cotizaciones previas encontradas — despliegue para elegir..."
                         : "Sin compras históricas similares registradas para esta familia/concepto");
             }
 
@@ -3350,11 +3476,17 @@ public partial class MainWindow : FluentWindow
         BdrCompCard2.Visibility = n >= 2 ? Visibility.Visible : Visibility.Collapsed;
         BdrCompCard3.Visibility = n >= 3 ? Visibility.Visible : Visibility.Collapsed;
 
+        if (BdrProveedoresExtraComp != null && DgProveedoresExtraComp != null)
+        {
+            DgProveedoresExtraComp.ItemsSource = null;
+            DgProveedoresExtraComp.ItemsSource = r.ProveedoresExtra;
+            BdrProveedoresExtraComp.Visibility = r.ProveedoresExtra.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         bool editable = !r.TieneOcGenerada;
-        BtnAgregarOpcionProveedorComp.IsEnabled = editable && n < 3;
-        BtnAgregarOpcionProveedorComp.Content = n < 3
-            ? $"➕ Añadir Opción {n + 1} de Proveedor"
-            : "✔ 3 Opciones Activas";
+        BtnAgregarOpcionProveedorComp.IsEnabled = editable;
+        int sigOp = n < 3 ? n + 1 : 4 + r.ProveedoresExtra.Count;
+        BtnAgregarOpcionProveedorComp.Content = $"+ Añadir Opción {sigOp} de Proveedor";
     }
 
     private void BtnAgregarOpcionProveedorComp_Click(object sender, RoutedEventArgs e)
@@ -3363,11 +3495,13 @@ public partial class MainWindow : FluentWindow
             return;
 
         if (r.NumeroOpcionesVisibles >= 3)
+        {
+            MostrarModalAgregarProveedorExtraComp(r);
             return;
+        }
 
         r.NumeroOpcionesVisibles++;
 
-        // Si existen más sugerencias históricas para este producto o su familia, podemos sugerir la siguiente opción histórica
         var (sugerencias, _) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(r.ProductoId, r.ProductoNombre, r.Familia);
         var provDict = (CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores()).ToDictionary(p => p.Id);
 
@@ -3400,6 +3534,148 @@ public partial class MainWindow : FluentWindow
 
         CargarProductoEnTarjetasComparativa(r);
         RecalcularTotalesComparativa();
+    }
+
+    private void MostrarModalAgregarProveedorExtraComp(CotizacionRenglonComparativo r)
+    {
+        if (r.SolicitudPartidaId <= 0)
+        {
+            System.Windows.MessageBox.Show(this, "Guarde primero la solicitud para habilitar proveedores adicionales (Opción 4+).", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        int numOpcion = 4 + r.ProveedoresExtra.Count;
+        var win = new Window
+        {
+            Title = $"Añadir Opción {numOpcion} de Proveedor — {r.ProductoNombre}",
+            Width = 460,
+            Height = 365,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = $"Opción {numOpcion} de Proveedor Concursante",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+
+        root.Children.Add(new TextBlock { Text = "Proveedor:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var cboProv = new ComboBox
+        {
+            ItemsSource = DatabaseService.ObtenerProveedores(),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        root.Children.Add(cboProv);
+
+        var gridPrecios = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        gridPrecios.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridPrecios.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridPrecios.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+
+        var spPrecio = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spPrecio.Children.Add(new TextBlock { Text = "Precio Unit. s/IVA ($):", FontSize = 11 });
+        var txtPrecio = new System.Windows.Controls.TextBox { Text = "0.00", Padding = new Thickness(6, 4, 6, 4) };
+        spPrecio.Children.Add(txtPrecio);
+        Grid.SetColumn(spPrecio, 0);
+        gridPrecios.Children.Add(spPrecio);
+
+        var spFlete = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spFlete.Children.Add(new TextBlock { Text = "Flete / Envío c/IVA ($):", FontSize = 11 });
+        var txtFlete = new System.Windows.Controls.TextBox { Text = "0.00", Padding = new Thickness(6, 4, 6, 4) };
+        spFlete.Children.Add(txtFlete);
+        Grid.SetColumn(spFlete, 1);
+        gridPrecios.Children.Add(spFlete);
+
+        var spDias = new StackPanel();
+        spDias.Children.Add(new TextBlock { Text = "Entrega (días):", FontSize = 11 });
+        var txtDias = new System.Windows.Controls.TextBox { Text = "2", Padding = new Thickness(6, 4, 6, 4) };
+        spDias.Children.Add(txtDias);
+        Grid.SetColumn(spDias, 2);
+        gridPrecios.Children.Add(spDias);
+        root.Children.Add(gridPrecios);
+
+        root.Children.Add(new TextBlock { Text = "Notas / Marca cotizada:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtNotas = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 14) };
+        root.Children.Add(txtNotas);
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnOk = new System.Windows.Controls.Button { Content = "Agregar Proveedor a Comparativa", Padding = new Thickness(14, 6, 14, 6), FontWeight = FontWeights.Bold };
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnOk.Click += (_, _) =>
+        {
+            if (cboProv.SelectedItem is not Proveedor provSel)
+            {
+                System.Windows.MessageBox.Show(win, "Seleccione un proveedor de la lista.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            decimal precio = ParseDecimal(txtPrecio.Text, 0m);
+            if (precio <= 0)
+            {
+                System.Windows.MessageBox.Show(win, "Capture un precio unitario sin IVA mayor a 0.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var extra = new CotizacionProveedorExtra
+            {
+                SolicitudPartidaId = r.SolicitudPartidaId,
+                NumeroOpcion = numOpcion,
+                ProveedorId = provSel.Id,
+                ProveedorNombre = provSel.NombreMostrar,
+                PrecioSinIva = precio,
+                FleteConIva = ParseDecimal(txtFlete.Text, 0m),
+                DiasEntrega = Math.Max(1, (int)ParseDecimal(txtDias.Text, 2m)),
+                NotasCotizacion = txtNotas.Text.Trim(),
+                DiasVigencia = r.DiasVigenciaCotizacion > 0 ? r.DiasVigenciaCotizacion : 15,
+                FechaCotizacion = DateTime.Now.ToString("yyyy-MM-dd HH:mm")
+            };
+            DatabaseService.GuardarProveedorExtraPartida(extra);
+            r.ProveedoresExtra = DatabaseService.ObtenerProveedoresExtraPartida(r.SolicitudPartidaId);
+            DatabaseService.GuardarCotizacionPartida(r);
+            win.DialogResult = true;
+        };
+
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnOk);
+        root.Children.Add(btnPanel);
+        win.Content = root;
+
+        if (win.ShowDialog() == true)
+        {
+            CargarProductoEnTarjetasComparativa(r);
+            RecalcularTotalesComparativa();
+        }
+    }
+
+    private void BtnElegirProveedorExtraGanador_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CotizacionProveedorExtra extra } &&
+            DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
+        {
+            ElegirOpcionGanadoraProductoActual(extra.NumeroOpcion);
+        }
+    }
+
+    private void BtnEliminarProveedorExtra_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CotizacionProveedorExtra extra } &&
+            DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
+        {
+            DatabaseService.EliminarProveedorExtraPartida(extra.Id);
+            r.ProveedoresExtra = DatabaseService.ObtenerProveedoresExtraPartida(r.SolicitudPartidaId);
+            if (r.ProveedorGanadorIndice == extra.NumeroOpcion)
+                r.ProveedorGanadorIndice = 0;
+            DatabaseService.GuardarCotizacionPartida(r);
+            CargarProductoEnTarjetasComparativa(r);
+            RecalcularTotalesComparativa();
+        }
     }
 
     private void BtnAplicarReferenciaSimilarOp1_Click(object sender, RoutedEventArgs e)
@@ -3620,6 +3896,11 @@ public partial class MainWindow : FluentWindow
         r.NotasCotizacion2 = r.NumeroOpcionesVisibles >= 2 ? (TxtCompNotas2.Text ?? string.Empty) : string.Empty;
         r.NotasCotizacion3 = r.NumeroOpcionesVisibles >= 3 ? (TxtCompNotas3.Text ?? string.Empty) : string.Empty;
 
+        if (TxtCompDiasVigencia != null)
+            r.DiasVigenciaCotizacion = Math.Max(1, (int)ParseDecimal(TxtCompDiasVigencia.Text, 15m));
+        if ((r.PrecioSinIva1 > 0 || r.PrecioSinIva2 > 0 || r.PrecioSinIva3 > 0 || r.ProveedoresExtra.Any(p => p.PrecioSinIva > 0)) && string.IsNullOrWhiteSpace(r.FechaCotizacion))
+            r.FechaCotizacion = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+
         DatabaseService.GuardarCotizacionPartida(r);
         ActualizarResumenYAparienciaTarjetasProducto(r);
         RecalcularTotalesComparativa();
@@ -3784,6 +4065,14 @@ public partial class MainWindow : FluentWindow
         if (r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0) candidatos.Add((1, r.TotalConFlete1));
         if (r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0) candidatos.Add((2, r.TotalConFlete2));
         if (r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0) candidatos.Add((3, r.TotalConFlete3));
+        foreach (var ex in r.ProveedoresExtra)
+        {
+            if (ex.ProveedorId > 0 && ex.PrecioSinIva > 0)
+            {
+                decimal totEx = Math.Round(r.Cantidad * ex.PrecioConIva + ex.FleteConIva, 2);
+                candidatos.Add((ex.NumeroOpcion, totEx));
+            }
+        }
 
         return candidatos.Count > 0 ? candidatos.OrderBy(c => c.costoTotal).First().idx : 0;
     }
@@ -3809,7 +4098,7 @@ public partial class MainWindow : FluentWindow
         DgComparativa.Items.Refresh();
 
         var decididosSinOc = _renglonesComparativa
-            .Where(r => !r.TieneOcGenerada && r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorIndice <= 3 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
+            .Where(r => !r.TieneOcGenerada && r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
             .ToList();
 
         var resumenesOc = decididosSinOc
@@ -3906,6 +4195,92 @@ public partial class MainWindow : FluentWindow
         System.Windows.MessageBox.Show(this, $"Se guardó el borrador de la comparativa para la solicitud {sol.Folio}.\n\nPuede continuar cotizando más tarde o emitir Órdenes de Compra parciales cuando lo desee.", "Borrador Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
+    private void BtnCopiarListaParaCotizar_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione primero una solicitud con artículos para copiar la lista de cotización.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"SOLICITUD DE COTIZACIÓN — Folio: {sol.Folio}");
+        sb.AppendLine($"Fecha: {DateTime.Now:yyyy-MM-dd}");
+        sb.AppendLine("Favor de cotizar los siguientes materiales indicando precio unitario, tiempo de entrega y vigencia:");
+        sb.AppendLine("------------------------------------------------------------");
+        int idx = 1;
+        foreach (var r in _renglonesComparativa)
+        {
+            sb.AppendLine($"{idx}. ({r.Cantidad:0.##} {r.UnidadCompra}) {r.ProductoNombre}");
+            idx++;
+        }
+        sb.AppendLine("------------------------------------------------------------");
+        sb.AppendLine("Atentamente: Gerencia de Compras");
+
+        Clipboard.SetText(sb.ToString());
+        System.Windows.MessageBox.Show(this,
+            "Se copió al portapapeles la lista limpia de materiales (sin precios internos) lista para pegar y enviar por WhatsApp o correo a los proveedores concursantes.",
+            "Lista Copiada para Proveedores", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void BtnImprimirComparativa_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione primero una solicitud con artículos para imprimir su Cuadro Comparativo.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        SincronizarRenglonActualDesdeTarjetas();
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, _renglonesComparativa.ToList());
+    }
+
+    private void BtnConvertirPresupuestoEnCompra_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud.SelectedItem is not Solicitud sol)
+            return;
+
+        SincronizarRenglonActualDesdeTarjetas();
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+
+        if (sol.EsSoloCotizacion)
+        {
+            var resp = System.Windows.MessageBox.Show(this,
+                $"La solicitud {sol.Folio} está registrada como 'Solo Cotización / Presupuesto'.\n\n• Si presiona 'Sí': Se convertirá en 'Requerimiento de Compra' para que pueda emitir Órdenes de Compra.\n• Si presiona 'No': Se marcará como 'Cotizada (Presupuesto)' conservando todos los precios en el Banco Histórico sin generar compra.",
+                "Finalizar Cotización o Convertir a Compra",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            if (resp == System.Windows.MessageBoxResult.Yes)
+            {
+                DatabaseService.ActualizarTipoYEstatusSolicitud(sol.Id, "Requerimiento de Compra", "En Comparativa");
+                RefrescarSolicitudes(sol.Id);
+                System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} se convirtió a 'Requerimiento de Compra'. Ya puede emitir las Órdenes de Compra correspondientes.", "Convertida a Compra", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else if (resp == System.Windows.MessageBoxResult.No)
+            {
+                DatabaseService.ActualizarTipoYEstatusSolicitud(sol.Id, "Solo Cotización / Presupuesto", "Cotizada (Presupuesto)");
+                RefrescarSolicitudes(sol.Id);
+                System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} quedó registrada como 'Cotizada (Presupuesto)' y sus precios se guardaron en el Banco Histórico con su vigencia.", "Presupuesto Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        else
+        {
+            var resp = System.Windows.MessageBox.Show(this,
+                $"¿Desea cambiar la solicitud {sol.Folio} a modalidad 'Solo Cotización / Presupuesto' (investigación de precios sin emisión de compra)?",
+                "Cambiar Tipo de Solicitud",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (resp == System.Windows.MessageBoxResult.Yes)
+            {
+                DatabaseService.ActualizarTipoYEstatusSolicitud(sol.Id, "Solo Cotización / Presupuesto", "Cotizada (Presupuesto)");
+                RefrescarSolicitudes(sol.Id);
+            }
+        }
+    }
+
     private void BtnGenerarOrdenesDesdeComparativa_Click(object sender, RoutedEventArgs e)
     {
         if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
@@ -3913,8 +4288,21 @@ public partial class MainWindow : FluentWindow
 
         SincronizarRenglonActualDesdeTarjetas();
 
+        if (sol.EsSoloCotizacion)
+        {
+            var confirmarConversion = System.Windows.MessageBox.Show(this,
+                $"Esta solicitud ({sol.Folio}) fue creada como 'Solo Cotización / Presupuesto'.\n\n¿Desea convertirla en 'Requerimiento de Compra' y emitir las Órdenes de Compra ahora?",
+                "Solicitud de Solo Cotización",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (confirmarConversion != System.Windows.MessageBoxResult.Yes)
+                return;
+
+            DatabaseService.ActualizarTipoYEstatusSolicitud(sol.Id, "Requerimiento de Compra", "En Comparativa");
+        }
+
         var decididosSinOc = _renglonesComparativa
-            .Where(r => !r.TieneOcGenerada && r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorIndice <= 3 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
+            .Where(r => !r.TieneOcGenerada && r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
             .ToList();
 
         if (decididosSinOc.Count == 0)
@@ -3996,8 +4384,63 @@ public partial class MainWindow : FluentWindow
         {
             TxtTituloRecepcionOc.Text = $"Recepción — {oc.Folio} ({oc.AvanceRecepcionTexto})";
             DgPartidasRecepcionOc.ItemsSource = oc.Partidas;
+
+            if (CboOcEstatusOperativo != null)
+            {
+                foreach (ComboBoxItem item in CboOcEstatusOperativo.Items)
+                {
+                    if (string.Equals(item.Content?.ToString(), oc.Estatus, StringComparison.OrdinalIgnoreCase))
+                    {
+                        CboOcEstatusOperativo.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+
+            if (CboOcCondicionPago != null)
+            {
+                bool encontrado = false;
+                foreach (ComboBoxItem item in CboOcCondicionPago.Items)
+                {
+                    if (string.Equals(item.Content?.ToString(), oc.CondicionPago, StringComparison.OrdinalIgnoreCase))
+                    {
+                        CboOcCondicionPago.SelectedItem = item;
+                        encontrado = true;
+                        break;
+                    }
+                }
+                if (!encontrado) CboOcCondicionPago.SelectedIndex = 0;
+            }
+
+            if (DpOcFechaProgramadaPago != null)
+            {
+                if (!string.IsNullOrWhiteSpace(oc.FechaProgramadaPago) && DateTime.TryParse(oc.FechaProgramadaPago, out var fProg))
+                    DpOcFechaProgramadaPago.SelectedDate = fProg;
+                else
+                    DpOcFechaProgramadaPago.SelectedDate = null;
+            }
+
             RefrescarHistorialEntradasOc();
         }
+    }
+
+    private void BtnActualizarFlujoOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione primero una Orden de Compra de la tabla.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string nuevoEstatus = (CboOcEstatusOperativo?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? oc.Estatus;
+        string condicionPago = (CboOcCondicionPago?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? oc.CondicionPago;
+        string fechaProg = DpOcFechaProgramadaPago?.SelectedDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+        DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, nuevoEstatus, condicionPago, fechaProg);
+        CargarTodoElSistema();
+        System.Windows.MessageBox.Show(this,
+            $"Se actualizó el flujo de la Orden de Compra {oc.Folio}:\n• Estatus: {nuevoEstatus}\n• Condición: {condicionPago}\n• Fecha programada/vencimiento: {(string.IsNullOrWhiteSpace(fechaProg) ? "No especificada" : fechaProg)}\n\nLos recordatorios de seguimiento se actualizaron en el Calendario del Dashboard.",
+            "Flujo de OC Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void BtnRecibirTodoPendienteOc_Click(object sender, RoutedEventArgs e)
@@ -4063,12 +4506,90 @@ public partial class MainWindow : FluentWindow
             ? (string.IsNullOrWhiteSpace(notas) ? $"Remisión/Nota Proveedor: {remision}" : $"Remisión/Nota: {remision} | {notas}")
             : notas;
 
-        var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(oc, aRecibir, notasCompletas);
+        bool reservarProyecto = ChkReservarStockProyectoRecepcion?.IsChecked == true;
+        var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(oc, aRecibir, notasCompletas, reservarProyecto);
         TxtNotasRecepcionOc.Clear();
         TxtFolioRemisionRecepcionOc?.Clear();
-        CargarTodoElSistema();
 
+        // Verificar si se recibieron herramientas para ofrecer alta automática de códigos individuales HER-xxxx
+        var prodsDict = DatabaseService.ObtenerProductos().ToDictionary(p => p.Id);
+        var partidasHerramienta = entrada.Partidas
+            .Where(ep => prodsDict.TryGetValue(ep.ProductoId, out var pr) && (pr.EsHerramienta || pr.CategoriaId == 4))
+            .ToList();
+        if (partidasHerramienta.Count > 0)
+        {
+            var respHer = System.Windows.MessageBox.Show(this,
+                "En esta recepción se identificaron artículos de la categoría Herramientas y Equipo.\n\n¿Desea generar automáticamente sus códigos individuales de activo (HER-xxxx) para control de préstamos y resguardos?",
+                "Generar Activos de Herramienta (HER-xxxx)",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (respHer == System.Windows.MessageBoxResult.Yes)
+            {
+                var generadas = new List<string>();
+                foreach (var ep in partidasHerramienta)
+                {
+                    int cantHer = Math.Max(1, (int)Math.Round(ep.CantidadIngresadaAlmacen));
+                    generadas.AddRange(DatabaseService.GenerarActivosHerramientaDesdeRecepcion(ep.ProductoId, cantHer, ep.ProductoNombre));
+                }
+                if (generadas.Count > 0)
+                {
+                    string listaHer = string.Join(", ", generadas);
+                    System.Windows.MessageBox.Show(this,
+                        $"Se generaron {generadas.Count} activo(s) individuales de herramienta listos para resguardo:\n{listaHer}",
+                        "Herramientas Dadas de Alta", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+        }
+
+        CargarTodoElSistema();
         BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, entrada);
+
+        // Si el material no se reservó en stock y la OC tiene departamento/proyecto, ofrecer pre-cargarlo en Salida de Material
+        if (!reservarProyecto && entrada.Partidas.Count > 0)
+        {
+            var respSal = System.Windows.MessageBox.Show(this,
+                $"¿Desea cargar los artículos recién recibidos de {oc.Folio} en la pestaña '5. Almacén -> Salida de Material' para emitir su Vale de Salida (SAL-xxxx) hacia el área solicitante ({oc.DepartamentoNombre})?",
+                "Emitir Salida de Material Recibido",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (respSal == System.Windows.MessageBoxResult.Yes)
+            {
+                CargarPartidasDeEntradaEnSalidaPos(entrada, oc);
+                CambiarSeccion(5);
+            }
+        }
+    }
+
+    private void CargarPartidasDeEntradaEnSalidaPos(EntradaAlmacen entrada, OrdenCompra? ocOrigen)
+    {
+        var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        _partidasSalidaPos.Clear();
+        foreach (var ep in entrada.Partidas)
+        {
+            if (prodsDict.TryGetValue(ep.ProductoId, out var prod))
+            {
+                decimal cantMenudeo = ep.CantidadIngresadaAlmacen > 0 ? ep.CantidadIngresadaAlmacen : ep.CantidadCompraRecibida;
+                AgregarProductoAValeSalidaPos(prod, cantMenudeo);
+            }
+        }
+
+        if (ocOrigen != null)
+        {
+            if (CboSalDepartamento != null && !string.IsNullOrWhiteSpace(ocOrigen.DepartamentoNombre))
+            {
+                var dep = CboSalDepartamento.Items.Cast<Departamento>().FirstOrDefault(d => d.Nombre.Equals(ocOrigen.DepartamentoNombre, StringComparison.OrdinalIgnoreCase));
+                if (dep != null) CboSalDepartamento.SelectedItem = dep;
+            }
+            if (CboSalProyecto != null && ocOrigen.ProyectoId > 0)
+            {
+                var proy = CboSalProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == ocOrigen.ProyectoId);
+                if (proy != null) CboSalProyecto.SelectedItem = proy;
+            }
+            if (TxtSalNotas != null)
+            {
+                TxtSalNotas.Text = $"Entrega de material recibido de {ocOrigen.Folio} ({entrada.Folio})";
+            }
+        }
     }
 
     private bool ConfirmarNombresConceptosAbiertosEnRecepcion(OrdenCompra oc, List<OrdenCompraPartida> conceptosAbiertos)
@@ -5063,14 +5584,117 @@ public partial class MainWindow : FluentWindow
         TxtSalNotas?.Clear();
     }
 
-    private void BtnRegistrarSalidaAlmacen_Click(object sender, RoutedEventArgs e)
+    private void BtnCargarMaterialOcRecibidaEnSalida_Click(object sender, RoutedEventArgs e)
     {
-        if (CboSalDepartamento.SelectedItem is not Departamento dep ||
-            CboSalProyecto.SelectedItem is not Proyecto proy)
+        var entradas = DatabaseService.ObtenerEntradasAlmacen();
+        if (entradas.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba la Salida y el Proyecto Destino.", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, "Aún no existen recepciones de Orden de Compra (ENT-xxxx) registradas en almacén.", "Sin recepciones", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
+
+        var win = new Window
+        {
+            Title = "Cargar Material de OC Recibida en Vale de Salida",
+            Width = 520,
+            Height = 250,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Brushes.White
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Seleccionar Recepción de Almacén (ENT-xxxx / OC-xxxx)",
+            FontSize = 14.5,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Seleccione el Vale de Entrada cuyos materiales desea entregar al área solicitante o cuerpo técnico:",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+
+        var cboEnt = new ComboBox
+        {
+            ItemsSource = entradas,
+            SelectedIndex = 0,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        root.Children.Add(cboEnt);
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnOk = new System.Windows.Controls.Button { Content = "Cargar Artículos en Salida", Padding = new Thickness(14, 6, 14, 6), FontWeight = FontWeights.Bold };
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnOk.Click += (_, _) =>
+        {
+            if (cboEnt.SelectedItem is EntradaAlmacen entSel)
+            {
+                var oc = entSel.OrdenCompraId > 0
+                    ? DatabaseService.ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == entSel.OrdenCompraId)
+                    : null;
+                CargarPartidasDeEntradaEnSalidaPos(entSel, oc);
+                win.DialogResult = true;
+            }
+        };
+
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnOk);
+        root.Children.Add(btnPanel);
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    private void BtnImprimirCartaResponsivaEpp_Click(object sender, RoutedEventArgs e)
+    {
+        SalidaAlmacen? sal = null;
+        if (DgMovimientosAlmacen.SelectedItem is MovimientoAlmacenFila fila && fila.SalidaOriginal != null)
+        {
+            sal = DatabaseService.ObtenerSalidasAlmacen().FirstOrDefault(s => s.Id == fila.SalidaOriginal.Id) ?? fila.SalidaOriginal;
+        }
+        else
+        {
+            sal = DatabaseService.ObtenerSalidasAlmacen().FirstOrDefault();
+        }
+
+        if (sal == null)
+        {
+            System.Windows.MessageBox.Show(this,
+                "Registre primero un Vale de Salida de Material (SAL-xxxx) o selecciónelo en la tabla 'Vales de Entrada y Salida' para generar e imprimir su Carta de Aceptación de Responsabilidad de EPP / Equipo.",
+                "Seleccione una Salida de Material", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        BarcodePrintService.MostrarVistaPreviaEImprimirCartaResponsabilidadEpp(this, sal);
+    }
+
+    private static bool EsArticuloEppOResponsiva(Producto? p, string nombreFallback)
+    {
+        if (p != null && (p.CategoriaId == 8 || p.CategoriaNombre.Contains("EPP", StringComparison.OrdinalIgnoreCase) || p.CategoriaNombre.Contains("Seguridad", StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        string nom = (p?.Nombre ?? nombreFallback ?? string.Empty).ToUpperInvariant();
+        string[] keywords = { "CASCO", "BOTA", "CALZADO", "CHALECO", "GUANTE", "LENTE", "GAFA", "ARNES", "ARNÉS", "FAJA", "CARETA", "TAPON", "AUDITIVO", "UNIFORME", "IMPERMEABLE", "RESPIRADOR", "MASCARILLA", "EPP" };
+        return keywords.Any(k => nom.Contains(k, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void BtnRegistrarSalidaAlmacen_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboSalDepartamento.SelectedItem is not Departamento dep)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba la Salida (el Proyecto Destino es opcional).", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        int proyId = (CboSalProyecto.SelectedItem as Proyecto)?.Id ?? DatabaseService.ObtenerProyectoStockGeneralId();
 
         string personaRecibe = (CboSalEncargado.SelectedItem as Encargado)?.Nombre
                                ?? CboSalEncargado.Text?.Trim()
@@ -5115,11 +5739,31 @@ public partial class MainWindow : FluentWindow
                     ?? DatabaseService.ObtenerEncargados(dep.Id).FirstOrDefault()?.Id
                     ?? 1;
 
-        var salida = DatabaseService.RegistrarSalidaAlmacen(dep.Id, encId, proy.Id, TxtSalNotas.Text, _partidasSalidaPos.ToList(), personaRecibe);
+        var salida = DatabaseService.RegistrarSalidaAlmacen(dep.Id, encId, proyId, TxtSalNotas.Text, _partidasSalidaPos.ToList(), personaRecibe);
+        bool incluyeEpp = salida.Partidas.Any(sp =>
+        {
+            prodsDict.TryGetValue(sp.ProductoId, out var prodObj);
+            return EsArticuloEppOResponsiva(prodObj, sp.ProductoNombre);
+        });
+
         BtnLimpiarSalidaPos_Click(sender, e);
         CargarTodoElSistema();
 
         BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, salida);
+
+        if (incluyeEpp)
+        {
+            var respEpp = System.Windows.MessageBox.Show(this,
+                $"Se detectó Equipo de Protección Personal (EPP) o equipo de asignación en el vale {salida.Folio} entregado a '{salida.PersonaRecibeEfectiva}'.\n\n¿Desea abrir e imprimir la Carta de Aceptación de Responsabilidad de EPP con firmas del Técnico y de la Gerencia correspondiente ({salida.DepartamentoNombre})?",
+                "Imprimir Carta Responsiva de EPP",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (respEpp == System.Windows.MessageBoxResult.Yes)
+            {
+                BarcodePrintService.MostrarVistaPreviaEImprimirCartaResponsabilidadEpp(this, salida);
+            }
+        }
     }
 
     private void BtnPrestarHerramienta_Click(object sender, RoutedEventArgs e)
@@ -5127,11 +5771,13 @@ public partial class MainWindow : FluentWindow
         var dep = CboPreDepartamento?.SelectedItem as Departamento ?? CboSalDepartamento.SelectedItem as Departamento;
         var proy = CboPreProyecto?.SelectedItem as Proyecto ?? CboSalProyecto.SelectedItem as Proyecto;
 
-        if (dep == null || proy == null)
+        if (dep == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba el Préstamo y el Proyecto Destino.", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba el Préstamo (el Proyecto Destino es opcional).", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+
+        int proyId = proy?.Id ?? DatabaseService.ObtenerProyectoStockGeneralId();
 
         string personaRecibe = (CboPrePersonaRecibe?.SelectedItem as Encargado)?.Nombre
                                ?? CboPrePersonaRecibe?.Text?.Trim()
@@ -5158,7 +5804,7 @@ public partial class MainWindow : FluentWindow
 
         string fechaCompromiso = (DpPreFechaCompromiso?.SelectedDate ?? DateTime.Today.AddDays(7)).ToString("yyyy-MM-dd");
 
-        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proy.Id, TxtSalNotas.Text, new List<HerramientaActivo> { her }, personaRecibe, fechaCompromiso);
+        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proyId, TxtSalNotas.Text, new List<HerramientaActivo> { her }, personaRecibe, fechaCompromiso);
         if (CboPreDepartamento != null) CboPreDepartamento.SelectedIndex = -1;
         if (CboPrePersonaRecibe != null) { CboPrePersonaRecibe.SelectedIndex = -1; CboPrePersonaRecibe.Text = string.Empty; }
         if (CboPreProyecto != null) CboPreProyecto.SelectedIndex = -1;
@@ -5601,21 +6247,26 @@ public partial class MainWindow : FluentWindow
                             CboXmlProyecto.SelectedItem = stock;
                     }
 
-                    // Buscar si ya existe una OC emitida sin factura de ese mismo proveedor; si no, seleccionar "Crear nueva OC automáticamente"
+                    // Buscar si ya existe una OC emitida o recibida con remisión de ese mismo proveedor que aún no tenga CFDI XML fiscal
                     if (CboXmlOrdenCompra.ItemsSource is IEnumerable<OrdenCompra> listaOcs)
                     {
-                        var idsConFactura = DatabaseService.ObtenerFacturasXml()
-                            .Where(f => f.OrdenCompraId.HasValue)
+                        var idsConFacturaFiscal = DatabaseService.ObtenerFacturasXml()
+                            .Where(f => f.OrdenCompraId.HasValue && !f.EsNotaSinFactura)
                             .Select(f => f.OrdenCompraId!.Value)
                             .ToHashSet();
 
                         var ocMismoProv = listaOcs.FirstOrDefault(o =>
                             o.Id > 0 &&
                             o.ProveedorRfc.Equals(_facturaXmlEnPantalla.EmisorRfc, StringComparison.OrdinalIgnoreCase) &&
-                            o.Estatus == "Emitida" &&
-                            !idsConFactura.Contains(o.Id));
+                            o.Estatus != "Cancelada" &&
+                            !idsConFacturaFiscal.Contains(o.Id));
 
                         CboXmlOrdenCompra.SelectedItem = ocMismoProv ?? listaOcs.FirstOrDefault(o => o.Id == 0);
+                        if (ocMismoProv != null && CboXmlProyecto.ItemsSource is IEnumerable<Proyecto> proysOc)
+                        {
+                            var proyOc = proysOc.FirstOrDefault(p => p.Id == ocMismoProv.ProyectoId);
+                            if (proyOc != null) CboXmlProyecto.SelectedItem = proyOc;
+                        }
                     }
                 }
                 finally
@@ -5897,11 +6548,12 @@ public partial class MainWindow : FluentWindow
 
         FacturaXml facturaGuardada = null!;
         int nuevosCreados = 0;
+        bool ingresarAuto = ChkXmlIngresarAlmacenAuto?.IsChecked == true;
 
         await EjecutarConIndicadorCargaAsync("Guardando factura XML, orden de compra y productos...", () =>
         {
             int productosAntes = DatabaseService.ObtenerProductos().Count;
-            facturaGuardada = DatabaseService.GuardarFacturaXml(_facturaXmlEnPantalla);
+            facturaGuardada = DatabaseService.GuardarFacturaXml(_facturaXmlEnPantalla, ingresarAuto);
             int productosDespues = DatabaseService.ObtenerProductos().Count;
             nuevosCreados = Math.Max(0, productosDespues - productosAntes);
 
@@ -6290,7 +6942,66 @@ public partial class MainWindow : FluentWindow
         }).OrderByDescending(x => x.TotalCompras).ToList();
         DgAnalisisProyectos.ItemsSource = proyStats;
 
+        // 4. Ranking General de Materiales Concurrentes y Proyección de Compras
+        if (DgRankingMaterialesAnalisis != null)
+        {
+            DgRankingMaterialesAnalisis.ItemsSource = DatabaseService.ObtenerRankingMaterialesConcurrentes();
+        }
+
         RenderizarGraficasProductoAnalisis();
+    }
+
+    private void DgRankingMaterialesAnalisis_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _sincronizandoProductoAnalisis) return;
+        if (DgRankingMaterialesAnalisis.SelectedItem is MaterialRankingAnalisis item && item.ProductoId > 0 && CboProductoAnalisis != null)
+        {
+            _sincronizandoProductoAnalisis = true;
+            try
+            {
+                if (CboProductoAnalisis.ItemsSource is IEnumerable<Producto> items)
+                {
+                    var match = items.FirstOrDefault(p => p.Id == item.ProductoId);
+                    if (match != null)
+                    {
+                        CboProductoAnalisis.SelectedItem = match;
+                    }
+                }
+            }
+            finally
+            {
+                _sincronizandoProductoAnalisis = false;
+            }
+            RenderizarGraficasProductoAnalisis();
+        }
+    }
+
+    private void BtnEnviarRankingASolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgRankingMaterialesAnalisis?.SelectedItem is not MaterialRankingAnalisis item)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione un artículo en la tabla de Ranking de Materiales para enviarlo a una Solicitud / Cotización.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        decimal cantSugerida = item.SugerenciaCompra > 0 ? item.SugerenciaCompra : 1m;
+        if (item.ProductoId > 0)
+        {
+            var prod = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.Id == item.ProductoId);
+            if (prod != null)
+            {
+                AgregarProductoAPartidasSolicitud(prod, cantSugerida, $"Reabastecimiento / Recotización sugerida ({item.VigenciaPrecioTexto})");
+            }
+        }
+        else
+        {
+            AgregarConceptoLibreAPartidasSolicitud(item.ProductoNombre, cantSugerida, $"Recotización de concepto recurrente ({item.VigenciaPrecioTexto})");
+        }
+
+        CambiarSeccion(2);
+        System.Windows.MessageBox.Show(this,
+            $"Se agregó '{item.ProductoNombre}' (Cantidad sugerida: {cantSugerida:0.##} {item.UnidadAlmacen}) al editor de Solicitudes para cotizar o abastecer.",
+            "Agregado a Solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void RenderizarGraficasProductoAnalisis()

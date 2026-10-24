@@ -177,8 +177,11 @@ public class Solicitud
     public string EncargadoNombre { get; set; } = string.Empty;
     public int ProyectoId { get; set; }
     public string ProyectoNombre { get; set; } = string.Empty;
+    public string ProyectoMostrar => string.IsNullOrWhiteSpace(ProyectoNombre) ? "Consumo Interno de Departamento" : ProyectoNombre;
+    public string TipoSolicitud { get; set; } = "Requerimiento de Compra"; // Requerimiento de Compra, Solo Cotización / Presupuesto
+    public bool EsSoloCotizacion => string.Equals(TipoSolicitud, "Solo Cotización / Presupuesto", StringComparison.OrdinalIgnoreCase);
     public string Origen { get; set; } = "Catálogo"; // Catálogo, WhatsApp, Plantilla Excel
-    public string Estatus { get; set; } = "Pendiente"; // Pendiente, En Comparativa, OC Generada, Atendida
+    public string Estatus { get; set; } = "Pendiente"; // Pendiente, En Comparativa, Cotización Entregada, OC Generada, Atendida
     public string Notas { get; set; } = string.Empty;
     public List<SolicitudPartida> Partidas { get; set; } = new();
     public int TotalSkus => Partidas.Count;
@@ -188,7 +191,7 @@ public class Solicitud
                               !string.Equals(Estatus, "Atendida", StringComparison.OrdinalIgnoreCase);
     public override string ToString() => Id == 0
         ? "[Nuevo Carrito Temporal] (Sin guardar aún)"
-        : $"{Folio} | {ProyectoNombre} ({TotalSkus} art. - {EncargadoNombre})";
+        : $"{Folio} | {ProyectoMostrar} [{TipoSolicitud}] ({TotalSkus} art. - {EncargadoNombre})";
 }
 
 public class SolicitudPartida
@@ -204,6 +207,9 @@ public class SolicitudPartida
     public string UnidadCompra { get; set; } = "Pieza";
     public decimal CantidadSolicitada { get; set; } = 1m;
     public decimal StockActualAlmacen { get; set; }
+    public bool IncluirEnCotizacion { get; set; } = true;
+    public int DiasVigenciaCotizacion { get; set; } = 15;
+    public string FechaCotizacion { get; set; } = string.Empty;
     public string NotasPartida { get; set; } = string.Empty;
 
     // Cotización guardada por producto (3 opciones + ganador + OC generada)
@@ -245,6 +251,23 @@ public class CotizacionComparativa
     public string Notas { get; set; } = string.Empty;
 }
 
+public class CotizacionProveedorExtra
+{
+    public int Id { get; set; }
+    public int SolicitudPartidaId { get; set; }
+    public int NumeroOpcion { get; set; } // 4, 5, 6...
+    public int ProveedorId { get; set; }
+    public string ProveedorNombre { get; set; } = "Sin asignar";
+    public decimal PrecioSinIva { get; set; }
+    public decimal PrecioConIva => Math.Round(PrecioSinIva * 1.16m, 2);
+    public int DiasEntrega { get; set; } = 2;
+    public decimal FleteConIva { get; set; }
+    public int DiasVigencia { get; set; } = 15;
+    public string FechaCotizacion { get; set; } = string.Empty;
+    public string NotasCotizacion { get; set; } = string.Empty;
+    public override string ToString() => $"Op.{NumeroOpcion} {ProveedorNombre}: ${PrecioConIva:N2} c/IVA ({DiasEntrega}d)";
+}
+
 public class CotizacionRenglonComparativo
 {
     public int SolicitudPartidaId { get; set; }
@@ -256,8 +279,30 @@ public class CotizacionRenglonComparativo
     public string UnidadCompra { get; set; } = "Pieza";
     public decimal Cantidad { get; set; } = 1m;
     public decimal StockActualAlmacen { get; set; }
+    public bool IncluirEnCotizacion { get; set; } = true;
+    public int DiasVigenciaCotizacion { get; set; } = 15;
+    public string FechaCotizacion { get; set; } = string.Empty;
     public decimal UltimoCostoCompraConIva { get; set; }
     public string ReferenciaHistorica { get; set; } = string.Empty;
+    public List<CotizacionProveedorExtra> ProveedoresExtra { get; set; } = new();
+
+    public string VigenciaEstadoTexto
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(FechaCotizacion))
+                return $"Vigencia: {DiasVigenciaCotizacion} días";
+            if (DateTime.TryParse(FechaCotizacion, out DateTime dtCot))
+            {
+                DateTime vence = dtCot.Date.AddDays(DiasVigenciaCotizacion > 0 ? DiasVigenciaCotizacion : 15);
+                int diasRestantes = (vence - DateTime.Today).Days;
+                if (diasRestantes >= 0)
+                    return $"Vigente ({diasRestantes}d rest.)";
+                return $"Vencida (hace {Math.Abs(diasRestantes)}d - Recotizar)";
+            }
+            return $"Vigencia: {DiasVigenciaCotizacion} días";
+        }
+    }
 
     // Opción 1
     public int Proveedor1Id { get; set; }
@@ -297,66 +342,95 @@ public class CotizacionRenglonComparativo
     public string NotasCotizacion3 { get; set; } = string.Empty;
     public decimal TotalPartidaConIva3 => Math.Round(Cantidad * PrecioSinIva3 * 1.16m, 2);
     public decimal TotalConFlete3 => Math.Round(TotalPartidaConIva3 + FleteConIva3, 2);
-    public string ResumenOpcion3 => Proveedor3Id > 0 && PrecioSinIva3 > 0
-        ? $"{Proveedor3Nombre}: ${PrecioConIva3:N2} c/u ({DiasEntrega3}d)"
-        : "Sin cotizar";
+    public string ResumenOpcion3
+    {
+        get
+        {
+            string baseOp3 = Proveedor3Id > 0 && PrecioSinIva3 > 0
+                ? $"{Proveedor3Nombre}: ${PrecioConIva3:N2} c/u ({DiasEntrega3}d)"
+                : "Sin cotizar";
+            if (ProveedoresExtra.Count == 0)
+                return baseOp3;
+            string extras = string.Join(" | ", ProveedoresExtra.Select(x => $"Op.{x.NumeroOpcion} {x.ProveedorNombre}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d)"));
+            return baseOp3 == "Sin cotizar" ? extras : $"{baseOp3} | {extras}";
+        }
+    }
 
-    // Proveedor ganador elegido para este producto (0 = Sin decidir, 1 = Opción 1, 2 = Opción 2, 3 = Opción 3)
+    // Proveedor ganador elegido para este producto (0 = Sin decidir, 1 = Opción 1, 2 = Opción 2, 3 = Opción 3, 4+ = ProveedoresExtra)
     public int ProveedorGanadorIndice { get; set; }
     public int NumeroOpcionesVisibles { get; set; } = 1;
     public int OrdenCompraId { get; set; }
     public string OrdenCompraFolio { get; set; } = string.Empty;
     public bool TieneOcGenerada => OrdenCompraId > 0 || !string.IsNullOrWhiteSpace(OrdenCompraFolio);
 
-    public int ProveedorGanadorId => ProveedorGanadorIndice switch
+    public int ProveedorGanadorId
     {
-        1 => Proveedor1Id,
-        2 => Proveedor2Id,
-        3 => Proveedor3Id,
-        _ => 0
-    };
+        get
+        {
+            if (ProveedorGanadorIndice == 1) return Proveedor1Id;
+            if (ProveedorGanadorIndice == 2) return Proveedor2Id;
+            if (ProveedorGanadorIndice == 3) return Proveedor3Id;
+            if (ProveedorGanadorIndice >= 4)
+                return ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == ProveedorGanadorIndice)?.ProveedorId ?? 0;
+            return 0;
+        }
+    }
 
-    public string ProveedorGanadorNombre => ProveedorGanadorIndice switch
+    public string ProveedorGanadorNombre
     {
-        1 => Proveedor1Nombre,
-        2 => Proveedor2Nombre,
-        3 => Proveedor3Nombre,
-        _ => "Sin decidir"
-    };
+        get
+        {
+            if (ProveedorGanadorIndice == 1) return Proveedor1Nombre;
+            if (ProveedorGanadorIndice == 2) return Proveedor2Nombre;
+            if (ProveedorGanadorIndice == 3) return Proveedor3Nombre;
+            if (ProveedorGanadorIndice >= 4)
+                return ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == ProveedorGanadorIndice)?.ProveedorNombre ?? "Sin decidir";
+            return "Sin decidir";
+        }
+    }
 
-    public decimal PrecioUnitarioGanadorSinIva => ProveedorGanadorIndice switch
+    public decimal PrecioUnitarioGanadorSinIva
     {
-        1 => PrecioSinIva1,
-        2 => PrecioSinIva2,
-        3 => PrecioSinIva3,
-        _ => 0m
-    };
+        get
+        {
+            if (ProveedorGanadorIndice == 1) return PrecioSinIva1;
+            if (ProveedorGanadorIndice == 2) return PrecioSinIva2;
+            if (ProveedorGanadorIndice == 3) return PrecioSinIva3;
+            if (ProveedorGanadorIndice >= 4)
+                return ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == ProveedorGanadorIndice)?.PrecioSinIva ?? 0m;
+            return 0m;
+        }
+    }
 
     public decimal PrecioUnitarioGanadorConIva => Math.Round(PrecioUnitarioGanadorSinIva * 1.16m, 2);
 
-    public decimal FleteGanadorConIva => ProveedorGanadorIndice switch
+    public decimal FleteGanadorConIva
     {
-        1 => FleteConIva1,
-        2 => FleteConIva2,
-        3 => FleteConIva3,
-        _ => 0m
-    };
+        get
+        {
+            if (ProveedorGanadorIndice == 1) return FleteConIva1;
+            if (ProveedorGanadorIndice == 2) return FleteConIva2;
+            if (ProveedorGanadorIndice == 3) return FleteConIva3;
+            if (ProveedorGanadorIndice >= 4)
+                return ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == ProveedorGanadorIndice)?.FleteConIva ?? 0m;
+            return 0m;
+        }
+    }
 
-    public int DiasEntregaGanador => ProveedorGanadorIndice switch
+    public int DiasEntregaGanador
     {
-        1 => DiasEntrega1,
-        2 => DiasEntrega2,
-        3 => DiasEntrega3,
-        _ => 2
-    };
+        get
+        {
+            if (ProveedorGanadorIndice == 1) return DiasEntrega1;
+            if (ProveedorGanadorIndice == 2) return DiasEntrega2;
+            if (ProveedorGanadorIndice == 3) return DiasEntrega3;
+            if (ProveedorGanadorIndice >= 4)
+                return ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == ProveedorGanadorIndice)?.DiasEntrega ?? 2;
+            return 2;
+        }
+    }
 
-    public decimal TotalGanadorConIva => ProveedorGanadorIndice switch
-    {
-        1 => TotalPartidaConIva1,
-        2 => TotalPartidaConIva2,
-        3 => TotalPartidaConIva3,
-        _ => 0m
-    };
+    public decimal TotalGanadorConIva => Math.Round(Cantidad * PrecioUnitarioGanadorSinIva * 1.16m, 2);
 
     public string EstadoDecisionTexto
     {
@@ -364,7 +438,7 @@ public class CotizacionRenglonComparativo
         {
             if (TieneOcGenerada)
                 return $"OC: {OrdenCompraFolio} ({ProveedorGanadorNombre})";
-            if (ProveedorGanadorIndice >= 1 && ProveedorGanadorIndice <= 3 && ProveedorGanadorId > 0)
+            if (ProveedorGanadorIndice >= 1 && ProveedorGanadorId > 0)
                 return $"Op.{ProveedorGanadorIndice}: {ProveedorGanadorNombre}";
             return "Pendiente de elegir";
         }
@@ -405,7 +479,9 @@ public class OrdenCompra
     public decimal Subtotal { get; set; }
     public decimal Iva { get; set; }
     public decimal TotalConIva { get; set; }
-    public string Estatus { get; set; } = "Emitida"; // Emitida, Recibida Parcialmente, Recibida Completa, Cerrada Parcial (Admin), Cancelada
+    public string CondicionPago { get; set; } = "Contado (Transferencia previa)";
+    public string FechaProgramadaPago { get; set; } = string.Empty;
+    public string Estatus { get; set; } = "Emitida"; // Pendiente Vo.Bo. Dirección, Autorizada / Pendiente Pago Finanzas, Pagada / Lista para Almacén, Emitida, Recibida Parcialmente, Recibida Completa, Cerrada Parcial (Admin), Cancelada
     public string Notas { get; set; } = string.Empty;
     public List<OrdenCompraPartida> Partidas { get; set; } = new();
     public decimal TotalUnidadesPedidas => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadPedida) : 0m;
@@ -620,7 +696,7 @@ public class EventoCalendario
         set => OrigenFolio = value;
     }
     public string EstadoTiempoTexto { get; set; } = string.Empty;
-    public string EstatusMostrar => Completado ? "✔ Completado" : EstadoTiempoTexto;
+    public string EstatusMostrar => Completado ? "Completado" : EstadoTiempoTexto;
 }
 
 public class PuntoHistorialCompraProducto
@@ -678,4 +754,37 @@ public class ReferenciaSimilarHistorica
     public string ReferenciaOrigen { get; set; } = string.Empty;
     public string EtiquetaCombo => $"{ProveedorNombre} | ${PrecioSinIva:N2} s/IVA (${PrecioConIva:N2} c/IVA) — [{ProductoCodigo}] {ProductoNombre}";
     public override string ToString() => EtiquetaCombo;
+}
+
+public class MaterialRankingAnalisis
+{
+    public int ProductoId { get; set; }
+    public string ProductoCodigo { get; set; } = string.Empty;
+    public string ProductoNombre { get; set; } = string.Empty;
+    public string CategoriaNombre { get; set; } = string.Empty;
+    public string UnidadAlmacen { get; set; } = "Pieza";
+    public int FrecuenciaSolicitudes { get; set; }
+    public decimal CantidadTotalSolicitada { get; set; }
+    public int FrecuenciaSalidas { get; set; }
+    public decimal CantidadTotalConsumida { get; set; }
+    public decimal StockActual { get; set; }
+    public decimal StockMinimo { get; set; }
+    public decimal UltimoPrecioConIva { get; set; }
+    public string UltimoProveedorNombre { get; set; } = "Sin registro";
+    public string FechaUltimaCotizacion { get; set; } = string.Empty;
+    public string VigenciaPrecioTexto { get; set; } = "Sin cotización reciente";
+    public decimal SugerenciaCompra => Math.Max(0m, Math.Round((CantidadTotalConsumida > 0 ? CantidadTotalConsumida * 0.35m : StockMinimo * 1.5m) - StockActual, 0));
+    public string PrioridadAbasto
+    {
+        get
+        {
+            if (StockActual <= 0 && (FrecuenciaSolicitudes >= 2 || FrecuenciaSalidas >= 2))
+                return "Alta (Alta rotación sin stock)";
+            if (StockActual <= StockMinimo && StockMinimo > 0)
+                return "Media (Bajo mínimo)";
+            if (VigenciaPrecioTexto.StartsWith("Vencid", StringComparison.OrdinalIgnoreCase))
+                return "Actualizar Precio";
+            return "Normal";
+        }
+    }
 }

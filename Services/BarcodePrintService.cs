@@ -92,15 +92,15 @@ public static class BarcodePrintService
         var metadatos = new List<(string etiq, string val)>
         {
             ("Departamento Solicitante:", sol.DepartamentoNombre),
-            ("Persona Solicitante:", sol.EncargadoNombre),
-            ("Proyecto Destino:", sol.ProyectoNombre),
+            ("Modalidad de Solicitud:", sol.TipoSolicitud),
+            ("Proyecto / Destino:", sol.ProyectoMostrar),
             ("Origen:", sol.Origen),
             ("Estatus:", sol.Estatus)
         };
 
         var hoja = ConstruirHojaCartaDocumento(
-            tituloDocumento: "SOLICITUD DE MATERIAL / COMPRA",
-            subtitulo: "Lebaref | Departamento de Compras",
+            tituloDocumento: sol.EsSoloCotizacion ? "SOLICITUD DE COTIZACIÓN / PRESUPUESTO" : "SOLICITUD DE MATERIAL / REQUERIMIENTO",
+            subtitulo: "Lebaref | Departamento de Compras y Abastecimiento",
             folioCodigoBarras: sol.Folio,
             fecha: sol.Fecha,
             metadatos: metadatos,
@@ -112,10 +112,58 @@ public static class BarcodePrintService
                 ("Total Unidades:", $"{sol.TotalArticulos:0.##}")
             },
             notas: sol.Notas,
-            firmaIzquierda: $"Solicitó: {sol.EncargadoNombre}",
-            firmaDerecha: "Recibió Compras / Almacén");
+            firmaIzquierda: $"Solicitó: Gerencia de {sol.DepartamentoNombre}",
+            firmaDerecha: "Recibió: Gerencia de Compras");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Solicitud {sol.Folio}", hoja);
+    }
+
+    public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones)
+    {
+        var filas = renglones.Select((r, idx) => new[]
+        {
+            (idx + 1).ToString(),
+            string.IsNullOrWhiteSpace(r.ProductoCodigo) ? "CONCEPTO" : r.ProductoCodigo,
+            !string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.DescripcionLibre : r.ProductoNombre,
+            $"{r.Cantidad:0.##} {r.UnidadCompra}",
+            r.ResumenOpcion1,
+            r.ResumenOpcion2,
+            r.ResumenOpcion3,
+            r.ProveedorGanadorId > 0 ? $"{r.ProveedorGanadorNombre} (${r.PrecioUnitarioGanadorConIva:N2})" : "Sin adjudicar",
+            r.VigenciaEstadoTexto
+        }).ToList();
+
+        decimal totalEstimadoConIva = renglones
+            .Where(r => r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
+            .Sum(r => r.TotalGanadorConIva + r.FleteGanadorConIva);
+
+        var metadatos = new List<(string etiq, string val)>
+        {
+            ("Solicitud Origen:", $"{sol.Folio} ({sol.TipoSolicitud})"),
+            ("Departamento Solicitante:", $"Gerencia de {sol.DepartamentoNombre}"),
+            ("Proyecto / Destino:", sol.ProyectoMostrar),
+            ("Estatus:", sol.Estatus)
+        };
+
+        var hoja = ConstruirHojaCartaDocumento(
+            tituloDocumento: "CUADRO COMPARATIVO DE COTIZACIONES",
+            subtitulo: "Lebaref | Análisis de Precios y Proveedores Concursantes",
+            folioCodigoBarras: $"COT-{sol.Id:D4}",
+            fecha: DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            metadatos: metadatos,
+            encabezadosTabla: new[] { "#", "Código", "Artículo / Concepto", "Cant.", "Opción 1", "Opción 2", "Opción 3 / Extras", "Selección", "Vigencia" },
+            filasTabla: filas,
+            totales: new List<(string, string)>
+            {
+                ("Partidas Analizadas:", renglones.Count.ToString()),
+                ("Total Adjudicado c/IVA:", $"${totalEstimadoConIva:N2}")
+            },
+            notas: sol.Notas,
+            firmaIzquierda: "Elaboró: Gerencia de Compras",
+            firmaCentro: $"Revisó: Gerencia de {sol.DepartamentoNombre}",
+            firmaDerecha: "Vo.Bo.: Dirección General");
+
+        AbrirVentanaVistaPreviaCarta(owner, $"Comparativa {sol.Folio}", hoja);
     }
 
     public static void MostrarVistaPreviaEImprimirOrdenCompra(Window owner, OrdenCompra oc)
@@ -134,11 +182,12 @@ public static class BarcodePrintService
         var metadatos = new List<(string etiq, string val)>
         {
             ("Proveedor:", $"{oc.ProveedorNombre} (RFC: {oc.ProveedorRfc})"),
-            ("Proyecto Destino:", oc.ProyectoNombre),
-            ("Departamento / Solicitante:", $"{oc.DepartamentoNombre} — {oc.EncargadoNombre}"),
+            ("Proyecto / Destino:", string.IsNullOrWhiteSpace(oc.ProyectoNombre) ? "Consumo Interno de Departamento" : oc.ProyectoNombre),
+            ("Área Solicitante:", $"Gerencia de {oc.DepartamentoNombre}"),
             ("Solicitud / Comparativa:", $"{oc.SolicitudFolio} / {oc.CotizacionFolio}"),
+            ("Condición de Pago:", $"{oc.CondicionPago}{(string.IsNullOrWhiteSpace(oc.FechaProgramadaPago) ? "" : " | Fecha prog.: " + oc.FechaProgramadaPago)}"),
             ("Tiempo de Entrega:", $"{oc.TiempoEntregaDias} días hábiles"),
-            ("Estatus de Recepción:", oc.Estatus)
+            ("Estatus Operativo:", oc.Estatus)
         };
 
         var totales = new List<(string etiq, string val)>
@@ -151,7 +200,7 @@ public static class BarcodePrintService
 
         var hoja = ConstruirHojaCartaDocumento(
             tituloDocumento: "ORDEN DE COMPRA",
-            subtitulo: "Lebaref | Departamento de Compras",
+            subtitulo: "Lebaref | Departamento de Compras y Abastecimiento",
             folioCodigoBarras: oc.Folio,
             fecha: oc.Fecha,
             metadatos: metadatos,
@@ -159,8 +208,9 @@ public static class BarcodePrintService
             filasTabla: filas,
             totales: totales,
             notas: oc.Notas,
-            firmaIzquierda: "Autorizó Compras",
-            firmaDerecha: "Recepción Almacén / Proveedor");
+            firmaIzquierda: "Emitió: Gerencia de Compras",
+            firmaCentro: "Vo.Bo.: Dirección General",
+            firmaDerecha: "Recepción: Jefatura de Almacén");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Orden de Compra {oc.Folio}", hoja);
     }
@@ -195,13 +245,13 @@ public static class BarcodePrintService
         {
             ("Orden de Compra:", string.IsNullOrWhiteSpace(ent.OrdenCompraFolio) ? "Entrada Directa" : ent.OrdenCompraFolio),
             ("Proveedor:", ent.ProveedorNombre),
-            ("Proyecto:", ent.ProyectoNombre),
-            ("Tipo:", ent.TipoEntrada)
+            ("Proyecto / Destino:", string.IsNullOrWhiteSpace(ent.ProyectoNombre) ? "Stock General / Consumo Interno" : ent.ProyectoNombre),
+            ("Tipo de Movimiento:", ent.TipoEntrada)
         };
 
         var hoja = ConstruirHojaCartaDocumento(
-            tituloDocumento: "VALE DE ENTRADA",
-            subtitulo: "Lebaref | Departamento de Compras",
+            tituloDocumento: "VALE DE ENTRADA A ALMACÉN",
+            subtitulo: "Lebaref | Jefatura de Almacén y Control de Inventarios",
             folioCodigoBarras: ent.Folio,
             fecha: ent.Fecha,
             metadatos: metadatos,
@@ -209,8 +259,8 @@ public static class BarcodePrintService
             filasTabla: filas,
             totales: new List<(string, string)> { ("Total Partidas:", ent.Partidas.Count.ToString()) },
             notas: ent.Notas,
-            firmaIzquierda: "Recibió Almacén",
-            firmaDerecha: "Entregó");
+            firmaIzquierda: "Recibió y Verificó: Jefatura de Almacén",
+            firmaDerecha: "Entregó: Proveedor / Transporte");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Entrada {ent.Folio}", hoja);
     }
@@ -264,17 +314,21 @@ public static class BarcodePrintService
             };
         }
 
+        string destinoMostrar = string.IsNullOrWhiteSpace(sal.ProyectoNombre) || sal.ProyectoNombre.Equals("Sin proyecto", StringComparison.OrdinalIgnoreCase)
+            ? $"Consumo Interno ({sal.DepartamentoNombre})"
+            : sal.ProyectoNombre;
+
         var metadatos = new List<(string etiq, string val)>
         {
-            ("Depto. que Aprueba:", sal.DepartamentoNombre),
-            ("Persona que Recibe:", sal.PersonaRecibeEfectiva),
-            ("Proyecto:", sal.ProyectoNombre),
+            ("Gerencia que Autoriza:", $"Gerencia de {sal.DepartamentoNombre}"),
+            ("Personal Técnico que Recibe:", sal.PersonaRecibeEfectiva),
+            ("Proyecto / Destino:", destinoMostrar),
             ("Estatus:", sal.EstatusDevolucionTexto)
         };
 
         var hoja = ConstruirHojaCartaDocumento(
             tituloDocumento: tieneDevoluciones ? "VALE DE ENTREGA Y DEVOLUCIÓN DE MATERIAL" : "VALE DE ENTREGA DE MATERIAL",
-            subtitulo: "Lebaref | Departamento de Compras",
+            subtitulo: "Lebaref | Jefatura de Almacén (Comprobante de Trazabilidad sin Precios)",
             folioCodigoBarras: sal.Folio,
             fecha: sal.Fecha,
             metadatos: metadatos,
@@ -282,10 +336,78 @@ public static class BarcodePrintService
             filasTabla: filas,
             totales: totales,
             notas: sal.Notas,
-            firmaIzquierda: $"Aprobó: {sal.DepartamentoNombre}",
-            firmaDerecha: $"Recibió: {sal.PersonaRecibeEfectiva}");
+            firmaIzquierda: "Entregó: Jefatura de Almacén",
+            firmaCentro: $"Autorizó: Gerencia de {sal.DepartamentoNombre}",
+            firmaDerecha: $"Recibió para Obra / Área: {sal.PersonaRecibeEfectiva}");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Salida {sal.Folio}", hoja);
+    }
+
+    public static void MostrarVistaPreviaEImprimirCartaResponsabilidadEpp(Window owner, SalidaAlmacen sal)
+    {
+        var catalogoDict = Data.DatabaseService.ObtenerProductos().ToDictionary(p => p.Id);
+
+        var filas = sal.Partidas.Select((p, idx) =>
+        {
+            catalogoDict.TryGetValue(p.ProductoId, out var prodCat);
+            string detalleEquipo = prodCat != null
+                ? string.Join(" | ", new[] { prodCat.Marca, prodCat.Modelo, prodCat.Medidas, prodCat.Especificacion1 }
+                    .Where(s => !string.IsNullOrWhiteSpace(s)))
+                : string.Empty;
+            if (string.IsNullOrWhiteSpace(detalleEquipo))
+                detalleEquipo = "Estándar de Seguridad Industrial";
+
+            return new[]
+            {
+                (idx + 1).ToString(),
+                p.ProductoCodigo,
+                p.ProductoNombre,
+                detalleEquipo,
+                $"{p.CantidadEntregada:0.##} {p.UnidadAlmacen}",
+                "Nuevo / En buen estado"
+            };
+        }).ToList();
+
+        string destinoMostrar = string.IsNullOrWhiteSpace(sal.ProyectoNombre) || sal.ProyectoNombre.Equals("Sin proyecto", StringComparison.OrdinalIgnoreCase)
+            ? $"Operación General ({sal.DepartamentoNombre})"
+            : sal.ProyectoNombre;
+
+        var metadatos = new List<(string etiq, string val)>
+        {
+            ("Folio de Salida Vinculado:", sal.Folio),
+            ("Colaborador / Técnico Receptor:", sal.PersonaRecibeEfectiva),
+            ("Departamento / Gerencia:", $"Gerencia de {sal.DepartamentoNombre}"),
+            ("Proyecto / Área de Asignación:", destinoMostrar),
+            ("Carácter de la Entrega:", "Dotación de Equipo de Protección Personal (EPP) / Resguardo Individual")
+        };
+
+        string clausulaResponsabilidad =
+            "CARTA DE ACEPTACIÓN DE RESPONSABILIDAD Y USO DE EQUIPO DE PROTECCIÓN PERSONAL (EPP):\n" +
+            $"Por medio de la presente, el colaborador receptor ({sal.PersonaRecibeEfectiva}) hace constar que recibe de conformidad y en óptimas condiciones físicas los artículos de Equipo de Protección Personal y/o indumentaria de trabajo descritos en este documento, obligándose a:\n" +
+            "1. Utilizar el equipo de forma obligatoria y permanente durante el desempeño de sus labores operativas y en sitio de obra, conforme a las normas de seguridad industrial de la empresa.\n" +
+            "2. Conservar, limpiar y resguardar adecuadamente cada artículo asignado, reportando de inmediato a su Gerencia de Área o a Jefatura de Almacén cualquier desgaste, daño o deterioro que comprometa su seguridad.\n" +
+            "3. Asumir la responsabilidad por el extravío, mal uso intencional o negligencia en el resguardo del equipo entregado, así como presentar el equipo desgastado al solicitar su reposición.";
+
+        var hoja = ConstruirHojaCartaDocumento(
+            tituloDocumento: "CARTA RESPONSIVA DE ENTREGA DE EPP",
+            subtitulo: "Lebaref | Seguridad Industrial y Jefatura de Almacén",
+            folioCodigoBarras: sal.Folio,
+            fecha: sal.Fecha,
+            metadatos: metadatos,
+            encabezadosTabla: new[] { "#", "Código", "Descripción del EPP / Equipo", "Marca / Talla / Especificación", "Cantidad", "Condición" },
+            filasTabla: filas,
+            totales: new List<(string, string)>
+            {
+                ("Total Conceptos EPP:", sal.Partidas.Count.ToString()),
+                ("Total Unidades Entregadas:", $"{sal.TotalUnidadesEntregadas:0.##}")
+            },
+            notas: sal.Notas,
+            firmaIzquierda: $"Conformidad Técnico / Empleado:\n{sal.PersonaRecibeEfectiva}",
+            firmaCentro: $"Autorizó Gerencia Correspondiente:\nGerencia de {sal.DepartamentoNombre}",
+            firmaDerecha: "Entregó y Registró:\nJefatura de Almacén",
+            clausulaLegal: clausulaResponsabilidad);
+
+        AbrirVentanaVistaPreviaCarta(owner, $"Carta Responsiva de EPP - {sal.Folio}", hoja);
     }
 
     public static void MostrarVistaPreviaEImprimirDevolucionMaterial(Window owner, SalidaAlmacen sal, EntradaAlmacen entDevolucion)
@@ -311,9 +433,9 @@ public static class BarcodePrintService
         {
             ("Vale de Salida Origen:", $"{sal.Folio} (Fecha salida: {sal.Fecha})"),
             ("Tipo de Reingreso:", $"{entDevolucion.TipoEntrada} ({sal.EstatusDevolucionTexto})"),
-            ("Persona que Devuelve:", sal.PersonaRecibeEfectiva),
-            ("Departamento:", sal.DepartamentoNombre),
-            ("Proyecto:", sal.ProyectoNombre)
+            ("Personal que Devuelve:", sal.PersonaRecibeEfectiva),
+            ("Gerencia Correspondiente:", $"Gerencia de {sal.DepartamentoNombre}"),
+            ("Proyecto / Destino:", sal.ProyectoNombre)
         };
 
         decimal totalDevHoy = entDevolucion.Partidas.Sum(x => x.CantidadIngresadaAlmacen);
@@ -335,7 +457,8 @@ public static class BarcodePrintService
             },
             notas: entDevolucion.Notas,
             firmaIzquierda: $"Entregó / Devolvió: {sal.PersonaRecibeEfectiva}",
-            firmaDerecha: "Recibió Almacén (Conformidad)");
+            firmaCentro: $"Vo.Bo.: Gerencia de {sal.DepartamentoNombre}",
+            firmaDerecha: "Recibió: Jefatura de Almacén");
 
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Devolución de Material {entDevolucion.Folio} ({sal.Folio})", hoja);
     }
@@ -361,9 +484,9 @@ public static class BarcodePrintService
 
         var metadatos = new List<(string etiq, string val)>
         {
-            ("Depto. que Aprueba:", pre.DepartamentoNombre),
-            ("Persona Responsable:", pre.PersonaRecibeEfectiva),
-            ("Proyecto:", pre.ProyectoNombre),
+            ("Gerencia que Autoriza:", $"Gerencia de {pre.DepartamentoNombre}"),
+            ("Personal Técnico Responsable:", pre.PersonaRecibeEfectiva),
+            ("Proyecto / Destino:", pre.ProyectoNombre),
             ("Fecha Salida / Compromiso:", $"{pre.FechaSalida}  |  Compromiso: {(string.IsNullOrWhiteSpace(pre.FechaCompromiso) ? "N/A" : pre.FechaCompromiso)}"),
             ("Estatus del Préstamo:", $"{pre.Estatus} ({devueltasCount} de {pre.Partidas.Count} devueltas)")
         };
@@ -393,7 +516,8 @@ public static class BarcodePrintService
             totales: totales,
             notas: pre.Notas,
             firmaIzquierda: tieneDevolucion ? $"Devolvió: {pre.PersonaRecibeEfectiva}" : $"Recibió: {pre.PersonaRecibeEfectiva}",
-            firmaDerecha: tieneDevolucion ? "Recibió Almacén (Devolución)" : $"Aprobó: {pre.DepartamentoNombre}");
+            firmaCentro: $"Autorizó: Gerencia de {pre.DepartamentoNombre}",
+            firmaDerecha: "Jefatura de Almacén");
 
         AbrirVentanaVistaPreviaCarta(owner, tieneDevolucion ? $"Vale de Devolución de Herramienta {pre.Folio}" : $"Vale de Préstamo {pre.Folio}", hoja);
     }
@@ -520,7 +644,9 @@ public static class BarcodePrintService
         List<(string etiq, string val)> totales,
         string notas,
         string firmaIzquierda,
-        string firmaDerecha)
+        string firmaDerecha,
+        string? firmaCentro = null,
+        string? clausulaLegal = null)
     {
         var page = new StackPanel
         {
@@ -736,21 +862,69 @@ public static class BarcodePrintService
         bottomGrid.Children.Add(totStack);
         page.Children.Add(bottomGrid);
 
-        // Líneas de firma
-        var sigGrid = new Grid { Margin = new Thickness(0, 24, 0, 8) };
-        sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
-        sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        if (!string.IsNullOrWhiteSpace(clausulaLegal))
+        {
+            var legalBox = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(12, 10, 12, 10),
+                Margin = new Thickness(0, 0, 0, 26)
+            };
+            legalBox.Child = new TextBlock
+            {
+                Text = clausulaLegal,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 15
+            };
+            page.Children.Add(legalBox);
+        }
 
-        var sig1 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
-        sig1.Child = new TextBlock { Text = firmaIzquierda, HorizontalAlignment = HorizontalAlignment.Center, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black };
-        Grid.SetColumn(sig1, 0);
-        sigGrid.Children.Add(sig1);
+        // Líneas de firma (2 o 3 puestos institucionales)
+        var sigGrid = new Grid { Margin = new Thickness(0, 28, 0, 8) };
+        if (!string.IsNullOrWhiteSpace(firmaCentro))
+        {
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var sig2 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
-        sig2.Child = new TextBlock { Text = firmaDerecha, HorizontalAlignment = HorizontalAlignment.Center, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black };
-        Grid.SetColumn(sig2, 2);
-        sigGrid.Children.Add(sig2);
+            var sig1 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig1.Child = new TextBlock { Text = firmaIzquierda, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig1, 0);
+            sigGrid.Children.Add(sig1);
+
+            var sig2 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig2.Child = new TextBlock { Text = firmaCentro, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig2, 2);
+            sigGrid.Children.Add(sig2);
+
+            var sig3 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig3.Child = new TextBlock { Text = firmaDerecha, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig3, 4);
+            sigGrid.Children.Add(sig3);
+        }
+        else
+        {
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var sig1 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig1.Child = new TextBlock { Text = firmaIzquierda, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig1, 0);
+            sigGrid.Children.Add(sig1);
+
+            var sig2 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig2.Child = new TextBlock { Text = firmaDerecha, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig2, 2);
+            sigGrid.Children.Add(sig2);
+        }
 
         page.Children.Add(sigGrid);
 

@@ -301,6 +301,32 @@ CREATE TABLE IF NOT EXISTS BitacoraAdministrador (
     Detalle TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS CotizacionesPartidaProveedor (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    SolicitudPartidaId INTEGER NOT NULL,
+    NumeroOpcion INTEGER NOT NULL DEFAULT 4,
+    ProveedorId INTEGER NOT NULL,
+    PrecioSinIva REAL NOT NULL DEFAULT 0,
+    DiasEntrega INTEGER NOT NULL DEFAULT 2,
+    FleteConIva REAL NOT NULL DEFAULT 0,
+    DiasVigencia INTEGER NOT NULL DEFAULT 15,
+    FechaCotizacion TEXT NOT NULL DEFAULT '',
+    NotasCotizacion TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS BancoPreciosHistorico (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ProductoId INTEGER NOT NULL DEFAULT 0,
+    DescripcionConcepto TEXT NOT NULL DEFAULT '',
+    Familia TEXT NOT NULL DEFAULT '',
+    ProveedorId INTEGER NOT NULL,
+    PrecioSinIva REAL NOT NULL DEFAULT 0,
+    DiasEntrega INTEGER NOT NULL DEFAULT 2,
+    DiasVigencia INTEGER NOT NULL DEFAULT 15,
+    FechaCotizacion TEXT NOT NULL,
+    OrigenFolio TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS IDX_Productos_CodigoInterno ON Productos(CodigoInterno);
 CREATE INDEX IF NOT EXISTS IDX_Productos_Nombre ON Productos(Nombre);
 CREATE INDEX IF NOT EXISTS IDX_Productos_CategoriaId ON Productos(CategoriaId);
@@ -350,6 +376,12 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         AsegurarColumnaExiste(conn, "SolicitudPartidas", "ProveedorGanadorIndice", "INTEGER NOT NULL DEFAULT 0");
         AsegurarColumnaExiste(conn, "SolicitudPartidas", "OrdenCompraId", "INTEGER NOT NULL DEFAULT 0");
         AsegurarColumnaExiste(conn, "SolicitudPartidas", "OrdenCompraFolio", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "IncluirEnCotizacion", "INTEGER NOT NULL DEFAULT 1");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "DiasVigenciaCotizacion", "INTEGER NOT NULL DEFAULT 15");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "FechaCotizacion", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "Solicitudes", "TipoSolicitud", "TEXT NOT NULL DEFAULT 'Requerimiento de Compra'");
+        AsegurarColumnaExiste(conn, "OrdenesCompra", "CondicionPago", "TEXT NOT NULL DEFAULT 'Contado (Transferencia previa)'");
+        AsegurarColumnaExiste(conn, "OrdenesCompra", "FechaProgramadaPago", "TEXT NOT NULL DEFAULT ''");
 
         // Columnas de persona abierta que recibe y fecha compromiso en Salidas y Préstamos
         AsegurarColumnaExiste(conn, "SalidasAlmacen", "PersonaRecibe", "TEXT NOT NULL DEFAULT ''");
@@ -1787,12 +1819,13 @@ DELETE FROM Productos WHERE Id = $id;";
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
 SELECT s.Id, s.Folio, s.Fecha, s.DepartamentoId, COALESCE(d.Nombre, 'Sin depto'), s.EncargadoId, COALESCE(e.Nombre, 'Sin encargado'),
-       s.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Sin proyecto'), s.Origen, s.Estatus, s.Notas
+       s.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Consumo Interno de Departamento'), s.Origen, s.Estatus, s.Notas,
+       COALESCE(NULLIF(s.TipoSolicitud, ''), 'Requerimiento de Compra')
 FROM Solicitudes s
 LEFT JOIN Departamentos d ON d.Id = s.DepartamentoId
 LEFT JOIN Encargados e ON e.Id = s.EncargadoId
-LEFT JOIN Proyectos pr ON pr.Id = p.ProyectoId
-ORDER BY s.Id DESC".Replace("p.ProyectoId", "s.ProyectoId");
+LEFT JOIN Proyectos pr ON pr.Id = s.ProyectoId
+ORDER BY s.Id DESC";
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
@@ -1809,7 +1842,8 @@ ORDER BY s.Id DESC".Replace("p.ProyectoId", "s.ProyectoId");
                 ProyectoNombre = r.GetString(8),
                 Origen = r.GetString(9),
                 Estatus = r.GetString(10),
-                Notas = r.GetString(11)
+                Notas = r.GetString(11),
+                TipoSolicitud = r.GetString(12)
             });
         }
 
@@ -1825,7 +1859,8 @@ SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'CONCEPTO
        COALESCE(sp.Proveedor2Id, 0), COALESCE(sp.PrecioSinIva2, 0), COALESCE(sp.DiasEntrega2, 3), COALESCE(sp.FleteConIva2, 0), COALESCE(sp.NotasCotizacion2, ''),
        COALESCE(sp.Proveedor3Id, 0), COALESCE(sp.PrecioSinIva3, 0), COALESCE(sp.DiasEntrega3, 1), COALESCE(sp.FleteConIva3, 0), COALESCE(sp.NotasCotizacion3, ''),
        COALESCE(sp.ProveedorGanadorIndice, 0), COALESCE(sp.OrdenCompraId, 0), COALESCE(sp.OrdenCompraFolio, ''),
-       COALESCE(sp.DescripcionLibre, ''), COALESCE(p.Familia, '')
+       COALESCE(sp.DescripcionLibre, ''), COALESCE(p.Familia, ''),
+       COALESCE(sp.IncluirEnCotizacion, 1), COALESCE(sp.DiasVigenciaCotizacion, 15), COALESCE(sp.FechaCotizacion, '')
 FROM SolicitudPartidas sp
 LEFT JOIN Productos p ON p.Id = sp.ProductoId
 WHERE sp.SolicitudId = $sid";
@@ -1870,17 +1905,21 @@ WHERE sp.SolicitudId = $sid";
                     NotasCotizacion3 = pr.GetString(23),
                     ProveedorGanadorIndice = pr.GetInt32(24),
                     OrdenCompraId = pr.GetInt32(25),
-                    OrdenCompraFolio = pr.GetString(26)
+                    OrdenCompraFolio = pr.GetString(26),
+                    IncluirEnCotizacion = pr.GetInt32(29) != 0,
+                    DiasVigenciaCotizacion = pr.GetInt32(30) > 0 ? pr.GetInt32(30) : 15,
+                    FechaCotizacion = pr.GetString(31)
                 });
             }
         }
         return list;
     }
 
-    public static Solicitud CrearSolicitud(int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas)
+    public static Solicitud CrearSolicitud(int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas, string tipoSolicitud = "Requerimiento de Compra")
     {
         string folio = GenerarSiguienteFolio("SOL", "Solicitudes");
         string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        string tipoLim = string.IsNullOrWhiteSpace(tipoSolicitud) ? "Requerimiento de Compra" : tipoSolicitud.Trim();
 
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
@@ -1889,8 +1928,8 @@ WHERE sp.SolicitudId = $sid";
         using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
-INSERT INTO Solicitudes (Folio, Fecha, DepartamentoId, EncargadoId, ProyectoId, Origen, Estatus, Notas)
-VALUES ($f, $fe, $d, $e, $p, $or, 'Pendiente', $n);
+INSERT INTO Solicitudes (Folio, Fecha, DepartamentoId, EncargadoId, ProyectoId, Origen, Estatus, Notas, TipoSolicitud)
+VALUES ($f, $fe, $d, $e, $p, $or, 'Pendiente', $n, $ts);
 SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$f", folio);
         cmd.Parameters.AddWithValue("$fe", fecha);
@@ -1899,6 +1938,7 @@ SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$p", proyectoId);
         cmd.Parameters.AddWithValue("$or", origen);
         cmd.Parameters.AddWithValue("$n", notas.Trim());
+        cmd.Parameters.AddWithValue("$ts", tipoLim);
         int solId = Convert.ToInt32(cmd.ExecuteScalar());
 
         foreach (var item in partidas)
@@ -1906,14 +1946,16 @@ SELECT last_insert_rowid();";
             using var pCmd = conn.CreateCommand();
             pCmd.Transaction = tx;
             pCmd.CommandText = @"
-INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida)
-VALUES ($sid, $pid, $dlib, $ulib, $cant, $not)";
+INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida, IncluirEnCotizacion, DiasVigenciaCotizacion)
+VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $inc, $vig)";
             pCmd.Parameters.AddWithValue("$sid", solId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
             pCmd.Parameters.AddWithValue("$dlib", !string.IsNullOrWhiteSpace(item.DescripcionLibre) ? item.DescripcionLibre.Trim() : (item.ProductoNombre ?? string.Empty).Trim());
             pCmd.Parameters.AddWithValue("$ulib", string.IsNullOrWhiteSpace(item.UnidadCompra) ? "Pieza" : item.UnidadCompra.Trim());
             pCmd.Parameters.AddWithValue("$cant", (double)item.CantidadSolicitada);
             pCmd.Parameters.AddWithValue("$not", item.NotasPartida ?? string.Empty);
+            pCmd.Parameters.AddWithValue("$inc", item.IncluirEnCotizacion ? 1 : 0);
+            pCmd.Parameters.AddWithValue("$vig", item.DiasVigenciaCotizacion > 0 ? item.DiasVigenciaCotizacion : 15);
             pCmd.ExecuteNonQuery();
         }
 
@@ -1921,7 +1963,7 @@ VALUES ($sid, $pid, $dlib, $ulib, $cant, $not)";
         return ObtenerSolicitudes().First(s => s.Id == solId);
     }
 
-    public static Solicitud ActualizarSolicitudExistente(int solicitudId, int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas)
+    public static Solicitud ActualizarSolicitudExistente(int solicitudId, int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas, string tipoSolicitud = "Requerimiento de Compra")
     {
         var solPrevia = ObtenerSolicitudes().FirstOrDefault(s => s.Id == solicitudId);
         if (solPrevia != null && solPrevia.Estatus == "OC Generada")
@@ -1936,6 +1978,8 @@ VALUES ($sid, $pid, $dlib, $ulib, $cant, $not)";
             .GroupBy(ClavePartida)
             .ToDictionary(g => g.Key, g => g.First()) ?? new Dictionary<string, SolicitudPartida>();
 
+        string tipoLim = string.IsNullOrWhiteSpace(tipoSolicitud) ? (solPrevia?.TipoSolicitud ?? "Requerimiento de Compra") : tipoSolicitud.Trim();
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var tx = conn.BeginTransaction();
@@ -1945,13 +1989,14 @@ VALUES ($sid, $pid, $dlib, $ulib, $cant, $not)";
             cmd.Transaction = tx;
             cmd.CommandText = @"
 UPDATE Solicitudes
-SET DepartamentoId = $d, EncargadoId = $e, ProyectoId = $p, Origen = $or, Notas = $n
+SET DepartamentoId = $d, EncargadoId = $e, ProyectoId = $p, Origen = $or, Notas = $n, TipoSolicitud = $ts
 WHERE Id = $id";
             cmd.Parameters.AddWithValue("$d", departamentoId);
             cmd.Parameters.AddWithValue("$e", encargadoId);
             cmd.Parameters.AddWithValue("$p", proyectoId);
             cmd.Parameters.AddWithValue("$or", origen);
             cmd.Parameters.AddWithValue("$n", (notas ?? string.Empty).Trim());
+            cmd.Parameters.AddWithValue("$ts", tipoLim);
             cmd.Parameters.AddWithValue("$id", solicitudId);
             cmd.ExecuteNonQuery();
         }
@@ -1982,14 +2027,16 @@ INSERT INTO SolicitudPartidas (
     Proveedor1Id, PrecioSinIva1, DiasEntrega1, FleteConIva1, NotasCotizacion1,
     Proveedor2Id, PrecioSinIva2, DiasEntrega2, FleteConIva2, NotasCotizacion2,
     Proveedor3Id, PrecioSinIva3, DiasEntrega3, FleteConIva3, NotasCotizacion3,
-    ProveedorGanadorIndice, OrdenCompraId, OrdenCompraFolio
+    ProveedorGanadorIndice, OrdenCompraId, OrdenCompraFolio,
+    IncluirEnCotizacion, DiasVigenciaCotizacion, FechaCotizacion
 )
 VALUES (
     $sid, $pid, $dlib, $ulib, $cant, $not,
     $pv1, $pr1, $d1, $fl1, $nc1,
     $pv2, $pr2, $d2, $fl2, $nc2,
     $pv3, $pr3, $d3, $fl3, $nc3,
-    $gan, 0, ''
+    $gan, 0, '',
+    $inc, $vig, $fcot
 )";
             pCmd.Parameters.AddWithValue("$sid", solicitudId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
@@ -2017,11 +2064,27 @@ VALUES (
             pCmd.Parameters.AddWithValue("$nc3", prev?.NotasCotizacion3 ?? item.NotasCotizacion3 ?? string.Empty);
 
             pCmd.Parameters.AddWithValue("$gan", prev?.ProveedorGanadorIndice ?? item.ProveedorGanadorIndice);
+            pCmd.Parameters.AddWithValue("$inc", item.IncluirEnCotizacion ? 1 : 0);
+            pCmd.Parameters.AddWithValue("$vig", prev?.DiasVigenciaCotizacion ?? (item.DiasVigenciaCotizacion > 0 ? item.DiasVigenciaCotizacion : 15));
+            pCmd.Parameters.AddWithValue("$fcot", prev?.FechaCotizacion ?? item.FechaCotizacion ?? string.Empty);
             pCmd.ExecuteNonQuery();
         }
 
         tx.Commit();
         return ObtenerSolicitudes().First(s => s.Id == solicitudId);
+    }
+
+    public static void ActualizarTipoYEstatusSolicitud(int solicitudId, string tipoSolicitud, string estatus)
+    {
+        if (solicitudId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE Solicitudes SET TipoSolicitud = $ts, Estatus = $est WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$ts", tipoSolicitud);
+        cmd.Parameters.AddWithValue("$est", estatus);
+        cmd.Parameters.AddWithValue("$id", solicitudId);
+        cmd.ExecuteNonQuery();
     }
 
     public static Solicitud AgregarOIncrementarPartidaEnSolicitud(int solicitudId, int productoId, decimal cantidadAgregar, string notasPartida = "")
@@ -2167,8 +2230,9 @@ VALUES ($sid, $pid, $cant, $not)";
             cmd.CommandText = @"
 SELECT oc.Id, oc.Folio, oc.Fecha, oc.SolicitudId, COALESCE(s.Folio, ''), oc.CotizacionFolio,
        oc.ProveedorId, COALESCE(pv.RazonSocial, 'Proveedor'), COALESCE(pv.NombreComercial, 'Proveedor'), COALESCE(pv.Rfc, ''),
-       oc.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Sin proyecto'), oc.DepartamentoNombre, oc.EncargadoNombre,
-       oc.TiempoEntregaDias, oc.CostoEnvioConIva, oc.Subtotal, oc.Iva, oc.TotalConIva, oc.Estatus, oc.Notas
+       oc.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Consumo Interno de Departamento'), oc.DepartamentoNombre, oc.EncargadoNombre,
+       oc.TiempoEntregaDias, oc.CostoEnvioConIva, oc.Subtotal, oc.Iva, oc.TotalConIva, oc.Estatus, oc.Notas,
+       COALESCE(NULLIF(oc.CondicionPago, ''), 'Contado (Transferencia previa)'), COALESCE(oc.FechaProgramadaPago, '')
 FROM OrdenesCompra oc
 LEFT JOIN Proveedores pv ON pv.Id = oc.ProveedorId
 LEFT JOIN Proyectos pr ON pr.Id = oc.ProyectoId
@@ -2200,7 +2264,9 @@ ORDER BY oc.Id DESC";
                     Iva = Convert.ToDecimal(r.GetDouble(17)),
                     TotalConIva = Convert.ToDecimal(r.GetDouble(18)),
                     Estatus = r.GetString(19),
-                    Notas = r.GetString(20)
+                    Notas = r.GetString(20),
+                    CondicionPago = r.GetString(21),
+                    FechaProgramadaPago = r.GetString(22)
                 });
             }
         }
@@ -2397,6 +2463,70 @@ ORDER BY Id DESC";
             }
         }
 
+        // 3. Complementar con BancoPreciosHistorico (cotizaciones registradas con vigencia, incluso sin compra)
+        using (var cmdBp = conn.CreateCommand())
+        {
+            cmdBp.CommandText = @"
+SELECT ProductoId, DescripcionConcepto, Familia, ProveedorId, PrecioSinIva, DiasEntrega, DiasVigencia, FechaCotizacion, OrigenFolio
+FROM BancoPreciosHistorico
+WHERE PrecioSinIva > 0 AND ProveedorId > 0
+ORDER BY Id DESC";
+            using var rb = cmdBp.ExecuteReader();
+            while (rb.Read())
+            {
+                int pid = rb.GetInt32(0);
+                string descC = rb.GetString(1);
+                string famC = rb.GetString(2);
+                int pvId = rb.GetInt32(3);
+                if (!provDict.TryGetValue(pvId, out var prv))
+                    continue;
+
+                bool coincide = false;
+                if (pid > 0 && idsCandidatos.Contains(pid))
+                    coincide = true;
+                else if (!string.IsNullOrWhiteSpace(famBase) && famC.Equals(famBase, StringComparison.OrdinalIgnoreCase))
+                    coincide = true;
+                else if (palabrasClave.Count > 0 && palabrasClave.Any(w => descC.Contains(w, StringComparison.OrdinalIgnoreCase)))
+                    coincide = true;
+
+                if (!coincide)
+                    continue;
+
+                if (resultados.Any(x => x.ProductoId == pid && x.ProveedorId == pvId && x.ProductoNombre.Equals(descC, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                decimal precio = Math.Round(Convert.ToDecimal(rb.GetDouble(4)), 2);
+                int diasEnt = rb.GetInt32(5);
+                int diasVig = rb.GetInt32(6) > 0 ? rb.GetInt32(6) : 15;
+                string fCot = rb.GetString(7);
+                string origFol = rb.GetString(8);
+
+                string vigTag = "Vigente";
+                if (DateTime.TryParse(fCot, out var dtCot))
+                {
+                    int rest = (dtCot.Date.AddDays(diasVig) - DateTime.Today).Days;
+                    vigTag = rest >= 0 ? $"Vigente ({rest}d)" : $"Vencido hace {Math.Abs(rest)}d";
+                }
+
+                prodDict.TryGetValue(pid, out var prd);
+                string codMostrar = prd?.CodigoInterno ?? "COT";
+                string nomMostrar = prd?.Nombre ?? (string.IsNullOrWhiteSpace(descC) ? "Concepto Cotizado" : descC);
+
+                resultados.Add(new ReferenciaSimilarHistorica
+                {
+                    ProductoId = pid,
+                    ProductoCodigo = codMostrar,
+                    ProductoNombre = nomMostrar,
+                    Familia = !string.IsNullOrWhiteSpace(famC) ? famC : (prd?.Familia ?? ""),
+                    ProveedorId = pvId,
+                    ProveedorNombre = prv.NombreMostrar,
+                    PrecioSinIva = precio,
+                    DiasEntrega = diasEnt > 0 ? diasEnt : 2,
+                    ReferenciaOrigen = $"Cotización {origFol} [{vigTag}] ({fCot})"
+                });
+            }
+        }
+
         // Ordenar priorizando el mejor precio unitario sin IVA
         return resultados
             .OrderBy(x => x.PrecioSinIva)
@@ -2434,9 +2564,152 @@ ORDER BY Id DESC";
         return (opciones, refHist);
     }
 
-    public static void GuardarCotizacionPartida(CotizacionRenglonComparativo r)
+    public static List<CotizacionProveedorExtra> ObtenerProveedoresExtraPartida(int solicitudPartidaId)
+    {
+        var list = new List<CotizacionProveedorExtra>();
+        if (solicitudPartidaId <= 0) return list;
+
+        var provDict = ObtenerProveedores().ToDictionary(p => p.Id);
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+SELECT Id, SolicitudPartidaId, NumeroOpcion, ProveedorId, PrecioSinIva, DiasEntrega, FleteConIva, DiasVigencia, FechaCotizacion, NotasCotizacion
+FROM CotizacionesPartidaProveedor
+WHERE SolicitudPartidaId = $spid
+ORDER BY NumeroOpcion ASC, Id ASC";
+        cmd.Parameters.AddWithValue("$spid", solicitudPartidaId);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            int pvId = r.GetInt32(3);
+            string pvNom = provDict.TryGetValue(pvId, out var pv) ? pv.NombreMostrar : "Proveedor";
+            list.Add(new CotizacionProveedorExtra
+            {
+                Id = r.GetInt32(0),
+                SolicitudPartidaId = r.GetInt32(1),
+                NumeroOpcion = r.GetInt32(2),
+                ProveedorId = pvId,
+                ProveedorNombre = pvNom,
+                PrecioSinIva = Convert.ToDecimal(r.GetDouble(4)),
+                DiasEntrega = r.GetInt32(5),
+                FleteConIva = Convert.ToDecimal(r.GetDouble(6)),
+                DiasVigencia = r.GetInt32(7) > 0 ? r.GetInt32(7) : 15,
+                FechaCotizacion = r.GetString(8),
+                NotasCotizacion = r.GetString(9)
+            });
+        }
+        return list;
+    }
+
+    public static void GuardarProveedorExtraPartida(CotizacionProveedorExtra extra)
+    {
+        if (extra.SolicitudPartidaId <= 0 || extra.ProveedorId <= 0) return;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        if (extra.NumeroOpcion < 4)
+        {
+            using var maxCmd = conn.CreateCommand();
+            maxCmd.CommandText = "SELECT COALESCE(MAX(NumeroOpcion), 3) FROM CotizacionesPartidaProveedor WHERE SolicitudPartidaId = $spid";
+            maxCmd.Parameters.AddWithValue("$spid", extra.SolicitudPartidaId);
+            extra.NumeroOpcion = Convert.ToInt32(maxCmd.ExecuteScalar()) + 1;
+        }
+
+        string fCot = string.IsNullOrWhiteSpace(extra.FechaCotizacion) ? DateTime.Today.ToString("yyyy-MM-dd") : extra.FechaCotizacion;
+        using var cmd = conn.CreateCommand();
+        if (extra.Id > 0)
+        {
+            cmd.CommandText = @"
+UPDATE CotizacionesPartidaProveedor
+SET ProveedorId = $pv, PrecioSinIva = $pr, DiasEntrega = $de, FleteConIva = $fl, DiasVigencia = $dv, FechaCotizacion = $fc, NotasCotizacion = $not
+WHERE Id = $id";
+            cmd.Parameters.AddWithValue("$id", extra.Id);
+        }
+        else
+        {
+            cmd.CommandText = @"
+INSERT INTO CotizacionesPartidaProveedor (SolicitudPartidaId, NumeroOpcion, ProveedorId, PrecioSinIva, DiasEntrega, FleteConIva, DiasVigencia, FechaCotizacion, NotasCotizacion)
+VALUES ($spid, $num, $pv, $pr, $de, $fl, $dv, $fc, $not)";
+            cmd.Parameters.AddWithValue("$spid", extra.SolicitudPartidaId);
+            cmd.Parameters.AddWithValue("$num", extra.NumeroOpcion);
+        }
+        cmd.Parameters.AddWithValue("$pv", extra.ProveedorId);
+        cmd.Parameters.AddWithValue("$pr", (double)extra.PrecioSinIva);
+        cmd.Parameters.AddWithValue("$de", Math.Max(1, extra.DiasEntrega));
+        cmd.Parameters.AddWithValue("$fl", (double)extra.FleteConIva);
+        cmd.Parameters.AddWithValue("$dv", extra.DiasVigencia > 0 ? extra.DiasVigencia : 15);
+        cmd.Parameters.AddWithValue("$fc", fCot);
+        cmd.Parameters.AddWithValue("$not", extra.NotasCotizacion ?? string.Empty);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarProveedorExtraPartida(int extraId)
+    {
+        if (extraId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM CotizacionesPartidaProveedor WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$id", extraId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void RegistrarPrecioEnBancoHistorico(int productoId, string descripcionConcepto, string familia, int proveedorId, decimal precioSinIva, int diasEntrega, int diasVigencia, string origenFolio)
+    {
+        if (proveedorId <= 0 || precioSinIva <= 0m) return;
+        string fechaHoy = DateTime.Today.ToString("yyyy-MM-dd");
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        using (var del = conn.CreateCommand())
+        {
+            del.CommandText = @"
+DELETE FROM BancoPreciosHistorico
+WHERE ProveedorId = $pv AND FechaCotizacion = $fc AND (
+    ($pid > 0 AND ProductoId = $pid) OR
+    ($pid <= 0 AND UPPER(TRIM(DescripcionConcepto)) = UPPER(TRIM($desc)))
+)";
+            del.Parameters.AddWithValue("$pv", proveedorId);
+            del.Parameters.AddWithValue("$fc", fechaHoy);
+            del.Parameters.AddWithValue("$pid", productoId);
+            del.Parameters.AddWithValue("$desc", descripcionConcepto ?? string.Empty);
+            del.ExecuteNonQuery();
+        }
+
+        using var ins = conn.CreateCommand();
+        ins.CommandText = @"
+INSERT INTO BancoPreciosHistorico (ProductoId, DescripcionConcepto, Familia, ProveedorId, PrecioSinIva, DiasEntrega, DiasVigencia, FechaCotizacion, OrigenFolio)
+VALUES ($pid, $desc, $fam, $pv, $pr, $de, $dv, $fc, $fol)";
+        ins.Parameters.AddWithValue("$pid", productoId);
+        ins.Parameters.AddWithValue("$desc", (descripcionConcepto ?? string.Empty).Trim());
+        ins.Parameters.AddWithValue("$fam", (familia ?? string.Empty).Trim());
+        ins.Parameters.AddWithValue("$pv", proveedorId);
+        ins.Parameters.AddWithValue("$pr", (double)precioSinIva);
+        ins.Parameters.AddWithValue("$de", Math.Max(1, diasEntrega));
+        ins.Parameters.AddWithValue("$dv", diasVigencia > 0 ? diasVigencia : 15);
+        ins.Parameters.AddWithValue("$fc", fechaHoy);
+        ins.Parameters.AddWithValue("$fol", string.IsNullOrWhiteSpace(origenFolio) ? "COT" : origenFolio.Trim());
+        ins.ExecuteNonQuery();
+    }
+
+    public static void GuardarCotizacionPartida(CotizacionRenglonComparativo r, string origenFolio = "COT")
     {
         if (r.SolicitudPartidaId <= 0) return;
+
+        bool tieneAlgunaCotizacion =
+            (r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0) ||
+            (r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0) ||
+            (r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0) ||
+            r.ProveedoresExtra.Any(x => x.ProveedorId > 0 && x.PrecioSinIva > 0);
+
+        if (tieneAlgunaCotizacion && string.IsNullOrWhiteSpace(r.FechaCotizacion))
+        {
+            r.FechaCotizacion = DateTime.Today.ToString("yyyy-MM-dd");
+        }
+        int vigencia = r.DiasVigenciaCotizacion > 0 ? r.DiasVigenciaCotizacion : 15;
 
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
@@ -2447,7 +2720,9 @@ SET CantidadSolicitada = $cant,
     Proveedor1Id = $pv1, PrecioSinIva1 = $pr1, DiasEntrega1 = $d1, FleteConIva1 = $fl1, NotasCotizacion1 = $nc1,
     Proveedor2Id = $pv2, PrecioSinIva2 = $pr2, DiasEntrega2 = $d2, FleteConIva2 = $fl2, NotasCotizacion2 = $nc2,
     Proveedor3Id = $pv3, PrecioSinIva3 = $pr3, DiasEntrega3 = $d3, FleteConIva3 = $fl3, NotasCotizacion3 = $nc3,
-    ProveedorGanadorIndice = $gan
+    ProveedorGanadorIndice = $gan,
+    DiasVigenciaCotizacion = $vig,
+    FechaCotizacion = $fcot
 WHERE Id = $id";
         cmd.Parameters.AddWithValue("$cant", (double)r.Cantidad);
         cmd.Parameters.AddWithValue("$pv1", r.Proveedor1Id);
@@ -2469,17 +2744,32 @@ WHERE Id = $id";
         cmd.Parameters.AddWithValue("$nc3", r.NotasCotizacion3 ?? string.Empty);
 
         cmd.Parameters.AddWithValue("$gan", r.ProveedorGanadorIndice);
+        cmd.Parameters.AddWithValue("$vig", vigencia);
+        cmd.Parameters.AddWithValue("$fcot", r.FechaCotizacion ?? string.Empty);
         cmd.Parameters.AddWithValue("$id", r.SolicitudPartidaId);
         cmd.ExecuteNonQuery();
+
+        string descConcepto = !string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.DescripcionLibre : r.ProductoNombre;
+        if (r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0)
+            RegistrarPrecioEnBancoHistorico(r.ProductoId, descConcepto, r.Familia, r.Proveedor1Id, r.PrecioSinIva1, r.DiasEntrega1, vigencia, origenFolio);
+        if (r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0)
+            RegistrarPrecioEnBancoHistorico(r.ProductoId, descConcepto, r.Familia, r.Proveedor2Id, r.PrecioSinIva2, r.DiasEntrega2, vigencia, origenFolio);
+        if (r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0)
+            RegistrarPrecioEnBancoHistorico(r.ProductoId, descConcepto, r.Familia, r.Proveedor3Id, r.PrecioSinIva3, r.DiasEntrega3, vigencia, origenFolio);
+
+        foreach (var ex in r.ProveedoresExtra.Where(x => x.ProveedorId > 0 && x.PrecioSinIva > 0))
+        {
+            RegistrarPrecioEnBancoHistorico(r.ProductoId, descConcepto, r.Familia, ex.ProveedorId, ex.PrecioSinIva, ex.DiasEntrega, vigencia, origenFolio);
+        }
     }
 
-    public static void GuardarBorradorComparativa(int solicitudId, List<CotizacionRenglonComparativo> renglones)
+    public static void GuardarBorradorComparativa(int solicitudId, List<CotizacionRenglonComparativo> renglones, string folioComparativa = "COT")
     {
         foreach (var r in renglones)
         {
             if (!r.TieneOcGenerada)
             {
-                GuardarCotizacionPartida(r);
+                GuardarCotizacionPartida(r, folioComparativa);
             }
         }
 
@@ -2503,16 +2793,15 @@ WHERE Id = $sid";
         List<CotizacionRenglonComparativo> renglones)
     {
         // Primero guardar el borrador de todas las cotizaciones capturadas
-        GuardarBorradorComparativa(solicitud.Id, renglones);
+        GuardarBorradorComparativa(solicitud.Id, renglones, folioComparativa);
 
         var creadas = new List<OrdenCompra>();
         var proveedoresDict = ObtenerProveedores().ToDictionary(p => p.Id);
 
-        // Filtrar solo los productos que tienen proveedor ganador elegido, precio > 0 y que aún NO tienen OC emitida
+        // Filtrar solo los productos que tienen proveedor ganador elegido (incluyendo 4+ ProveedoresExtra), precio > 0 y que aún NO tienen OC emitida
         var partidasParaEmitir = renglones
             .Where(r => !r.TieneOcGenerada &&
                         r.ProveedorGanadorIndice >= 1 &&
-                        r.ProveedorGanadorIndice <= 3 &&
                         r.ProveedorGanadorId > 0 &&
                         r.PrecioUnitarioGanadorSinIva > 0)
             .GroupBy(r => r.ProveedorGanadorId)
@@ -2548,7 +2837,7 @@ WHERE Id = $sid";
                     1 => reng.NotasCotizacion1,
                     2 => reng.NotasCotizacion2,
                     3 => reng.NotasCotizacion3,
-                    _ => ""
+                    _ => reng.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == reng.ProveedorGanadorIndice)?.NotasCotizacion ?? ""
                 };
                 string descLib = !string.IsNullOrWhiteSpace(reng.DescripcionLibre) ? reng.DescripcionLibre : reng.ProductoNombre;
                 partidasOc.Add((reng.SolicitudPartidaId, reng.ProductoId, descLib, reng.UnidadCompra, reng.Cantidad, precioSinIva, notaOpc));
@@ -2561,13 +2850,16 @@ WHERE Id = $sid";
 
             string folioOc = GenerarSiguienteFolio("OC", "OrdenesCompra");
             string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            string condPagoProv = string.IsNullOrWhiteSpace(prov.CondicionesPago) || prov.CondicionesPago.Equals("Contado", StringComparison.OrdinalIgnoreCase)
+                ? "Contado (Transferencia previa)"
+                : prov.CondicionesPago;
 
             using var tx = conn.BeginTransaction();
             using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = @"
-INSERT INTO OrdenesCompra (Folio, Fecha, SolicitudId, CotizacionFolio, ProveedorId, ProyectoId, DepartamentoNombre, EncargadoNombre, TiempoEntregaDias, CostoEnvioConIva, Subtotal, Iva, TotalConIva, Estatus, Notas)
-VALUES ($fol, $fec, $sid, $cfol, $pvid, $prid, $dep, $enc, $dias, $flete, $sub, $iva, $tot, 'Emitida', $not);
+INSERT INTO OrdenesCompra (Folio, Fecha, SolicitudId, CotizacionFolio, ProveedorId, ProyectoId, DepartamentoNombre, EncargadoNombre, TiempoEntregaDias, CostoEnvioConIva, Subtotal, Iva, TotalConIva, Estatus, Notas, CondicionPago, FechaProgramadaPago)
+VALUES ($fol, $fec, $sid, $cfol, $pvid, $prid, $dep, $enc, $dias, $flete, $sub, $iva, $tot, 'Pendiente Vo.Bo. Dirección', $not, $cpag, $fprog);
 SELECT last_insert_rowid();";
             cmd.Parameters.AddWithValue("$fol", folioOc);
             cmd.Parameters.AddWithValue("$fec", fecha);
@@ -2583,6 +2875,8 @@ SELECT last_insert_rowid();";
             cmd.Parameters.AddWithValue("$iva", (double)ivaTotal);
             cmd.Parameters.AddWithValue("$tot", (double)totalConIva);
             cmd.Parameters.AddWithValue("$not", $"Generada desde comparativa por producto {folioComparativa} ({solicitud.Folio})");
+            cmd.Parameters.AddWithValue("$cpag", condPagoProv);
+            cmd.Parameters.AddWithValue("$fprog", DateTime.Today.AddDays(1).ToString("yyyy-MM-dd"));
             int ocId = Convert.ToInt32(cmd.ExecuteScalar());
 
             foreach (var p in partidasOc)
@@ -2636,10 +2930,79 @@ WHERE Id = $spid";
         return creadas;
     }
 
+    public static void ActualizarEstatusYCondicionOrdenCompra(int ocId, string nuevoEstatus, string condicionPago, string fechaProgramadaPago)
+    {
+        if (ocId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+UPDATE OrdenesCompra
+SET Estatus = $est,
+    CondicionPago = $cp,
+    FechaProgramadaPago = $fp
+WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$est", string.IsNullOrWhiteSpace(nuevoEstatus) ? "Emitida" : nuevoEstatus.Trim());
+        cmd.Parameters.AddWithValue("$cp", string.IsNullOrWhiteSpace(condicionPago) ? "Contado (Transferencia previa)" : condicionPago.Trim());
+        cmd.Parameters.AddWithValue("$fp", (fechaProgramadaPago ?? string.Empty).Trim());
+        cmd.Parameters.AddWithValue("$id", ocId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static List<string> GenerarActivosHerramientaDesdeRecepcion(int productoId, int cantidad, string marcaModelo, string ubicacion = "Gabinete H-1")
+    {
+        var generados = new List<string>();
+        if (productoId <= 0 || cantidad <= 0) return generados;
+
+        var existentes = ObtenerHerramientas();
+        int maxNum = 0;
+        foreach (var h in existentes)
+        {
+            if (h.CodigoIndividual.StartsWith("HER-", StringComparison.OrdinalIgnoreCase) &&
+                int.TryParse(h.CodigoIndividual[4..].Trim(), out int n) && n > maxNum)
+            {
+                maxNum = n;
+            }
+        }
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        for (int i = 0; i < cantidad; i++)
+        {
+            maxNum++;
+            string codigo = $"HER-{maxNum:D4}";
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+INSERT INTO HerramientasActivos (ProductoId, CodigoIndividual, NumeroSerie, MarcaModelo, Estado, Ubicacion, EncargadoActual, ProyectoActual, NotasEstado)
+VALUES ($pid, $cod, 'S/N', $mm, 'Disponible', $ub, '', '', 'Alta desde recepción de compra')";
+            cmd.Parameters.AddWithValue("$pid", productoId);
+            cmd.Parameters.AddWithValue("$cod", codigo);
+            cmd.Parameters.AddWithValue("$mm", string.IsNullOrWhiteSpace(marcaModelo) ? "Estándar" : marcaModelo.Trim());
+            cmd.Parameters.AddWithValue("$ub", string.IsNullOrWhiteSpace(ubicacion) ? "Gabinete H-1" : ubicacion.Trim());
+            cmd.ExecuteNonQuery();
+            generados.Add(codigo);
+        }
+
+        using (var upP = conn.CreateCommand())
+        {
+            upP.Transaction = tx;
+            upP.CommandText = "UPDATE Productos SET EsHerramienta = 1 WHERE Id = $pid";
+            upP.Parameters.AddWithValue("$pid", productoId);
+            upP.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return generados;
+    }
+
     public static EntradaAlmacen RegistrarRecepcionOrdenCompra(
         OrdenCompra oc,
         List<(OrdenCompraPartida partida, decimal cantidadRecibirAhora)> recepcion,
-        string notas)
+        string notas,
+        bool reservarParaProyecto = false)
     {
         // Si alguna partida por recibir era un Concepto Abierto (ProductoId <= 0), darla de alta en el Catálogo (PRD-xxxx) ahora que ya se compró/recibió
         foreach (var (partida, cantRecibir) in recepcion.Where(x => x.cantidadRecibirAhora > 0))
@@ -2719,6 +3082,7 @@ SELECT last_insert_rowid();";
         {
             decimal factor = Math.Max(1m, partida.FactorConversion);
             decimal cantAlmacen = Math.Round(cantRecibir * factor, 2);
+            decimal cantReserva = (reservarParaProyecto && oc.ProyectoId > 0) ? cantAlmacen : 0m;
 
             using var epCmd = conn.CreateCommand();
             epCmd.Transaction = tx;
@@ -2750,9 +3114,13 @@ WHERE Id = $id";
             upProd.CommandText = @"
 UPDATE Productos
 SET StockActual = StockActual + $ca,
+    StockReservadoProyecto = StockReservadoProyecto + $res,
+    FactorConversion = $fc,
     UltimoCostoCompra = $costo
 WHERE Id = $pid";
             upProd.Parameters.AddWithValue("$ca", (double)cantAlmacen);
+            upProd.Parameters.AddWithValue("$res", (double)cantReserva);
+            upProd.Parameters.AddWithValue("$fc", (double)factor);
             upProd.Parameters.AddWithValue("$costo", (double)partida.PrecioUnitarioConIva);
             upProd.Parameters.AddWithValue("$pid", partida.ProductoId);
             upProd.ExecuteNonQuery();
@@ -3544,9 +3912,27 @@ VALUES ($rfc, $c, $d, $pid, $p)";
     {
         if (ordenCompraId <= 0) return;
 
-        var facturasDeEstaOc = ObtenerFacturasXml().Where(f => f.OrdenCompraId == ordenCompraId).OrderBy(f => f.Id).ToList();
-        if (facturasDeEstaOc.Count == 0) return;
+        var todasFacturasOc = ObtenerFacturasXml().Where(f => f.OrdenCompraId == ordenCompraId).OrderBy(f => f.Id).ToList();
+        if (todasFacturasOc.Count == 0) return;
 
+        // Si ya existe al menos un CFDI XML real en esta OC y también había una nota sintética NOTA-..., eliminar la nota sintética para que el XML fiscal la reemplace limpiamente
+        var xmlsReales = todasFacturasOc.Where(f => !f.EsNotaSinFactura).ToList();
+        var notasSinteticas = todasFacturasOc.Where(f => f.EsNotaSinFactura).ToList();
+        if (xmlsReales.Count > 0 && notasSinteticas.Count > 0)
+        {
+            using var connClean = new SqliteConnection(ConnectionString);
+            connClean.Open();
+            foreach (var nota in notasSinteticas)
+            {
+                using var delC = connClean.CreateCommand();
+                delC.CommandText = "DELETE FROM FacturaConceptos WHERE FacturaXmlId = $id; DELETE FROM FacturasXml WHERE Id = $id;";
+                delC.Parameters.AddWithValue("$id", nota.Id);
+                delC.ExecuteNonQuery();
+            }
+            todasFacturasOc = xmlsReales;
+        }
+
+        var facturasDeEstaOc = todasFacturasOc;
         var primeraFac = facturasDeEstaOc.First();
         int provId = AsegurarProveedorPorRfc(primeraFac.EmisorRfc, primeraFac.EmisorNombre);
 
@@ -3617,6 +4003,9 @@ WHERE Id = $ocid";
             delPart.ExecuteNonQuery();
         }
 
+        decimal totalPedidasNuevas = 0m;
+        decimal totalRecibidasConservadas = 0m;
+
         foreach (var fac in facturasDeEstaOc)
         {
             foreach (var c in fac.Conceptos.Where(x => x.ProductoIdVinculado.HasValue && x.ProductoIdVinculado.Value > 0))
@@ -3630,7 +4019,11 @@ WHERE Id = $ocid";
                     recibidasPorProducto[prodId] = Math.Max(0m, disp - cantRecibida);
                 }
 
+                totalPedidasNuevas += cantPedida;
+                totalRecibidasConservadas += cantRecibida;
+
                 decimal precioSinIva = CalcularPrecioUnitarioSinIvaParaOc(c);
+                decimal costoConIva = Math.Round(precioSinIva * 1.16m, 2);
 
                 using var insPart = conn.CreateCommand();
                 insPart.Transaction = tx;
@@ -3643,7 +4036,40 @@ VALUES ($ocid, $pid, $cant, $rec, $precio)";
                 insPart.Parameters.AddWithValue("$rec", (double)cantRecibida);
                 insPart.Parameters.AddWithValue("$precio", (double)precioSinIva);
                 insPart.ExecuteNonQuery();
+
+                // Actualizar costo real en Entradas de Almacén previas de esta OC (cuando se recibió primero con remisión)
+                using var upEp = conn.CreateCommand();
+                upEp.Transaction = tx;
+                upEp.CommandText = @"
+UPDATE EntradaPartidas
+SET CostoUnitarioCompraConIva = $costo
+WHERE ProductoId = $pid AND EntradaAlmacenId IN (SELECT Id FROM EntradasAlmacen WHERE OrdenCompraId = $ocid)";
+                upEp.Parameters.AddWithValue("$costo", (double)costoConIva);
+                upEp.Parameters.AddWithValue("$pid", prodId);
+                upEp.Parameters.AddWithValue("$ocid", ordenCompraId);
+                upEp.ExecuteNonQuery();
             }
+        }
+
+        // Actualizar UUID fiscal en Entradas de Almacén de esta OC y recalcular Estatus de la OC según recepción física
+        using (var upEntUuid = conn.CreateCommand())
+        {
+            upEntUuid.Transaction = tx;
+            upEntUuid.CommandText = "UPDATE EntradasAlmacen SET FacturaUuid = $uuid WHERE OrdenCompraId = $ocid AND TRIM(FacturaUuid) = ''";
+            upEntUuid.Parameters.AddWithValue("$uuid", primeraFac.Uuid);
+            upEntUuid.Parameters.AddWithValue("$ocid", ordenCompraId);
+            upEntUuid.ExecuteNonQuery();
+        }
+
+        if (totalRecibidasConservadas > 0m)
+        {
+            string estRec = totalRecibidasConservadas >= totalPedidasNuevas - 0.001m ? "Recibida Completa" : "Recibida Parcialmente";
+            using var upEst = conn.CreateCommand();
+            upEst.Transaction = tx;
+            upEst.CommandText = "UPDATE OrdenesCompra SET Estatus = $est WHERE Id = $ocid";
+            upEst.Parameters.AddWithValue("$est", estRec);
+            upEst.Parameters.AddWithValue("$ocid", ordenCompraId);
+            upEst.ExecuteNonQuery();
         }
 
         tx.Commit();
@@ -3702,7 +4128,7 @@ VALUES ($ocid, $pid, $cant, 0, $precio)";
         return (ocId, folioOc);
     }
 
-    public static FacturaXml GuardarFacturaXml(FacturaXml factura)
+    public static FacturaXml GuardarFacturaXml(FacturaXml factura, bool ingresarAlmacenAutomaticamente = false)
     {
         // 1. Asegurar que el proveedor exista por RFC
         int proveedorId = AsegurarProveedorPorRfc(factura.EmisorRfc, factura.EmisorNombre);
@@ -3827,6 +4253,25 @@ VALUES ($fid, $cps, $nid, $desc, $uni, $cant, $vu, $imp, $iva, $pid)";
         if (!seCreoNuevaOc && factura.OrdenCompraId.HasValue)
         {
             SincronizarOrdenCompraConSusFacturas(factura.OrdenCompraId.Value, proyectoId);
+        }
+
+        if (ingresarAlmacenAutomaticamente && factura.OrdenCompraId.HasValue && factura.OrdenCompraId.Value > 0)
+        {
+            var ocActual = ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == factura.OrdenCompraId.Value);
+            if (ocActual != null)
+            {
+                var pendientes = ocActual.Partidas
+                    .Where(p => p.CantidadPendiente > 0m)
+                    .Select(p => (p, p.CantidadPendiente))
+                    .ToList();
+                if (pendientes.Count > 0)
+                {
+                    RegistrarRecepcionOrdenCompra(
+                        ocActual,
+                        pendientes,
+                        $"Ingreso automático al registrar Factura XML {factura.SerieFolio} ({factura.Uuid})");
+                }
+            }
         }
 
         return ObtenerFacturasXml().First(f => f.Id == factura.Id);
@@ -4690,32 +5135,90 @@ ORDER BY Fecha ASC, Id DESC";
             }
         }
 
-        // 2. Eventos automáticos: Llegada estimada de Órdenes de Compra pendientes/parciales
-        var ocsPendientes = ObtenerOrdenesCompra()
-            .Where(o => o.Estatus == "Emitida" || o.Estatus == "Recibida Parcial" || o.Estatus == "Recibida Parcialmente")
-            .ToList();
+        // 2. Eventos automáticos: Órdenes de Compra (Vo.Bo. Dirección, Pago Finanzas y Recepción Almacén)
+        var todasOcs = ObtenerOrdenesCompra().Where(o => o.Estatus != "Cancelada").ToList();
 
-        foreach (var oc in ocsPendientes)
+        foreach (var oc in todasOcs)
         {
             DateTime fechaBase = DateTime.Now;
             if (DateTime.TryParse(oc.Fecha, out var dtOc))
                 fechaBase = dtOc;
 
-            DateTime fechaEstimada = fechaBase.AddDays(Math.Max(1, oc.TiempoEntregaDias));
-            bool vencida = fechaEstimada.Date < DateTime.Now.Date;
-
-            lista.Add(new EventoCalendario
+            if (oc.Estatus == "Pendiente Vo.Bo. Dirección")
             {
-                Id = -oc.Id,
-                Fecha = fechaEstimada.ToString("yyyy-MM-dd"),
-                Titulo = $"📦 Llegada estimada {oc.Folio} - {oc.ProveedorNombre}",
-                Descripcion = $"Proyecto: {oc.ProyectoNombre} | Avance recepción: {oc.AvanceRecepcionTexto} | Total: {oc.TotalConIva:C2}",
-                Categoria = "Entrega OC",
-                Prioridad = vencida ? "Alta" : "Media",
-                Completado = false,
-                ReferenciaFolio = oc.Folio,
-                EsAutomatico = true
-            });
+                string fSeg = !string.IsNullOrWhiteSpace(oc.FechaProgramadaPago)
+                    ? oc.FechaProgramadaPago
+                    : fechaBase.AddDays(1).ToString("yyyy-MM-dd");
+                bool vencida = DateTime.TryParse(fSeg, out var dtS) && dtS.Date < DateTime.Now.Date;
+                lista.Add(new EventoCalendario
+                {
+                    Id = -(200000 + oc.Id),
+                    Fecha = fSeg.Length >= 10 ? fSeg[..10] : fSeg,
+                    Titulo = $"Seguimiento Vo.Bo. Dirección: {oc.Folio} - {oc.ProveedorNombre}",
+                    Descripcion = $"Solicita: {oc.DepartamentoNombre} ({oc.ProyectoNombre}) | Total: {oc.TotalConIva:C2}",
+                    Categoria = "Autorización Dirección",
+                    Prioridad = vencida ? "Alta" : "Media",
+                    Completado = false,
+                    ReferenciaFolio = oc.Folio,
+                    EsAutomatico = true
+                });
+            }
+            else if (oc.Estatus == "Autorizada / Pendiente Pago Finanzas")
+            {
+                string fPago = !string.IsNullOrWhiteSpace(oc.FechaProgramadaPago)
+                    ? oc.FechaProgramadaPago
+                    : fechaBase.AddDays(1).ToString("yyyy-MM-dd");
+                bool vencida = DateTime.TryParse(fPago, out var dtP) && dtP.Date < DateTime.Now.Date;
+                lista.Add(new EventoCalendario
+                {
+                    Id = -(300000 + oc.Id),
+                    Fecha = fPago.Length >= 10 ? fPago[..10] : fPago,
+                    Titulo = $"Pago programado Finanzas: {oc.Folio} - {oc.ProveedorNombre}",
+                    Descripcion = $"Condición: {oc.CondicionPago} | Total a transferir: {oc.TotalConIva:C2}",
+                    Categoria = "Pago a Proveedor",
+                    Prioridad = vencida ? "Alta" : "Media",
+                    Completado = false,
+                    ReferenciaFolio = oc.Folio,
+                    EsAutomatico = true
+                });
+            }
+            else if (oc.Estatus == "Emitida" || oc.Estatus == "Pagada / Lista para Almacén" || oc.Estatus == "Recibida Parcial" || oc.Estatus == "Recibida Parcialmente")
+            {
+                DateTime fechaEstimada = fechaBase.AddDays(Math.Max(1, oc.TiempoEntregaDias));
+                bool vencida = fechaEstimada.Date < DateTime.Now.Date;
+
+                lista.Add(new EventoCalendario
+                {
+                    Id = -oc.Id,
+                    Fecha = fechaEstimada.ToString("yyyy-MM-dd"),
+                    Titulo = $"Recepción estimada Almacén: {oc.Folio} - {oc.ProveedorNombre}",
+                    Descripcion = $"Destino: {oc.ProyectoNombre} | Avance: {oc.AvanceRecepcionTexto} | Total: {oc.TotalConIva:C2}",
+                    Categoria = "Entrega OC",
+                    Prioridad = vencida ? "Alta" : "Media",
+                    Completado = false,
+                    ReferenciaFolio = oc.Folio,
+                    EsAutomatico = true
+                });
+            }
+
+            if ((oc.Estatus == "Recibida Completa" || oc.Estatus == "Recibida Parcialmente") &&
+                oc.CondicionPago.StartsWith("Crédito", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(oc.FechaProgramadaPago))
+            {
+                bool vencida = DateTime.TryParse(oc.FechaProgramadaPago, out var dtCred) && dtCred.Date < DateTime.Now.Date;
+                lista.Add(new EventoCalendario
+                {
+                    Id = -(400000 + oc.Id),
+                    Fecha = oc.FechaProgramadaPago.Length >= 10 ? oc.FechaProgramadaPago[..10] : oc.FechaProgramadaPago,
+                    Titulo = $"Vencimiento de crédito: {oc.Folio} - {oc.ProveedorNombre}",
+                    Descripcion = $"{oc.CondicionPago} | Monto por liquidar: {oc.TotalConIva:C2}",
+                    Categoria = "Pago a Proveedor",
+                    Prioridad = vencida ? "Alta" : "Media",
+                    Completado = false,
+                    ReferenciaFolio = oc.Folio,
+                    EsAutomatico = true
+                });
+            }
         }
 
         // 3. Eventos automáticos: Devolución compromiso de Préstamos de Herramienta activos o parciales
@@ -4739,8 +5242,8 @@ ORDER BY Fecha ASC, Id DESC";
             {
                 Id = -(100000 + pre.Id),
                 Fecha = fechaComp.Length >= 10 ? fechaComp[..10] : fechaComp,
-                Titulo = $"🔧 Devolución herramienta {pre.Folio} ({pre.PersonaRecibeEfectiva})",
-                Descripcion = $"Aprueba: {pre.DepartamentoNombre} | Herramientas: {pre.ResumenHerramientas}",
+                Titulo = $"Devolución herramienta {pre.Folio} ({pre.PersonaRecibeEfectiva})",
+                Descripcion = $"Autorizó: {pre.DepartamentoNombre} | Herramientas: {pre.ResumenHerramientas}",
                 Categoria = "Préstamo Herramienta",
                 Prioridad = vencido ? "Alta" : "Media",
                 Completado = false,
@@ -4756,9 +5259,9 @@ ORDER BY Fecha ASC, Id DESC";
                 int diff = (dtEv.Date - DateTime.Now.Date).Days;
                 ev.EstadoTiempoTexto = diff switch
                 {
-                    < 0 => $"⚠️ Vencido ({Math.Abs(diff)}d)",
-                    0 => "📍 Hoy",
-                    1 => "⏳ Mañana",
+                    < 0 => $"Vencido ({Math.Abs(diff)}d)",
+                    0 => "Hoy",
+                    1 => "Mañana",
                     _ => $"En {diff} días"
                 };
             }
@@ -4856,5 +5359,122 @@ ORDER BY f.FechaTimbrado ASC";
         }
 
         return puntos.OrderBy(p => p.Fecha).ToList();
+    }
+
+    public static List<MaterialRankingAnalisis> ObtenerRankingMaterialesConcurrentes()
+    {
+        var productos = ObtenerProductos();
+        var prodDict = productos.ToDictionary(p => p.Id);
+        var provDict = ObtenerProveedores().ToDictionary(p => p.Id);
+
+        var freqSol = new Dictionary<int, (int numVeces, decimal cantTotal)>();
+        var freqSal = new Dictionary<int, (int numVeces, decimal cantNeta)>();
+        var ultCot = new Dictionary<int, (int provId, decimal precioSinIva, string fecha, int diasVig)>();
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        using (var cmdSol = conn.CreateCommand())
+        {
+            cmdSol.CommandText = @"
+SELECT ProductoId, COUNT(*), SUM(CantidadSolicitada)
+FROM SolicitudPartidas
+WHERE ProductoId > 0
+GROUP BY ProductoId";
+            using var r = cmdSol.ExecuteReader();
+            while (r.Read())
+            {
+                freqSol[r.GetInt32(0)] = (r.GetInt32(1), Convert.ToDecimal(r.GetDouble(2)));
+            }
+        }
+
+        using (var cmdSal = conn.CreateCommand())
+        {
+            cmdSal.CommandText = @"
+SELECT ProductoId, COUNT(*), SUM(MAX(0, CantidadEntregada - COALESCE(CantidadDevuelta, 0)))
+FROM SalidaPartidas
+WHERE ProductoId > 0
+GROUP BY ProductoId";
+            using var r = cmdSal.ExecuteReader();
+            while (r.Read())
+            {
+                freqSal[r.GetInt32(0)] = (r.GetInt32(1), Convert.ToDecimal(r.GetDouble(2)));
+            }
+        }
+
+        using (var cmdOc = conn.CreateCommand())
+        {
+            cmdOc.CommandText = @"
+SELECT ocp.ProductoId, oc.ProveedorId, ocp.PrecioUnitarioSinIva, oc.Fecha
+FROM OrdenCompraPartidas ocp
+INNER JOIN OrdenesCompra oc ON oc.Id = ocp.OrdenCompraId
+WHERE ocp.ProductoId > 0 AND ocp.PrecioUnitarioSinIva > 0 AND oc.Estatus <> 'Cancelada'
+ORDER BY oc.Id ASC";
+            using var r = cmdOc.ExecuteReader();
+            while (r.Read())
+            {
+                ultCot[r.GetInt32(0)] = (r.GetInt32(1), Convert.ToDecimal(r.GetDouble(2)), r.GetString(3), 15);
+            }
+        }
+
+        using (var cmdBp = conn.CreateCommand())
+        {
+            cmdBp.CommandText = @"
+SELECT ProductoId, ProveedorId, PrecioSinIva, FechaCotizacion, DiasVigencia
+FROM BancoPreciosHistorico
+WHERE ProductoId > 0 AND PrecioSinIva > 0
+ORDER BY Id ASC";
+            using var r = cmdBp.ExecuteReader();
+            while (r.Read())
+            {
+                ultCot[r.GetInt32(0)] = (r.GetInt32(1), Convert.ToDecimal(r.GetDouble(2)), r.GetString(3), r.GetInt32(4));
+            }
+        }
+
+        var resultado = new List<MaterialRankingAnalisis>();
+        foreach (var p in productos)
+        {
+            freqSol.TryGetValue(p.Id, out var fs);
+            freqSal.TryGetValue(p.Id, out var fsal);
+            ultCot.TryGetValue(p.Id, out var uc);
+
+            if (fs.numVeces == 0 && fsal.numVeces == 0 && p.StockActual >= p.StockMinimo && uc.precioSinIva <= 0m)
+                continue;
+
+            string provNom = uc.provId > 0 && provDict.TryGetValue(uc.provId, out var prv) ? prv.NombreMostrar : "Sin proveedor reciente";
+            decimal ultimoPrecioConIva = uc.precioSinIva > 0m ? Math.Round(uc.precioSinIva * 1.16m, 2) : p.UltimoCostoCompra;
+            string vigTexto = "Sin cotización reciente";
+            if (!string.IsNullOrWhiteSpace(uc.fecha) && DateTime.TryParse(uc.fecha, out var dtC))
+            {
+                int dv = uc.diasVig > 0 ? uc.diasVig : 15;
+                int rest = (dtC.Date.AddDays(dv) - DateTime.Today).Days;
+                vigTexto = rest >= 0 ? $"Vigente ({rest}d rest.)" : $"Vencido (hace {Math.Abs(rest)}d)";
+            }
+
+            resultado.Add(new MaterialRankingAnalisis
+            {
+                ProductoId = p.Id,
+                ProductoCodigo = p.CodigoInterno,
+                ProductoNombre = p.Nombre,
+                CategoriaNombre = p.CategoriaNombre,
+                UnidadAlmacen = p.UnidadAlmacen,
+                FrecuenciaSolicitudes = fs.numVeces,
+                CantidadTotalSolicitada = fs.cantTotal,
+                FrecuenciaSalidas = fsal.numVeces,
+                CantidadTotalConsumida = fsal.cantNeta,
+                StockActual = p.StockActual,
+                StockMinimo = p.StockMinimo,
+                UltimoPrecioConIva = ultimoPrecioConIva,
+                UltimoProveedorNombre = provNom,
+                FechaUltimaCotizacion = uc.fecha?.Length >= 10 ? uc.fecha[..10] : (uc.fecha ?? ""),
+                VigenciaPrecioTexto = vigTexto
+            });
+        }
+
+        return resultado
+            .OrderByDescending(x => x.FrecuenciaSolicitudes + x.FrecuenciaSalidas)
+            .ThenByDescending(x => x.CantidadTotalConsumida + x.CantidadTotalSolicitada)
+            .ThenBy(x => x.StockActual)
+            .ToList();
     }
 }
