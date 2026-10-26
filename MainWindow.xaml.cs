@@ -436,6 +436,18 @@ public partial class MainWindow : FluentWindow
                 CboProdFamilia.SelectedIndex = -1;
                 CboProdFamilia.Text = textoFamActual;
             }
+            if (TxtProdUnidadCompra != null)
+            {
+                string ucActual = TxtProdUnidadCompra.Text;
+                TxtProdUnidadCompra.ItemsSource = DatabaseService.UnidadesMedidaEstandar;
+                TxtProdUnidadCompra.Text = ucActual;
+            }
+            if (TxtProdUnidadAlmacen != null)
+            {
+                string uaActual = TxtProdUnidadAlmacen.Text;
+                TxtProdUnidadAlmacen.ItemsSource = DatabaseService.UnidadesMedidaEstandar;
+                TxtProdUnidadAlmacen.Text = uaActual;
+            }
 
             // Solicitudes (en blanco por defecto si no se está editando)
             int solDepPrev = (CboSolDepartamento.SelectedItem as Departamento)?.Id ?? 0;
@@ -1970,8 +1982,8 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.Especificacion1 = TxtProdEspecificacion1.Text.Trim();
         _productoEnEdicion.Especificacion2 = TxtProdEspecificacion2.Text.Trim();
         _productoEnEdicion.Descripcion = TxtProdDescripcion.Text.Trim();
-        _productoEnEdicion.UnidadCompra = string.IsNullOrWhiteSpace(TxtProdUnidadCompra.Text) ? "Pieza" : TxtProdUnidadCompra.Text.Trim();
-        _productoEnEdicion.UnidadAlmacen = string.IsNullOrWhiteSpace(TxtProdUnidadAlmacen.Text) ? "Pieza" : TxtProdUnidadAlmacen.Text.Trim();
+        _productoEnEdicion.UnidadCompra = DatabaseService.NormalizarUnidadMedida(TxtProdUnidadCompra.Text);
+        _productoEnEdicion.UnidadAlmacen = DatabaseService.NormalizarUnidadMedida(TxtProdUnidadAlmacen.Text);
         _productoEnEdicion.FactorConversion = ParseDecimal(TxtProdFactor.Text, 1m);
         _productoEnEdicion.StockActual = ParseDecimal(TxtProdStock.Text, 0m);
         _productoEnEdicion.StockMinimo = ParseDecimal(TxtProdStockMin.Text, 5m);
@@ -3379,6 +3391,16 @@ public partial class MainWindow : FluentWindow
                 TxtCompProdSubtitulo.Text = "Seleccione primero una Solicitud arriba y luego un artículo de la tabla para cotizarlo.";
                 TxtCompProdHistorial.Text = "";
                 TxtCompProdCantidad.Text = "";
+                if (UgTarjetasComparativa != null) UgTarjetasComparativa.Columns = 1;
+                if (BdrCompCard2 != null) BdrCompCard2.Visibility = Visibility.Collapsed;
+                if (BdrCompCard3 != null) BdrCompCard3.Visibility = Visibility.Collapsed;
+                if (BdrProveedoresExtraComp != null) BdrProveedoresExtraComp.Visibility = Visibility.Collapsed;
+                if (BtnAgregarOpcionProveedorComp != null)
+                {
+                    BtnAgregarOpcionProveedorComp.Visibility = Visibility.Visible;
+                    BtnAgregarOpcionProveedorComp.IsEnabled = true;
+                    BtnAgregarOpcionProveedorComp.Content = "+ Añadir Proveedor Concursante";
+                }
                 if (CboCompReferenciasSimilares != null)
                 {
                     CboCompReferenciasSimilares.ItemsSource = null;
@@ -3473,6 +3495,8 @@ public partial class MainWindow : FluentWindow
             return;
 
         int n = Math.Clamp(r.NumeroOpcionesVisibles, 1, 3);
+        if (UgTarjetasComparativa != null)
+            UgTarjetasComparativa.Columns = n;
         BdrCompCard2.Visibility = n >= 2 ? Visibility.Visible : Visibility.Collapsed;
         BdrCompCard3.Visibility = n >= 3 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -3484,6 +3508,7 @@ public partial class MainWindow : FluentWindow
         }
 
         bool editable = !r.TieneOcGenerada;
+        BtnAgregarOpcionProveedorComp.Visibility = Visibility.Visible;
         BtnAgregarOpcionProveedorComp.IsEnabled = editable;
         int sigOp = n < 3 ? n + 1 : 4 + r.ProveedoresExtra.Count;
         BtnAgregarOpcionProveedorComp.Content = $"+ Añadir Opción {sigOp} de Proveedor";
@@ -3491,8 +3516,24 @@ public partial class MainWindow : FluentWindow
 
     private void BtnAgregarOpcionProveedorComp_Click(object sender, RoutedEventArgs e)
     {
-        if (DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
+        var r = DgComparativa.SelectedItem as CotizacionRenglonComparativo;
+        if (r == null && _renglonesComparativa.Count > 0)
+        {
+            DgComparativa.SelectedIndex = 0;
+            r = DgComparativa.SelectedItem as CotizacionRenglonComparativo;
+        }
+
+        if (r == null)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione primero una Solicitud arriba y un artículo de la lista izquierda para añadir proveedores concursantes.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
+        }
+
+        if (r.TieneOcGenerada)
+        {
+            System.Windows.MessageBox.Show(this, $"Este artículo ya tiene emitida la Orden de Compra {r.OrdenCompraFolio}.", "Artículo cerrado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
 
         if (r.NumeroOpcionesVisibles >= 3)
         {
@@ -4639,7 +4680,7 @@ public partial class MainWindow : FluentWindow
 
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var itemsPanel = new StackPanel();
-        var editores = new List<(OrdenCompraPartida partida, System.Windows.Controls.TextBox txtNombre, System.Windows.Controls.TextBox txtUnidad)>();
+        var editores = new List<(OrdenCompraPartida partida, System.Windows.Controls.TextBox txtNombre, ComboBox cboUnidad)>();
 
         foreach (var part in conceptosAbiertos)
         {
@@ -4663,7 +4704,7 @@ public partial class MainWindow : FluentWindow
 
             var rowGrid = new Grid();
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
 
             var txtNom = new System.Windows.Controls.TextBox
             {
@@ -4672,20 +4713,21 @@ public partial class MainWindow : FluentWindow
                 Margin = new Thickness(0, 0, 8, 0),
                 ToolTip = "Nombre específico del artículo (ej. Jabón Líquido Salvo 900ml)"
             };
-            var txtUni = new System.Windows.Controls.TextBox
+            var cboUni = new ComboBox
             {
-                Text = string.IsNullOrWhiteSpace(part.UnidadCompra) ? "Pieza" : part.UnidadCompra,
-                Padding = new Thickness(6, 4, 6, 4),
-                ToolTip = "Unidad de compra/almacén"
+                ItemsSource = DatabaseService.UnidadesMedidaEstandar,
+                IsEditable = true,
+                Text = DatabaseService.NormalizarUnidadMedida(part.UnidadCompra),
+                ToolTip = "Unidad de compra/almacén estandarizada"
             };
             Grid.SetColumn(txtNom, 0);
-            Grid.SetColumn(txtUni, 1);
+            Grid.SetColumn(cboUni, 1);
             rowGrid.Children.Add(txtNom);
-            rowGrid.Children.Add(txtUni);
+            rowGrid.Children.Add(cboUni);
             sp.Children.Add(rowGrid);
             card.Child = sp;
             itemsPanel.Children.Add(card);
-            editores.Add((part, txtNom, txtUni));
+            editores.Add((part, txtNom, cboUni));
         }
 
         scroll.Content = itemsPanel;
@@ -4694,7 +4736,7 @@ public partial class MainWindow : FluentWindow
         btnCancelar.Click += (_, _) => win.DialogResult = false;
         btnConfirmar.Click += (_, _) =>
         {
-            foreach (var (partida, txtNombre, txtUnidad) in editores)
+            foreach (var (partida, txtNombre, cboUnidad) in editores)
             {
                 string nom = txtNombre.Text.Trim();
                 if (!string.IsNullOrWhiteSpace(nom))
@@ -4702,12 +4744,9 @@ public partial class MainWindow : FluentWindow
                     partida.DescripcionLibre = nom;
                     partida.ProductoNombre = nom;
                 }
-                string uni = txtUnidad.Text.Trim();
-                if (!string.IsNullOrWhiteSpace(uni))
-                {
-                    partida.UnidadCompra = uni;
-                    partida.UnidadAlmacen = uni;
-                }
+                string uni = DatabaseService.NormalizarUnidadMedida(cboUnidad.Text);
+                partida.UnidadCompra = uni;
+                partida.UnidadAlmacen = uni;
             }
             win.DialogResult = true;
         };

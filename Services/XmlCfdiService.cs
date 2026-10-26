@@ -68,7 +68,9 @@ public static class XmlCfdiService
             string claveSat = ObtenerAtributo(cNodo, "ClaveProdServ");
             string noId = ObtenerAtributo(cNodo, "NoIdentificacion");
             string desc = ObtenerAtributo(cNodo, "Descripcion");
-            string unidad = ObtenerAtributo(cNodo, "Unidad", ObtenerAtributo(cNodo, "ClaveUnidad", "PZA"));
+            string claveUnidadSat = ObtenerAtributo(cNodo, "ClaveUnidad", "H87");
+            string unidadRaw = ObtenerAtributo(cNodo, "Unidad", claveUnidadSat);
+            string unidad = DatabaseService.NormalizarUnidadMedida(unidadRaw, claveUnidadSat);
             decimal cantidad = ObtenerDecimal(cNodo, "Cantidad", 1m);
             decimal valorUnitario = ObtenerDecimal(cNodo, "ValorUnitario", 0m);
             decimal importe = ObtenerDecimal(cNodo, "Importe", 0m);

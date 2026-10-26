@@ -405,8 +405,288 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         SeedEventosCalendarioSiVacio(conn);
         MigrarCategoriasYReclasificarCatalogo(conn);
         AutoAsignarFamiliasInicialesSiVacio(conn);
+        EstandarizarUnidadesMedidaEnBaseDatos(conn);
         conn.Close();
         SincronizarFacturasYOrdenesExistentes();
+    }
+
+    public static readonly IReadOnlyList<string> UnidadesMedidaEstandar = new[]
+    {
+        "Pieza",
+        "Metro",
+        "Kilogramo",
+        "Gramo",
+        "Litro",
+        "Mililitro",
+        "Galón",
+        "Cubeta",
+        "Bote",
+        "Cartucho",
+        "Paquete",
+        "Caja",
+        "Rollo",
+        "Bolsa",
+        "Bulto",
+        "Juego",
+        "Par",
+        "Barra",
+        "Hoja",
+        "Metro cuadrado",
+        "Metro cúbico",
+        "Servicio"
+    };
+
+    public static string NormalizarUnidadMedida(string? unidadRaw, string? claveUnidadSat = null)
+    {
+        string raw = (unidadRaw ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            raw = (claveUnidadSat ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return "Pieza";
+
+        // 1. Quitar textos entre paréntesis o corchetes, ej. "Caja (100 pzas)" -> "Caja"
+        int idxPar = raw.IndexOf('(');
+        if (idxPar > 0) raw = raw[..idxPar].Trim();
+        int idxCor = raw.IndexOf('[');
+        if (idxCor > 0) raw = raw[..idxCor].Trim();
+
+        // 2. Separar sufijos o prefijos de clave SAT con guion, ej. "PIEZA-H87", "KILOGRAMO-KGM"
+        string partePrincipal = raw;
+        string parteSecundaria = (claveUnidadSat ?? string.Empty).Trim();
+        if (raw.Contains('-'))
+        {
+            var partes = raw.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (partes.Length >= 2)
+            {
+                partePrincipal = partes[0];
+                if (string.IsNullOrWhiteSpace(parteSecundaria))
+                    parteSecundaria = partes[^1];
+            }
+        }
+
+        string u = LimpiarTextoUnidad(partePrincipal);
+        string sat = LimpiarTextoUnidad(parteSecundaria);
+
+        string? mapeada = MapearClaveOSinonimoUnidad(u) ?? MapearClaveOSinonimoUnidad(sat);
+        if (!string.IsNullOrEmpty(mapeada))
+            return mapeada;
+
+        // Coincidencia parcial segura
+        if (u.StartsWith("PIEZ") || u.StartsWith("PZA") || u == "H87") return "Pieza";
+        if (u.StartsWith("KILO") || u.StartsWith("KG")) return "Kilogramo";
+        if (u.StartsWith("GRAM")) return "Gramo";
+        if (u.StartsWith("METRO CUAD") || u.StartsWith("MT2") || u.StartsWith("M2")) return "Metro cuadrado";
+        if (u.StartsWith("METRO CUB") || u.StartsWith("MT3") || u.StartsWith("M3")) return "Metro cúbico";
+        if (u.StartsWith("METR") || u.StartsWith("MTR")) return "Metro";
+        if (u.StartsWith("MILILIT")) return "Mililitro";
+        if (u.StartsWith("LITR") || u.StartsWith("LTR")) return "Litro";
+        if (u.StartsWith("GAL")) return "Galón";
+        if (u.StartsWith("CUBET")) return "Cubeta";
+        if (u.StartsWith("PAQ") || u.StartsWith("PACK")) return "Paquete";
+        if (u.StartsWith("CAJ")) return "Caja";
+        if (u.StartsWith("ROLL") || u.StartsWith("BOBIN") || u.StartsWith("CARRET")) return "Rollo";
+        if (u.StartsWith("BOLS")) return "Bolsa";
+        if (u.StartsWith("BULT") || u.StartsWith("SAC") || u.StartsWith("COSTAL")) return "Bulto";
+        if (u.StartsWith("JUEG") || u.StartsWith("JGO") || u.StartsWith("KIT") || u.StartsWith("CONJUNT")) return "Juego";
+        if (u.StartsWith("CARTUCH") || u.StartsWith("TUB")) return "Cartucho";
+        if (u.StartsWith("BOT") || u.StartsWith("LAT") || u.StartsWith("ENVAS")) return "Bote";
+        if (u.StartsWith("BARR") || u.StartsWith("TRAM") || u.StartsWith("VARILL")) return "Barra";
+        if (u.StartsWith("HOJ") || u.StartsWith("PLIEG") || u.StartsWith("LAMIN") || u.StartsWith("PLAC")) return "Hoja";
+        if (u.StartsWith("SERV") || u.StartsWith("ACTIV")) return "Servicio";
+
+        return "Pieza";
+    }
+
+    private static string LimpiarTextoUnidad(string? txt)
+    {
+        if (string.IsNullOrWhiteSpace(txt)) return string.Empty;
+        string s = txt.Trim().ToUpperInvariant()
+            .Replace(".", "")
+            .Replace(",", "")
+            .Replace("Á", "A")
+            .Replace("É", "E")
+            .Replace("Í", "I")
+            .Replace("Ó", "O")
+            .Replace("Ú", "U")
+            .Replace("\uFFFD", "O"); // Corrige "GALÓN" con caracter corrupto "GALN"
+        while (s.Contains("  "))
+            s = s.Replace("  ", " ");
+        return s.Trim();
+    }
+
+    private static string? MapearClaveOSinonimoUnidad(string u)
+    {
+        if (string.IsNullOrWhiteSpace(u)) return null;
+        return u switch
+        {
+            "PIEZA" or "PIEZAS" or "PZA" or "PZAS" or "PZ" or "PZS" or "H87" or "XUN" or "EA" or "UN" or "UND" or "UNI" or "UNIDAD" or "UNIDADES" or "C62" => "Pieza",
+            "METRO" or "METROS" or "METRO LINEAL" or "METROS LINEALES" or "MTR" or "MT" or "MTS" or "M" or "ML" or "LM" => "Metro",
+            "KILOGRAMO" or "KILOGRAMOS" or "KILO" or "KILOS" or "KGM" or "KG" or "KGS" => "Kilogramo",
+            "GRAMO" or "GRAMOS" or "GRM" or "GR" or "GRS" or "G" => "Gramo",
+            "LITRO" or "LITROS" or "LTR" or "LT" or "LTS" or "L" => "Litro",
+            "MILILITRO" or "MILILITROS" or "MLT" => "Mililitro",
+            "GALON" or "GALONES" or "GAL" or "GLL" or "GL" => "Galón",
+            "CUBETA" or "CUBETAS" or "CUB" => "Cubeta",
+            "BOTE" or "BOTES" or "LATA" or "LATAS" or "ENVASE" or "AEROSOL" or "SPRAY" => "Bote",
+            "CARTUCHO" or "CARTUCHOS" or "CRT" or "TUBO" => "Cartucho",
+            "PAQUETE" or "PAQUETES" or "PAQ" or "PQT" or "PQ" or "PK" or "XPK" or "PACK" or "BLISTER" => "Paquete",
+            "CAJA" or "CAJAS" or "CJ" or "CJA" or "BX" or "XBX" => "Caja",
+            "ROLLO" or "ROLLOS" or "RO" or "XRO" or "BOBINA" or "CARRETE" => "Rollo",
+            "BOLSA" or "BOLSAS" or "BG" or "XBG" => "Bolsa",
+            "BULTO" or "BULTOS" or "SACO" or "SACOS" or "COSTAL" or "COSTALES" => "Bulto",
+            "JUEGO" or "JUEGOS" or "JGO" or "JGOS" or "KIT" or "KITS" or "SET" or "KT" or "CONJUNTO" => "Juego",
+            "PAR" or "PARES" or "PR" or "2P" => "Par",
+            "BARRA" or "BARRAS" or "TRAMO" or "TRAMOS" or "VARILLA" or "PERFIL" => "Barra",
+            "HOJA" or "HOJAS" or "PLIEGO" or "PLIEGOS" or "PLACA" or "LAMINA" => "Hoja",
+            "METRO CUADRADO" or "METROS CUADRADOS" or "M2" or "M²" or "MTK" or "MT2" => "Metro cuadrado",
+            "METRO CUBICO" or "METROS CUBICOS" or "M3" or "M³" or "MTQ" or "MT3" => "Metro cúbico",
+            "SERVICIO" or "SERVICIOS" or "SER" or "SRV" or "E48" or "ACT" or "ACTIVIDAD" or "LOTE" or "XLT" => "Servicio",
+            _ => null
+        };
+    }
+
+    public static void EstandarizarUnidadesMedidaEnBaseDatos(SqliteConnection conn)
+    {
+        using var tx = conn.BeginTransaction();
+
+        // 1. Productos (UnidadCompra y UnidadAlmacen)
+        var prods = new List<(int Id, string Uc, string Ua)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT Id, UnidadCompra, UnidadAlmacen FROM Productos;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                prods.Add((r.GetInt32(0), r.IsDBNull(1) ? "" : r.GetString(1), r.IsDBNull(2) ? "" : r.GetString(2)));
+            }
+        }
+        foreach (var (id, uc, ua) in prods)
+        {
+            string normUc = NormalizarUnidadMedida(uc);
+            string normUa = NormalizarUnidadMedida(ua);
+            if (normUc != uc || normUa != ua)
+            {
+                using var upd = conn.CreateCommand();
+                upd.Transaction = tx;
+                upd.CommandText = "UPDATE Productos SET UnidadCompra = $uc, UnidadAlmacen = $ua WHERE Id = $id;";
+                upd.Parameters.AddWithValue("$uc", normUc);
+                upd.Parameters.AddWithValue("$ua", normUa);
+                upd.Parameters.AddWithValue("$id", id);
+                upd.ExecuteNonQuery();
+            }
+        }
+
+        // 2. FacturaConceptos (Unidad)
+        var unidadesFac = new List<string>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT DISTINCT Unidad FROM FacturaConceptos;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                if (!r.IsDBNull(0)) unidadesFac.Add(r.GetString(0));
+            }
+        }
+        foreach (var uOriginal in unidadesFac)
+        {
+            string norm = NormalizarUnidadMedida(uOriginal);
+            if (norm != uOriginal)
+            {
+                using var upd = conn.CreateCommand();
+                upd.Transaction = tx;
+                upd.CommandText = "UPDATE FacturaConceptos SET Unidad = $norm WHERE Unidad = $orig;";
+                upd.Parameters.AddWithValue("$norm", norm);
+                upd.Parameters.AddWithValue("$orig", uOriginal);
+                upd.ExecuteNonQuery();
+            }
+        }
+
+        // 3. EntradaPartidas (UnidadCompra y UnidadAlmacen)
+        var entradasU = new List<(int Id, string Uc, string Ua)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT Id, UnidadCompra, UnidadAlmacen FROM EntradaPartidas;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                entradasU.Add((r.GetInt32(0), r.IsDBNull(1) ? "" : r.GetString(1), r.IsDBNull(2) ? "" : r.GetString(2)));
+            }
+        }
+        foreach (var (id, uc, ua) in entradasU)
+        {
+            string normUc = NormalizarUnidadMedida(uc);
+            string normUa = NormalizarUnidadMedida(ua);
+            if (normUc != uc || normUa != ua)
+            {
+                using var upd = conn.CreateCommand();
+                upd.Transaction = tx;
+                upd.CommandText = "UPDATE EntradaPartidas SET UnidadCompra = $uc, UnidadAlmacen = $ua WHERE Id = $id;";
+                upd.Parameters.AddWithValue("$uc", normUc);
+                upd.Parameters.AddWithValue("$ua", normUa);
+                upd.Parameters.AddWithValue("$id", id);
+                upd.ExecuteNonQuery();
+            }
+        }
+
+        // 4. SalidaPartidas (UnidadAlmacen)
+        var unidadesSal = new List<string>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT DISTINCT UnidadAlmacen FROM SalidaPartidas;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                if (!r.IsDBNull(0)) unidadesSal.Add(r.GetString(0));
+            }
+        }
+        foreach (var uOriginal in unidadesSal)
+        {
+            string norm = NormalizarUnidadMedida(uOriginal);
+            if (norm != uOriginal)
+            {
+                using var upd = conn.CreateCommand();
+                upd.Transaction = tx;
+                upd.CommandText = "UPDATE SalidaPartidas SET UnidadAlmacen = $norm WHERE UnidadAlmacen = $orig;";
+                upd.Parameters.AddWithValue("$norm", norm);
+                upd.Parameters.AddWithValue("$orig", uOriginal);
+                upd.ExecuteNonQuery();
+            }
+        }
+
+        // 5. SolicitudPartidas y OrdenCompraPartidas (UnidadLibre)
+        foreach (var tabla in new[] { "SolicitudPartidas", "OrdenCompraPartidas" })
+        {
+            var unidadesLibres = new List<string>();
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = $"SELECT DISTINCT UnidadLibre FROM {tabla};";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    if (!r.IsDBNull(0)) unidadesLibres.Add(r.GetString(0));
+                }
+            }
+            foreach (var uOriginal in unidadesLibres)
+            {
+                string norm = NormalizarUnidadMedida(uOriginal);
+                if (norm != uOriginal)
+                {
+                    using var upd = conn.CreateCommand();
+                    upd.Transaction = tx;
+                    upd.CommandText = $"UPDATE {tabla} SET UnidadLibre = $norm WHERE UnidadLibre = $orig;";
+                    upd.Parameters.AddWithValue("$norm", norm);
+                    upd.Parameters.AddWithValue("$orig", uOriginal);
+                    upd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        tx.Commit();
     }
 
     private static void AsegurarColumnaExiste(SqliteConnection conn, string tabla, string columna, string definicionSql)
@@ -1350,8 +1630,10 @@ SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$cap", (p.CapacidadElectrica ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$esp1", (p.Especificacion1 ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$esp2", (p.Especificacion2 ?? string.Empty).Trim());
-        cmd.Parameters.AddWithValue("$uc", p.UnidadCompra.Trim());
-        cmd.Parameters.AddWithValue("$ua", p.UnidadAlmacen.Trim());
+        p.UnidadCompra = NormalizarUnidadMedida(p.UnidadCompra);
+        p.UnidadAlmacen = NormalizarUnidadMedida(p.UnidadAlmacen);
+        cmd.Parameters.AddWithValue("$uc", p.UnidadCompra);
+        cmd.Parameters.AddWithValue("$ua", p.UnidadAlmacen);
         cmd.Parameters.AddWithValue("$fc", (double)Math.Max(0.0001m, p.FactorConversion));
         cmd.Parameters.AddWithValue("$sa", (double)p.StockActual);
         cmd.Parameters.AddWithValue("$sm", (double)p.StockMinimo);
@@ -3831,7 +4113,7 @@ LIMIT 1";
         string nombre = string.IsNullOrWhiteSpace(c.Descripcion)
             ? $"Producto Factura {nuevoCodigo}"
             : c.Descripcion.Trim();
-        string unidad = string.IsNullOrWhiteSpace(c.Unidad) ? "PZA" : c.Unidad.Trim();
+        string unidad = NormalizarUnidadMedida(c.Unidad);
         decimal costoUnitarioConIva = c.Cantidad > 0m && (c.Importe + c.IvaConcepto) > 0m
             ? Math.Round((c.Importe + c.IvaConcepto) / c.Cantidad, 2)
             : Math.Round(c.ValorUnitario * 1.16m, 2);
