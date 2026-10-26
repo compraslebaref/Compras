@@ -1,10 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 using SistemaComprasAlmacen.Models;
 
 namespace SistemaComprasAlmacen.Services;
@@ -77,7 +83,7 @@ public static class BarcodePrintService
         return img;
     }
 
-    public static void MostrarVistaPreviaEImprimirSolicitud(Window owner, Solicitud sol)
+    public static void MostrarVistaPreviaEImprimirSolicitud(Window owner, Solicitud sol, bool soloDescargar = false)
     {
         var filas = sol.Partidas.Select((p, idx) => new[]
         {
@@ -115,10 +121,16 @@ public static class BarcodePrintService
             firmaIzquierda: $"Solicitó: Gerencia de {sol.DepartamentoNombre}",
             firmaDerecha: "Recibió: Gerencia de Compras");
 
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"Solicitud_{sol.Folio}", hoja);
+            return;
+        }
+
         AbrirVentanaVistaPreviaCarta(owner, $"Solicitud {sol.Folio}", hoja);
     }
 
-    public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones)
+    public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones, bool soloDescargar = false)
     {
         var filas = renglones.Select((r, idx) => new[]
         {
@@ -163,10 +175,16 @@ public static class BarcodePrintService
             firmaCentro: $"Revisó: Gerencia de {sol.DepartamentoNombre}",
             firmaDerecha: "Vo.Bo.: Dirección General");
 
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"Comparativa_{sol.Folio}", hoja);
+            return;
+        }
+
         AbrirVentanaVistaPreviaCarta(owner, $"Comparativa {sol.Folio}", hoja);
     }
 
-    public static void MostrarVistaPreviaEImprimirOrdenCompra(Window owner, OrdenCompra oc)
+    public static void MostrarVistaPreviaEImprimirOrdenCompra(Window owner, OrdenCompra oc, bool soloDescargar = false)
     {
         var filas = oc.Partidas.Select((p, idx) => new[]
         {
@@ -212,10 +230,16 @@ public static class BarcodePrintService
             firmaCentro: "Vo.Bo.: Dirección General",
             firmaDerecha: "Recepción: Jefatura de Almacén");
 
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"OrdenCompra_{oc.Folio}", hoja);
+            return;
+        }
+
         AbrirVentanaVistaPreviaCarta(owner, $"Orden de Compra {oc.Folio}", hoja);
     }
 
-    public static void MostrarVistaPreviaEImprimirEntrada(Window owner, EntradaAlmacen ent)
+    public static void MostrarVistaPreviaEImprimirEntrada(Window owner, EntradaAlmacen ent, bool soloDescargar = false)
     {
         if (!string.IsNullOrWhiteSpace(ent.TipoEntrada) &&
             ent.TipoEntrada.Contains("Devolución", StringComparison.OrdinalIgnoreCase) &&
@@ -226,7 +250,7 @@ public static class BarcodePrintService
                 .FirstOrDefault(s => s.Folio.Equals(ent.OrdenCompraFolio, StringComparison.OrdinalIgnoreCase));
             if (salVinculada != null)
             {
-                MostrarVistaPreviaEImprimirDevolucionMaterial(owner, salVinculada, ent);
+                MostrarVistaPreviaEImprimirDevolucionMaterial(owner, salVinculada, ent, soloDescargar);
                 return;
             }
         }
@@ -262,10 +286,16 @@ public static class BarcodePrintService
             firmaIzquierda: "Recibió y Verificó: Jefatura de Almacén",
             firmaDerecha: "Entregó: Proveedor / Transporte");
 
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"ValeEntrada_{ent.Folio}", hoja);
+            return;
+        }
+
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Entrada {ent.Folio}", hoja);
     }
 
-    public static void MostrarVistaPreviaEImprimirSalida(Window owner, SalidaAlmacen sal)
+    public static void MostrarVistaPreviaEImprimirSalida(Window owner, SalidaAlmacen sal, bool soloDescargar = false)
     {
         bool tieneDevoluciones = sal.TotalUnidadesDevueltas > 0;
 
@@ -340,10 +370,16 @@ public static class BarcodePrintService
             firmaCentro: $"Autorizó: Gerencia de {sal.DepartamentoNombre}",
             firmaDerecha: $"Recibió para Obra / Área: {sal.PersonaRecibeEfectiva}");
 
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"ValeSalida_{sal.Folio}", hoja);
+            return;
+        }
+
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Salida {sal.Folio}", hoja);
     }
 
-    public static void MostrarVistaPreviaEImprimirCartaResponsabilidadEpp(Window owner, SalidaAlmacen sal)
+    public static void MostrarVistaPreviaEImprimirCartaResponsabilidadEpp(Window owner, SalidaAlmacen sal, bool soloDescargar = false)
     {
         var catalogoDict = Data.DatabaseService.ObtenerProductos().ToDictionary(p => p.Id);
 
@@ -407,10 +443,16 @@ public static class BarcodePrintService
             firmaDerecha: "Entregó y Registró:\nJefatura de Almacén",
             clausulaLegal: clausulaResponsabilidad);
 
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"CartaResponsivaEPP_{sal.Folio}", hoja);
+            return;
+        }
+
         AbrirVentanaVistaPreviaCarta(owner, $"Carta Responsiva de EPP - {sal.Folio}", hoja);
     }
 
-    public static void MostrarVistaPreviaEImprimirDevolucionMaterial(Window owner, SalidaAlmacen sal, EntradaAlmacen entDevolucion)
+    public static void MostrarVistaPreviaEImprimirDevolucionMaterial(Window owner, SalidaAlmacen sal, EntradaAlmacen entDevolucion, bool soloDescargar = false)
     {
         var filas = sal.Partidas.Select((p, idx) =>
         {
@@ -460,10 +502,16 @@ public static class BarcodePrintService
             firmaCentro: $"Vo.Bo.: Gerencia de {sal.DepartamentoNombre}",
             firmaDerecha: "Recibió: Jefatura de Almacén");
 
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"ValeDevolucion_{entDevolucion.Folio}", hoja);
+            return;
+        }
+
         AbrirVentanaVistaPreviaCarta(owner, $"Vale de Devolución de Material {entDevolucion.Folio} ({sal.Folio})", hoja);
     }
 
-    public static void MostrarVistaPreviaEImprimirPrestamo(Window owner, PrestamoHerramienta pre)
+    public static void MostrarVistaPreviaEImprimirPrestamo(Window owner, PrestamoHerramienta pre, bool soloDescargar = false)
     {
         bool tieneDevolucion = pre.Partidas.Any(p => !string.Equals(p.EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase));
         int devueltasCount = pre.Partidas.Count(p => !string.Equals(p.EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase));
@@ -518,6 +566,12 @@ public static class BarcodePrintService
             firmaIzquierda: tieneDevolucion ? $"Devolvió: {pre.PersonaRecibeEfectiva}" : $"Recibió: {pre.PersonaRecibeEfectiva}",
             firmaCentro: $"Autorizó: Gerencia de {pre.DepartamentoNombre}",
             firmaDerecha: "Jefatura de Almacén");
+
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"ValeHerramienta_{pre.Folio}", hoja);
+            return;
+        }
 
         AbrirVentanaVistaPreviaCarta(owner, tieneDevolucion ? $"Vale de Devolución de Herramienta {pre.Folio}" : $"Vale de Préstamo {pre.Folio}", hoja);
     }
@@ -937,7 +991,35 @@ public static class BarcodePrintService
             Margin = new Thickness(0, 14, 0, 0)
         });
 
+        page.Tag = new DatosExportablesDocumento
+        {
+            TituloDocumento = tituloDocumento,
+            Subtitulo = subtitulo,
+            Folio = folioCodigoBarras,
+            Fecha = fecha,
+            Metadatos = metadatos,
+            EncabezadosTabla = encabezadosTabla,
+            FilasTabla = filasTabla,
+            Totales = totales,
+            Notas = notas,
+            ClausulaLegal = clausulaLegal
+        };
+
         return page;
+    }
+
+    private sealed class DatosExportablesDocumento
+    {
+        public string TituloDocumento { get; init; } = string.Empty;
+        public string Subtitulo { get; init; } = string.Empty;
+        public string Folio { get; init; } = string.Empty;
+        public string Fecha { get; init; } = string.Empty;
+        public List<(string etiq, string val)> Metadatos { get; init; } = new();
+        public string[] EncabezadosTabla { get; init; } = Array.Empty<string>();
+        public List<string[]> FilasTabla { get; init; } = new();
+        public List<(string etiq, string val)> Totales { get; init; } = new();
+        public string Notas { get; init; } = string.Empty;
+        public string? ClausulaLegal { get; init; }
     }
 
     private static void AbrirVentanaVistaPreviaCarta(Window owner, string tituloVentana, FrameworkElement contenidoHojaCarta)
@@ -945,7 +1027,7 @@ public static class BarcodePrintService
         var win = new Window
         {
             Title = $"Lebaref | {tituloVentana}",
-            Width = 880,
+            Width = 900,
             Height = 760,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = owner,
@@ -960,16 +1042,30 @@ public static class BarcodePrintService
             Padding = new Thickness(16, 10, 16, 10)
         };
         var topStack = new DockPanel();
-        var lblInfo = new TextBlock
+
+        var actionsPanel = new StackPanel
         {
-            Text = tituloVentana,
-            Foreground = Brushes.White,
-            FontWeight = FontWeights.SemiBold,
-            FontSize = 14,
-            VerticalAlignment = VerticalAlignment.Center
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0)
         };
-        DockPanel.SetDock(lblInfo, Dock.Left);
-        topStack.Children.Add(lblInfo);
+
+        var btnDescargar = new Button
+        {
+            Content = "Descargar Archivo (PDF / PNG / Excel)",
+            Padding = new Thickness(14, 7, 14, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            FontWeight = FontWeights.SemiBold,
+            Background = new SolidColorBrush(Color.FromRgb(30, 64, 175)),
+            Foreground = Brushes.White,
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        btnDescargar.Click += (_, _) =>
+        {
+            GuardarDocumentoEnArchivo(win, tituloVentana, contenidoHojaCarta);
+        };
+        actionsPanel.Children.Add(btnDescargar);
 
         var btnPrint = new Button
         {
@@ -978,7 +1074,6 @@ public static class BarcodePrintService
             FontWeight = FontWeights.Bold,
             Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
             Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Right,
             Cursor = System.Windows.Input.Cursors.Hand
         };
         btnPrint.Click += (_, _) =>
@@ -989,8 +1084,21 @@ public static class BarcodePrintService
                 dlg.PrintVisual(contenidoHojaCarta, tituloVentana);
             }
         };
-        DockPanel.SetDock(btnPrint, Dock.Right);
-        topStack.Children.Add(btnPrint);
+        actionsPanel.Children.Add(btnPrint);
+
+        DockPanel.SetDock(actionsPanel, Dock.Right);
+        topStack.Children.Add(actionsPanel);
+
+        var lblInfo = new TextBlock
+        {
+            Text = tituloVentana,
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        topStack.Children.Add(lblInfo);
 
         topBar.Child = topStack;
         DockPanel.SetDock(topBar, Dock.Top);
@@ -1019,5 +1127,234 @@ public static class BarcodePrintService
 
         win.Content = root;
         win.ShowDialog();
+    }
+
+    public static void GuardarDocumentoEnArchivo(Window owner, string nombreBase, FrameworkElement contenidoHojaCarta)
+    {
+        string nombreLimpio = string.Concat(nombreBase.Split(Path.GetInvalidFileNameChars())).Replace(' ', '_');
+        if (string.IsNullOrWhiteSpace(nombreLimpio))
+            nombreLimpio = $"Documento_{DateTime.Now:yyyyMMdd_HHmm}";
+
+        var dlg = new SaveFileDialog
+        {
+            Title = "Descargar / Guardar Documento",
+            FileName = $"{nombreLimpio}.pdf",
+            DefaultExt = ".pdf",
+            Filter = "Documento PDF (*.pdf)|*.pdf|Imagen PNG de Alta Resolución (*.png)|*.png|Archivo CSV para Excel (*.csv)|*.csv"
+        };
+
+        if (dlg.ShowDialog(owner) != true)
+            return;
+
+        string ext = Path.GetExtension(dlg.FileName).ToLowerInvariant();
+        try
+        {
+            if (ext == ".csv")
+            {
+                ExportarDocumentoComoCsv(dlg.FileName, contenidoHojaCarta);
+            }
+            else if (ext == ".png")
+            {
+                ExportarDocumentoComoPng(dlg.FileName, contenidoHojaCarta);
+            }
+            else
+            {
+                ExportarDocumentoComoPdf(dlg.FileName, contenidoHojaCarta);
+            }
+
+            var abrir = MessageBox.Show(owner,
+                $"Archivo guardado correctamente en:\n{dlg.FileName}\n\n¿Desea abrir el archivo descargado ahora?",
+                "Archivo Descargado",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (abrir == MessageBoxResult.Yes)
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = dlg.FileName,
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(owner,
+                $"No se pudo guardar el archivo:\n{ex.Message}",
+                "Error al descargar archivo",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private static RenderTargetBitmap RenderizarHojaCartaBitmap(FrameworkElement contenidoHojaCarta, double dpi = 192.0)
+    {
+        FrameworkElement target = contenidoHojaCarta;
+        Border? tempWrapper = null;
+
+        if (contenidoHojaCarta.Parent is Border parentBorder)
+        {
+            target = parentBorder;
+        }
+        else if (contenidoHojaCarta.Parent == null)
+        {
+            tempWrapper = new Border
+            {
+                Background = Brushes.White,
+                Width = 816,
+                MinHeight = 1020,
+                Child = contenidoHojaCarta
+            };
+            target = tempWrapper;
+        }
+
+        double widthDip = target.ActualWidth > 100 ? target.ActualWidth : 816;
+        target.Measure(new Size(widthDip, double.PositiveInfinity));
+        double heightDip = Math.Max(1020, target.DesiredSize.Height);
+        target.Arrange(new Rect(0, 0, widthDip, heightDip));
+        target.UpdateLayout();
+
+        int pixelWidth = Math.Max(1, (int)Math.Round(widthDip * dpi / 96.0));
+        int pixelHeight = Math.Max(1, (int)Math.Round(heightDip * dpi / 96.0));
+
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, widthDip, heightDip));
+            var vb = new VisualBrush(target)
+            {
+                Stretch = Stretch.None,
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top
+            };
+            dc.DrawRectangle(vb, null, new Rect(0, 0, widthDip, heightDip));
+        }
+
+        var rtb = new RenderTargetBitmap(pixelWidth, pixelHeight, dpi, dpi, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+
+        if (tempWrapper != null)
+        {
+            tempWrapper.Child = null;
+        }
+
+        return rtb;
+    }
+
+    private static void ExportarDocumentoComoPng(string rutaArchivo, FrameworkElement contenidoHojaCarta)
+    {
+        var rtb = RenderizarHojaCartaBitmap(contenidoHojaCarta, 192.0);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(rtb));
+        using var fs = new FileStream(rutaArchivo, FileMode.Create, FileAccess.Write);
+        encoder.Save(fs);
+    }
+
+    private static void ExportarDocumentoComoPdf(string rutaArchivo, FrameworkElement contenidoHojaCarta)
+    {
+        var rtb = RenderizarHojaCartaBitmap(contenidoHojaCarta, 192.0);
+        var jpegEncoder = new JpegBitmapEncoder { QualityLevel = 94 };
+        jpegEncoder.Frames.Add(BitmapFrame.Create(rtb));
+
+        using var msImg = new MemoryStream();
+        jpegEncoder.Save(msImg);
+        byte[] jpegBytes = msImg.ToArray();
+
+        int imgW = rtb.PixelWidth;
+        int imgH = rtb.PixelHeight;
+
+        // Página tamaño Carta en puntos PDF (72 pt/in): 612 pt ancho, alto proporcional (mínimo 792 pt)
+        double pageW = 612.0;
+        double pageH = Math.Max(792.0, Math.Round(pageW * imgH / Math.Max(1.0, imgW), 2));
+        string pageWStr = pageW.ToString("0.##", CultureInfo.InvariantCulture);
+        string pageHStr = pageH.ToString("0.##", CultureInfo.InvariantCulture);
+
+        using var fs = new FileStream(rutaArchivo, FileMode.Create, FileAccess.Write);
+        var offsets = new List<long>();
+
+        void WriteAscii(string text)
+        {
+            byte[] b = Encoding.ASCII.GetBytes(text);
+            fs.Write(b, 0, b.Length);
+        }
+
+        WriteAscii("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+
+        // 1: Catalog
+        offsets.Add(fs.Position);
+        WriteAscii("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+        // 2: Pages
+        offsets.Add(fs.Position);
+        WriteAscii("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+
+        // 3: Page
+        offsets.Add(fs.Position);
+        WriteAscii($"3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /XObject << /Im0 4 0 R >> >> /MediaBox [0 0 {pageWStr} {pageHStr}] /Contents 5 0 R >>\nendobj\n");
+
+        // 4: Image XObject (DCTDecode / JPEG)
+        offsets.Add(fs.Position);
+        WriteAscii($"4 0 obj\n<< /Type /XObject /Subtype /Image /Width {imgW} /Height {imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpegBytes.Length} >>\nstream\n");
+        fs.Write(jpegBytes, 0, jpegBytes.Length);
+        WriteAscii("\nendstream\nendobj\n");
+
+        // 5: Content stream
+        string contentCmd = $"q\n{pageWStr} 0 0 {pageHStr} 0 0 cm\n/Im0 Do\nQ\n";
+        byte[] contentBytes = Encoding.ASCII.GetBytes(contentCmd);
+        offsets.Add(fs.Position);
+        WriteAscii($"5 0 obj\n<< /Length {contentBytes.Length} >>\nstream\n");
+        fs.Write(contentBytes, 0, contentBytes.Length);
+        WriteAscii("endstream\nendobj\n");
+
+        // xref
+        long xrefPos = fs.Position;
+        WriteAscii($"xref\n0 {offsets.Count + 1}\n");
+        WriteAscii("0000000000 65535 f \n");
+        foreach (long off in offsets)
+        {
+            WriteAscii($"{off:D10} 00000 n \n");
+        }
+
+        WriteAscii($"trailer\n<< /Size {offsets.Count + 1} /Root 1 0 R >>\nstartxref\n{xrefPos}\n%%EOF\n");
+    }
+
+    private static void ExportarDocumentoComoCsv(string rutaArchivo, FrameworkElement contenidoHojaCarta)
+    {
+        var sb = new StringBuilder();
+        if (contenidoHojaCarta.Tag is DatosExportablesDocumento datos)
+        {
+            sb.AppendLine($"\"{datos.TituloDocumento.Replace("\"", "\"\"")}\"");
+            sb.AppendLine($"\"Folio:\",\"{datos.Folio}\",\"Fecha:\",\"{datos.Fecha}\"");
+            foreach (var (etiq, val) in datos.Metadatos)
+            {
+                sb.AppendLine($"\"{etiq.Replace("\"", "\"\"")}\",\"{val.Replace("\"", "\"\"")}\"");
+            }
+            sb.AppendLine();
+
+            if (datos.EncabezadosTabla.Length > 0)
+            {
+                sb.AppendLine(string.Join(",", datos.EncabezadosTabla.Select(h => $"\"{h.Replace("\"", "\"\"")}\"")));
+            }
+            foreach (var fila in datos.FilasTabla)
+            {
+                sb.AppendLine(string.Join(",", fila.Select(c => $"\"{(c ?? string.Empty).Replace("\"", "\"\"")}\"")));
+            }
+            sb.AppendLine();
+
+            foreach (var (etiq, val) in datos.Totales)
+            {
+                sb.AppendLine($"\"{etiq.Replace("\"", "\"\"")}\",\"{val.Replace("\"", "\"\"")}\"");
+            }
+            if (!string.IsNullOrWhiteSpace(datos.Notas))
+            {
+                sb.AppendLine($"\"Observaciones:\",\"{datos.Notas.Replace("\"", "\"\"")}\"");
+            }
+        }
+        else
+        {
+            sb.AppendLine("Documento exportado");
+        }
+
+        File.WriteAllText(rutaArchivo, sb.ToString(), new UTF8Encoding(true));
     }
 }

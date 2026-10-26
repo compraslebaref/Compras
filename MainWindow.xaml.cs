@@ -2823,6 +2823,20 @@ public partial class MainWindow : FluentWindow
         BarcodePrintService.MostrarVistaPreviaEImprimirSolicitud(this, sol);
     }
 
+    private void BtnDescargarSolicitudArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = DgHistorialSolicitudes.SelectedItem as Solicitud
+                  ?? DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+
+        if (sol == null)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione o guarde primero una Solicitud para descargar su archivo (PDF, PNG o Excel CSV).", "Solicitud no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        BarcodePrintService.MostrarVistaPreviaEImprimirSolicitud(this, sol, soloDescargar: true);
+    }
+
     private void BtnEliminarSolicitud_Click(object sender, RoutedEventArgs e)
     {
         var sol = DgHistorialSolicitudes.SelectedItem as Solicitud
@@ -4277,6 +4291,19 @@ public partial class MainWindow : FluentWindow
         BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, _renglonesComparativa.ToList());
     }
 
+    private void BtnDescargarComparativaArchivo_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione primero una solicitud con artículos para descargar su Cuadro Comparativo (PDF, PNG o Excel CSV).", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        SincronizarRenglonActualDesdeTarjetas();
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, _renglonesComparativa.ToList(), soloDescargar: true);
+    }
+
     private void BtnConvertirPresupuestoEnCompra_Click(object sender, RoutedEventArgs e)
     {
         if (CboCompSolicitud.SelectedItem is not Solicitud sol)
@@ -4509,6 +4536,22 @@ public partial class MainWindow : FluentWindow
         if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
         {
             BarcodePrintService.MostrarVistaPreviaEImprimirOrdenCompra(this, oc);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una Orden de Compra de la lista para imprimirla.", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnDescargarOcSeleccionada_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirOrdenCompra(this, oc, soloDescargar: true);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una Orden de Compra de la lista para descargar su archivo (PDF, PNG o Excel CSV).", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -4945,6 +4988,22 @@ public partial class MainWindow : FluentWindow
         if (DgEntradasHistorial.SelectedItem is EntradaAlmacen ent)
         {
             BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una recepción (ENT-xxxx) del historial para imprimirla.", "Sin recepción seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnDescargarEntradaSeleccionada_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgEntradasHistorial.SelectedItem is EntradaAlmacen ent)
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent, soloDescargar: true);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una recepción (ENT-xxxx) del historial para descargar su archivo (PDF, PNG o Excel CSV).", "Sin recepción seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -5510,15 +5569,29 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void AbrirVistaPreviaMovimientoAlmacen(MovimientoAlmacenFila fila)
+    private void BtnDescargarMovimientoAlmacen_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgMovimientosAlmacen.SelectedItem is MovimientoAlmacenFila fila)
+        {
+            AbrirVistaPreviaMovimientoAlmacen(fila, soloDescargar: true);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this,
+                "Seleccione un movimiento (Entrada ENT-xxxx o Salida SAL-xxxx) de la tabla inferior para descargar su archivo (PDF, PNG o Excel CSV).",
+                "Seleccione un vale", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void AbrirVistaPreviaMovimientoAlmacen(MovimientoAlmacenFila fila, bool soloDescargar = false)
     {
         if (fila.EntradaOriginal != null)
         {
-            BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, fila.EntradaOriginal);
+            BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, fila.EntradaOriginal, soloDescargar);
         }
         else if (fila.SalidaOriginal != null)
         {
-            BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, fila.SalidaOriginal);
+            BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, fila.SalidaOriginal, soloDescargar);
         }
     }
 
