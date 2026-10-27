@@ -576,46 +576,20 @@ public static class BarcodePrintService
         AbrirVentanaVistaPreviaCarta(owner, tieneDevolucion ? $"Vale de Devolución de Herramienta {pre.Folio}" : $"Vale de Préstamo {pre.Folio}", hoja);
     }
 
+    // Dimensiones estándar fijas de Hoja Tamaño Carta (US Letter: 8.5" x 11.0" a 96 DPI)
+    public const double AnchoHojaCartaDip = 816.0;
+    public const double AltoHojaCartaDip = 1056.0;
+    public const double MargenHojaCartaDip = 28.0;
+    public const double AnchoContenidoCartaDip = AnchoHojaCartaDip - (MargenHojaCartaDip * 2); // 760 DIPs
+    public const double AltoContenidoUtilCartaDip = AltoHojaCartaDip - (MargenHojaCartaDip * 2); // 1000 DIPs
+
     public static void MostrarVistaPreviaCatalogoCodigosCarta(Window owner, List<Producto> productos, List<HerramientaActivo> herramientas)
     {
-        var pagePanel = new StackPanel
-        {
-            Width = 760,
-            Background = Brushes.White,
-            Margin = new Thickness(24)
-        };
-
-        var header = new Border
-        {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
-            BorderThickness = new Thickness(0, 0, 0, 3),
-            Padding = new Thickness(0, 0, 0, 10),
-            Margin = new Thickness(0, 0, 0, 16)
-        };
-
-        var hStack = new StackPanel();
-        hStack.Children.Add(new TextBlock
-        {
-            Text = "CATÁLOGO DE CÓDIGOS DE BARRAS",
-            FontSize = 18,
-            FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
-        });
-        hStack.Children.Add(new TextBlock
-        {
-            Text = "Lebaref | Departamento de Compras",
-            FontSize = 11.5,
-            Foreground = Brushes.DimGray,
-            Margin = new Thickness(0, 3, 0, 0)
-        });
-        header.Child = hStack;
-        pagePanel.Children.Add(header);
-
-        var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
+        var tarjetas = new List<(string codigo, string titulo, string subtitulo, string colorHex)>();
 
         foreach (var p in productos)
         {
-            wrap.Children.Add(CrearTarjetaCodigoImprimible(
+            tarjetas.Add((
                 p.CodigoEfectivo,
                 p.Nombre,
                 $"Stock: {p.StockActual:0.##} {p.UnidadAlmacen} | Ubic: {p.Ubicacion}",
@@ -624,16 +598,111 @@ public static class BarcodePrintService
 
         foreach (var h in herramientas)
         {
-            wrap.Children.Add(CrearTarjetaCodigoImprimible(
+            tarjetas.Add((
                 h.CodigoIndividual,
                 $"[HERRAMIENTA] {h.ProductoNombre}",
                 $"{h.MarcaModelo} | Serie: {h.NumeroSerie}",
                 "#5C2D91"));
         }
 
-        pagePanel.Children.Add(wrap);
+        // 3 columnas x 6 filas = 18 etiquetas por cada hoja Tamaño Carta (816 x 1056 DIPs)
+        const int tarjetasPorHoja = 18;
+        int totalPaginas = Math.Max(1, (int)Math.Ceiling(tarjetas.Count / (double)tarjetasPorHoja));
+        var paginasCarta = new List<FrameworkElement>();
+        var contenedorPaginas = new StackPanel { Background = Brushes.Transparent };
 
-        AbrirVentanaVistaPreviaCarta(owner, "Catálogo de Códigos de Barras en Hoja Carta", pagePanel);
+        for (int pIndex = 0; pIndex < totalPaginas; pIndex++)
+        {
+            var dockHoja = new DockPanel
+            {
+                Width = AnchoContenidoCartaDip,
+                Height = AltoContenidoUtilCartaDip,
+                LastChildFill = true
+            };
+
+            var header = new Border
+            {
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+                BorderThickness = new Thickness(0, 0, 0, 3),
+                Padding = new Thickness(0, 0, 0, 10),
+                Margin = new Thickness(0, 0, 0, 14)
+            };
+
+            var hStack = new StackPanel();
+            hStack.Children.Add(new TextBlock
+            {
+                Text = "CATÁLOGO DE CÓDIGOS DE BARRAS",
+                FontSize = 18,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+            });
+            hStack.Children.Add(new TextBlock
+            {
+                Text = $"Lebaref | Departamento de Compras — Hoja {pIndex + 1} de {totalPaginas}",
+                FontSize = 11.5,
+                Foreground = Brushes.DimGray,
+                Margin = new Thickness(0, 3, 0, 0)
+            });
+            header.Child = hStack;
+            DockPanel.SetDock(header, Dock.Top);
+            dockHoja.Children.Add(header);
+
+            var pie = new TextBlock
+            {
+                Text = $"Lebaref | Catálogo de Códigos de Barras — Página {pIndex + 1} de {totalPaginas}",
+                FontSize = 9.5,
+                Foreground = Brushes.Gray,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            DockPanel.SetDock(pie, Dock.Bottom);
+            dockHoja.Children.Add(pie);
+
+            var wrap = new WrapPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+
+            var lote = tarjetas.Skip(pIndex * tarjetasPorHoja).Take(tarjetasPorHoja);
+            foreach (var item in lote)
+            {
+                wrap.Children.Add(CrearTarjetaCodigoImprimible(item.codigo, item.titulo, item.subtitulo, item.colorHex));
+            }
+
+            dockHoja.Children.Add(wrap);
+
+            var hojaCarta = EnvolverEnHojaCartaEstandar(dockHoja);
+            paginasCarta.Add(hojaCarta);
+
+            var sombraHoja = new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = Brushes.Silver,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 0, pIndex < totalPaginas - 1 ? 22 : 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Child = hojaCarta
+            };
+            contenedorPaginas.Children.Add(sombraHoja);
+        }
+
+        var filasCsv = tarjetas
+            .Select(t => new[] { t.codigo, t.titulo, t.subtitulo })
+            .ToList();
+
+        contenedorPaginas.Tag = new DatosExportablesDocumento
+        {
+            TituloDocumento = "CATÁLOGO DE CÓDIGOS DE BARRAS",
+            Subtitulo = "Lebaref | Departamento de Compras",
+            Folio = "CATALOGO-BARRAS",
+            Fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            EncabezadosTabla = new[] { "Código", "Artículo / Herramienta", "Detalle / Ubicación" },
+            FilasTabla = filasCsv,
+            PaginasCarta = paginasCarta
+        };
+
+        AbrirVentanaVistaPreviaCarta(owner, "Catálogo de Códigos de Barras en Hoja Carta", contenedorPaginas);
     }
 
     private static Border CrearTarjetaCodigoImprimible(string codigo, string titulo, string subtitulo, string colorBordeHex)
@@ -687,6 +756,346 @@ public static class BarcodePrintService
         return card;
     }
 
+    private static Border EnvolverEnHojaCartaEstandar(UIElement contenidoInterno)
+    {
+        return new Border
+        {
+            Width = AnchoHojaCartaDip,
+            Height = AltoHojaCartaDip,
+            Background = Brushes.White,
+            Padding = new Thickness(MargenHojaCartaDip),
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true,
+            Child = contenidoInterno
+        };
+    }
+
+    private static double MedirAltoElementoCarta(FrameworkElement elemento)
+    {
+        elemento.Width = AnchoContenidoCartaDip;
+        elemento.Measure(new Size(AnchoContenidoCartaDip, double.PositiveInfinity));
+        return Math.Ceiling(elemento.DesiredSize.Height);
+    }
+
+    private static StackPanel CrearEncabezadoHojaDocumento(
+        string tituloDocumento,
+        string subtitulo,
+        string folioCodigoBarras,
+        string fecha,
+        List<(string etiq, string val)> metadatos,
+        bool esContinuacion)
+    {
+        var panel = new StackPanel { Width = AnchoContenidoCartaDip };
+
+        var topGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = esContinuacion ? $"{tituloDocumento} (Continuación)" : tituloDocumento,
+            FontSize = esContinuacion ? 17 : 20,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+            TextWrapping = TextWrapping.Wrap
+        });
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = subtitulo,
+            FontSize = 11,
+            Foreground = Brushes.DimGray,
+            Margin = new Thickness(0, 2, 0, 3)
+        });
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = $"Fecha de Emisión: {fecha}   |   Folio: {folioCodigoBarras}",
+            FontSize = 10.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.Black
+        });
+        Grid.SetColumn(titleStack, 0);
+        topGrid.Children.Add(titleStack);
+
+        var barcodeBorder = new Border
+        {
+            BorderBrush = Brushes.LightGray,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 5, 10, 5),
+            Background = Brushes.White
+        };
+        var bcStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        bcStack.Children.Add(new Image
+        {
+            Source = CrearImagenCodigoBarras(folioCodigoBarras),
+            Width = esContinuacion ? 180 : 210,
+            Height = esContinuacion ? 38 : 46,
+            Stretch = Stretch.Fill
+        });
+        bcStack.Children.Add(new TextBlock
+        {
+            Text = folioCodigoBarras,
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12,
+            FontWeight = FontWeights.Bold,
+            Foreground = Brushes.Black,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        barcodeBorder.Child = bcStack;
+        Grid.SetColumn(barcodeBorder, 1);
+        topGrid.Children.Add(barcodeBorder);
+
+        panel.Children.Add(topGrid);
+
+        panel.Children.Add(new Border
+        {
+            Height = 2,
+            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+
+        if (!esContinuacion && metadatos.Count > 0)
+        {
+            var metaBorder = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(11),
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            var metaGrid = new Grid();
+            metaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+            metaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            for (int i = 0; i < metadatos.Count; i++)
+            {
+                metaGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var lbl = new TextBlock
+                {
+                    Text = metadatos[i].etiq,
+                    FontWeight = FontWeights.Bold,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+                    Margin = new Thickness(0, 2, 8, 2)
+                };
+                var val = new TextBlock
+                {
+                    Text = metadatos[i].val,
+                    FontSize = 11,
+                    Foreground = Brushes.Black,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 2, 0, 2)
+                };
+                Grid.SetRow(lbl, i);
+                Grid.SetColumn(lbl, 0);
+                Grid.SetRow(val, i);
+                Grid.SetColumn(val, 1);
+                metaGrid.Children.Add(lbl);
+                metaGrid.Children.Add(val);
+            }
+            metaBorder.Child = metaGrid;
+            panel.Children.Add(metaBorder);
+        }
+
+        return panel;
+    }
+
+    private static Grid CrearFilaTablaDocumento(string[] encabezadosTabla, string[] valores, bool esEncabezado, int indiceFilaOriginal)
+    {
+        var rowGrid = new Grid { Width = AnchoContenidoCartaDip };
+        for (int c = 0; c < encabezadosTabla.Length; c++)
+        {
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = c == 2 ? new GridLength(2.4, GridUnitType.Star) : new GridLength(1, GridUnitType.Star)
+            });
+        }
+
+        for (int c = 0; c < encabezadosTabla.Length; c++)
+        {
+            string texto = c < valores.Length ? (valores[c] ?? string.Empty) : string.Empty;
+            if (esEncabezado)
+            {
+                var hCell = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                    Padding = new Thickness(6, 5, 6, 5),
+                    BorderBrush = Brushes.White,
+                    BorderThickness = new Thickness(0, 0, 1, 0)
+                };
+                hCell.Child = new TextBlock
+                {
+                    Text = texto,
+                    Foreground = Brushes.White,
+                    FontWeight = FontWeights.Bold,
+                    FontSize = 10.5,
+                    TextWrapping = TextWrapping.Wrap
+                };
+                Grid.SetColumn(hCell, c);
+                rowGrid.Children.Add(hCell);
+            }
+            else
+            {
+                var cell = new Border
+                {
+                    Background = indiceFilaOriginal % 2 == 0 ? Brushes.White : new SolidColorBrush(Color.FromRgb(248, 250, 252)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+                    BorderThickness = new Thickness(0.5),
+                    Padding = new Thickness(6, 4.5, 6, 4.5)
+                };
+                cell.Child = new TextBlock
+                {
+                    Text = texto,
+                    Foreground = Brushes.Black,
+                    FontSize = 10.2,
+                    TextWrapping = TextWrapping.Wrap
+                };
+                Grid.SetColumn(cell, c);
+                rowGrid.Children.Add(cell);
+            }
+        }
+
+        return rowGrid;
+    }
+
+    private static StackPanel CrearBloqueCierreDocumento(
+        List<(string etiq, string val)> totales,
+        string notas,
+        string firmaIzquierda,
+        string firmaDerecha,
+        string? firmaCentro,
+        string? clausulaLegal)
+    {
+        var bloque = new StackPanel
+        {
+            Width = AnchoContenidoCartaDip,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+
+        var bottomGrid = new Grid { Margin = new Thickness(0, 0, 0, 20) };
+        bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
+        bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var notesBox = new Border
+        {
+            BorderBrush = Brushes.LightGray,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+            Padding = new Thickness(10),
+            Margin = new Thickness(0, 0, 12, 0)
+        };
+        notesBox.Child = new TextBlock
+        {
+            Text = $"Observaciones / Notas:\n{(string.IsNullOrWhiteSpace(notas) ? "Sin observaciones adicionales." : notas)}",
+            FontSize = 10.2,
+            Foreground = Brushes.Black,
+            TextWrapping = TextWrapping.Wrap
+        };
+        Grid.SetColumn(notesBox, 0);
+        bottomGrid.Children.Add(notesBox);
+
+        var totStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        foreach (var (etiq, val) in totales)
+        {
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+            row.Children.Add(new TextBlock
+            {
+                Text = etiq + " ",
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 11,
+                Foreground = Brushes.DarkSlateGray
+            });
+            row.Children.Add(new TextBlock
+            {
+                Text = val,
+                FontWeight = FontWeights.Bold,
+                FontSize = 12,
+                Foreground = Brushes.Black,
+                Width = 115,
+                TextAlignment = TextAlignment.Right
+            });
+            totStack.Children.Add(row);
+        }
+        Grid.SetColumn(totStack, 1);
+        bottomGrid.Children.Add(totStack);
+        bloque.Children.Add(bottomGrid);
+
+        if (!string.IsNullOrWhiteSpace(clausulaLegal))
+        {
+            var legalBox = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(12, 9, 12, 9),
+                Margin = new Thickness(0, 0, 0, 22)
+            };
+            legalBox.Child = new TextBlock
+            {
+                Text = clausulaLegal,
+                FontSize = 9.8,
+                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 14
+            };
+            bloque.Children.Add(legalBox);
+        }
+
+        var sigGrid = new Grid { Margin = new Thickness(0, 24, 0, 4) };
+        if (!string.IsNullOrWhiteSpace(firmaCentro))
+        {
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var sig1 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig1.Child = new TextBlock { Text = firmaIzquierda, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.2, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig1, 0);
+            sigGrid.Children.Add(sig1);
+
+            var sig2 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig2.Child = new TextBlock { Text = firmaCentro, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.2, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig2, 2);
+            sigGrid.Children.Add(sig2);
+
+            var sig3 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig3.Child = new TextBlock { Text = firmaDerecha, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.2, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig3, 4);
+            sigGrid.Children.Add(sig3);
+        }
+        else
+        {
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var sig1 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig1.Child = new TextBlock { Text = firmaIzquierda, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig1, 0);
+            sigGrid.Children.Add(sig1);
+
+            var sig2 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
+            sig2.Child = new TextBlock { Text = firmaDerecha, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(sig2, 2);
+            sigGrid.Children.Add(sig2);
+        }
+
+        bloque.Children.Add(sigGrid);
+        return bloque;
+    }
+
     private static FrameworkElement ConstruirHojaCartaDocumento(
         string tituloDocumento,
         string subtitulo,
@@ -702,296 +1111,177 @@ public static class BarcodePrintService
         string? firmaCentro = null,
         string? clausulaLegal = null)
     {
-        var page = new StackPanel
-        {
-            Width = 760,
-            Background = Brushes.White,
-            Margin = new Thickness(28)
-        };
+        const double altoPiePagina = 26.0;
+        double altoDisponiblePorHoja = AltoContenidoUtilCartaDip - altoPiePagina; // 974 DIPs útiles por hoja
 
-        // Encabezado con Folio y Código de Barras escaneable
-        var topGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
-        topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Medimos encabezados de Página 1 y de Páginas de continuación
+        var muestraEncabezadoP1 = CrearEncabezadoHojaDocumento(tituloDocumento, subtitulo, folioCodigoBarras, fecha, metadatos, false);
+        double altoEncabezadoP1 = MedirAltoElementoCarta(muestraEncabezadoP1);
 
-        var titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        titleStack.Children.Add(new TextBlock
-        {
-            Text = tituloDocumento,
-            FontSize = 20,
-            FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
-        });
-        titleStack.Children.Add(new TextBlock
-        {
-            Text = subtitulo,
-            FontSize = 11.5,
-            Foreground = Brushes.DimGray,
-            Margin = new Thickness(0, 2, 0, 4)
-        });
-        titleStack.Children.Add(new TextBlock
-        {
-            Text = $"Fecha de Emisión: {fecha}",
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = Brushes.Black
-        });
-        Grid.SetColumn(titleStack, 0);
-        topGrid.Children.Add(titleStack);
+        var muestraEncabezadoCont = CrearEncabezadoHojaDocumento(tituloDocumento, subtitulo, folioCodigoBarras, fecha, metadatos, true);
+        double altoEncabezadoCont = MedirAltoElementoCarta(muestraEncabezadoCont);
 
-        var barcodeBorder = new Border
-        {
-            BorderBrush = Brushes.LightGray,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 6, 10, 6),
-            Background = Brushes.White
-        };
-        var bcStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        bcStack.Children.Add(new Image
-        {
-            Source = CrearImagenCodigoBarras(folioCodigoBarras),
-            Width = 210,
-            Height = 48,
-            Stretch = Stretch.Fill
-        });
-        bcStack.Children.Add(new TextBlock
-        {
-            Text = folioCodigoBarras,
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 13,
-            FontWeight = FontWeights.Bold,
-            Foreground = Brushes.Black,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 2, 0, 0)
-        });
-        barcodeBorder.Child = bcStack;
-        Grid.SetColumn(barcodeBorder, 1);
-        topGrid.Children.Add(barcodeBorder);
+        var muestraCabeceraTabla = CrearFilaTablaDocumento(encabezadosTabla, encabezadosTabla, true, 0);
+        double altoCabeceraTabla = MedirAltoElementoCarta(muestraCabeceraTabla);
 
-        page.Children.Add(topGrid);
+        var bloqueCierre = CrearBloqueCierreDocumento(totales, notas, firmaIzquierda, firmaDerecha, firmaCentro, clausulaLegal);
+        double altoBloqueCierre = MedirAltoElementoCarta(bloqueCierre);
 
-        // Línea divisoria azul Windows
-        page.Children.Add(new Border
+        // Pre-medimos cada fila de datos para paginar sin cortar ninguna fila a la mitad
+        var altosFilas = new double[filasTabla.Count];
+        for (int i = 0; i < filasTabla.Count; i++)
         {
-            Height = 2,
-            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
-            Margin = new Thickness(0, 0, 0, 12)
-        });
-
-        // Cuadro de Metadatos
-        var metaBorder = new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(12),
-            Margin = new Thickness(0, 0, 0, 14)
-        };
-        var metaGrid = new Grid();
-        metaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
-        metaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        for (int i = 0; i < metadatos.Count; i++)
-        {
-            metaGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var lbl = new TextBlock
-            {
-                Text = metadatos[i].etiq,
-                FontWeight = FontWeights.Bold,
-                FontSize = 11.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
-                Margin = new Thickness(0, 2, 8, 2)
-            };
-            var val = new TextBlock
-            {
-                Text = metadatos[i].val,
-                FontSize = 11.5,
-                Foreground = Brushes.Black,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 2)
-            };
-            Grid.SetRow(lbl, i);
-            Grid.SetColumn(lbl, 0);
-            Grid.SetRow(val, i);
-            Grid.SetColumn(val, 1);
-            metaGrid.Children.Add(lbl);
-            metaGrid.Children.Add(val);
-        }
-        metaBorder.Child = metaGrid;
-        page.Children.Add(metaBorder);
-
-        // Tabla de Partidas
-        var tableGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
-        for (int c = 0; c < encabezadosTabla.Length; c++)
-        {
-            tableGrid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = c == 2 ? new GridLength(2.4, GridUnitType.Star) : new GridLength(1, GridUnitType.Star)
-            });
+            var filaVisual = CrearFilaTablaDocumento(encabezadosTabla, filasTabla[i], false, i);
+            altosFilas[i] = MedirAltoElementoCarta(filaVisual);
         }
 
-        tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        for (int c = 0; c < encabezadosTabla.Length; c++)
+        // Planificamos qué filas van en cada página Tamaño Carta y en cuál va el bloque de cierre
+        var definicionPaginas = new List<(bool esContinuacion, List<int> indicesFilas, bool incluyeCierre)>();
+
+        int filaActual = 0;
+        bool esPrimeraPagina = true;
+
+        if (filasTabla.Count == 0)
         {
-            var hCell = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
-                Padding = new Thickness(6, 5, 6, 5),
-                BorderBrush = Brushes.White,
-                BorderThickness = new Thickness(0, 0, 1, 0)
-            };
-            hCell.Child = new TextBlock
-            {
-                Text = encabezadosTabla[c],
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.Bold,
-                FontSize = 10.5
-            };
-            Grid.SetRow(hCell, 0);
-            Grid.SetColumn(hCell, c);
-            tableGrid.Children.Add(hCell);
-        }
-
-        for (int r = 0; r < filasTabla.Count; r++)
-        {
-            tableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var rowValues = filasTabla[r];
-            for (int c = 0; c < rowValues.Length && c < encabezadosTabla.Length; c++)
-            {
-                var cell = new Border
-                {
-                    Background = r % 2 == 0 ? Brushes.White : new SolidColorBrush(Color.FromRgb(248, 250, 252)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                    BorderThickness = new Thickness(0.5),
-                    Padding = new Thickness(6, 5, 6, 5)
-                };
-                cell.Child = new TextBlock
-                {
-                    Text = rowValues[c],
-                    Foreground = Brushes.Black,
-                    FontSize = 10.5,
-                    TextWrapping = TextWrapping.Wrap
-                };
-                Grid.SetRow(cell, r + 1);
-                Grid.SetColumn(cell, c);
-                tableGrid.Children.Add(cell);
-            }
-        }
-        page.Children.Add(tableGrid);
-
-        // Totales y Notas
-        var bottomGrid = new Grid { Margin = new Thickness(0, 0, 0, 28) };
-        bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
-        bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var notesBox = new Border
-        {
-            BorderBrush = Brushes.LightGray,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5),
-            Padding = new Thickness(10),
-            Margin = new Thickness(0, 0, 12, 0)
-        };
-        notesBox.Child = new TextBlock
-        {
-            Text = $"Observaciones / Notas:\n{(string.IsNullOrWhiteSpace(notas) ? "Sin observaciones adicionales." : notas)}",
-            FontSize = 10.5,
-            Foreground = Brushes.Black,
-            TextWrapping = TextWrapping.Wrap
-        };
-        Grid.SetColumn(notesBox, 0);
-        bottomGrid.Children.Add(notesBox);
-
-        var totStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        foreach (var (etiq, val) in totales)
-        {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 2) };
-            row.Children.Add(new TextBlock { Text = etiq + " ", FontWeight = FontWeights.SemiBold, FontSize = 11.5, Foreground = Brushes.DarkSlateGray });
-            row.Children.Add(new TextBlock { Text = val, FontWeight = FontWeights.Bold, FontSize = 12.5, Foreground = Brushes.Black, Width = 110, TextAlignment = TextAlignment.Right });
-            totStack.Children.Add(row);
-        }
-        Grid.SetColumn(totStack, 1);
-        bottomGrid.Children.Add(totStack);
-        page.Children.Add(bottomGrid);
-
-        if (!string.IsNullOrWhiteSpace(clausulaLegal))
-        {
-            var legalBox = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(5),
-                Padding = new Thickness(12, 10, 12, 10),
-                Margin = new Thickness(0, 0, 0, 26)
-            };
-            legalBox.Child = new TextBlock
-            {
-                Text = clausulaLegal,
-                FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = 15
-            };
-            page.Children.Add(legalBox);
-        }
-
-        // Líneas de firma (2 o 3 puestos institucionales)
-        var sigGrid = new Grid { Margin = new Thickness(0, 28, 0, 8) };
-        if (!string.IsNullOrWhiteSpace(firmaCentro))
-        {
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var sig1 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
-            sig1.Child = new TextBlock { Text = firmaIzquierda, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(sig1, 0);
-            sigGrid.Children.Add(sig1);
-
-            var sig2 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
-            sig2.Child = new TextBlock { Text = firmaCentro, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(sig2, 2);
-            sigGrid.Children.Add(sig2);
-
-            var sig3 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
-            sig3.Child = new TextBlock { Text = firmaDerecha, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(sig3, 4);
-            sigGrid.Children.Add(sig3);
+            definicionPaginas.Add((false, new List<int>(), true));
         }
         else
         {
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
-            sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            while (filaActual < filasTabla.Count)
+            {
+                double altoEnc = esPrimeraPagina ? altoEncabezadoP1 : altoEncabezadoCont;
+                double presupuestoTabla = altoDisponiblePorHoja - altoEnc - altoCabeceraTabla - 8.0;
+                var filasDeEstaPagina = new List<int>();
+                double acumuladoFilas = 0;
 
-            var sig1 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
-            sig1.Child = new TextBlock { Text = firmaIzquierda, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(sig1, 0);
-            sigGrid.Children.Add(sig1);
+                while (filaActual < filasTabla.Count)
+                {
+                    double altoFila = altosFilas[filaActual];
+                    if (filasDeEstaPagina.Count > 0 && acumuladoFilas + altoFila > presupuestoTabla)
+                    {
+                        break;
+                    }
+                    filasDeEstaPagina.Add(filaActual);
+                    acumuladoFilas += altoFila;
+                    filaActual++;
+                }
 
-            var sig2 = new Border { BorderBrush = Brushes.Black, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0) };
-            sig2.Child = new TextBlock { Text = firmaDerecha, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.Black, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(sig2, 2);
-            sigGrid.Children.Add(sig2);
+                bool esUltimaTandaDeFilas = filaActual >= filasTabla.Count;
+                bool cabeCierreEnEstaHoja = false;
+
+                if (esUltimaTandaDeFilas)
+                {
+                    double espacioRestante = altoDisponiblePorHoja - altoEnc - altoCabeceraTabla - acumuladoFilas - 8.0;
+                    cabeCierreEnEstaHoja = espacioRestante >= altoBloqueCierre;
+                }
+
+                definicionPaginas.Add((!esPrimeraPagina, filasDeEstaPagina, cabeCierreEnEstaHoja));
+                esPrimeraPagina = false;
+
+                if (esUltimaTandaDeFilas && !cabeCierreEnEstaHoja)
+                {
+                    // Agregamos una hoja Carta adicional para que Totales, Notas, Cláusula y Firmas salgan 100% completos
+                    definicionPaginas.Add((true, new List<int>(), true));
+                }
+            }
         }
 
-        page.Children.Add(sigGrid);
+        int totalPaginas = definicionPaginas.Count;
+        var paginasCarta = new List<FrameworkElement>();
+        var contenedorPaginas = new StackPanel { Background = Brushes.Transparent };
 
-        page.Children.Add(new TextBlock
+        for (int pIndex = 0; pIndex < totalPaginas; pIndex++)
         {
-            Text = $"Lebaref | Departamento de Compras — Folio: {folioCodigoBarras}",
-            FontSize = 9.5,
-            Foreground = Brushes.Gray,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 14, 0, 0)
-        });
+            var def = definicionPaginas[pIndex];
 
-        page.Tag = new DatosExportablesDocumento
+            var dockHoja = new DockPanel
+            {
+                Width = AnchoContenidoCartaDip,
+                Height = AltoContenidoUtilCartaDip,
+                LastChildFill = true
+            };
+
+            var piePagina = new TextBlock
+            {
+                Text = $"Lebaref | Departamento de Compras — Folio: {folioCodigoBarras} — Página {pIndex + 1} de {totalPaginas}",
+                FontSize = 9.5,
+                Foreground = Brushes.Gray,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            DockPanel.SetDock(piePagina, Dock.Bottom);
+            dockHoja.Children.Add(piePagina);
+
+            var cuerpoHoja = new StackPanel
+            {
+                Width = AnchoContenidoCartaDip,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+
+            var encabezadoVisual = CrearEncabezadoHojaDocumento(
+                tituloDocumento,
+                subtitulo,
+                folioCodigoBarras,
+                fecha,
+                metadatos,
+                def.esContinuacion);
+            cuerpoHoja.Children.Add(encabezadoVisual);
+
+            if (def.indicesFilas.Count > 0 || pIndex == 0)
+            {
+                var tablaPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+                tablaPanel.Children.Add(CrearFilaTablaDocumento(encabezadosTabla, encabezadosTabla, true, 0));
+
+                foreach (int idxFila in def.indicesFilas)
+                {
+                    tablaPanel.Children.Add(CrearFilaTablaDocumento(encabezadosTabla, filasTabla[idxFila], false, idxFila));
+                }
+
+                if (!def.incluyeCierre && pIndex < totalPaginas - 1)
+                {
+                    tablaPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"Continúa en la página {pIndex + 2} de {totalPaginas}...",
+                        FontSize = 9.5,
+                        FontStyle = FontStyles.Italic,
+                        Foreground = Brushes.DimGray,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Margin = new Thickness(0, 6, 0, 0)
+                    });
+                }
+
+                cuerpoHoja.Children.Add(tablaPanel);
+            }
+
+            if (def.incluyeCierre)
+            {
+                cuerpoHoja.Children.Add(CrearBloqueCierreDocumento(
+                    totales,
+                    notas,
+                    firmaIzquierda,
+                    firmaDerecha,
+                    firmaCentro,
+                    clausulaLegal));
+            }
+
+            dockHoja.Children.Add(cuerpoHoja);
+
+            var hojaCarta = EnvolverEnHojaCartaEstandar(dockHoja);
+            paginasCarta.Add(hojaCarta);
+
+            var sombraHoja = new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = Brushes.Silver,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 0, pIndex < totalPaginas - 1 ? 22 : 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Child = hojaCarta
+            };
+            contenedorPaginas.Children.Add(sombraHoja);
+        }
+
+        contenedorPaginas.Tag = new DatosExportablesDocumento
         {
             TituloDocumento = tituloDocumento,
             Subtitulo = subtitulo,
@@ -1002,10 +1292,11 @@ public static class BarcodePrintService
             FilasTabla = filasTabla,
             Totales = totales,
             Notas = notas,
-            ClausulaLegal = clausulaLegal
+            ClausulaLegal = clausulaLegal,
+            PaginasCarta = paginasCarta
         };
 
-        return page;
+        return contenedorPaginas;
     }
 
     private sealed class DatosExportablesDocumento
@@ -1020,15 +1311,81 @@ public static class BarcodePrintService
         public List<(string etiq, string val)> Totales { get; init; } = new();
         public string Notas { get; init; } = string.Empty;
         public string? ClausulaLegal { get; init; }
+        public List<FrameworkElement> PaginasCarta { get; init; } = new();
+    }
+
+    private static List<FrameworkElement> ObtenerPaginasCarta(FrameworkElement contenidoHojaCarta)
+    {
+        if (contenidoHojaCarta.Tag is DatosExportablesDocumento datos && datos.PaginasCarta.Count > 0)
+        {
+            return datos.PaginasCarta;
+        }
+        return new List<FrameworkElement> { contenidoHojaCarta };
+    }
+
+    // Paginador multipágina oficial para que PrintDialog imprima todas las hojas Tamaño Carta completas
+    private sealed class PaginadorHojasCarta : DocumentPaginator
+    {
+        private readonly IReadOnlyList<FrameworkElement> _paginas;
+        private Size _pageSize;
+
+        public PaginadorHojasCarta(IReadOnlyList<FrameworkElement> paginas, Size pageSize)
+        {
+            _paginas = paginas;
+            _pageSize = pageSize.Width > 0 && pageSize.Height > 0
+                ? pageSize
+                : new Size(AnchoHojaCartaDip, AltoHojaCartaDip);
+        }
+
+        public override bool IsPageCountValid => true;
+        public override int PageCount => _paginas.Count;
+
+        public override Size PageSize
+        {
+            get => _pageSize;
+            set => _pageSize = value;
+        }
+
+        public override IDocumentPaginatorSource? Source => null;
+
+        public override DocumentPage GetPage(int pageNumber)
+        {
+            var rtb = RenderizarElementoHojaCartaBitmap(_paginas[pageNumber], 192.0);
+
+            var img = new Image
+            {
+                Source = rtb,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var contenedorImpresion = new Border
+            {
+                Width = _pageSize.Width,
+                Height = _pageSize.Height,
+                Background = Brushes.White,
+                Child = img
+            };
+
+            contenedorImpresion.Measure(_pageSize);
+            contenedorImpresion.Arrange(new Rect(new Point(0, 0), _pageSize));
+            contenedorImpresion.UpdateLayout();
+
+            return new DocumentPage(contenedorImpresion, _pageSize, new Rect(_pageSize), new Rect(_pageSize));
+        }
     }
 
     private static void AbrirVentanaVistaPreviaCarta(Window owner, string tituloVentana, FrameworkElement contenidoHojaCarta)
     {
+        var paginas = ObtenerPaginasCarta(contenidoHojaCarta);
+        int numHojas = paginas.Count;
+
         var win = new Window
         {
-            Title = $"Lebaref | {tituloVentana}",
-            Width = 900,
-            Height = 760,
+            Title = $"Lebaref | {tituloVentana} ({numHojas} {(numHojas == 1 ? "Hoja Carta" : "Hojas Carta")})",
+            Width = 910,
+            Height = 780,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = owner,
             Background = new SolidColorBrush(Color.FromRgb(226, 232, 240))
@@ -1069,7 +1426,7 @@ public static class BarcodePrintService
 
         var btnPrint = new Button
         {
-            Content = "Imprimir",
+            Content = numHojas > 1 ? $"Imprimir ({numHojas} Hojas Carta)" : "Imprimir (Tamaño Carta)",
             Padding = new Thickness(18, 7, 18, 7),
             FontWeight = FontWeights.Bold,
             Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
@@ -1081,7 +1438,9 @@ public static class BarcodePrintService
             var dlg = new PrintDialog();
             if (dlg.ShowDialog() == true)
             {
-                dlg.PrintVisual(contenidoHojaCarta, tituloVentana);
+                var tamanoImpresora = new Size(dlg.PrintableAreaWidth, dlg.PrintableAreaHeight);
+                var paginador = new PaginadorHojasCarta(paginas, tamanoImpresora);
+                dlg.PrintDocument(paginador, tituloVentana);
             }
         };
         actionsPanel.Children.Add(btnPrint);
@@ -1091,10 +1450,10 @@ public static class BarcodePrintService
 
         var lblInfo = new TextBlock
         {
-            Text = tituloVentana,
+            Text = $"{tituloVentana}   •   Formato Carta (8.5\" x 11\") — {numHojas} {(numHojas == 1 ? "página" : "páginas")}",
             Foreground = Brushes.White,
             FontWeight = FontWeights.SemiBold,
-            FontSize = 14,
+            FontSize = 13.5,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -1111,18 +1470,8 @@ public static class BarcodePrintService
             Padding = new Thickness(20)
         };
 
-        var paperBorder = new Border
-        {
-            Background = Brushes.White,
-            Width = 816,
-            MinHeight = 1020,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            BorderBrush = Brushes.Silver,
-            BorderThickness = new Thickness(1),
-            Child = contenidoHojaCarta
-        };
-
-        scroll.Content = paperBorder;
+        contenidoHojaCarta.HorizontalAlignment = HorizontalAlignment.Center;
+        scroll.Content = contenidoHojaCarta;
         root.Children.Add(scroll);
 
         win.Content = root;
@@ -1140,7 +1489,7 @@ public static class BarcodePrintService
             Title = "Descargar / Guardar Documento",
             FileName = $"{nombreLimpio}.pdf",
             DefaultExt = ".pdf",
-            Filter = "Documento PDF (*.pdf)|*.pdf|Imagen PNG de Alta Resolución (*.png)|*.png|Archivo CSV para Excel (*.csv)|*.csv"
+            Filter = "Documento PDF Tamaño Carta (*.pdf)|*.pdf|Imagen PNG de Alta Resolución (*.png)|*.png|Archivo CSV para Excel (*.csv)|*.csv"
         };
 
         if (dlg.ShowDialog(owner) != true)
@@ -1187,32 +1536,14 @@ public static class BarcodePrintService
         }
     }
 
-    private static RenderTargetBitmap RenderizarHojaCartaBitmap(FrameworkElement contenidoHojaCarta, double dpi = 192.0)
+    private static RenderTargetBitmap RenderizarElementoHojaCartaBitmap(FrameworkElement hojaCarta, double dpi = 192.0)
     {
-        FrameworkElement target = contenidoHojaCarta;
-        Border? tempWrapper = null;
+        double widthDip = AnchoHojaCartaDip;
+        double heightDip = AltoHojaCartaDip;
 
-        if (contenidoHojaCarta.Parent is Border parentBorder)
-        {
-            target = parentBorder;
-        }
-        else if (contenidoHojaCarta.Parent == null)
-        {
-            tempWrapper = new Border
-            {
-                Background = Brushes.White,
-                Width = 816,
-                MinHeight = 1020,
-                Child = contenidoHojaCarta
-            };
-            target = tempWrapper;
-        }
-
-        double widthDip = target.ActualWidth > 100 ? target.ActualWidth : 816;
-        target.Measure(new Size(widthDip, double.PositiveInfinity));
-        double heightDip = Math.Max(1020, target.DesiredSize.Height);
-        target.Arrange(new Rect(0, 0, widthDip, heightDip));
-        target.UpdateLayout();
+        hojaCarta.Measure(new Size(widthDip, heightDip));
+        hojaCarta.Arrange(new Rect(0, 0, widthDip, heightDip));
+        hojaCarta.UpdateLayout();
 
         int pixelWidth = Math.Max(1, (int)Math.Round(widthDip * dpi / 96.0));
         int pixelHeight = Math.Max(1, (int)Math.Round(heightDip * dpi / 96.0));
@@ -1221,7 +1552,7 @@ public static class BarcodePrintService
         using (var dc = dv.RenderOpen())
         {
             dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, widthDip, heightDip));
-            var vb = new VisualBrush(target)
+            var vb = new VisualBrush(hojaCarta)
             {
                 Stretch = Stretch.None,
                 AlignmentX = AlignmentX.Left,
@@ -1232,42 +1563,58 @@ public static class BarcodePrintService
 
         var rtb = new RenderTargetBitmap(pixelWidth, pixelHeight, dpi, dpi, PixelFormats.Pbgra32);
         rtb.Render(dv);
-
-        if (tempWrapper != null)
-        {
-            tempWrapper.Child = null;
-        }
-
         return rtb;
     }
 
     private static void ExportarDocumentoComoPng(string rutaArchivo, FrameworkElement contenidoHojaCarta)
     {
-        var rtb = RenderizarHojaCartaBitmap(contenidoHojaCarta, 192.0);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(rtb));
-        using var fs = new FileStream(rutaArchivo, FileMode.Create, FileAccess.Write);
-        encoder.Save(fs);
+        var paginas = ObtenerPaginasCarta(contenidoHojaCarta);
+        const double dpi = 192.0;
+
+        if (paginas.Count == 1)
+        {
+            var rtb = RenderizarElementoHojaCartaBitmap(paginas[0], dpi);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(rtb));
+            using var fs = new FileStream(rutaArchivo, FileMode.Create, FileAccess.Write);
+            encoder.Save(fs);
+            return;
+        }
+
+        // Si tiene múltiples páginas, las apilamos verticalmente con una línea divisoria gris para que el PNG contenga todas las hojas completas
+        var bitmaps = paginas.Select(p => RenderizarElementoHojaCartaBitmap(p, dpi)).ToList();
+        int widthPx = bitmaps[0].PixelWidth;
+        int gapPx = 24;
+        int totalHeightPx = bitmaps.Sum(b => b.PixelHeight) + (gapPx * (bitmaps.Count - 1));
+
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(226, 232, 240)), null, new Rect(0, 0, widthPx, totalHeightPx));
+            int yOffset = 0;
+            foreach (var bmp in bitmaps)
+            {
+                dc.DrawImage(bmp, new Rect(0, yOffset, bmp.PixelWidth, bmp.PixelHeight));
+                yOffset += bmp.PixelHeight + gapPx;
+            }
+        }
+
+        var combinado = new RenderTargetBitmap(widthPx, totalHeightPx, 96.0, 96.0, PixelFormats.Pbgra32);
+        combinado.Render(dv);
+
+        var pngEncoder = new PngBitmapEncoder();
+        pngEncoder.Frames.Add(BitmapFrame.Create(combinado));
+        using var fsOut = new FileStream(rutaArchivo, FileMode.Create, FileAccess.Write);
+        pngEncoder.Save(fsOut);
     }
 
     private static void ExportarDocumentoComoPdf(string rutaArchivo, FrameworkElement contenidoHojaCarta)
     {
-        var rtb = RenderizarHojaCartaBitmap(contenidoHojaCarta, 192.0);
-        var jpegEncoder = new JpegBitmapEncoder { QualityLevel = 94 };
-        jpegEncoder.Frames.Add(BitmapFrame.Create(rtb));
+        var paginas = ObtenerPaginasCarta(contenidoHojaCarta);
 
-        using var msImg = new MemoryStream();
-        jpegEncoder.Save(msImg);
-        byte[] jpegBytes = msImg.ToArray();
-
-        int imgW = rtb.PixelWidth;
-        int imgH = rtb.PixelHeight;
-
-        // Página tamaño Carta en puntos PDF (72 pt/in): 612 pt ancho, alto proporcional (mínimo 792 pt)
-        double pageW = 612.0;
-        double pageH = Math.Max(792.0, Math.Round(pageW * imgH / Math.Max(1.0, imgW), 2));
-        string pageWStr = pageW.ToString("0.##", CultureInfo.InvariantCulture);
-        string pageHStr = pageH.ToString("0.##", CultureInfo.InvariantCulture);
+        // Página tamaño Carta exacta en puntos PDF (72 pt/in): 612 x 792 pt (8.5" x 11.0")
+        const string pageWStr = "612";
+        const string pageHStr = "792";
 
         using var fs = new FileStream(rutaArchivo, FileMode.Create, FileAccess.Write);
         var offsets = new List<long>();
@@ -1280,33 +1627,58 @@ public static class BarcodePrintService
 
         WriteAscii("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
 
-        // 1: Catalog
+        // Objeto 1: Catalog
         offsets.Add(fs.Position);
         WriteAscii("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
 
-        // 2: Pages
-        offsets.Add(fs.Position);
-        WriteAscii("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+        // Cada página pIndex (0..N-1) utiliza 3 objetos PDF:
+        // pageObjId = 3 + (pIndex * 3)
+        // imgObjId  = 4 + (pIndex * 3)
+        // cntObjId  = 5 + (pIndex * 3)
+        var kidsRefs = Enumerable.Range(0, paginas.Count)
+            .Select(i => $"{3 + (i * 3)} 0 R");
 
-        // 3: Page
+        // Objeto 2: Pages (raíz de todas las hojas Tamaño Carta)
         offsets.Add(fs.Position);
-        WriteAscii($"3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /XObject << /Im0 4 0 R >> >> /MediaBox [0 0 {pageWStr} {pageHStr}] /Contents 5 0 R >>\nendobj\n");
+        WriteAscii($"2 0 obj\n<< /Type /Pages /Kids [{string.Join(" ", kidsRefs)}] /Count {paginas.Count} >>\nendobj\n");
 
-        // 4: Image XObject (DCTDecode / JPEG)
-        offsets.Add(fs.Position);
-        WriteAscii($"4 0 obj\n<< /Type /XObject /Subtype /Image /Width {imgW} /Height {imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpegBytes.Length} >>\nstream\n");
-        fs.Write(jpegBytes, 0, jpegBytes.Length);
-        WriteAscii("\nendstream\nendobj\n");
+        for (int i = 0; i < paginas.Count; i++)
+        {
+            var rtb = RenderizarElementoHojaCartaBitmap(paginas[i], 192.0);
+            var jpegEncoder = new JpegBitmapEncoder { QualityLevel = 94 };
+            jpegEncoder.Frames.Add(BitmapFrame.Create(rtb));
 
-        // 5: Content stream
-        string contentCmd = $"q\n{pageWStr} 0 0 {pageHStr} 0 0 cm\n/Im0 Do\nQ\n";
-        byte[] contentBytes = Encoding.ASCII.GetBytes(contentCmd);
-        offsets.Add(fs.Position);
-        WriteAscii($"5 0 obj\n<< /Length {contentBytes.Length} >>\nstream\n");
-        fs.Write(contentBytes, 0, contentBytes.Length);
-        WriteAscii("endstream\nendobj\n");
+            using var msImg = new MemoryStream();
+            jpegEncoder.Save(msImg);
+            byte[] jpegBytes = msImg.ToArray();
 
-        // xref
+            int imgW = rtb.PixelWidth;
+            int imgH = rtb.PixelHeight;
+
+            int pageObjId = 3 + (i * 3);
+            int imgObjId = 4 + (i * 3);
+            int cntObjId = 5 + (i * 3);
+
+            // Page object
+            offsets.Add(fs.Position);
+            WriteAscii($"{pageObjId} 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /XObject << /Im0 {imgObjId} 0 R >> >> /MediaBox [0 0 {pageWStr} {pageHStr}] /Contents {cntObjId} 0 R >>\nendobj\n");
+
+            // Image XObject
+            offsets.Add(fs.Position);
+            WriteAscii($"{imgObjId} 0 obj\n<< /Type /XObject /Subtype /Image /Width {imgW} /Height {imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {jpegBytes.Length} >>\nstream\n");
+            fs.Write(jpegBytes, 0, jpegBytes.Length);
+            WriteAscii("\nendstream\nendobj\n");
+
+            // Content stream
+            string contentCmd = $"q\n{pageWStr} 0 0 {pageHStr} 0 0 cm\n/Im0 Do\nQ\n";
+            byte[] contentBytes = Encoding.ASCII.GetBytes(contentCmd);
+            offsets.Add(fs.Position);
+            WriteAscii($"{cntObjId} 0 obj\n<< /Length {contentBytes.Length} >>\nstream\n");
+            fs.Write(contentBytes, 0, contentBytes.Length);
+            WriteAscii("endstream\nendobj\n");
+        }
+
+        // Tabla xref
         long xrefPos = fs.Position;
         WriteAscii($"xref\n0 {offsets.Count + 1}\n");
         WriteAscii("0000000000 65535 f \n");
