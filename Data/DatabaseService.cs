@@ -406,6 +406,7 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         MigrarCategoriasYReclasificarCatalogo(conn);
         AutoAsignarFamiliasInicialesSiVacio(conn);
         EstandarizarUnidadesMedidaEnBaseDatos(conn);
+        SincronizarHerramientasCatalogoConDirectorio(conn);
         conn.Close();
         SincronizarFacturasYOrdenesExistentes();
     }
@@ -1745,20 +1746,136 @@ WHERE Id = $id;";
             mark.ExecuteNonQuery();
         }
 
-        // Asegurar que artículos consumibles, EPP, limpieza o papelería (Categoría <> 4) que no tienen activos individuales HER-xxxx no queden marcados como EsHerramienta=1 por error
+        // Asegurar que artículos consumibles, EPP o limpieza que no tienen activos individuales HER-xxxx no queden marcados como EsHerramienta=1 por error,
+        // pero conservando cualquier artículo que el usuario haya marcado legítimamente como herramienta.
         using (var fixHer = conn.CreateCommand())
         {
             fixHer.Transaction = tx;
             fixHer.CommandText = @"
 UPDATE Productos
+SET CategoriaId = 8, EsHerramienta = 0
+WHERE (UPPER(Nombre) LIKE '%CASCO%'
+    OR UPPER(Nombre) LIKE '%GUANTE%'
+    OR UPPER(Nombre) LIKE '%CHALECO%'
+    OR UPPER(Nombre) LIKE '%ALTA VISIBILIDAD%'
+    OR UPPER(Nombre) LIKE '%ALTA VISIBILIAD%'
+    OR UPPER(Nombre) LIKE '%CONO DE PRECAUCI%'
+    OR UPPER(Nombre) LIKE '%RESPIRADOR%')
+  AND Id NOT IN (SELECT DISTINCT ProductoId FROM HerramientasActivos);
+
+UPDATE Productos
 SET EsHerramienta = 0
-WHERE CategoriaId <> 4
-  AND EsHerramienta = 1
-  AND Id NOT IN (SELECT DISTINCT ProductoId FROM HerramientasActivos);";
+WHERE UPPER(Nombre) LIKE '%FUMIGADOR%'
+  AND Id NOT IN (SELECT DISTINCT ProductoId FROM HerramientasActivos);
+
+UPDATE Productos
+SET CategoriaId = 4
+WHERE (UPPER(Nombre) LIKE '%VACUOMETRO%'
+    OR UPPER(Nombre) LIKE '%VACUÓMETRO%'
+    OR UPPER(Nombre) LIKE '%ESCALERA%'
+    OR UPPER(Nombre) LIKE '%MEDIDOR DE TEMPERATURA%'
+    OR UPPER(Nombre) LIKE '%HIDROLAVADORA%');";
             fixHer.ExecuteNonQuery();
         }
 
         tx.Commit();
+    }
+
+    public static void SincronizarHerramientasCatalogoConDirectorio(SqliteConnection? connExterna = null)
+    {
+        bool cerrar = false;
+        SqliteConnection conn;
+        if (connExterna != null)
+        {
+            conn = connExterna;
+        }
+        else
+        {
+            conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            cerrar = true;
+        }
+
+        try
+        {
+            int maxNum = 0;
+            var conteoPorProducto = new Dictionary<int, int>();
+
+            using (var cmdHer = conn.CreateCommand())
+            {
+                cmdHer.CommandText = "SELECT ProductoId, CodigoIndividual FROM HerramientasActivos;";
+                using var r = cmdHer.ExecuteReader();
+                while (r.Read())
+                {
+                    int pid = r.GetInt32(0);
+                    string cod = r.IsDBNull(1) ? string.Empty : r.GetString(1);
+                    conteoPorProducto[pid] = conteoPorProducto.TryGetValue(pid, out int c) ? c + 1 : 1;
+
+                    if (cod.StartsWith("HER-", StringComparison.OrdinalIgnoreCase) &&
+                        int.TryParse(cod[4..].Trim(), out int n) && n > maxNum)
+                    {
+                        maxNum = n;
+                    }
+                }
+            }
+
+            var herramientasSinRegistro = new List<(int Id, string Nombre, string Marca, string Modelo, string Ubicacion)>();
+            using (var cmdProd = conn.CreateCommand())
+            {
+                cmdProd.CommandText = @"
+SELECT Id, Nombre, COALESCE(Marca, ''), COALESCE(Modelo, ''), COALESCE(Ubicacion, 'Gabinete H-1')
+FROM Productos
+WHERE EsHerramienta = 1
+ORDER BY Id;";
+                using var rp = cmdProd.ExecuteReader();
+                while (rp.Read())
+                {
+                    int pid = rp.GetInt32(0);
+                    if (!conteoPorProducto.ContainsKey(pid))
+                    {
+                        herramientasSinRegistro.Add((
+                            pid,
+                            rp.GetString(1),
+                            rp.GetString(2),
+                            rp.GetString(3),
+                            rp.GetString(4)));
+                    }
+                }
+            }
+
+            if (herramientasSinRegistro.Count == 0)
+                return;
+
+            using var tx = conn.BeginTransaction();
+            foreach (var h in herramientasSinRegistro)
+            {
+                maxNum++;
+                string codigo = $"HER-{maxNum:D4}";
+                string marcaModelo = $"{h.Marca} {h.Modelo}".Trim();
+                if (string.IsNullOrWhiteSpace(marcaModelo))
+                    marcaModelo = h.Nombre;
+                string ubicacion = string.IsNullOrWhiteSpace(h.Ubicacion) || h.Ubicacion == "A-01"
+                    ? "Gabinete H-1"
+                    : h.Ubicacion;
+
+                using var ins = conn.CreateCommand();
+                ins.Transaction = tx;
+                ins.CommandText = @"
+INSERT INTO HerramientasActivos (ProductoId, CodigoIndividual, NumeroSerie, MarcaModelo, Estado, Ubicacion, EncargadoActual, ProyectoActual, NotasEstado)
+VALUES ($pid, $cod, 'S/N', $mm, 'Disponible', $ub, '', '', 'Sincronizada desde Catálogo de Herramientas');";
+                ins.Parameters.AddWithValue("$pid", h.Id);
+                ins.Parameters.AddWithValue("$cod", codigo);
+                ins.Parameters.AddWithValue("$mm", marcaModelo);
+                ins.Parameters.AddWithValue("$ub", ubicacion);
+                ins.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
+        finally
+        {
+            if (cerrar)
+                conn.Close();
+        }
     }
 
     public static (int CategoriaId, string Marca, string Modelo, string Medidas, string CapacidadElectrica, string Especificacion1, string Especificacion2)
@@ -1790,7 +1907,7 @@ WHERE CategoriaId <> 4
         if (ContieneAlguno(u, "AUTOVÍA", "AUTOVIA", "PEAJE", "NRU ", "CASETA", "FLETE"))
             return 11; // Servicios, Peajes y Gastos Operativos
 
-        if (ContieneAlguno(u, "CASCO DE SEGURIDAD", "BARBOQUEJO", "LENTES DE SEGURIDAD", "LENTE CON RECUBRIMIENTO", "GUANTE", "PONCHO UNITALLA", "BANDA DE PLÁSTICOPROHIBIDO", "PROHIBIDO"))
+        if (ContieneAlguno(u, "CASCO DE SEGURIDAD", "BARBOQUEJO", "LENTES DE SEGURIDAD", "LENTE CON RECUBRIMIENTO", "GUANTE", "PONCHO UNITALLA", "BANDA DE PLÁSTICOPROHIBIDO", "PROHIBIDO", "CHALECO", "ALTA VISIBILIDAD", "ALTA VISIBILIAD", "CONO DE PRECAUCIÓN", "CONO DE PRECAUCION", "RESPIRADOR"))
             return 8; // Seguridad Industrial y EPP
 
         if (ContieneAlguno(u, "CARPETA", "FOLDER", "ENGARGO", "OPALINA", "BOLIG", "LECTOR TARJETAS CLIP", "STARLINK", "GATORADE", "SPLENDA", "TENEDORES", "CUCHASOP", "SERVILLETA", "SERVI BOLSA"))
@@ -1816,7 +1933,7 @@ WHERE CategoriaId <> 4
         if (ContieneAlguno(u, "VARITA DE PLATA", "SOLDADURA DE PLATA", "PASTA FUNDENTE", "FUNDENTE", "TANGIT", "PEGAMENTO PARA PVC", "LIJA", "DISCOS DE LIJA", "CINTA TEFLON", "CINTA PARA DUCTO", "CINTA DE ALUMINIO", "SCOTCH CINTA DE MONTAJE", "SOLVENTE DIELECTRICO", "ALCOHOL ISOPROPILICO", "LUBRICANTE", "GRASA AUTOMOTRIZ", "ÁCIDO MURIATICO", "ACIDO MURIATICO", "ESTOPA", "PASTILLAS SAL"))
             return 7; // Soldadura, Químicos y Consumibles Técnicos
 
-        if (ContieneAlguno(u, "FLEXOMETRO", "VENTILADOR PEDESTAL", "SOPLADORA", "DESARMADOR", "ASPIRADORA", "HIDROLAVADORA", "LAVA-1500P", "ESCOBA JAR", "ESCOBA METÁLICA", "PUNTAS DE IMPACTO", "DADOS MAG", "SEGUETA", "BROQUERO", "BROCA", "MULTÍMETRO", "MULTIMETRO", "CABLES DE PRUEBA", "MACHETE", "PALA CUADRADA", "LINTERNA", "LAMPARA PORTATIL"))
+        if (ContieneAlguno(u, "FLEXOMETRO", "VENTILADOR PEDESTAL", "SOPLADORA", "DESARMADOR", "ASPIRADORA", "HIDROLAVADORA", "LAVA-1500P", "ESCOBA JAR", "ESCOBA METÁLICA", "PUNTAS DE IMPACTO", "DADOS MAG", "SEGUETA", "BROQUERO", "BROCA", "MULTÍMETRO", "MULTIMETRO", "VACUOMETRO", "VACUÓMETRO", "MANOMETRO", "MANÓMETRO", "MEDIDOR DE TEMPERATURA", "ESCALERA", "TALADRO", "ROTOMARTILLO", "ESMERIL", "CABLES DE PRUEBA", "MACHETE", "PALA CUADRADA", "LINTERNA", "LAMPARA PORTATIL", "LAMPARA DE TRABAJO", "LÁMPARA DE TRABAJO"))
             return 4; // Herramientas, Medición y Maquinaria
 
         return 2; // Eléctrico, Iluminación y Control
@@ -2056,6 +2173,14 @@ VALUES ($pid, $ci, $ns, $mm, $est, $ubi, '', '', $not)";
         cmd.Parameters.AddWithValue("$ubi", h.Ubicacion.Trim());
         cmd.Parameters.AddWithValue("$not", h.NotasEstado.Trim());
         cmd.ExecuteNonQuery();
+
+        if (h.ProductoId > 0)
+        {
+            using var upProd = conn.CreateCommand();
+            upProd.CommandText = "UPDATE Productos SET EsHerramienta = 1 WHERE Id = $pid;";
+            upProd.Parameters.AddWithValue("$pid", h.ProductoId);
+            upProd.ExecuteNonQuery();
+        }
     }
 
     public static void EliminarHerramientaActivo(int id)

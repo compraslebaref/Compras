@@ -513,7 +513,11 @@ public partial class MainWindow : FluentWindow
             CboAltaEncargadoDepto.SelectedItem = (_encargadoEditandoId > 0 && encDepPrev > 0) ? deptos.FirstOrDefault(d => d.Id == encDepPrev) : null;
 
             int dirHerProdPrev = (CboDirHerProducto.SelectedItem as Producto)?.Id ?? 0;
-            var prodsHer = productos.Where(p => p.EsHerramienta).ToList();
+            var prodsHer = productos
+                .OrderByDescending(p => p.EsHerramienta)
+                .ThenByDescending(p => p.CategoriaId == 4)
+                .ThenBy(p => p.Nombre)
+                .ToList();
             CboDirHerProducto.ItemsSource = prodsHer;
             CboDirHerProducto.SelectedItem = (_herramientaEditandoId > 0 && dirHerProdPrev > 0) ? prodsHer.FirstOrDefault(p => p.Id == dirHerProdPrev) : null;
         }
@@ -1789,6 +1793,7 @@ public partial class MainWindow : FluentWindow
 
         ImgPreviewProducto.Source = ImageStandardizerService.CargarImagenSegura(p.ImagenRuta);
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(p.CodigoEfectivo);
+        ActualizarEtiquetasUnidadesYConversionProducto();
         ActualizarSeleccionCatalogo();
         ActualizarBannerModoEditorProducto(p);
     }
@@ -1824,6 +1829,7 @@ public partial class MainWindow : FluentWindow
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = null;
         ActualizarEtiquetasFichaPorCategoria(null);
+        ActualizarEtiquetasUnidadesYConversionProducto();
         ActualizarSeleccionCatalogo();
         ActualizarBannerModoEditorProducto(null);
     }
@@ -1860,8 +1866,51 @@ public partial class MainWindow : FluentWindow
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(sig);
         ActualizarEtiquetasFichaPorCategoria(null);
+        ActualizarEtiquetasUnidadesYConversionProducto();
         ActualizarSeleccionCatalogo();
         ActualizarBannerModoEditorProducto(null);
+    }
+
+    private void UnidadOFactorProducto_Changed(object sender, EventArgs e)
+    {
+        if (!IsLoaded) return;
+        ActualizarEtiquetasUnidadesYConversionProducto();
+    }
+
+    private void TxtProdFactorOCosto_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        ActualizarEtiquetasUnidadesYConversionProducto();
+    }
+
+    private void ActualizarEtiquetasUnidadesYConversionProducto()
+    {
+        if (LblProdExistenciaUnidad == null || LblProdStockMinUnidad == null || LblProdCostoUnidad == null || TxtResumenConversionProducto == null)
+            return;
+
+        string uCompraRaw = (TxtProdUnidadCompra?.SelectedItem as string) ?? TxtProdUnidadCompra?.Text ?? string.Empty;
+        string uEntregaRaw = (TxtProdUnidadAlmacen?.SelectedItem as string) ?? TxtProdUnidadAlmacen?.Text ?? string.Empty;
+
+        string uCompra = string.IsNullOrWhiteSpace(uCompraRaw) ? "Unid. Compra" : DatabaseService.NormalizarUnidadMedida(uCompraRaw);
+        string uEntrega = string.IsNullOrWhiteSpace(uEntregaRaw) ? "Unid. Entrega" : DatabaseService.NormalizarUnidadMedida(uEntregaRaw);
+
+        decimal factor = Math.Max(1m, ParseDecimal(TxtProdFactor?.Text, 1m));
+        decimal costoCompra = ParseDecimal(TxtProdCosto?.Text, 0m);
+        decimal costoEntrega = factor > 0 ? Math.Round(costoCompra / factor, 2) : costoCompra;
+
+        LblProdExistenciaUnidad.Text = $"Existencia (en {uEntrega})";
+        LblProdStockMinUnidad.Text = $"Stock Mín. ({uEntrega})";
+        LblProdCostoUnidad.Text = $"Costo x {uCompra} (c/IVA)";
+
+        if (factor > 1m || !string.Equals(uCompra, uEntrega, StringComparison.OrdinalIgnoreCase))
+        {
+            string costoTxt = costoCompra > 0m ? $" | Costo x {uEntrega}: {costoEntrega:C2}" : string.Empty;
+            TxtResumenConversionProducto.Text = $"💡 1 {uCompra} (Compra) = {factor:0.##} {uEntrega} (Entrega en almacén). Existencia expresada en {uEntrega}{costoTxt}";
+        }
+        else
+        {
+            TxtResumenConversionProducto.Text = $"💡 Relación 1 a 1: Compras por {uCompra} y la Existencia se controla en {uEntrega}.";
+        }
     }
 
     private void ActualizarBannerModoEditorProducto(Producto? prodEditando)
@@ -1968,6 +2017,9 @@ public partial class MainWindow : FluentWindow
             catId = autoInfo.CategoriaId > 0 ? autoInfo.CategoriaId : 1;
         }
 
+        bool eraHerramientaAntes = _productoEnEdicion.Id > 0 &&
+                                   DatabaseService.ObtenerHerramientas().Any(h => h.ProductoId == _productoEnEdicion.Id);
+
         _productoEnEdicion.CodigoInterno = codInterno;
         _productoEnEdicion.CodigoBarras = codBarras;
         _productoEnEdicion.Nombre = TxtProdNombre.Text.Trim();
@@ -1991,13 +2043,529 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.Ubicacion = string.IsNullOrWhiteSpace(TxtProdUbicacion.Text) ? "A-01" : TxtProdUbicacion.Text.Trim();
         _productoEnEdicion.EsHerramienta = ChkProdEsHerramienta.IsChecked == true;
 
+        Producto? prodGuardado = null;
         await EjecutarConIndicadorCargaAsync("Guardando producto...", () =>
         {
+            int idGuardado = DatabaseService.GuardarProducto(_productoEnEdicion);
+            _productoEnEdicion.Id = idGuardado;
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            prodGuardado = _cacheProductos.FirstOrDefault(x => x.Id == idGuardado) ?? _productoEnEdicion;
+            CargarProductoEnEditor(prodGuardado);
+        });
+
+        if (prodGuardado != null && prodGuardado.EsHerramienta && !eraHerramientaAntes)
+        {
+            int cantSugerida = Math.Max(1, (int)Math.Round(prodGuardado.StockActual));
+            MostrarModalRegistroHerramienta(prodGuardado, cantSugerida);
+        }
+    }
+
+    private void ChkProdEsHerramienta_Click(object sender, RoutedEventArgs e)
+    {
+        if (ChkProdEsHerramienta.IsChecked != true)
+            return;
+
+        if (_productoEnEdicion.Id > 0)
+        {
+            _productoEnEdicion.EsHerramienta = true;
             DatabaseService.GuardarProducto(_productoEnEdicion);
             CargarTodoElSistema(conservarPosicionCatalogo: true);
             var actualizado = _cacheProductos.FirstOrDefault(x => x.Id == _productoEnEdicion.Id) ?? _productoEnEdicion;
-            CargarProductoEnEditor(actualizado);
+            int cantSug = Math.Max(1, (int)Math.Round(actualizado.StockActual));
+            MostrarModalRegistroHerramienta(actualizado, cantSug);
+        }
+        else if (!string.IsNullOrWhiteSpace(TxtProdNombre.Text))
+        {
+            BtnGuardarProducto_Click(sender, e);
+        }
+    }
+
+    private void BtnConfigurarHerramientaCatalogo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_productoEnEdicion.Id > 0)
+        {
+            if (!_productoEnEdicion.EsHerramienta)
+            {
+                ChkProdEsHerramienta.IsChecked = true;
+                _productoEnEdicion.EsHerramienta = true;
+                DatabaseService.GuardarProducto(_productoEnEdicion);
+                CargarTodoElSistema(conservarPosicionCatalogo: true);
+            }
+            var actualizado = _cacheProductos.FirstOrDefault(x => x.Id == _productoEnEdicion.Id) ?? _productoEnEdicion;
+            int cantSug = Math.Max(1, (int)Math.Round(actualizado.StockActual));
+            MostrarModalRegistroHerramienta(actualizado, cantSug);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(TxtProdNombre.Text))
+        {
+            ChkProdEsHerramienta.IsChecked = true;
+            BtnGuardarProducto_Click(sender, e);
+            return;
+        }
+
+        MostrarModalRegistroHerramienta(null, 1);
+    }
+
+    private void MostrarModalRegistroHerramienta(Producto? prodPreseleccionado, int cantidadSugerida = 1)
+    {
+        var todosProductos = DatabaseService.ObtenerProductos()
+            .OrderByDescending(p => p.EsHerramienta)
+            .ThenByDescending(p => p.CategoriaId == 4)
+            .ThenBy(p => p.Nombre)
+            .ToList();
+
+        if (todosProductos.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "No hay productos en el catálogo.", "Catálogo vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Registro de Información de Herramienta en Almacén (Directorio HER-xxxx)",
+            Width = 860,
+            Height = 620,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+        };
+
+        var root = new Grid { Margin = new Thickness(18) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Título
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Selector Producto
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Tabla HER existentes
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Formulario edición/alta
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Botones inferiores
+
+        // 1. Encabezado
+        var headerStack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        headerStack.Children.Add(new TextBlock
+        {
+            Text = "🔧 Ficha de Herramienta para Resguardo y Préstamo en Almacén",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
         });
+        headerStack.Children.Add(new TextBlock
+        {
+            Text = "Capture o actualice el Código Individual (HER-xxxx), Número de Serie, Marca/Modelo, Ubicación en Gabinete y Estado. Esta información se sincroniza automáticamente con el Directorio de Herramientas y con el módulo de Préstamos.",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        Grid.SetRow(headerStack, 0);
+        root.Children.Add(headerStack);
+
+        // 2. Selector de Producto del Catálogo
+        var prodBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 8, 12, 8),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var prodGrid = new Grid();
+        prodGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        prodGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        prodGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        prodGrid.Children.Add(new TextBlock
+        {
+            Text = "Producto de Catálogo:",
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0)
+        });
+
+        var cboProd = new ComboBox
+        {
+            ItemsSource = todosProductos,
+            IsEditable = false,
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+        Grid.SetColumn(cboProd, 1);
+        prodGrid.Children.Add(cboProd);
+
+        var lblResumenStock = new TextBlock
+        {
+            FontSize = 11.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(3, 105, 161)),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(lblResumenStock, 2);
+        prodGrid.Children.Add(lblResumenStock);
+
+        prodBorder.Child = prodGrid;
+        Grid.SetRow(prodBorder, 1);
+        root.Children.Add(prodBorder);
+
+        // 3. Tabla de unidades individuales HER-xxxx registradas para este producto
+        var tableGroup = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var topTableBar = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(topTableBar, Dock.Top);
+
+        var btnLimpiarFormHer = new System.Windows.Controls.Button
+        {
+            Content = "+ Preparar Nueva Pieza (HER-xxxx)",
+            Padding = new Thickness(10, 4, 10, 4),
+            FontWeight = FontWeights.SemiBold,
+            Cursor = Cursors.Hand
+        };
+        DockPanel.SetDock(btnLimpiarFormHer, Dock.Right);
+        topTableBar.Children.Add(btnLimpiarFormHer);
+
+        var lblTablaTitulo = new TextBlock
+        {
+            Text = "Unidades físicas (HER-xxxx) registradas en el Directorio para este artículo (seleccione una fila para editarla):",
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        topTableBar.Children.Add(lblTablaTitulo);
+        tableGroup.Children.Add(topTableBar);
+
+        var dgHer = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single,
+            Background = Brushes.White
+        };
+        dgHer.Columns.Add(new DataGridTextColumn { Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 100 });
+        dgHer.Columns.Add(new DataGridTextColumn { Header = "N° de Serie", Binding = new System.Windows.Data.Binding("NumeroSerie"), Width = 130 });
+        dgHer.Columns.Add(new DataGridTextColumn { Header = "Marca / Modelo", Binding = new System.Windows.Data.Binding("MarcaModelo"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgHer.Columns.Add(new DataGridTextColumn { Header = "Ubicación Almacén", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 135 });
+        dgHer.Columns.Add(new DataGridTextColumn { Header = "Estado", Binding = new System.Windows.Data.Binding("Estado"), Width = 110 });
+        dgHer.Columns.Add(new DataGridTextColumn { Header = "Notas / Accesorios", Binding = new System.Windows.Data.Binding("NotasEstado"), Width = 160 });
+        tableGroup.Children.Add(dgHer);
+
+        Grid.SetRow(tableGroup, 2);
+        root.Children.Add(tableGroup);
+
+        // 4. Formulario de captura / edición de la herramienta
+        var formBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246)),
+            BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14, 10, 14, 12),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+
+        var formStack = new StackPanel();
+        var lblModoForm = new TextBlock
+        {
+            Text = "✨ Capturar Datos de la Herramienta",
+            FontWeight = FontWeights.Bold,
+            FontSize = 12.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(29, 78, 216)),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        formStack.Children.Add(lblModoForm);
+
+        var row1 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        row1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star) });
+        row1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
+        row1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.6, GridUnitType.Star) });
+        row1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) });
+
+        var spCod = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        spCod.Children.Add(new TextBlock { Text = "Código Individual (HER-xxxx)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtCodigo = new System.Windows.Controls.TextBox { FontFamily = new FontFamily("Consolas"), Padding = new Thickness(6, 4, 6, 4) };
+        spCod.Children.Add(txtCodigo);
+        Grid.SetColumn(spCod, 0);
+        row1.Children.Add(spCod);
+
+        var spSerie = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        spSerie.Children.Add(new TextBlock { Text = "Número de Serie (o S/N)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtSerie = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 4, 6, 4) };
+        spSerie.Children.Add(txtSerie);
+        Grid.SetColumn(spSerie, 1);
+        row1.Children.Add(spSerie);
+
+        var spMarca = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        spMarca.Children.Add(new TextBlock { Text = "Marca y Modelo", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtMarca = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 4, 6, 4) };
+        spMarca.Children.Add(txtMarca);
+        Grid.SetColumn(spMarca, 2);
+        row1.Children.Add(spMarca);
+
+        var spCant = new StackPanel();
+        spCant.Children.Add(new TextBlock { Text = "Cant. Piezas", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtCantNuevas = new System.Windows.Controls.TextBox { Text = Math.Max(1, cantidadSugerida).ToString(), Padding = new Thickness(6, 4, 6, 4), ToolTip = "Si va a registrar varias herramientas idénticas de una vez, indique cuántas fichas HER consecutivas generar" };
+        spCant.Children.Add(txtCantNuevas);
+        Grid.SetColumn(spCant, 3);
+        row1.Children.Add(spCant);
+
+        formStack.Children.Add(row1);
+
+        var row2 = new Grid();
+        row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star) });
+        row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.2, GridUnitType.Star) });
+
+        var spUbi = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        spUbi.Children.Add(new TextBlock { Text = "Ubicación en Almacén (Gabinete / Estante)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtUbi = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 4, 6, 4) };
+        spUbi.Children.Add(txtUbi);
+        Grid.SetColumn(spUbi, 0);
+        row2.Children.Add(spUbi);
+
+        var spEstado = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        spEstado.Children.Add(new TextBlock { Text = "Estado Inicial / Actual", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var cboEstado = new ComboBox { Padding = new Thickness(6, 4, 6, 4) };
+        foreach (var est in new[] { "Disponible", "En Préstamo", "En Mantenimiento", "Dañada", "Extraviada / Baja" })
+            cboEstado.Items.Add(est);
+        cboEstado.SelectedIndex = 0;
+        spEstado.Children.Add(cboEstado);
+        Grid.SetColumn(spEstado, 1);
+        row2.Children.Add(spEstado);
+
+        var spNotas = new StackPanel();
+        spNotas.Children.Add(new TextBlock { Text = "Notas de Resguardo / Accesorios Incluidos (Estuche, cargador, etc.)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtNotas = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 4, 6, 4) };
+        spNotas.Children.Add(txtNotas);
+        Grid.SetColumn(spNotas, 2);
+        row2.Children.Add(spNotas);
+
+        formStack.Children.Add(row2);
+        formBorder.Child = formStack;
+        Grid.SetRow(formBorder, 3);
+        root.Children.Add(formBorder);
+
+        // 5. Barra inferior de botones
+        var bottomBar = new DockPanel();
+        var btnIrDirectorio = new System.Windows.Controls.Button
+        {
+            Content = "📂 Ver en Directorio de Herramientas",
+            Padding = new Thickness(12, 7, 12, 7),
+            Cursor = Cursors.Hand
+        };
+        DockPanel.SetDock(btnIrDirectorio, Dock.Left);
+        bottomBar.Children.Add(btnIrDirectorio);
+
+        var rightBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCerrar = new System.Windows.Controls.Button
+        {
+            Content = "Cerrar",
+            Padding = new Thickness(16, 7, 16, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            Cursor = Cursors.Hand
+        };
+        var btnGuardarHer = new System.Windows.Controls.Button
+        {
+            Content = "💾 Guardar Información en Directorio de Herramientas",
+            Padding = new Thickness(16, 7, 16, 7),
+            FontWeight = FontWeights.Bold,
+            Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+            Foreground = Brushes.White,
+            Cursor = Cursors.Hand
+        };
+        rightBtns.Children.Add(btnCerrar);
+        rightBtns.Children.Add(btnGuardarHer);
+        bottomBar.Children.Add(rightBtns);
+
+        Grid.SetRow(bottomBar, 4);
+        root.Children.Add(bottomBar);
+
+        int idHerEditandoModal = 0;
+
+        void PrepararFormularioParaProducto(Producto? pSel, HerramientaActivo? herEditar = null)
+        {
+            if (pSel == null) return;
+
+            if (herEditar != null)
+            {
+                idHerEditandoModal = herEditar.Id;
+                lblModoForm.Text = $"✏️ Editando Ficha Existente: {herEditar.CodigoIndividual}";
+                txtCodigo.Text = herEditar.CodigoIndividual;
+                txtSerie.Text = herEditar.NumeroSerie;
+                txtMarca.Text = herEditar.MarcaModelo;
+                txtUbi.Text = herEditar.Ubicacion;
+                cboEstado.SelectedItem = herEditar.Estado;
+                if (cboEstado.SelectedIndex < 0) cboEstado.SelectedIndex = 0;
+                txtNotas.Text = herEditar.NotasEstado;
+                txtCantNuevas.Text = "1";
+                txtCantNuevas.IsEnabled = false;
+                btnGuardarHer.Content = $"💾 Guardar Cambios en {herEditar.CodigoIndividual}";
+            }
+            else
+            {
+                idHerEditandoModal = 0;
+                string sigHer = DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
+                lblModoForm.Text = $"✨ Registrar Nueva Ficha Individual ({sigHer})";
+                txtCodigo.Text = sigHer;
+                txtSerie.Text = !string.IsNullOrWhiteSpace(pSel.CodigoBarras) && !pSel.CodigoBarras.StartsWith("PRD-")
+                    ? pSel.CodigoBarras
+                    : "S/N";
+                string marcaMod = $"{pSel.Marca} {pSel.Modelo}".Trim();
+                txtMarca.Text = !string.IsNullOrWhiteSpace(marcaMod) ? marcaMod : pSel.Nombre;
+                txtUbi.Text = !string.IsNullOrWhiteSpace(pSel.Ubicacion) && pSel.Ubicacion != "A-01"
+                    ? pSel.Ubicacion
+                    : "Gabinete H-1";
+                cboEstado.SelectedIndex = 0;
+                txtNotas.Text = pSel.Descripcion;
+                txtCantNuevas.IsEnabled = true;
+                btnGuardarHer.Content = "➕ Guardar y Registrar en Directorio de Herramientas";
+            }
+        }
+
+        void RefrescarTablaHerramientasProducto()
+        {
+            if (cboProd.SelectedItem is not Producto pSel) return;
+            var lista = DatabaseService.ObtenerHerramientas().Where(h => h.ProductoId == pSel.Id).ToList();
+            dgHer.ItemsSource = lista;
+            lblResumenStock.Text = $"Existencia: {pSel.StockActual:0.##} {pSel.UnidadAlmacen} | Fichas HER: {lista.Count}";
+
+            if (lista.Count == 1 && string.Equals(lista[0].NotasEstado, "Sincronizada desde Catálogo de Herramientas", StringComparison.OrdinalIgnoreCase))
+            {
+                dgHer.SelectedItem = lista[0];
+                PrepararFormularioParaProducto(pSel, lista[0]);
+            }
+            else if (lista.Count == 0)
+            {
+                PrepararFormularioParaProducto(pSel, null);
+            }
+        }
+
+        cboProd.SelectionChanged += (_, _) =>
+        {
+            RefrescarTablaHerramientasProducto();
+            if (cboProd.SelectedItem is Producto pSel && dgHer.SelectedItem == null)
+            {
+                PrepararFormularioParaProducto(pSel, null);
+            }
+        };
+
+        dgHer.SelectionChanged += (_, _) =>
+        {
+            if (cboProd.SelectedItem is Producto pSel && dgHer.SelectedItem is HerramientaActivo hSel)
+            {
+                PrepararFormularioParaProducto(pSel, hSel);
+            }
+        };
+
+        btnLimpiarFormHer.Click += (_, _) =>
+        {
+            dgHer.SelectedItem = null;
+            if (cboProd.SelectedItem is Producto pSel)
+            {
+                PrepararFormularioParaProducto(pSel, null);
+                txtSerie.Focus();
+                txtSerie.SelectAll();
+            }
+        };
+
+        btnGuardarHer.Click += (_, _) =>
+        {
+            if (cboProd.SelectedItem is not Producto pSel)
+            {
+                System.Windows.MessageBox.Show(win, "Seleccione el producto del catálogo.", "Falta producto", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string serie = string.IsNullOrWhiteSpace(txtSerie.Text) ? "S/N" : txtSerie.Text.Trim();
+            string marca = string.IsNullOrWhiteSpace(txtMarca.Text) ? pSel.Nombre : txtMarca.Text.Trim();
+            string ubi = string.IsNullOrWhiteSpace(txtUbi.Text) ? "Gabinete H-1" : txtUbi.Text.Trim();
+            string est = cboEstado.SelectedItem?.ToString() ?? "Disponible";
+            string notas = txtNotas.Text.Trim();
+
+            if (idHerEditandoModal > 0)
+            {
+                string cod = string.IsNullOrWhiteSpace(txtCodigo.Text)
+                    ? DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual")
+                    : txtCodigo.Text.Trim();
+
+                DatabaseService.GuardarHerramientaActivo(new HerramientaActivo
+                {
+                    Id = idHerEditandoModal,
+                    ProductoId = pSel.Id,
+                    CodigoIndividual = cod,
+                    NumeroSerie = serie,
+                    MarcaModelo = marca,
+                    Estado = est,
+                    Ubicacion = ubi,
+                    NotasEstado = notas
+                });
+            }
+            else
+            {
+                int cant = Math.Max(1, (int)ParseDecimal(txtCantNuevas.Text, 1m));
+                for (int i = 0; i < cant; i++)
+                {
+                    string cod = (i == 0 && !string.IsNullOrWhiteSpace(txtCodigo.Text))
+                        ? txtCodigo.Text.Trim()
+                        : DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
+
+                    string serieItem = (cant > 1 && serie != "S/N") ? $"{serie}-{i + 1}" : serie;
+
+                    DatabaseService.GuardarHerramientaActivo(new HerramientaActivo
+                    {
+                        Id = 0,
+                        ProductoId = pSel.Id,
+                        CodigoIndividual = cod,
+                        NumeroSerie = serieItem,
+                        MarcaModelo = marca,
+                        Estado = est,
+                        Ubicacion = ubi,
+                        NotasEstado = notas
+                    });
+                }
+            }
+
+            // Sincronizar también la ubicación y bandera EsHerramienta en el producto del catálogo
+            var prodActual = DatabaseService.ObtenerProductos().FirstOrDefault(x => x.Id == pSel.Id);
+            if (prodActual != null)
+            {
+                var totalFichasHer = DatabaseService.ObtenerHerramientas().Count(h => h.ProductoId == pSel.Id && h.Estado != "Extraviada / Baja");
+                prodActual.EsHerramienta = true;
+                if (!string.IsNullOrWhiteSpace(ubi))
+                    prodActual.Ubicacion = ubi;
+                if (prodActual.StockActual < totalFichasHer)
+                    prodActual.StockActual = totalFichasHer;
+                DatabaseService.GuardarProducto(prodActual);
+            }
+
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            RefrescarTablaHerramientasProducto();
+            System.Windows.MessageBox.Show(win,
+                $"La información de la herramienta quedó guardada y sincronizada en el Directorio de Herramientas y en Almacén.",
+                "Herramienta Registrada", MessageBoxButton.OK, MessageBoxImage.Information);
+        };
+
+        btnIrDirectorio.Click += (_, _) =>
+        {
+            win.Close();
+            CambiarSeccion(8);
+        };
+
+        btnCerrar.Click += (_, _) => win.Close();
+
+        var inicial = prodPreseleccionado != null
+            ? todosProductos.FirstOrDefault(p => p.Id == prodPreseleccionado.Id)
+            : todosProductos.FirstOrDefault(p => p.EsHerramienta) ?? todosProductos.FirstOrDefault();
+
+        cboProd.SelectedItem = inicial;
+        RefrescarTablaHerramientasProducto();
+
+        win.Content = root;
+        win.ShowDialog();
+
+        CargarTodoElSistema(conservarPosicionCatalogo: true);
+        if (_productoEnEdicion.Id > 0)
+        {
+            var recargado = _cacheProductos.FirstOrDefault(p => p.Id == _productoEnEdicion.Id);
+            if (recargado != null)
+                CargarProductoEnEditor(recargado);
+        }
     }
 
     private async void BtnEliminarProductoCatalogoCard_Click(object sender, RoutedEventArgs e)
@@ -4595,32 +5163,19 @@ public partial class MainWindow : FluentWindow
         TxtNotasRecepcionOc.Clear();
         TxtFolioRemisionRecepcionOc?.Clear();
 
-        // Verificar si se recibieron herramientas para ofrecer alta automática de códigos individuales HER-xxxx
+        // Verificar si se recibieron herramientas para abrir el modal de registro de activo individual (HER-xxxx)
         var prodsDict = DatabaseService.ObtenerProductos().ToDictionary(p => p.Id);
         var partidasHerramienta = entrada.Partidas
             .Where(ep => prodsDict.TryGetValue(ep.ProductoId, out var pr) && (pr.EsHerramienta || pr.CategoriaId == 4))
             .ToList();
         if (partidasHerramienta.Count > 0)
         {
-            var respHer = System.Windows.MessageBox.Show(this,
-                "En esta recepción se identificaron artículos de la categoría Herramientas y Equipo.\n\n¿Desea generar automáticamente sus códigos individuales de activo (HER-xxxx) para control de préstamos y resguardos?",
-                "Generar Activos de Herramienta (HER-xxxx)",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-            if (respHer == System.Windows.MessageBoxResult.Yes)
+            foreach (var ep in partidasHerramienta)
             {
-                var generadas = new List<string>();
-                foreach (var ep in partidasHerramienta)
+                if (prodsDict.TryGetValue(ep.ProductoId, out var prodHer))
                 {
                     int cantHer = Math.Max(1, (int)Math.Round(ep.CantidadIngresadaAlmacen));
-                    generadas.AddRange(DatabaseService.GenerarActivosHerramientaDesdeRecepcion(ep.ProductoId, cantHer, ep.ProductoNombre));
-                }
-                if (generadas.Count > 0)
-                {
-                    string listaHer = string.Join(", ", generadas);
-                    System.Windows.MessageBox.Show(this,
-                        $"Se generaron {generadas.Count} activo(s) individuales de herramienta listos para resguardo:\n{listaHer}",
-                        "Herramientas Dadas de Alta", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MostrarModalRegistroHerramienta(prodHer, cantHer);
                 }
             }
         }
@@ -6257,20 +6812,7 @@ public partial class MainWindow : FluentWindow
 
     private void BtnNuevaHerramientaIndividual_Click(object sender, RoutedEventArgs e)
     {
-        var prodHer = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.EsHerramienta) ?? DatabaseService.ObtenerProductos().First();
-        string nuevoCodigo = DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
-        DatabaseService.GuardarHerramientaActivo(new HerramientaActivo
-        {
-            ProductoId = prodHer.Id,
-            CodigoIndividual = nuevoCodigo,
-            NumeroSerie = $"SN-{DateTime.Now:MMddHHmm}",
-            MarcaModelo = prodHer.Nombre,
-            Estado = "Disponible",
-            Ubicacion = "Gabinete H-1",
-            NotasEstado = "Registrada lista para préstamo"
-        });
-        CargarTodoElSistema();
-        System.Windows.MessageBox.Show(this, $"Se dio de alta la herramienta individual {nuevoCodigo} asociada a '{prodHer.Nombre}'.", "Alta de Herramienta", MessageBoxButton.OK, MessageBoxImage.Information);
+        MostrarModalRegistroHerramienta(null, 1);
     }
 
     // ==================== TAB 6: FACTURAS XML (CFDI 4.0) ====================

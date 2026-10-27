@@ -671,17 +671,24 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                                     <TextBlock Text="Unidad Compra" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ComboBox x:Name="TxtProdUnidadCompra" IsEditable="True" ToolTip="Seleccione unidad estándar (Pieza, Metro, Kilogramo, Litro, Galón, Caja, Paquete, Rollo, etc.)" />
+                                                    <ComboBox x:Name="TxtProdUnidadCompra" IsEditable="True" SelectionChanged="UnidadOFactorProducto_Changed" LostFocus="UnidadOFactorProducto_Changed" ToolTip="Unidad en que lo factura el proveedor (Caja, Paquete, Rollo, Pieza, etc.)" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Margin="4,0,4,0">
                                                     <TextBlock Text="Unidad Entrega" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ComboBox x:Name="TxtProdUnidadAlmacen" IsEditable="True" ToolTip="Seleccione unidad estándar de almacén (Pieza, Metro, Kilogramo, Litro, Galón, Par, etc.)" />
+                                                    <ComboBox x:Name="TxtProdUnidadAlmacen" IsEditable="True" SelectionChanged="UnidadOFactorProducto_Changed" LostFocus="UnidadOFactorProducto_Changed" ToolTip="Unidad en que se guarda y entrega en almacén (Pieza, Rollo, Metro, Litro, Par, etc.)" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2" Margin="4,0,0,0">
                                                     <TextBlock Text="Piezas x Compra" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ui:TextBox x:Name="TxtProdFactor" PlaceholderText="Ej. 1" />
+                                                    <ui:TextBox x:Name="TxtProdFactor" PlaceholderText="Ej. 1" TextChanged="TxtProdFactorOCosto_TextChanged" ToolTip="Cuántas Unidades de Entrega contiene 1 Unidad de Compra (Ej. 1 Caja = 12 Rollos)" />
                                                 </StackPanel>
                                             </Grid>
+                                            <TextBlock x:Name="TxtResumenConversionProducto"
+                                                       Text="Existencia expresada en Unidad de Entrega | Costo expresado por Unidad de Compra"
+                                                       FontSize="10.5"
+                                                       Foreground="#0369A1"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,5,0,0" />
                                         </StackPanel>
                                     </Border>
 
@@ -692,16 +699,16 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="Existencia Actual" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <TextBlock x:Name="LblProdExistenciaUnidad" Text="Existencia (Entrega)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" ToolTip="La existencia actual del almacén se expresa siempre en Unidades de Entrega" />
                                             <ui:TextBox x:Name="TxtProdStock" PlaceholderText="Ej. 0" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,4,0">
-                                            <TextBlock Text="Stock Mínimo" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <TextBlock x:Name="LblProdStockMinUnidad" Text="Stock Mín. (Entrega)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" ToolTip="Nivel mínimo de alerta expresado en Unidades de Entrega" />
                                             <ui:TextBox x:Name="TxtProdStockMin" PlaceholderText="Ej. 5" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                            <TextBlock Text="Costo ($ c/IVA)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                            <ui:TextBox x:Name="TxtProdCosto" PlaceholderText="Ej. 0.00" />
+                                            <TextBlock x:Name="LblProdCostoUnidad" Text="Costo Compra ($ c/IVA)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" ToolTip="Costo con IVA por cada Unidad de Compra" />
+                                            <ui:TextBox x:Name="TxtProdCosto" PlaceholderText="Ej. 0.00" TextChanged="TxtProdFactorOCosto_TextChanged" />
                                         </StackPanel>
                                     </Grid>
 
@@ -709,12 +716,28 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
                                             <TextBlock Text="Ubicación en Almacén" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
                                             <ui:TextBox x:Name="TxtProdUbicacion" PlaceholderText="Ej. Estante A-01" />
                                         </StackPanel>
-                                        <CheckBox x:Name="ChkProdEsHerramienta" Grid.Column="1" Content="Herramienta" VerticalAlignment="Bottom" Margin="10,0,0,4" />
+                                        <CheckBox x:Name="ChkProdEsHerramienta"
+                                                  Grid.Column="1"
+                                                  Content="Herramienta"
+                                                  VerticalAlignment="Bottom"
+                                                  Margin="8,0,0,4"
+                                                  ToolTip="Marcar si es una herramienta de resguardo en almacén (abre el registro de ficha individual HER-xxxx)"
+                                                  Click="ChkProdEsHerramienta_Click" />
+                                        <ui:Button x:Name="BtnConfigurarHerramientaCatalogo"
+                                                   Grid.Column="2"
+                                                   Content="🔧 Ficha HER"
+                                                   FontSize="11"
+                                                   Padding="8,5"
+                                                   VerticalAlignment="Bottom"
+                                                   Margin="6,0,0,2"
+                                                   ToolTip="Abrir modal de información de la herramienta (Número de serie, código individual HER-xxxx, ubicación y estado)"
+                                                   Click="BtnConfigurarHerramientaCatalogo_Click" />
                                     </Grid>
 
                                     <Image x:Name="ImgBarcodeProductoEditor" Height="44" Stretch="Fill" Margin="0,2,0,8" />
