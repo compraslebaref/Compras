@@ -49,6 +49,7 @@ public partial class MainWindow : FluentWindow
     private readonly ObservableCollection<SolicitudPartida> _partidasNuevaSolicitud = new();
     private readonly ObservableCollection<CotizacionRenglonComparativo> _renglonesComparativa = new();
     private readonly ObservableCollection<SalidaPartida> _partidasSalidaPos = new();
+    private readonly ObservableCollection<HerramientaActivo> _herramientasPorPrestar = new();
     private readonly ObservableCollection<PartidaCompraSinFactura> _partidasCompraSinFactura = new();
     private List<PrestamoVistaFila> _todosPrestamosFilas = new();
     private List<MovimientoAlmacenFila> _todosMovimientosAlmacen = new();
@@ -978,14 +979,11 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            // Si es una herramienta disponible, seleccionarla para prestarla
+            // Si es una herramienta disponible, agregarla a la lista de préstamo actual
             var disp = CboHerramientaDisponible.Items.Cast<HerramientaActivo>().FirstOrDefault(h => CoincideFolioFlexible(h.CodigoIndividual, code));
             if (disp != null)
             {
-                CboHerramientaDisponible.SelectedItem = disp;
-                System.Windows.MessageBox.Show(this,
-                    $"Herramienta {disp.CodigoIndividual} ({disp.ProductoNombre}) disponible y seleccionada para préstamo.",
-                    "Herramienta Disponible", MessageBoxButton.OK, MessageBoxImage.Information);
+                AgregarHerramientaAListaPrestamo(disp);
                 return;
             }
         }
@@ -6433,6 +6431,98 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    private void CboHerramientaDisponible_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            BtnAgregarHerramientaAPrestamo_Click(sender, e);
+            e.Handled = true;
+        }
+    }
+
+    private void BtnAgregarHerramientaAPrestamo_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboHerramientaDisponible.SelectedItem is HerramientaActivo herSel)
+        {
+            AgregarHerramientaAListaPrestamo(herSel);
+            return;
+        }
+
+        string txt = CboHerramientaDisponible.Text?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(txt) && CboHerramientaDisponible.ItemsSource is IEnumerable<HerramientaActivo> disponibles)
+        {
+            var match = disponibles.FirstOrDefault(h =>
+                h.CodigoIndividual.Equals(txt, StringComparison.OrdinalIgnoreCase) ||
+                CoincideFolioFlexible(h.CodigoIndividual, txt) ||
+                h.ProductoNombre.Contains(txt, StringComparison.OrdinalIgnoreCase) ||
+                h.ToString().Contains(txt, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                AgregarHerramientaAListaPrestamo(match);
+                return;
+            }
+        }
+
+        System.Windows.MessageBox.Show(this,
+            "Seleccione una herramienta disponible del listado para agregarla al vale de préstamo.",
+            "Seleccione herramienta", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void AgregarHerramientaAListaPrestamo(HerramientaActivo her)
+    {
+        if (_herramientasPorPrestar.Any(x => x.Id == her.Id))
+        {
+            CboHerramientaDisponible.SelectedIndex = -1;
+            CboHerramientaDisponible.Text = string.Empty;
+            return;
+        }
+
+        _herramientasPorPrestar.Add(her);
+        CboHerramientaDisponible.SelectedIndex = -1;
+        CboHerramientaDisponible.Text = string.Empty;
+        ActualizarVistaListaPrestamoHerramientas();
+    }
+
+    private void BtnQuitarHerramientaDePrestamo_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: HerramientaActivo her })
+        {
+            var item = _herramientasPorPrestar.FirstOrDefault(x => x.Id == her.Id);
+            if (item != null)
+                _herramientasPorPrestar.Remove(item);
+            ActualizarVistaListaPrestamoHerramientas();
+        }
+    }
+
+    private void BtnLimpiarListaPrestamo_Click(object sender, RoutedEventArgs e)
+    {
+        _herramientasPorPrestar.Clear();
+        ActualizarVistaListaPrestamoHerramientas();
+    }
+
+    private void ActualizarVistaListaPrestamoHerramientas()
+    {
+        if (BdrListaHerramientasPorPrestar == null || IcHerramientasPorPrestar == null || TxtResumenListaPrestamoHer == null)
+            return;
+
+        if (IcHerramientasPorPrestar.ItemsSource == null)
+            IcHerramientasPorPrestar.ItemsSource = _herramientasPorPrestar;
+
+        int n = _herramientasPorPrestar.Count;
+        BdrListaHerramientasPorPrestar.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+        TxtResumenListaPrestamoHer.Text = n == 1
+            ? "Lista para prestar en un solo vale (1 herramienta seleccionada):"
+            : $"Lista para prestar en un solo vale ({n} herramientas seleccionadas):";
+
+        if (BtnRegistrarPrestamoHer != null)
+        {
+            BtnRegistrarPrestamoHer.Content = n > 0
+                ? $"Registrar Préstamo ({n})"
+                : "Registrar Préstamo";
+        }
+    }
+
     private void BtnPrestarHerramienta_Click(object sender, RoutedEventArgs e)
     {
         var dep = CboPreDepartamento?.SelectedItem as Departamento ?? CboSalDepartamento.SelectedItem as Departamento;
@@ -6459,9 +6549,16 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (CboHerramientaDisponible.SelectedItem is not HerramientaActivo her)
+        var listaParaPrestar = _herramientasPorPrestar.ToList();
+        if (CboHerramientaDisponible.SelectedItem is HerramientaActivo herCombo &&
+            !listaParaPrestar.Any(x => x.Id == herCombo.Id))
         {
-            System.Windows.MessageBox.Show(this, "No hay una herramienta disponible seleccionada.", "Sin herramienta", MessageBoxButton.OK, MessageBoxImage.Information);
+            listaParaPrestar.Add(herCombo);
+        }
+
+        if (listaParaPrestar.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "Seleccione una o más herramientas disponibles (usando '+ Agregar a Lista' o el selector) para registrar el préstamo.", "Sin herramientas seleccionadas", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -6471,11 +6568,13 @@ public partial class MainWindow : FluentWindow
 
         string fechaCompromiso = (DpPreFechaCompromiso?.SelectedDate ?? DateTime.Today.AddDays(7)).ToString("yyyy-MM-dd");
 
-        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proyId, TxtSalNotas.Text, new List<HerramientaActivo> { her }, personaRecibe, fechaCompromiso);
+        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proyId, TxtSalNotas.Text, listaParaPrestar, personaRecibe, fechaCompromiso);
+        _herramientasPorPrestar.Clear();
+        ActualizarVistaListaPrestamoHerramientas();
         if (CboPreDepartamento != null) CboPreDepartamento.SelectedIndex = -1;
         if (CboPrePersonaRecibe != null) { CboPrePersonaRecibe.SelectedIndex = -1; CboPrePersonaRecibe.Text = string.Empty; }
         if (CboPreProyecto != null) CboPreProyecto.SelectedIndex = -1;
-        if (CboHerramientaDisponible != null) CboHerramientaDisponible.SelectedIndex = -1;
+        if (CboHerramientaDisponible != null) { CboHerramientaDisponible.SelectedIndex = -1; CboHerramientaDisponible.Text = string.Empty; }
         CargarTodoElSistema();
 
         BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, prestamo);
@@ -6518,6 +6617,21 @@ public partial class MainWindow : FluentWindow
         {
             System.Windows.MessageBox.Show(this,
                 "Seleccione primero una herramienta o préstamo de la tabla para abrir e imprimir su Hoja de Préstamo / Devolución.",
+                "Seleccione un préstamo", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnDescargarValePrestamo_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgPrestamosHerramientas.SelectedItem is PrestamoVistaFila fila)
+        {
+            var actualizado = DatabaseService.ObtenerPrestamosHerramienta().FirstOrDefault(p => p.Id == fila.PrestamoId) ?? fila.PrestamoOriginal;
+            BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, actualizado, soloDescargar: true);
+        }
+        else
+        {
+            System.Windows.MessageBox.Show(this,
+                "Seleccione primero una herramienta o préstamo de la tabla para descargar su Hoja de Préstamo / Devolución (PDF, PNG o Excel CSV).",
                 "Seleccione un préstamo", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }

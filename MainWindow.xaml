@@ -1791,14 +1791,102 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <Grid Margin="0,0,0,8">
+                                        <Grid Margin="0,0,0,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <ComboBox x:Name="CboHerramientaDisponible" Grid.Column="0" Margin="0,0,6,0" IsEditable="True" IsTextSearchEnabled="True" />
-                                            <ui:Button Grid.Column="1" Appearance="Primary" Content="Registrar Préstamo" Click="BtnPrestarHerramienta_Click" />
+                                            <ComboBox x:Name="CboHerramientaDisponible"
+                                                      Grid.Column="0"
+                                                      Margin="0,0,6,0"
+                                                      IsEditable="True"
+                                                      IsTextSearchEnabled="True"
+                                                      PreviewKeyDown="CboHerramientaDisponible_PreviewKeyDown"
+                                                      ToolTip="Seleccione una herramienta disponible y presione '+ Agregar a Lista' para incluir varias en un mismo vale PRE-xxxx" />
+                                            <ui:Button Grid.Column="1"
+                                                       Content="+ Agregar a Lista"
+                                                       Margin="0,0,6,0"
+                                                       ToolTip="Agregar esta herramienta a la lista actual para prestar varias en un solo Vale PRE-xxxx"
+                                                       Click="BtnAgregarHerramientaAPrestamo_Click" />
+                                            <ui:Button x:Name="BtnRegistrarPrestamoHer"
+                                                       Grid.Column="2"
+                                                       Appearance="Primary"
+                                                       Content="Registrar Préstamo"
+                                                       ToolTip="Emitir un único Vale de Préstamo (PRE-xxxx) con todas las herramientas de la lista"
+                                                       Click="BtnPrestarHerramienta_Click" />
                                         </Grid>
+
+                                        <!-- Lista de herramientas acumuladas para un mismo préstamo PRE-xxxx -->
+                                        <Border x:Name="BdrListaHerramientasPorPrestar"
+                                                Visibility="Collapsed"
+                                                Padding="8,6"
+                                                CornerRadius="6"
+                                                Background="#EFF6FF"
+                                                BorderBrush="#93C5FD"
+                                                BorderThickness="1"
+                                                Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <Button DockPanel.Dock="Right"
+                                                            Content="Vaciar lista"
+                                                            FontSize="10.5"
+                                                            Padding="6,1"
+                                                            Margin="6,0,0,0"
+                                                            Click="BtnLimpiarListaPrestamo_Click" />
+                                                    <TextBlock x:Name="TxtResumenListaPrestamoHer"
+                                                               Text="Lista para prestar en un solo vale (0 herramientas):"
+                                                               FontSize="11"
+                                                               FontWeight="Bold"
+                                                               Foreground="#1E40AF"
+                                                               VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <ItemsControl x:Name="IcHerramientasPorPrestar">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel Orientation="Horizontal" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Background="White"
+                                                                    BorderBrush="#60A5FA"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="5"
+                                                                    Padding="7,3"
+                                                                    Margin="0,0,6,4">
+                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding CodigoIndividual}"
+                                                                               FontFamily="Consolas"
+                                                                               FontWeight="Bold"
+                                                                               FontSize="11"
+                                                                               Foreground="#1D4ED8"
+                                                                               VerticalAlignment="Center"
+                                                                               Margin="0,0,5,0" />
+                                                                    <TextBlock Text="{Binding ProductoNombre}"
+                                                                               FontSize="11"
+                                                                               MaxWidth="185"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               ToolTip="{Binding ProductoNombre}"
+                                                                               VerticalAlignment="Center"
+                                                                               Margin="0,0,6,0" />
+                                                                    <Button Content="✕"
+                                                                            FontSize="10"
+                                                                            Padding="4,0"
+                                                                            Foreground="#DC2626"
+                                                                            Background="Transparent"
+                                                                            BorderThickness="0"
+                                                                            Cursor="Hand"
+                                                                            ToolTip="Quitar de la lista"
+                                                                            Tag="{Binding}"
+                                                                            Click="BtnQuitarHerramientaDePrestamo_Click" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
 
                                     <!-- Devolución -->
@@ -1807,8 +1895,9 @@
                                             <TextBlock Text="Devolución de Herramienta (Completa, Parcial o con Incidencia)" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="165" />
+                                                    <ColumnDefinition Width="155" />
                                                     <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
@@ -1820,7 +1909,8 @@
                                                 </ComboBox>
                                                 <ui:TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" PlaceholderText="Observaciones al devolver (ej. faltó accesorio, se devuelve 1 de 2)..." />
                                                 <ui:Button Grid.Column="2" Content="Registrar Devolución" Appearance="Primary" Margin="0,0,6,0" Click="BtnRegistrarDevolucionHerramienta_Click" />
-                                                <ui:Button Grid.Column="3" Content="Imprimir Hoja" Click="BtnReimprimirValePrestamo_Click" />
+                                                <ui:Button Grid.Column="3" Content="Imprimir Hoja" Margin="0,0,6,0" Click="BtnReimprimirValePrestamo_Click" />
+                                                <ui:Button Grid.Column="4" Content="Descargar" ToolTip="Descargar hoja de préstamo en PDF, PNG o Excel CSV" Click="BtnDescargarValePrestamo_Click" />
                                             </Grid>
                                         </StackPanel>
                                     </Border>
