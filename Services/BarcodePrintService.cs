@@ -517,6 +517,8 @@ public static class BarcodePrintService
         int devueltasCount = pre.Partidas.Count(p => !string.Equals(p.EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase));
         int pendientesCount = pre.Partidas.Count - devueltasCount;
 
+        string fechaPromesa = string.IsNullOrWhiteSpace(pre.FechaCompromiso) ? "-" : pre.FechaCompromiso;
+
         var filas = pre.Partidas.Select((p, idx) => new[]
         {
             (idx + 1).ToString(),
@@ -525,9 +527,7 @@ public static class BarcodePrintService
             string.IsNullOrWhiteSpace(p.NumeroSerie) ? p.MarcaModelo : $"{p.MarcaModelo} (S/N: {p.NumeroSerie})",
             p.EstadoSalida,
             p.EstadoDevolucion,
-            string.IsNullOrWhiteSpace(p.FechaDevuelto)
-                ? (string.IsNullOrWhiteSpace(p.Observaciones) ? "En préstamo" : p.Observaciones)
-                : $"{p.FechaDevuelto}{(string.IsNullOrWhiteSpace(p.Observaciones) ? "" : " | " + p.Observaciones)}"
+            fechaPromesa
         }).ToList();
 
         var metadatos = new List<(string etiq, string val)>
@@ -535,7 +535,7 @@ public static class BarcodePrintService
             ("Gerencia que Autoriza:", $"Gerencia de {pre.DepartamentoNombre}"),
             ("Personal Técnico Responsable:", pre.PersonaRecibeEfectiva),
             ("Proyecto / Destino:", pre.ProyectoNombre),
-            ("Fecha Salida / Compromiso:", $"{pre.FechaSalida}  |  Compromiso: {(string.IsNullOrWhiteSpace(pre.FechaCompromiso) ? "N/A" : pre.FechaCompromiso)}"),
+            ("Fecha Salida / Fecha Promesa:", $"{pre.FechaSalida}  |  Fecha Promesa: {fechaPromesa}"),
             ("Estatus del Préstamo:", $"{pre.Estatus} ({devueltasCount} de {pre.Partidas.Count} devueltas)")
         };
 
@@ -559,7 +559,7 @@ public static class BarcodePrintService
             folioCodigoBarras: pre.Folio,
             fecha: tieneDevolucion && !string.IsNullOrWhiteSpace(pre.FechaDevolucion) ? pre.FechaDevolucion : pre.FechaSalida,
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Herramienta", "Marca / Serie", "Estado Salida", "Estado Retorno", "Fecha Retorno / Obs." },
+            encabezadosTabla: new[] { "#", "Código", "Herramienta", "Marca / Serie", "Estado Salida", "Estado Retorno", "Fecha Promesa" },
             filasTabla: filas,
             totales: totales,
             notas: pre.Notas,

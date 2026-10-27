@@ -1917,12 +1917,13 @@
 
                                     <DataGrid x:Name="DgPrestamosHerramientas" AutoGenerateColumns="False" IsReadOnly="True">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Folio" Binding="{Binding FolioVale}" Width="95" />
-                                            <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="80" />
+                                            <DataGridTextColumn Header="Folio" Binding="{Binding FolioVale}" Width="90" />
+                                            <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="78" />
                                             <DataGridTextColumn Header="Herramienta" Binding="{Binding HerramientaDescripcion}" Width="*" />
-                                            <DataGridTextColumn Header="Depto. Aprueba" Binding="{Binding DepartamentoNombre}" Width="115" />
-                                            <DataGridTextColumn Header="Quien Recibe" Binding="{Binding EncargadoNombre}" Width="125" />
-                                            <DataGridTextColumn Header="Estado" Binding="{Binding EstadoDevolucion}" Width="90" />
+                                            <DataGridTextColumn Header="Depto. Aprueba" Binding="{Binding DepartamentoNombre}" Width="105" />
+                                            <DataGridTextColumn Header="Quien Recibe" Binding="{Binding EncargadoNombre}" Width="115" />
+                                            <DataGridTextColumn Header="Fecha Promesa" Binding="{Binding FechaPromesa}" Width="95" />
+                                            <DataGridTextColumn Header="Estado" Binding="{Binding EstadoDevolucion}" Width="88" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>

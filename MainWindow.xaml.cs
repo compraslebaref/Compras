@@ -74,6 +74,7 @@ public partial class MainWindow : FluentWindow
         public string DepartamentoNombre { get; set; } = string.Empty;
         public string EncargadoNombre { get; set; } = string.Empty;
         public string ProyectoNombre { get; set; } = string.Empty;
+        public string FechaPromesa { get; set; } = string.Empty;
         public string EstadoDevolucion { get; set; } = string.Empty;
         public PrestamoHerramienta PrestamoOriginal { get; set; } = null!;
     }
@@ -5624,6 +5625,7 @@ public partial class MainWindow : FluentWindow
                     DepartamentoNombre = pre.DepartamentoNombre,
                     EncargadoNombre = pre.PersonaRecibeEfectiva,
                     ProyectoNombre = pre.ProyectoNombre,
+                    FechaPromesa = pre.FechaCompromiso,
                     EstadoDevolucion = part.EstadoDevolucion,
                     PrestamoOriginal = pre
                 });
@@ -6568,7 +6570,7 @@ public partial class MainWindow : FluentWindow
 
         string fechaCompromiso = (DpPreFechaCompromiso?.SelectedDate ?? DateTime.Today.AddDays(7)).ToString("yyyy-MM-dd");
 
-        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proyId, TxtSalNotas.Text, listaParaPrestar, personaRecibe, fechaCompromiso);
+        var prestamo = DatabaseService.RegistrarPrestamoHerramienta(dep.Id, encId, proyId, string.Empty, listaParaPrestar, personaRecibe, fechaCompromiso);
         _herramientasPorPrestar.Clear();
         ActualizarVistaListaPrestamoHerramientas();
         if (CboPreDepartamento != null) CboPreDepartamento.SelectedIndex = -1;
