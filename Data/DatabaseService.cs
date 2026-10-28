@@ -1801,7 +1801,7 @@ WHERE (UPPER(Nombre) LIKE '%VACUOMETRO%'
             // 1. Limpieza única de artículos cuyo StockActual fue incrementado artificialmente al abrir/guardar el modal de herramienta sin compra/existencia real
             using (var chkClean = conn.CreateCommand())
             {
-                chkClean.CommandText = "SELECT COUNT(*) FROM ConfiguracionSistema WHERE Clave = 'LimpiezaStockHerramientasModalV1';";
+                chkClean.CommandText = "SELECT COUNT(*) FROM ConfiguracionSistema WHERE Clave = 'LimpiezaStockHerramientasModalV2';";
                 bool yaLimpiado = Convert.ToInt32(chkClean.ExecuteScalar()) > 0;
                 if (!yaLimpiado)
                 {
@@ -1810,10 +1810,15 @@ WHERE (UPPER(Nombre) LIKE '%VACUOMETRO%'
 -- PRD-0137 y PRD-0316 tenían StockActual = 0 antes de marcarse como herramienta (creó 1 existencia al abrir/guardar el modal)
 UPDATE Productos SET StockActual = 0 WHERE CodigoInterno IN ('PRD-0137', 'PRD-0316') AND StockActual = 1;
 
--- PRD-0182 tenía 4 cascos reales (en préstamo) y al abrir/guardar el modal por segunda vez duplicó a 8
-UPDATE Productos SET StockActual = 4 WHERE CodigoInterno = 'PRD-0182' AND StockActual = 8;
+-- PRD-0182 (Casco de seguridad color naranja) sí cuenta con 8 unidades reales
+UPDATE Productos SET StockActual = 8 WHERE CodigoInterno = 'PRD-0182';
+INSERT OR IGNORE INTO HerramientasActivos (Id, ProductoId, CodigoIndividual, NumeroSerie, MarcaModelo, Estado, Ubicacion, EncargadoActual, ProyectoActual, NotasEstado) VALUES
+(46, 192, 'HER-0037', 'TCASN-1', 'CASCO DE SEGURIDAD COLOR NARANJA', 'Disponible', 'Almacén General', '', '', 'Clave SAT: 46181704 | ID Prov: TCASN | Creado desde Factura U-243917'),
+(47, 192, 'HER-0038', 'TCASN-2', 'CASCO DE SEGURIDAD COLOR NARANJA', 'Disponible', 'Almacén General', '', '', 'Clave SAT: 46181704 | ID Prov: TCASN | Creado desde Factura U-243917'),
+(48, 192, 'HER-0039', 'TCASN-3', 'CASCO DE SEGURIDAD COLOR NARANJA', 'Disponible', 'Almacén General', '', '', 'Clave SAT: 46181704 | ID Prov: TCASN | Creado desde Factura U-243917'),
+(49, 192, 'HER-0040', 'TCASN-4', 'CASCO DE SEGURIDAD COLOR NARANJA', 'Disponible', 'Almacén General', '', '', 'Clave SAT: 46181704 | ID Prov: TCASN | Creado desde Factura U-243917');
 
-INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ('LimpiezaStockHerramientasModalV1', '1');";
+INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ('LimpiezaStockHerramientasModalV2', '1');";
                     fixCmd.ExecuteNonQuery();
                 }
             }
