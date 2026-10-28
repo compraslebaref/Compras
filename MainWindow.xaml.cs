@@ -3553,21 +3553,73 @@ public partial class MainWindow : FluentWindow
     {
         var dlg = new SaveFileDialog
         {
-            Title = "Guardar Plantilla de Solicitud para Ingeniería (Excel CSV)",
-            FileName = "Plantilla_Solicitud_Ingenieria.csv",
+            Title = "Guardar Plantilla Estándar de Solicitud de Material (Excel / Portal Web CSV)",
+            FileName = "Plantilla_Estandar_Solicitud_Material.csv",
             Filter = "Archivo CSV para Excel (*.csv)|*.csv"
         };
         if (dlg.ShowDialog() == true)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("CodigoProducto,Cantidad,Notas");
-            foreach (var p in DatabaseService.ObtenerProductos().Take(4))
-            {
-                sb.AppendLine($"{p.CodigoInterno},2,Para proyecto en curso ({p.Nombre})");
-            }
-            File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8);
-            System.Windows.MessageBox.Show(this, $"Plantilla guardada en:\n{dlg.FileName}\n\nLos ingenieros pueden abrirla en Excel, capturar códigos/nombres y cantidades, y usted importarla con 1 clic.", "Plantilla Generada", MessageBoxButton.OK, MessageBoxImage.Information);
+            sb.AppendLine("FORMATO ESTANDAR DE SOLICITUD DE MATERIAL E INSUMOS (WEB / EXCEL),,,,,,");
+            sb.AppendLine("Folio Web (Opcional),WEB-2026-0001,,,,,");
+            sb.AppendLine("Departamento / Area,HVAC,,,,,");
+            sb.AppendLine("Nombre Solicitante,Ing. Carlos Mendoza,,,,,");
+            sb.AppendLine("Persona que Recibe,Lázaro Burgos,,,,,");
+            sb.AppendLine("Proyecto / Obra Destino,HVAC-PAM,,,,,");
+            sb.AppendLine($"Fecha Requerida,{DateTime.Today.AddDays(3):yyyy-MM-dd},,,,,");
+            sb.AppendLine("Nivel de Urgencia,Normal,Opciones: Normal | Urgente,,,,");
+            sb.AppendLine("Lugar de Entrega,Recoger en Almacén,Opciones: Recoger en Almacén | Entrega en Obra | Envío Foráneo,,,,");
+            sb.AppendLine("Observaciones Generales,Material para instalación programada de la semana,,,,,");
+            sb.AppendLine(",,,,,,");
+            sb.AppendLine("DescripcionArticulo,EspecificacionMedida,MarcaModeloRef,Cantidad,UnidadMedida,PrecioRefSinIva,NotasUso");
+            sb.AppendLine("\"Tubo de cobre rígido\",\"Tipo L de 1/2 pulg x 6.10 m\",\"IUSA o Nacobre\",4,Tramo,480.00,\"Línea de succión equipo principal\"");
+            sb.AppendLine("\"Cable de uso rudo\",\"Calibre 12 AWG 3 hilos 600V\",\"Condumex o Indiana\",1,Rollo,2150.00,\"Alimentación condensadora\"");
+            sb.AppendLine("\"Guante de nitrilo anticorte\",\"Talla Grande (L) Nivel 5\",\"Pretul o Truper\",6,Par,85.00,\"EPP para cuadrilla de montaje\"");
+
+            File.WriteAllText(dlg.FileName, sb.ToString(), new UTF8Encoding(true));
+            System.Windows.MessageBox.Show(this,
+                $"Plantilla estándar guardada en:\n{dlg.FileName}\n\n" +
+                "• Incluye el Encabezado obligatorio (Folio Web, Departamento, Solicitante, Quién recibe, Proyecto, Fecha requerida, Urgencia y Lugar de entrega).\n" +
+                "• Incluye las 7 columnas por artículo (Descripción, Especificación/Medida, Marca/Modelo Ref, Cantidad, Unidad, Precio Ref. sin IVA y Notas de uso).\n" +
+                "• Al importarla aquí, todas las partidas entran como Conceptos Libres listos para cotizar o vincular al catálogo.",
+                "Plantilla Estándar Generada", MessageBoxButton.OK, MessageBoxImage.Information);
         }
+    }
+
+    private static List<string> DividirLineaCsvEstandar(string linea, char delimitador)
+    {
+        var resultado = new List<string>();
+        if (linea == null) return resultado;
+
+        var actual = new StringBuilder();
+        bool enComillas = false;
+        for (int i = 0; i < linea.Length; i++)
+        {
+            char c = linea[i];
+            if (c == '"')
+            {
+                if (enComillas && i + 1 < linea.Length && linea[i + 1] == '"')
+                {
+                    actual.Append('"');
+                    i++;
+                }
+                else
+                {
+                    enComillas = !enComillas;
+                }
+            }
+            else if (c == delimitador && !enComillas)
+            {
+                resultado.Add(actual.ToString().Trim());
+                actual.Clear();
+            }
+            else
+            {
+                actual.Append(c);
+            }
+        }
+        resultado.Add(actual.ToString().Trim());
+        return resultado;
     }
 
     private void BtnImportarPlantillaSolicitud_Click(object sender, RoutedEventArgs e)
@@ -3576,53 +3628,336 @@ public partial class MainWindow : FluentWindow
 
         var dlg = new OpenFileDialog
         {
-            Title = "Importar Plantilla de Solicitud (CSV)",
+            Title = "Importar Solicitud desde Archivo Estándar (Web / Excel CSV)",
             Filter = "Archivo CSV (*.csv)|*.csv|Todos los archivos (*.*)|*.*"
         };
-        if (dlg.ShowDialog() == true)
-        {
-            var lineas = File.ReadAllLines(dlg.FileName);
-            var productos = DatabaseService.ObtenerProductos();
-            foreach (var l in lineas.Skip(1))
-            {
-                var cols = l.Split(',');
-                if (cols.Length < 2) continue;
-                string clave = cols[0].Trim();
-                decimal cant = ParseDecimal(cols[1], 1m);
-                string nota = cols.Length >= 3 ? cols[2].Trim() : "Importado de plantilla";
+        if (dlg.ShowDialog() != true) return;
 
-                var prod = productos.FirstOrDefault(p =>
-                    p.CodigoInterno.Equals(clave, StringComparison.OrdinalIgnoreCase) ||
-                    p.Nombre.Contains(clave, StringComparison.OrdinalIgnoreCase));
-                if (prod != null)
+        string[] lineas;
+        try
+        {
+            var bytes = File.ReadAllBytes(dlg.FileName);
+            string contenido = Encoding.UTF8.GetString(bytes);
+            if (contenido.Contains('\uFFFD'))
+            {
+                contenido = Encoding.Latin1.GetString(bytes);
+            }
+            lineas = contenido.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"No se pudo leer el archivo:\n{ex.Message}", "Error de lectura", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        // Detectar delimitador (coma o punto y coma si Excel regional lo guardó con ';')
+        char delim = ',';
+        var lineaCabecera = lineas.FirstOrDefault(l =>
+            l.Contains("DescripcionArticulo", StringComparison.OrdinalIgnoreCase) ||
+            l.Contains("CodigoProducto", StringComparison.OrdinalIgnoreCase));
+        if (lineaCabecera != null && lineaCabecera.Count(c => c == ';') > lineaCabecera.Count(c => c == ','))
+        {
+            delim = ';';
+        }
+        else if (lineaCabecera == null && lineas.Take(10).Sum(l => l.Count(c => c == ';')) > lineas.Take(10).Sum(l => l.Count(c => c == ',')))
+        {
+            delim = ';';
+        }
+
+        string folioWeb = string.Empty;
+        string deptoTxt = string.Empty;
+        string solicitanteTxt = string.Empty;
+        string recibeTxt = string.Empty;
+        string proyectoTxt = string.Empty;
+        string fechaReqTxt = string.Empty;
+        string urgenciaTxt = string.Empty;
+        string lugarEntregaTxt = string.Empty;
+        string obsGeneralesTxt = string.Empty;
+
+        bool enTablaPartidas = false;
+        bool esFormatoLegacy3Cols = false;
+        int partidasImportadas = 0;
+
+        foreach (var rawLine in lineas)
+        {
+            if (string.IsNullOrWhiteSpace(rawLine)) continue;
+            var cols = DividirLineaCsvEstandar(rawLine, delim);
+            if (cols.Count == 0 || cols.All(string.IsNullOrWhiteSpace)) continue;
+
+            string c0 = cols[0].Trim();
+            if (string.IsNullOrWhiteSpace(c0)) continue;
+
+            // Detectar inicio de la tabla de partidas
+            if (c0.Equals("DescripcionArticulo", StringComparison.OrdinalIgnoreCase) ||
+                c0.Equals("Descripción", StringComparison.OrdinalIgnoreCase) ||
+                c0.Equals("Descripcion", StringComparison.OrdinalIgnoreCase) ||
+                c0.Equals("Articulo", StringComparison.OrdinalIgnoreCase) ||
+                c0.Equals("Artículo", StringComparison.OrdinalIgnoreCase))
+            {
+                enTablaPartidas = true;
+                esFormatoLegacy3Cols = false;
+                continue;
+            }
+            if (c0.Equals("CodigoProducto", StringComparison.OrdinalIgnoreCase))
+            {
+                enTablaPartidas = true;
+                esFormatoLegacy3Cols = true;
+                continue;
+            }
+
+            if (!enTablaPartidas)
+            {
+                string val = cols.Count > 1 ? cols[1].Trim() : string.Empty;
+                if (c0.StartsWith("FORMATO ESTANDAR", StringComparison.OrdinalIgnoreCase) ||
+                    c0.StartsWith("SOLICITUD DE MATERIAL", StringComparison.OrdinalIgnoreCase))
                 {
-                    var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == prod.Id);
-                    if (existente != null)
-                    {
-                        existente.CantidadSolicitada += cant;
-                    }
-                    else
-                    {
-                        _partidasNuevaSolicitud.Add(new SolicitudPartida
-                        {
-                            ProductoId = prod.Id,
-                            ProductoCodigo = prod.CodigoInterno,
-                            ProductoNombre = prod.Nombre,
-                            Familia = prod.Familia,
-                            UnidadCompra = prod.UnidadCompra,
-                            CantidadSolicitada = cant,
-                            StockActualAlmacen = prod.StockActual,
-                            NotasPartida = nota
-                        });
-                    }
+                    continue;
                 }
-                else if (!string.IsNullOrWhiteSpace(clave))
+                if (c0.Contains("Folio Web", StringComparison.OrdinalIgnoreCase) || c0.Equals("Folio", StringComparison.OrdinalIgnoreCase))
+                    folioWeb = val;
+                else if (c0.Contains("Departamento", StringComparison.OrdinalIgnoreCase) || c0.Contains("Area", StringComparison.OrdinalIgnoreCase) || c0.Contains("Área", StringComparison.OrdinalIgnoreCase))
+                    deptoTxt = val;
+                else if (c0.Contains("Solicitante", StringComparison.OrdinalIgnoreCase) || c0.Contains("Quien pide", StringComparison.OrdinalIgnoreCase))
+                    solicitanteTxt = val;
+                else if (c0.Contains("Recibe", StringComparison.OrdinalIgnoreCase))
+                    recibeTxt = val;
+                else if (c0.Contains("Proyecto", StringComparison.OrdinalIgnoreCase) || c0.Contains("Obra", StringComparison.OrdinalIgnoreCase))
+                    proyectoTxt = val;
+                else if (c0.Contains("Fecha Requerida", StringComparison.OrdinalIgnoreCase) || c0.Contains("Fecha Compromiso", StringComparison.OrdinalIgnoreCase))
+                    fechaReqTxt = val;
+                else if (c0.Contains("Urgencia", StringComparison.OrdinalIgnoreCase) || c0.Contains("Prioridad", StringComparison.OrdinalIgnoreCase))
+                    urgenciaTxt = val;
+                else if (c0.Contains("Lugar de Entrega", StringComparison.OrdinalIgnoreCase) || c0.Contains("Entrega", StringComparison.OrdinalIgnoreCase))
+                    lugarEntregaTxt = val;
+                else if (c0.Contains("Observaciones", StringComparison.OrdinalIgnoreCase) || c0.Contains("Notas", StringComparison.OrdinalIgnoreCase))
+                    obsGeneralesTxt = val;
+                continue;
+            }
+
+            // Procesar renglón de partida (entran todas como Concepto Libre según el flujo definido)
+            if (esFormatoLegacy3Cols)
+            {
+                string descLegacy = c0;
+                decimal cantLegacy = cols.Count > 1 ? ParseDecimal(cols[1], 1m) : 1m;
+                string notaLegacy = cols.Count > 2 && !string.IsNullOrWhiteSpace(cols[2]) ? cols[2].Trim() : "Importado de plantilla";
+                AgregarPartidaConceptoLibreEstructurada(descLegacy, string.Empty, string.Empty, cantLegacy, "Pieza", 0m, notaLegacy);
+                partidasImportadas++;
+            }
+            else
+            {
+                string descArt = c0;
+                string especMedida = cols.Count > 1 ? cols[1].Trim() : string.Empty;
+                string marcaRef = cols.Count > 2 ? cols[2].Trim() : string.Empty;
+                decimal cant = cols.Count > 3 ? ParseDecimal(cols[3], 1m) : 1m;
+                string unidadRaw = cols.Count > 4 && !string.IsNullOrWhiteSpace(cols[4]) ? cols[4].Trim() : "Pieza";
+                decimal precioRef = cols.Count > 5 ? ParseDecimal(cols[5].Replace("$", "").Trim(), 0m) : 0m;
+                string notasUso = cols.Count > 6 ? cols[6].Trim() : string.Empty;
+
+                if (cant <= 0m) cant = 1m;
+                AgregarPartidaConceptoLibreEstructurada(descArt, especMedida, marcaRef, cant, unidadRaw, precioRef, notasUso);
+                partidasImportadas++;
+            }
+        }
+
+        // Aplicar metadatos del encabezado a los controles de la Solicitud
+        AplicarEncabezadoSolicitudImportada(
+            folioWeb,
+            deptoTxt,
+            solicitanteTxt,
+            recibeTxt,
+            proyectoTxt,
+            fechaReqTxt,
+            urgenciaTxt,
+            lugarEntregaTxt,
+            obsGeneralesTxt);
+
+        DgPartidasNuevaSolicitud.Items.Refresh();
+        PersistirCambioSiSolicitudEnEdicion();
+
+        System.Windows.MessageBox.Show(this,
+            $"Se importaron {partidasImportadas} partida(s) como Conceptos Libres listos para cotizar o vincular al catálogo.\n\n" +
+            $"• Folio Web: {(string.IsNullOrWhiteSpace(folioWeb) ? "(Sin folio web)" : folioWeb)}\n" +
+            $"• Departamento: {(string.IsNullOrWhiteSpace(deptoTxt) ? "(Seleccione en pantalla)" : deptoTxt)}\n" +
+            $"• Solicitante: {(string.IsNullOrWhiteSpace(solicitanteTxt) ? "(Seleccione en pantalla)" : solicitanteTxt)}\n" +
+            $"• Proyecto: {(string.IsNullOrWhiteSpace(proyectoTxt) ? "Consumo Interno / General" : proyectoTxt)}\n" +
+            $"• Fecha Requerida: {(string.IsNullOrWhiteSpace(fechaReqTxt) ? "No especificada" : fechaReqTxt)} ({(string.IsNullOrWhiteSpace(urgenciaTxt) ? "Normal" : urgenciaTxt)})",
+            "Solicitud Importada Correctamente", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void AgregarPartidaConceptoLibreEstructurada(
+        string descripcionBase,
+        string especificacionMedida,
+        string marcaModeloRef,
+        decimal cantidad,
+        string unidadRaw,
+        decimal precioRefSinIva,
+        string notasUso)
+    {
+        string desc = (descripcionBase ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(desc)) return;
+
+        var partesDesc = new List<string> { desc };
+        if (!string.IsNullOrWhiteSpace(especificacionMedida))
+            partesDesc.Add(especificacionMedida.Trim());
+        if (!string.IsNullOrWhiteSpace(marcaModeloRef))
+            partesDesc.Add($"(Ref: {marcaModeloRef.Trim()})");
+
+        string descCompleta = string.Join(" - ", partesDesc).ToUpperInvariant();
+        string unidadNorm = DatabaseService.NormalizarUnidadMedida(unidadRaw);
+
+        var partesNota = new List<string>();
+        if (!string.IsNullOrWhiteSpace(notasUso))
+            partesNota.Add(notasUso.Trim());
+        if (precioRefSinIva > 0m)
+            partesNota.Add($"Precio Ref. S/IVA: ${precioRefSinIva:N2}");
+
+        string notaFinal = partesNota.Count > 0 ? string.Join(" | ", partesNota) : "Importado de Solicitud Web/Excel";
+
+        var existente = _partidasNuevaSolicitud.FirstOrDefault(x =>
+            x.ProductoId <= 0 &&
+            string.Equals(x.DescripcionLibre, descCompleta, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.UnidadCompra, unidadNorm, StringComparison.OrdinalIgnoreCase));
+
+        if (existente != null)
+        {
+            existente.CantidadSolicitada += cantidad;
+            if (precioRefSinIva > 0m && existente.PrecioSinIva1 <= 0m)
+            {
+                existente.PrecioSinIva1 = precioRefSinIva;
+                existente.NotasCotizacion1 = "Precio ref. solicitante";
+            }
+        }
+        else
+        {
+            string famSug = DatabaseService.ExtraerFamiliaSugerida(desc);
+            _partidasNuevaSolicitud.Add(new SolicitudPartida
+            {
+                ProductoId = 0,
+                ProductoCodigo = "CONCEPTO",
+                ProductoNombre = descCompleta,
+                DescripcionLibre = descCompleta,
+                Familia = famSug,
+                UnidadCompra = unidadNorm,
+                CantidadSolicitada = cantidad,
+                StockActualAlmacen = 0m,
+                NotasPartida = notaFinal,
+                PrecioSinIva1 = precioRefSinIva > 0m ? precioRefSinIva : 0m,
+                NotasCotizacion1 = precioRefSinIva > 0m ? "Precio ref. solicitante" : string.Empty
+            });
+        }
+    }
+
+    private void AplicarEncabezadoSolicitudImportada(
+        string folioWeb,
+        string deptoTxt,
+        string solicitanteTxt,
+        string recibeTxt,
+        string proyectoTxt,
+        string fechaReqTxt,
+        string urgenciaTxt,
+        string lugarEntregaTxt,
+        string obsGeneralesTxt)
+    {
+        // 1. Departamento
+        Departamento? deptoSel = null;
+        if (!string.IsNullOrWhiteSpace(deptoTxt))
+        {
+            var deptos = DatabaseService.ObtenerDepartamentos();
+            deptoSel = deptos.FirstOrDefault(d =>
+                d.Nombre.Equals(deptoTxt, StringComparison.OrdinalIgnoreCase) ||
+                d.Codigo.Equals(deptoTxt, StringComparison.OrdinalIgnoreCase) ||
+                d.Nombre.Contains(deptoTxt, StringComparison.OrdinalIgnoreCase) ||
+                deptoTxt.Contains(d.Nombre, StringComparison.OrdinalIgnoreCase));
+
+            if (deptoSel == null)
+            {
+                string codNuevo = deptoTxt.Length >= 3
+                    ? new string(deptoTxt.Where(char.IsLetterOrDigit).Take(6).ToArray()).ToUpperInvariant()
+                    : "DEP-WEB";
+                DatabaseService.GuardarDepartamento(codNuevo, deptoTxt.Trim());
+                CargarCombosBase();
+                deptoSel = DatabaseService.ObtenerDepartamentos().FirstOrDefault(d => d.Nombre.Equals(deptoTxt.Trim(), StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (deptoSel != null && CboSolDepartamento != null)
+            {
+                CboSolDepartamento.SelectedItem = CboSolDepartamento.Items.Cast<Departamento>().FirstOrDefault(d => d.Id == deptoSel.Id);
+            }
+        }
+        else
+        {
+            deptoSel = CboSolDepartamento?.SelectedItem as Departamento;
+        }
+
+        // 2. Solicitante / Encargado
+        string nombreEncargadoBuscar = !string.IsNullOrWhiteSpace(solicitanteTxt) ? solicitanteTxt : recibeTxt;
+        if (deptoSel != null && !string.IsNullOrWhiteSpace(nombreEncargadoBuscar))
+        {
+            var encs = DatabaseService.ObtenerEncargados(deptoSel.Id);
+            var encSel = encs.FirstOrDefault(e =>
+                e.Nombre.Equals(nombreEncargadoBuscar, StringComparison.OrdinalIgnoreCase) ||
+                e.Nombre.Contains(nombreEncargadoBuscar, StringComparison.OrdinalIgnoreCase) ||
+                nombreEncargadoBuscar.Contains(e.Nombre, StringComparison.OrdinalIgnoreCase));
+
+            if (encSel == null)
+            {
+                DatabaseService.GuardarEncargado(deptoSel.Id, nombreEncargadoBuscar.Trim(), "Solicitante Web/Excel", "");
+                encs = DatabaseService.ObtenerEncargados(deptoSel.Id);
+                encSel = encs.FirstOrDefault(e => e.Nombre.Equals(nombreEncargadoBuscar.Trim(), StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (CboSolEncargado != null)
+            {
+                CboSolEncargado.ItemsSource = encs;
+                if (encSel != null)
+                    CboSolEncargado.SelectedItem = encs.FirstOrDefault(x => x.Id == encSel.Id);
+            }
+        }
+
+        // 3. Proyecto / Obra Destino
+        if (!string.IsNullOrWhiteSpace(proyectoTxt) && CboSolProyecto != null)
+        {
+            if (proyectoTxt.Contains("Interno", StringComparison.OrdinalIgnoreCase) ||
+                proyectoTxt.Contains("Sin proyecto", StringComparison.OrdinalIgnoreCase))
+            {
+                CboSolProyecto.SelectedIndex = -1;
+            }
+            else
+            {
+                var proys = CboSolProyecto.Items.Cast<Proyecto>().ToList();
+                var proySel = proys.FirstOrDefault(p =>
+                    p.Codigo.Equals(proyectoTxt, StringComparison.OrdinalIgnoreCase) ||
+                    p.Nombre.Equals(proyectoTxt, StringComparison.OrdinalIgnoreCase) ||
+                    p.Codigo.Contains(proyectoTxt, StringComparison.OrdinalIgnoreCase) ||
+                    p.Nombre.Contains(proyectoTxt, StringComparison.OrdinalIgnoreCase) ||
+                    proyectoTxt.Contains(p.Codigo, StringComparison.OrdinalIgnoreCase));
+                if (proySel != null)
                 {
-                    AgregarConceptoLibreAPartidasSolicitud(clave, cant, nota);
+                    CboSolProyecto.SelectedItem = proySel;
                 }
             }
-            DgPartidasNuevaSolicitud.Items.Refresh();
-            PersistirCambioSiSolicitudEnEdicion();
+        }
+
+        // 4. Construir resumen estructurado en Notas de la Solicitud
+        var metadatosNotas = new List<string>();
+        if (!string.IsNullOrWhiteSpace(folioWeb))
+            metadatosNotas.Add($"[Folio Web: {folioWeb}]");
+        if (!string.IsNullOrWhiteSpace(fechaReqTxt))
+            metadatosNotas.Add($"[Fecha Requerida: {fechaReqTxt}]");
+        if (!string.IsNullOrWhiteSpace(urgenciaTxt))
+            metadatosNotas.Add($"[Urgencia: {urgenciaTxt}]");
+        if (!string.IsNullOrWhiteSpace(lugarEntregaTxt))
+            metadatosNotas.Add($"[Entrega: {lugarEntregaTxt}]");
+        if (!string.IsNullOrWhiteSpace(recibeTxt) && !string.Equals(recibeTxt, solicitanteTxt, StringComparison.OrdinalIgnoreCase))
+            metadatosNotas.Add($"[Recibe: {recibeTxt}]");
+        if (!string.IsNullOrWhiteSpace(proyectoTxt) && CboSolProyecto?.SelectedItem == null && !proyectoTxt.Contains("Interno", StringComparison.OrdinalIgnoreCase))
+            metadatosNotas.Add($"[Obra indicada: {proyectoTxt}]");
+        if (!string.IsNullOrWhiteSpace(obsGeneralesTxt))
+            metadatosNotas.Add(obsGeneralesTxt);
+
+        if (metadatosNotas.Count > 0 && TxtSolNotas != null)
+        {
+            TxtSolNotas.Text = string.Join(" | ", metadatosNotas);
         }
     }
 

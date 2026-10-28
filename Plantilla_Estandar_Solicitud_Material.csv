@@ -1,0 +1,15 @@
+FORMATO ESTANDAR DE SOLICITUD DE MATERIAL E INSUMOS (WEB / EXCEL),,,,,,
+Folio Web (Opcional),WEB-2026-0001,,,,,
+Departamento / Area,HVAC,,,,,
+Nombre Solicitante,Ing. Carlos Mendoza,,,,,
+Persona que Recibe,Lázaro Burgos,,,,,
+Proyecto / Obra Destino,HVAC-PAM,,,,,
+Fecha Requerida,2026-11-05,,,,,
+Nivel de Urgencia,Normal,Opciones: Normal | Urgente,,,,
+Lugar de Entrega,Recoger en Almacén,Opciones: Recoger en Almacén | Entrega en Obra | Envío Foráneo,,,,
+Observaciones Generales,Material para instalación programada de la semana,,,,,
+,,,,,,
+DescripcionArticulo,EspecificacionMedida,MarcaModeloRef,Cantidad,UnidadMedida,PrecioRefSinIva,NotasUso
+"Tubo de cobre rígido","Tipo L de 1/2 pulg x 6.10 m","IUSA o Nacobre",4,Tramo,480.00,"Línea de succión equipo principal"
+"Cable de uso rudo","Calibre 12 AWG 3 hilos 600V","Condumex o Indiana",1,Rollo,2150.00,"Alimentación condensadora"
+"Guante de nitrilo anticorte","Talla Grande (L) Nivel 5","Pretul o Truper",6,Par,85.00,"EPP para cuadrilla de montaje"

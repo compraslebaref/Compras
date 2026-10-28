@@ -2464,14 +2464,16 @@ SELECT last_insert_rowid();";
             using var pCmd = conn.CreateCommand();
             pCmd.Transaction = tx;
             pCmd.CommandText = @"
-INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida, IncluirEnCotizacion, DiasVigenciaCotizacion)
-VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $inc, $vig)";
+INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida, PrecioSinIva1, NotasCotizacion1, IncluirEnCotizacion, DiasVigenciaCotizacion)
+VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $pr1, $nc1, $inc, $vig)";
             pCmd.Parameters.AddWithValue("$sid", solId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
             pCmd.Parameters.AddWithValue("$dlib", !string.IsNullOrWhiteSpace(item.DescripcionLibre) ? item.DescripcionLibre.Trim() : (item.ProductoNombre ?? string.Empty).Trim());
             pCmd.Parameters.AddWithValue("$ulib", string.IsNullOrWhiteSpace(item.UnidadCompra) ? "Pieza" : item.UnidadCompra.Trim());
             pCmd.Parameters.AddWithValue("$cant", (double)item.CantidadSolicitada);
             pCmd.Parameters.AddWithValue("$not", item.NotasPartida ?? string.Empty);
+            pCmd.Parameters.AddWithValue("$pr1", (double)item.PrecioSinIva1);
+            pCmd.Parameters.AddWithValue("$nc1", item.NotasCotizacion1 ?? string.Empty);
             pCmd.Parameters.AddWithValue("$inc", item.IncluirEnCotizacion ? 1 : 0);
             pCmd.Parameters.AddWithValue("$vig", item.DiasVigenciaCotizacion > 0 ? item.DiasVigenciaCotizacion : 15);
             pCmd.ExecuteNonQuery();
