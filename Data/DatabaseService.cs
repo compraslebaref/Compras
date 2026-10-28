@@ -1798,6 +1798,97 @@ WHERE (UPPER(Nombre) LIKE '%VACUOMETRO%'
 
         try
         {
+            // 1. Limpieza única de artículos cuyo StockActual fue incrementado artificialmente al abrir/guardar el modal de herramienta sin compra/existencia real
+            using (var chkClean = conn.CreateCommand())
+            {
+                chkClean.CommandText = "SELECT COUNT(*) FROM ConfiguracionSistema WHERE Clave = 'LimpiezaStockHerramientasModalV1';";
+                bool yaLimpiado = Convert.ToInt32(chkClean.ExecuteScalar()) > 0;
+                if (!yaLimpiado)
+                {
+                    using var fixCmd = conn.CreateCommand();
+                    fixCmd.CommandText = @"
+-- PRD-0137 y PRD-0316 tenían StockActual = 0 antes de marcarse como herramienta (creó 1 existencia al abrir/guardar el modal)
+UPDATE Productos SET StockActual = 0 WHERE CodigoInterno IN ('PRD-0137', 'PRD-0316') AND StockActual = 1;
+
+-- PRD-0182 tenía 4 cascos reales (en préstamo) y al abrir/guardar el modal por segunda vez duplicó a 8
+UPDATE Productos SET StockActual = 4 WHERE CodigoInterno = 'PRD-0182' AND StockActual = 8;
+
+INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ('LimpiezaStockHerramientasModalV1', '1');";
+                    fixCmd.ExecuteNonQuery();
+                }
+            }
+
+            // 2. Eliminar fichas HER-xxxx sobrantes que estén 'Disponible' y sin historial en PrestamoPartidas cuando superan el StockActual real del producto
+            var stockPorProducto = new Dictionary<int, int>();
+            using (var cmdSt = conn.CreateCommand())
+            {
+                cmdSt.CommandText = "SELECT Id, COALESCE(StockActual, 0) FROM Productos;";
+                using var rs = cmdSt.ExecuteReader();
+                while (rs.Read())
+                {
+                    stockPorProducto[rs.GetInt32(0)] = Math.Max(0, (int)Math.Round(rs.GetDouble(1)));
+                }
+            }
+
+            var fichasPorProducto = new Dictionary<int, List<(int HerId, string Estado, int NumPrestamos)>>();
+            using (var cmdF = conn.CreateCommand())
+            {
+                cmdF.CommandText = @"
+SELECT h.Id, h.ProductoId, COALESCE(h.Estado, 'Disponible'),
+       (SELECT COUNT(*) FROM PrestamoPartidas pp WHERE pp.HerramientaActivoId = h.Id)
+FROM HerramientasActivos h
+ORDER BY h.Id DESC;";
+                using var rf = cmdF.ExecuteReader();
+                while (rf.Read())
+                {
+                    int hid = rf.GetInt32(0);
+                    int pid = rf.GetInt32(1);
+                    string est = rf.GetString(2);
+                    int nprest = rf.GetInt32(3);
+                    if (!fichasPorProducto.TryGetValue(pid, out var list))
+                    {
+                        list = new List<(int, string, int)>();
+                        fichasPorProducto[pid] = list;
+                    }
+                    list.Add((hid, est, nprest));
+                }
+            }
+
+            var idsHerParaEliminar = new List<int>();
+            foreach (var kv in fichasPorProducto)
+            {
+                int pid = kv.Key;
+                int stockEsperado = stockPorProducto.TryGetValue(pid, out int st) ? st : 0;
+                var activas = kv.Value
+                    .Where(x => !string.Equals(x.Estado, "Extraviada / Baja", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                int exceso = activas.Count - stockEsperado;
+                if (exceso > 0)
+                {
+                    foreach (var ficha in activas)
+                    {
+                        if (exceso <= 0) break;
+                        if (string.Equals(ficha.Estado, "Disponible", StringComparison.OrdinalIgnoreCase) && ficha.NumPrestamos == 0)
+                        {
+                            idsHerParaEliminar.Add(ficha.HerId);
+                            exceso--;
+                        }
+                    }
+                }
+            }
+
+            if (idsHerParaEliminar.Count > 0)
+            {
+                foreach (int hid in idsHerParaEliminar)
+                {
+                    using var delHer = conn.CreateCommand();
+                    delHer.CommandText = "DELETE FROM HerramientasActivos WHERE Id = $id;";
+                    delHer.Parameters.AddWithValue("$id", hid);
+                    delHer.ExecuteNonQuery();
+                }
+            }
+
             int maxNum = 0;
             var conteoPorProducto = new Dictionary<int, int>();
 
@@ -1838,7 +1929,7 @@ ORDER BY Id;";
                     int pid = rp.GetInt32(0);
                     double stock = rp.GetDouble(5);
                     int registradasActivas = conteoPorProducto.TryGetValue(pid, out int c) ? c : 0;
-                    int esperadas = Math.Max(1, (int)Math.Round(stock));
+                    int esperadas = Math.Max(0, (int)Math.Round(stock));
 
                     if (esperadas > registradasActivas)
                     {

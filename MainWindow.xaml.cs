@@ -2047,6 +2047,7 @@ public partial class MainWindow : FluentWindow
         {
             int idGuardado = DatabaseService.GuardarProducto(_productoEnEdicion);
             _productoEnEdicion.Id = idGuardado;
+            DatabaseService.SincronizarHerramientasCatalogoConDirectorio();
             CargarTodoElSistema(conservarPosicionCatalogo: true);
             prodGuardado = _cacheProductos.FirstOrDefault(x => x.Id == idGuardado) ?? _productoEnEdicion;
             CargarProductoEnEditor(prodGuardado);
@@ -2054,7 +2055,7 @@ public partial class MainWindow : FluentWindow
 
         if (prodGuardado != null && prodGuardado.EsHerramienta && !eraHerramientaAntes)
         {
-            int cantSugerida = Math.Max(1, (int)Math.Round(prodGuardado.StockActual));
+            int cantSugerida = Math.Max(0, (int)Math.Round(prodGuardado.StockActual));
             MostrarModalRegistroHerramienta(prodGuardado, cantSugerida);
         }
     }
@@ -2068,9 +2069,10 @@ public partial class MainWindow : FluentWindow
         {
             _productoEnEdicion.EsHerramienta = true;
             DatabaseService.GuardarProducto(_productoEnEdicion);
+            DatabaseService.SincronizarHerramientasCatalogoConDirectorio();
             CargarTodoElSistema(conservarPosicionCatalogo: true);
             var actualizado = _cacheProductos.FirstOrDefault(x => x.Id == _productoEnEdicion.Id) ?? _productoEnEdicion;
-            int cantSug = Math.Max(1, (int)Math.Round(actualizado.StockActual));
+            int cantSug = Math.Max(0, (int)Math.Round(actualizado.StockActual));
             MostrarModalRegistroHerramienta(actualizado, cantSug);
         }
         else if (!string.IsNullOrWhiteSpace(TxtProdNombre.Text))
@@ -2088,10 +2090,11 @@ public partial class MainWindow : FluentWindow
                 ChkProdEsHerramienta.IsChecked = true;
                 _productoEnEdicion.EsHerramienta = true;
                 DatabaseService.GuardarProducto(_productoEnEdicion);
-                CargarTodoElSistema(conservarPosicionCatalogo: true);
             }
+            DatabaseService.SincronizarHerramientasCatalogoConDirectorio();
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
             var actualizado = _cacheProductos.FirstOrDefault(x => x.Id == _productoEnEdicion.Id) ?? _productoEnEdicion;
-            int cantSug = Math.Max(1, (int)Math.Round(actualizado.StockActual));
+            int cantSug = Math.Max(0, (int)Math.Round(actualizado.StockActual));
             MostrarModalRegistroHerramienta(actualizado, cantSug);
             return;
         }
@@ -2103,10 +2106,10 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        MostrarModalRegistroHerramienta(null, 1);
+        MostrarModalRegistroHerramienta(null, 0);
     }
 
-    private void MostrarModalRegistroHerramienta(Producto? prodPreseleccionado, int cantidadSugerida = 1)
+    private void MostrarModalRegistroHerramienta(Producto? prodPreseleccionado, int cantidadSugerida = 0)
     {
         var todosProductos = DatabaseService.ObtenerProductos()
             .OrderByDescending(p => p.EsHerramienta)
@@ -2299,7 +2302,7 @@ public partial class MainWindow : FluentWindow
 
         var spCant = new StackPanel();
         spCant.Children.Add(new TextBlock { Text = "Cant. Piezas", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
-        var txtCantNuevas = new System.Windows.Controls.TextBox { Text = Math.Max(1, cantidadSugerida).ToString(), Padding = new Thickness(6, 4, 6, 4), ToolTip = "Si va a registrar varias herramientas idénticas de una vez, indique cuántas fichas HER consecutivas generar" };
+        var txtCantNuevas = new System.Windows.Controls.TextBox { Text = Math.Max(0, cantidadSugerida).ToString(), Padding = new Thickness(6, 4, 6, 4), ToolTip = "Cantidad de fichas HER individuales a generar según la existencia real en almacén (0 si aún no hay stock)" };
         spCant.Children.Add(txtCantNuevas);
         Grid.SetColumn(spCant, 3);
         row1.Children.Add(spCant);
@@ -2377,7 +2380,7 @@ public partial class MainWindow : FluentWindow
 
         int idHerEditandoModal = 0;
 
-        void PrepararFormularioParaProducto(Producto? pSel, HerramientaActivo? herEditar = null)
+        void PrepararFormularioParaProducto(Producto? pSel, HerramientaActivo? herEditar = null, bool forzarNuevaPiezaManual = false)
         {
             if (pSel == null) return;
 
@@ -2386,6 +2389,7 @@ public partial class MainWindow : FluentWindow
                 idHerEditandoModal = herEditar.Id;
                 lblModoForm.Text = $"✏️ Editando Ficha Existente: {herEditar.CodigoIndividual}";
                 txtCodigo.Text = herEditar.CodigoIndividual;
+                txtCodigo.IsEnabled = true;
                 txtSerie.Text = herEditar.NumeroSerie;
                 txtMarca.Text = herEditar.MarcaModelo;
                 txtUbi.Text = herEditar.Ubicacion;
@@ -2399,9 +2403,12 @@ public partial class MainWindow : FluentWindow
             else
             {
                 idHerEditandoModal = 0;
-                string sigHer = DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
-                lblModoForm.Text = $"✨ Registrar Nueva Ficha Individual ({sigHer})";
-                txtCodigo.Text = sigHer;
+                int activasActuales = DatabaseService.ObtenerHerramientas()
+                    .Count(h => h.ProductoId == pSel.Id && !string.Equals(h.Estado, "Extraviada / Baja", StringComparison.OrdinalIgnoreCase));
+                int stockRedondeado = Math.Max(0, (int)Math.Round(pSel.StockActual));
+                int faltantesPorStock = Math.Max(0, stockRedondeado - activasActuales);
+                int cantDefault = forzarNuevaPiezaManual ? (stockRedondeado > activasActuales ? 1 : 0) : faltantesPorStock;
+
                 txtSerie.Text = !string.IsNullOrWhiteSpace(pSel.CodigoBarras) && !pSel.CodigoBarras.StartsWith("PRD-")
                     ? pSel.CodigoBarras
                     : "S/N";
@@ -2412,25 +2419,44 @@ public partial class MainWindow : FluentWindow
                     : "Gabinete H-1";
                 cboEstado.SelectedIndex = 0;
                 txtNotas.Text = pSel.Descripcion;
-                txtCantNuevas.IsEnabled = true;
-                btnGuardarHer.Content = "➕ Guardar y Registrar en Directorio de Herramientas";
+                txtCantNuevas.Text = cantDefault.ToString();
+                txtCantNuevas.IsEnabled = cantDefault > 0;
+
+                if (cantDefault > 0)
+                {
+                    string sigHer = DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
+                    lblModoForm.Text = $"✨ Registrar Nueva Ficha Individual ({sigHer})";
+                    txtCodigo.Text = sigHer;
+                    txtCodigo.IsEnabled = true;
+                    btnGuardarHer.Content = "➕ Guardar y Registrar en Directorio de Herramientas";
+                }
+                else
+                {
+                    lblModoForm.Text = "⚙️ Configurar Herramienta en Catálogo (Existencia actual: 0 — Las fichas HER se crearán al recibir compra)";
+                    txtCodigo.Text = "(Al recibir stock)";
+                    txtCodigo.IsEnabled = false;
+                    btnGuardarHer.Content = "💾 Guardar Configuración de Herramienta (Sin crear existencia)";
+                }
             }
         }
 
         void RefrescarTablaHerramientasProducto()
         {
             if (cboProd.SelectedItem is not Producto pSel) return;
+            var prodFresco = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.Id == pSel.Id) ?? pSel;
+            pSel.StockActual = prodFresco.StockActual;
             var lista = DatabaseService.ObtenerHerramientas().Where(h => h.ProductoId == pSel.Id).ToList();
             dgHer.ItemsSource = lista;
             lblResumenStock.Text = $"Existencia: {pSel.StockActual:0.##} {pSel.UnidadAlmacen} | Fichas HER: {lista.Count}";
 
-            var recienSincronizada = lista.LastOrDefault(h => string.Equals(h.NotasEstado, "Sincronizada desde Catálogo de Herramientas", StringComparison.OrdinalIgnoreCase));
-            if (recienSincronizada != null)
+            if (lista.Count > 0)
             {
+                var recienSincronizada = lista.LastOrDefault(h => string.Equals(h.NotasEstado, "Sincronizada desde Catálogo de Herramientas", StringComparison.OrdinalIgnoreCase))
+                                         ?? lista[0];
                 dgHer.SelectedItem = recienSincronizada;
                 PrepararFormularioParaProducto(pSel, recienSincronizada);
             }
-            else if (lista.Count == 0)
+            else
             {
                 PrepararFormularioParaProducto(pSel, null);
             }
@@ -2439,10 +2465,6 @@ public partial class MainWindow : FluentWindow
         cboProd.SelectionChanged += (_, _) =>
         {
             RefrescarTablaHerramientasProducto();
-            if (cboProd.SelectedItem is Producto pSel && dgHer.SelectedItem == null)
-            {
-                PrepararFormularioParaProducto(pSel, null);
-            }
         };
 
         dgHer.SelectionChanged += (_, _) =>
@@ -2458,7 +2480,7 @@ public partial class MainWindow : FluentWindow
             dgHer.SelectedItem = null;
             if (cboProd.SelectedItem is Producto pSel)
             {
-                PrepararFormularioParaProducto(pSel, null);
+                PrepararFormularioParaProducto(pSel, null, forzarNuevaPiezaManual: true);
                 txtSerie.Focus();
                 txtSerie.SelectAll();
             }
@@ -2480,7 +2502,7 @@ public partial class MainWindow : FluentWindow
 
             if (idHerEditandoModal > 0)
             {
-                string cod = string.IsNullOrWhiteSpace(txtCodigo.Text)
+                string cod = string.IsNullOrWhiteSpace(txtCodigo.Text) || txtCodigo.Text.StartsWith("(")
                     ? DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual")
                     : txtCodigo.Text.Trim();
 
@@ -2498,10 +2520,10 @@ public partial class MainWindow : FluentWindow
             }
             else
             {
-                int cant = Math.Max(1, (int)ParseDecimal(txtCantNuevas.Text, 1m));
+                int cant = Math.Max(0, (int)ParseDecimal(txtCantNuevas.Text, 0m));
                 for (int i = 0; i < cant; i++)
                 {
-                    string cod = (i == 0 && !string.IsNullOrWhiteSpace(txtCodigo.Text))
+                    string cod = (i == 0 && !string.IsNullOrWhiteSpace(txtCodigo.Text) && !txtCodigo.Text.StartsWith("("))
                         ? txtCodigo.Text.Trim()
                         : DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
 
@@ -2521,24 +2543,21 @@ public partial class MainWindow : FluentWindow
                 }
             }
 
-            // Sincronizar también la ubicación y bandera EsHerramienta en el producto del catálogo
+            // Sincronizar ubicación y bandera EsHerramienta en el producto del catálogo SIN alterar StockActual
             var prodActual = DatabaseService.ObtenerProductos().FirstOrDefault(x => x.Id == pSel.Id);
             if (prodActual != null)
             {
-                var totalFichasHer = DatabaseService.ObtenerHerramientas().Count(h => h.ProductoId == pSel.Id && h.Estado != "Extraviada / Baja");
                 prodActual.EsHerramienta = true;
                 if (!string.IsNullOrWhiteSpace(ubi))
                     prodActual.Ubicacion = ubi;
-                if (prodActual.StockActual < totalFichasHer)
-                    prodActual.StockActual = totalFichasHer;
                 DatabaseService.GuardarProducto(prodActual);
             }
 
             CargarTodoElSistema(conservarPosicionCatalogo: true);
             RefrescarTablaHerramientasProducto();
             System.Windows.MessageBox.Show(win,
-                $"La información de la herramienta quedó guardada y sincronizada en el Directorio de Herramientas y en Almacén.",
-                "Herramienta Registrada", MessageBoxButton.OK, MessageBoxImage.Information);
+                "La información de la herramienta quedó guardada sin alterar la existencia de almacén.",
+                "Herramienta Guardada", MessageBoxButton.OK, MessageBoxImage.Information);
         };
 
         btnIrDirectorio.Click += (_, _) =>
