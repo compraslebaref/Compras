@@ -2424,10 +2424,11 @@ public partial class MainWindow : FluentWindow
             dgHer.ItemsSource = lista;
             lblResumenStock.Text = $"Existencia: {pSel.StockActual:0.##} {pSel.UnidadAlmacen} | Fichas HER: {lista.Count}";
 
-            if (lista.Count == 1 && string.Equals(lista[0].NotasEstado, "Sincronizada desde Catálogo de Herramientas", StringComparison.OrdinalIgnoreCase))
+            var recienSincronizada = lista.LastOrDefault(h => string.Equals(h.NotasEstado, "Sincronizada desde Catálogo de Herramientas", StringComparison.OrdinalIgnoreCase));
+            if (recienSincronizada != null)
             {
-                dgHer.SelectedItem = lista[0];
-                PrepararFormularioParaProducto(pSel, lista[0]);
+                dgHer.SelectedItem = recienSincronizada;
+                PrepararFormularioParaProducto(pSel, recienSincronizada);
             }
             else if (lista.Count == 0)
             {

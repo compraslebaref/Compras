@@ -1803,13 +1803,18 @@ WHERE (UPPER(Nombre) LIKE '%VACUOMETRO%'
 
             using (var cmdHer = conn.CreateCommand())
             {
-                cmdHer.CommandText = "SELECT ProductoId, CodigoIndividual FROM HerramientasActivos;";
+                cmdHer.CommandText = "SELECT ProductoId, CodigoIndividual, COALESCE(Estado, 'Disponible') FROM HerramientasActivos;";
                 using var r = cmdHer.ExecuteReader();
                 while (r.Read())
                 {
                     int pid = r.GetInt32(0);
                     string cod = r.IsDBNull(1) ? string.Empty : r.GetString(1);
-                    conteoPorProducto[pid] = conteoPorProducto.TryGetValue(pid, out int c) ? c + 1 : 1;
+                    string est = r.IsDBNull(2) ? "Disponible" : r.GetString(2);
+
+                    if (!string.Equals(est, "Extraviada / Baja", StringComparison.OrdinalIgnoreCase))
+                    {
+                        conteoPorProducto[pid] = conteoPorProducto.TryGetValue(pid, out int c) ? c + 1 : 1;
+                    }
 
                     if (cod.StartsWith("HER-", StringComparison.OrdinalIgnoreCase) &&
                         int.TryParse(cod[4..].Trim(), out int n) && n > maxNum)
@@ -1819,11 +1824,11 @@ WHERE (UPPER(Nombre) LIKE '%VACUOMETRO%'
                 }
             }
 
-            var herramientasSinRegistro = new List<(int Id, string Nombre, string Marca, string Modelo, string Ubicacion)>();
+            var herramientasPorCrear = new List<(int Id, string Nombre, string Marca, string Modelo, string Ubicacion, int CantidadFaltante)>();
             using (var cmdProd = conn.CreateCommand())
             {
                 cmdProd.CommandText = @"
-SELECT Id, Nombre, COALESCE(Marca, ''), COALESCE(Modelo, ''), COALESCE(Ubicacion, 'Gabinete H-1')
+SELECT Id, Nombre, COALESCE(Marca, ''), COALESCE(Modelo, ''), COALESCE(Ubicacion, 'Gabinete H-1'), COALESCE(StockActual, 0)
 FROM Productos
 WHERE EsHerramienta = 1
 ORDER BY Id;";
@@ -1831,26 +1836,30 @@ ORDER BY Id;";
                 while (rp.Read())
                 {
                     int pid = rp.GetInt32(0);
-                    if (!conteoPorProducto.ContainsKey(pid))
+                    double stock = rp.GetDouble(5);
+                    int registradasActivas = conteoPorProducto.TryGetValue(pid, out int c) ? c : 0;
+                    int esperadas = Math.Max(1, (int)Math.Round(stock));
+
+                    if (esperadas > registradasActivas)
                     {
-                        herramientasSinRegistro.Add((
+                        int faltantes = Math.Min(50, esperadas - registradasActivas);
+                        herramientasPorCrear.Add((
                             pid,
                             rp.GetString(1),
                             rp.GetString(2),
                             rp.GetString(3),
-                            rp.GetString(4)));
+                            rp.GetString(4),
+                            faltantes));
                     }
                 }
             }
 
-            if (herramientasSinRegistro.Count == 0)
+            if (herramientasPorCrear.Count == 0)
                 return;
 
             using var tx = conn.BeginTransaction();
-            foreach (var h in herramientasSinRegistro)
+            foreach (var h in herramientasPorCrear)
             {
-                maxNum++;
-                string codigo = $"HER-{maxNum:D4}";
                 string marcaModelo = $"{h.Marca} {h.Modelo}".Trim();
                 if (string.IsNullOrWhiteSpace(marcaModelo))
                     marcaModelo = h.Nombre;
@@ -1858,16 +1867,22 @@ ORDER BY Id;";
                     ? "Gabinete H-1"
                     : h.Ubicacion;
 
-                using var ins = conn.CreateCommand();
-                ins.Transaction = tx;
-                ins.CommandText = @"
+                for (int i = 0; i < h.CantidadFaltante; i++)
+                {
+                    maxNum++;
+                    string codigo = $"HER-{maxNum:D4}";
+
+                    using var ins = conn.CreateCommand();
+                    ins.Transaction = tx;
+                    ins.CommandText = @"
 INSERT INTO HerramientasActivos (ProductoId, CodigoIndividual, NumeroSerie, MarcaModelo, Estado, Ubicacion, EncargadoActual, ProyectoActual, NotasEstado)
 VALUES ($pid, $cod, 'S/N', $mm, 'Disponible', $ub, '', '', 'Sincronizada desde Catálogo de Herramientas');";
-                ins.Parameters.AddWithValue("$pid", h.Id);
-                ins.Parameters.AddWithValue("$cod", codigo);
-                ins.Parameters.AddWithValue("$mm", marcaModelo);
-                ins.Parameters.AddWithValue("$ub", ubicacion);
-                ins.ExecuteNonQuery();
+                    ins.Parameters.AddWithValue("$pid", h.Id);
+                    ins.Parameters.AddWithValue("$cod", codigo);
+                    ins.Parameters.AddWithValue("$mm", marcaModelo);
+                    ins.Parameters.AddWithValue("$ub", ubicacion);
+                    ins.ExecuteNonQuery();
+                }
             }
             tx.Commit();
         }
@@ -3558,6 +3573,7 @@ WHERE OrdenCompraId = $ocid AND CantidadRecibida < CantidadPedida - 0.001";
         upEnt.ExecuteNonQuery();
 
         tx.Commit();
+        SincronizarHerramientasCatalogoConDirectorio(conn);
         return ObtenerEntradasAlmacen().First(e => e.Id == entId);
     }
 
