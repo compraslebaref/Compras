@@ -393,11 +393,13 @@
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Código" Binding="{Binding CodigoInterno}" Width="95" />
+                                                <DataGridTextColumn Header="Prioridad" Binding="{Binding PrioridadAlertaStock}" Width="125" />
+                                                <DataGridTextColumn Header="Código" Binding="{Binding CodigoInterno}" Width="82" />
                                                 <DataGridTextColumn Header="Producto" Binding="{Binding Nombre}" Width="*" />
-                                                <DataGridTextColumn Header="Actual" Binding="{Binding StockActual}" Width="80" />
-                                                <DataGridTextColumn Header="Mínimo" Binding="{Binding StockMinimo}" Width="75" />
-                                                <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="80" />
+                                                <DataGridTextColumn Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="62" />
+                                                <DataGridTextColumn Header="Mínimo" Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="62" />
+                                                <DataGridTextColumn Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="68" />
+                                                <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="68" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </StackPanel>

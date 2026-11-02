@@ -5959,7 +5959,7 @@ ORDER BY Id ASC";
             freqSal.TryGetValue(p.Id, out var fsal);
             ultCot.TryGetValue(p.Id, out var uc);
 
-            if (fs.numVeces == 0 && fsal.numVeces == 0 && p.StockActual >= p.StockMinimo && uc.precioSinIva <= 0m)
+            if (fs.numVeces == 0 && fsal.numVeces == 0 && p.StockMinimo <= p.StockActual && uc.precioSinIva <= 0m)
                 continue;
 
             string provNom = uc.provId > 0 && provDict.TryGetValue(uc.provId, out var prv) ? prv.NombreMostrar : "Sin proveedor reciente";
@@ -5993,7 +5993,9 @@ ORDER BY Id ASC";
         }
 
         return resultado
-            .OrderByDescending(x => x.FrecuenciaSolicitudes + x.FrecuenciaSalidas)
+            .OrderByDescending(x => x.StockMinimo > x.StockActual ? 1 : 0)
+            .ThenByDescending(x => x.StockMinimo > x.StockActual ? (x.StockMinimo - x.StockActual) : 0m)
+            .ThenByDescending(x => x.FrecuenciaSolicitudes + x.FrecuenciaSalidas)
             .ThenByDescending(x => x.CantidadTotalConsumida + x.CantidadTotalSolicitada)
             .ThenBy(x => x.StockActual)
             .ToList();

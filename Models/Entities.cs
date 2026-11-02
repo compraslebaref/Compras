@@ -108,7 +108,13 @@ public class Producto : INotifyPropertyChanged
     public ImageSource? ImagenMiniatura => ImageStandardizerService.ObtenerMiniaturaCacheada(_imagenRuta);
     public bool EsHerramienta { get; set; }
     public decimal StockLibre => Math.Max(0, StockActual - StockReservadoProyecto);
-    public bool StockBajo => StockActual <= StockMinimo;
+    public bool StockBajo => StockMinimo > StockActual;
+    public decimal FaltanteStock => StockMinimo > StockActual ? StockMinimo - StockActual : 0m;
+    public string PrioridadAlertaStock => StockMinimo <= StockActual
+        ? "Normal"
+        : (StockActual <= 0
+            ? "🔴 Crítica (Agotado)"
+            : (StockActual <= StockMinimo * 0.5m ? "🟠 Alta (≤50%)" : "🟡 Media"));
     public string ConversionTexto => FactorConversion > 1
         ? $"1 {UnidadCompra} = {FactorConversion:0.##} {UnidadAlmacen}"
         : $"1 {UnidadAlmacen}";
@@ -793,10 +799,12 @@ public class MaterialRankingAnalisis
     {
         get
         {
+            if (StockMinimo > StockActual && StockActual <= 0)
+                return "🔴 Crítica (Agotado / Bajo Mín.)";
+            if (StockMinimo > StockActual)
+                return "🟠 Alta (Stock Mín. > Actual)";
             if (StockActual <= 0 && (FrecuenciaSolicitudes >= 2 || FrecuenciaSalidas >= 2))
                 return "Alta (Alta rotación sin stock)";
-            if (StockActual <= StockMinimo && StockMinimo > 0)
-                return "Media (Bajo mínimo)";
             if (VigenciaPrecioTexto.StartsWith("Vencid", StringComparison.OrdinalIgnoreCase))
                 return "Actualizar Precio";
             return "Normal";

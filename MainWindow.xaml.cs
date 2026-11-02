@@ -1120,14 +1120,21 @@ public partial class MainWindow : FluentWindow
         var prods = _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos();
         var her = DatabaseService.ObtenerHerramientas();
 
+        var alertasStock = prods
+            .Where(p => p.StockMinimo > p.StockActual)
+            .OrderBy(p => p.StockActual <= 0 ? 0 : (p.StockActual <= p.StockMinimo * 0.5m ? 1 : 2))
+            .ThenByDescending(p => p.FaltanteStock)
+            .ThenBy(p => p.StockActual)
+            .ToList();
+
         KpiSolicitudes.Text = sols.Count(s => s.Estatus == "Pendiente").ToString();
         KpiOcsAbiertas.Text = ocs.Count(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToString();
-        KpiStockBajo.Text = prods.Count(p => p.StockBajo).ToString();
+        KpiStockBajo.Text = alertasStock.Count.ToString();
         KpiHerramientasPrestadas.Text = her.Count(h => h.Estado == "En Préstamo").ToString();
         KpiGastoTotal.Text = ocs.Where(o => o.Estatus != "Cancelada").Sum(o => o.TotalConIva).ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
 
         DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToList();
-        DgDashboardAlertas.ItemsSource = prods.Where(p => p.StockBajo).ToList();
+        DgDashboardAlertas.ItemsSource = alertasStock;
 
         RefrescarCalendarioYAgendaDashboard();
     }
