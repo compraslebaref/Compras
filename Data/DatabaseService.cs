@@ -5998,4 +5998,40 @@ ORDER BY Id ASC";
             .ThenBy(x => x.StockActual)
             .ToList();
     }
+
+    public static void ActualizarUbicacionProducto(int productoId, string ubicacion, bool sincronizarHerramientas = true)
+    {
+        if (productoId <= 0) return;
+        string ubi = (ubicacion ?? "").Trim();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE Productos SET Ubicacion=$u WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$u", ubi);
+            cmd.Parameters.AddWithValue("$id", productoId);
+            cmd.ExecuteNonQuery();
+        }
+        if (sincronizarHerramientas && !string.IsNullOrWhiteSpace(ubi))
+        {
+            using var cmdH = conn.CreateCommand();
+            cmdH.CommandText = "UPDATE HerramientasActivos SET Ubicacion=$u WHERE ProductoId=$id AND (Ubicacion IS NULL OR TRIM(Ubicacion)='' OR TRIM(Ubicacion)='Almacén General')";
+            cmdH.Parameters.AddWithValue("$u", ubi);
+            cmdH.Parameters.AddWithValue("$id", productoId);
+            cmdH.ExecuteNonQuery();
+        }
+    }
+
+    public static void ActualizarUbicacionHerramientaIndividual(int herramientaId, string ubicacion)
+    {
+        if (herramientaId <= 0) return;
+        string ubi = (ubicacion ?? "").Trim();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE HerramientasActivos SET Ubicacion=$u WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$u", ubi);
+        cmd.Parameters.AddWithValue("$id", herramientaId);
+        cmd.ExecuteNonQuery();
+    }
 }

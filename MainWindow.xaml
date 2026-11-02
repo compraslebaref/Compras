@@ -373,6 +373,7 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0"
                                                        Text="Carrito / Solicitud Destino:"
@@ -390,8 +391,13 @@
                                                        Appearance="Primary"
                                                        Click="BtnEnviarCarritoASolicitud_Click" />
                                             <ui:Button Grid.Column="3"
+                                                       Margin="0,0,6,0"
                                                        Content="A Salida Almacén"
                                                        Click="BtnEnviarCarritoASalida_Click" />
+                                            <ui:Button Grid.Column="4"
+                                                       Content="🗺️ Mapa Anaqueles (A–F)"
+                                                       ToolTip="Abrir consulta e inventario gráfico por estante y cuadrante (A-01 a F-09 y PISO)"
+                                                       Click="BtnAbrirMapaAnaqueles_Click" />
                                         </Grid>
                                     </Border>
                                 </StackPanel>
@@ -719,8 +725,21 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Ubicación en Almacén" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                            <ui:TextBox x:Name="TxtProdUbicacion" PlaceholderText="Ej. Estante A-01" />
+                                            <TextBlock Text="Ubicación en Almacén (Estante-Cuadrante)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ui:TextBox x:Name="TxtProdUbicacion" Grid.Column="0" PlaceholderText="Ej. A-01" />
+                                                <ui:Button Grid.Column="1"
+                                                           Content="🗺️"
+                                                           FontSize="12"
+                                                           Padding="8,5"
+                                                           Margin="4,0,0,0"
+                                                           ToolTip="Abrir selector gráfico 3x3 de anaquel y cuadrante (A-01 a F-09)"
+                                                           Click="BtnSelectorUbicacionProducto_Click" />
+                                            </Grid>
                                         </StackPanel>
                                         <CheckBox x:Name="ChkProdEsHerramienta"
                                                   Grid.Column="1"
@@ -2720,7 +2739,15 @@
 
                                     <Border Grid.Row="0" Margin="0,0,0,8" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
-                                            <TextBlock DockPanel.Dock="Top" Text="Inventario Individual de Herramientas" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
+                                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <ui:Button DockPanel.Dock="Right"
+                                                           Content="🗺️ Mapa e Inventario por Cuadrante"
+                                                           FontSize="11.5"
+                                                           Padding="10,4"
+                                                           ToolTip="Ver mapa gráfico 3x3 de anaqueles A–F y consultar qué herramientas y materiales hay en cada cuadrante"
+                                                           Click="BtnAbrirMapaAnaqueles_Click" />
+                                                <TextBlock Text="Inventario Individual de Herramientas" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                                            </DockPanel>
                                             <DataGrid x:Name="DgDirHerramientas"
                                                       AutoGenerateColumns="False"
                                                       IsReadOnly="True"
@@ -2792,8 +2819,21 @@
                                                         </ComboBox>
                                                     </StackPanel>
                                                     <StackPanel Margin="4,0,0,0">
-                                                        <TextBlock Text="Ubicación" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                        <ui:TextBox x:Name="TxtDirHerUbicacion" PlaceholderText="Ej. Gabinete H-1" />
+                                                        <TextBlock Text="Ubicación (Estante-Cuadrante)" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <ui:TextBox x:Name="TxtDirHerUbicacion" Grid.Column="0" PlaceholderText="Ej. A-04" />
+                                                            <ui:Button Grid.Column="1"
+                                                                       Content="🗺️"
+                                                                       FontSize="12"
+                                                                       Padding="8,5"
+                                                                       Margin="4,0,0,0"
+                                                                       ToolTip="Abrir selector gráfico 3x3 de anaquel y cuadrante (A-01 a F-09)"
+                                                                       Click="BtnSelectorUbicacionDirHer_Click" />
+                                                        </Grid>
                                                     </StackPanel>
                                                 </UniformGrid>
 

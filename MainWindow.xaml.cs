@@ -2315,9 +2315,25 @@ public partial class MainWindow : FluentWindow
         row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.2, GridUnitType.Star) });
 
         var spUbi = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
-        spUbi.Children.Add(new TextBlock { Text = "Ubicación en Almacén (Gabinete / Estante)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        spUbi.Children.Add(new TextBlock { Text = "Ubicación en Almacén (Estante-Cuadrante)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var gridUbi = new Grid();
+        gridUbi.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridUbi.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var txtUbi = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 4, 6, 4) };
-        spUbi.Children.Add(txtUbi);
+        Grid.SetColumn(txtUbi, 0);
+        gridUbi.Children.Add(txtUbi);
+        var btnMapaUbi = new System.Windows.Controls.Button
+        {
+            Content = "🗺️",
+            Padding = new Thickness(8, 4, 8, 4),
+            Margin = new Thickness(4, 0, 0, 0),
+            Cursor = Cursors.Hand,
+            ToolTip = "Abrir selector gráfico 3x3 de anaquel y cuadrante (A-01 a F-09)"
+        };
+        btnMapaUbi.Click += (_, _) => MostrarSelectorYMapaAnaqueles(txtUbi.Text, nuevaCoord => txtUbi.Text = nuevaCoord, win);
+        Grid.SetColumn(btnMapaUbi, 1);
+        gridUbi.Children.Add(btnMapaUbi);
+        spUbi.Children.Add(gridUbi);
         Grid.SetColumn(spUbi, 0);
         row2.Children.Add(spUbi);
 
@@ -2414,9 +2430,9 @@ public partial class MainWindow : FluentWindow
                     : "S/N";
                 string marcaMod = $"{pSel.Marca} {pSel.Modelo}".Trim();
                 txtMarca.Text = !string.IsNullOrWhiteSpace(marcaMod) ? marcaMod : pSel.Nombre;
-                txtUbi.Text = !string.IsNullOrWhiteSpace(pSel.Ubicacion) && pSel.Ubicacion != "A-01"
+                txtUbi.Text = !string.IsNullOrWhiteSpace(pSel.Ubicacion)
                     ? pSel.Ubicacion
-                    : "Gabinete H-1";
+                    : "A-04";
                 cboEstado.SelectedIndex = 0;
                 txtNotas.Text = pSel.Descripcion;
                 txtCantNuevas.Text = cantDefault.ToString();
@@ -9047,6 +9063,897 @@ public partial class MainWindow : FluentWindow
     {
         string ruta = DatabaseService.CrearRespaldoBaseDatos();
         System.Windows.MessageBox.Show(this, $"Respaldo local creado exitosamente en:\n{ruta}", "Respaldo SQLite", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    // =====================================================================
+    // MAPA GRÁFICO DE ANAQUELES (A–F y PISO) Y CONSULTA POR CUADRANTE (3x3)
+    // =====================================================================
+
+    private void BtnAbrirMapaAnaqueles_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarSelectorYMapaAnaqueles(null, null, this);
+    }
+
+    private void BtnSelectorUbicacionProducto_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarSelectorYMapaAnaqueles(TxtProdUbicacion?.Text, nuevaCoord =>
+        {
+            if (TxtProdUbicacion != null)
+                TxtProdUbicacion.Text = nuevaCoord;
+        }, this);
+    }
+
+    private void BtnSelectorUbicacionDirHer_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarSelectorYMapaAnaqueles(TxtDirHerUbicacion?.Text, nuevaCoord =>
+        {
+            if (TxtDirHerUbicacion != null)
+                TxtDirHerUbicacion.Text = nuevaCoord;
+        }, this);
+    }
+
+    private static (string Estante, string Cuadrante, string SubContenedor) ParsearCoordenadaAlmacen(string? ubicacion)
+    {
+        if (string.IsNullOrWhiteSpace(ubicacion))
+            return ("", "", "");
+
+        string raw = ubicacion.Trim().ToUpperInvariant()
+            .Replace("ESTANTE ", "")
+            .Replace("ANAQUEL ", "")
+            .Replace("RACK ", "")
+            .Trim();
+
+        // Buscar patrón PISO-01 o A-01 (con o sin subcontenedor -G1 / -C1)
+        var partes = raw.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length >= 2)
+        {
+            string est = partes[0];
+            if (est is "A" or "B" or "C" or "D" or "E" or "F" or "PISO")
+            {
+                if (int.TryParse(partes[1], out int num) && num >= 1 && num <= 9)
+                {
+                    string cuad = num.ToString("00");
+                    string sub = partes.Length >= 3 ? partes[2] : "";
+                    return (est, cuad, sub);
+                }
+            }
+        }
+
+        // Si solo puso "PISO"
+        if (raw.StartsWith("PISO", StringComparison.OrdinalIgnoreCase))
+            return ("PISO", "01", "");
+
+        return ("", "", "");
+    }
+
+    private static bool CoincideConEstanteYCuadrante(string? ubicacion, string estante, string? cuadrante = null)
+    {
+        var parsed = ParsearCoordenadaAlmacen(ubicacion);
+        if (string.IsNullOrEmpty(parsed.Estante))
+            return false;
+
+        if (!string.Equals(parsed.Estante, estante, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(cuadrante) || cuadrante == "TODOS")
+            return true;
+
+        return string.Equals(parsed.Cuadrante, cuadrante, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void MostrarSelectorYMapaAnaqueles(string? coordenadaInicial = null, Action<string>? alSeleccionarCoordenada = null, Window? owner = null)
+    {
+        bool modoSelector = alSeleccionarCoordenada != null;
+        var parsedInicial = ParsearCoordenadaAlmacen(coordenadaInicial);
+
+        string estanteActual = !string.IsNullOrEmpty(parsedInicial.Estante) ? parsedInicial.Estante : "A";
+        string cuadranteActual = !string.IsNullOrEmpty(parsedInicial.Cuadrante) ? parsedInicial.Cuadrante : "05";
+        string subContenedorActual = parsedInicial.SubContenedor;
+
+        var win = new Window
+        {
+            Title = modoSelector
+                ? "🗺️ Selector Gráfico de Coordenadas e Inventario por Cuadrante (Anaqueles A–F y PISO)"
+                : "🗺️ Mapa Logístico de Almacén — Consulta e Inventario por Cuadrante (Anaqueles A–F y PISO)",
+            Width = 1220,
+            Height = 760,
+            MinWidth = 1040,
+            MinHeight = 660,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = owner ?? this,
+            Background = new SolidColorBrush(Color.FromRgb(243, 244, 246))
+        };
+
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: Header + Rack Selector
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: Main Split (3x3 Grid + Right Inventory)
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: Footer
+
+        // --- ROW 0: ENCABEZADO Y PESTAÑAS DE ESTANTES (A..F + PISO) ---
+        var topCard = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14, 10, 14, 10),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+
+        var topStack = new StackPanel();
+        var headerDock = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+
+        var spSubCont = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        spSubCont.Children.Add(new TextBlock
+        {
+            Text = "Gaveta / Caja (Opcional):",
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0)
+        });
+        var cboSubContenedor = new ComboBox { Width = 165, Padding = new Thickness(6, 4, 6, 4), FontSize = 11.5 };
+        cboSubContenedor.Items.Add("(Sin caja / Directo)");
+        for (int g = 1; g <= 9; g++) cboSubContenedor.Items.Add($"G{g} (Gaveta {g})");
+        for (int c = 1; c <= 9; c++) cboSubContenedor.Items.Add($"C{c} (Caja {c})");
+        cboSubContenedor.SelectedIndex = 0;
+        if (!string.IsNullOrEmpty(subContenedorActual))
+        {
+            for (int i = 1; i < cboSubContenedor.Items.Count; i++)
+            {
+                if (cboSubContenedor.Items[i]?.ToString()?.StartsWith(subContenedorActual + " ", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    cboSubContenedor.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+        spSubCont.Children.Add(cboSubContenedor);
+        DockPanel.SetDock(spSubCont, Dock.Right);
+        headerDock.Children.Add(spSubCont);
+
+        var titleStack = new StackPanel();
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = "🗺️ Sistema de Coordenadas por Estante y Cuadrante (Estándar Bottom-Up 3×3)",
+            FontSize = 15.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(17, 24, 39))
+        });
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = "Seleccione un Anaquel (A a F o Zona PISO) y haga clic en cualquiera de los 9 cuadrantes para consultar su inventario o asignar ubicación.",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99))
+        });
+        headerDock.Children.Add(titleStack);
+        topStack.Children.Add(headerDock);
+
+        var rackButtonsPanel = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
+        topStack.Children.Add(rackButtonsPanel);
+        topCard.Child = topStack;
+        Grid.SetRow(topCard, 0);
+        root.Children.Add(topCard);
+
+        // --- ROW 1: PANEL DIVIDIDO (IZQUIERDA: MATRIZ 3x3 DEL ANAQUEL | DERECHA: INVENTARIO DEL CUADRANTE) ---
+        var mainSplit = new Grid();
+        mainSplit.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star) });
+        mainSplit.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });
+        mainSplit.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.35, GridUnitType.Star) });
+
+        // Panel Izquierdo: Frente del Anaquel 3x3
+        var leftCard = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14)
+        };
+        var leftDock = new DockPanel();
+
+        var leftHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var btnVerTodoEstante = new System.Windows.Controls.Button
+        {
+            Content = "👁️ Ver todo el anaquel",
+            Padding = new Thickness(10, 4, 10, 4),
+            FontSize = 11.5,
+            Cursor = Cursors.Hand,
+            ToolTip = "Mostrar en la tabla derecha todos los artículos y herramientas de los 9 cuadrantes de este anaquel"
+        };
+        DockPanel.SetDock(btnVerTodoEstante, Dock.Right);
+        leftHeader.Children.Add(btnVerTodoEstante);
+
+        var txtTituloAnaquel = new TextBlock
+        {
+            Text = "Vista Frontal — Anaquel A",
+            FontSize = 14,
+            FontWeight = FontWeights.Bold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromRgb(30, 58, 138))
+        };
+        leftHeader.Children.Add(txtTituloAnaquel);
+        DockPanel.SetDock(leftHeader, Dock.Top);
+        leftDock.Children.Add(leftHeader);
+
+        // Leyenda ergonómica de niveles
+        var legendGrid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 8) };
+        legendGrid.Children.Add(CrearBadgeLeyendaNivel("🔼 Superior (07–09): Baja rotación / Escalera", Color.FromRgb(254, 243, 199), Color.FromRgb(146, 64, 14)));
+        legendGrid.Children.Add(CrearBadgeLeyendaNivel("⏺️ Medio (04–06): Altura cabeza / Herramientas", Color.FromRgb(219, 234, 254), Color.FromRgb(30, 64, 175)));
+        legendGrid.Children.Add(CrearBadgeLeyendaNivel("🔽 Inferior (01–03): Fácil acceso / Pesados", Color.FromRgb(220, 252, 231), Color.FromRgb(22, 101, 52)));
+        DockPanel.SetDock(legendGrid, Dock.Top);
+        leftDock.Children.Add(legendGrid);
+
+        // Grid 3x3 del estante
+        var shelfGrid = new Grid();
+        for (int r = 0; r < 3; r++)
+            shelfGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        for (int c = 0; c < 3; c++)
+            shelfGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        leftDock.Children.Add(shelfGrid);
+        leftCard.Child = leftDock;
+        Grid.SetColumn(leftCard, 0);
+        mainSplit.Children.Add(leftCard);
+
+        // Panel Derecho: Consulta e Inventario por Cuadrante + Reasignación Rápida
+        var rightCard = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14)
+        };
+        var rightGrid = new Grid();
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: Header Cuadrante + KPIs
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 1: Barra de asignación rápida
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 2: Tabla Productos
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.05, GridUnitType.Star) }); // 3: Tabla Herramientas HER-xxxx
+
+        // Right Row 0: Header & KPIs
+        var rightHeaderBorder = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 8, 12, 8),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        var rightHeaderDock = new DockPanel();
+        var btnExportarCuadranteCsv = new System.Windows.Controls.Button
+        {
+            Content = "📄 Exportar CSV",
+            Padding = new Thickness(10, 4, 10, 4),
+            FontSize = 11.5,
+            Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Exportar a Excel/CSV el listado de materiales y herramientas ubicados en este cuadrante o anaquel"
+        };
+        DockPanel.SetDock(btnExportarCuadranteCsv, Dock.Right);
+        rightHeaderDock.Children.Add(btnExportarCuadranteCsv);
+
+        var rightHeaderStack = new StackPanel();
+        var txtInventarioTitulo = new TextBlock
+        {
+            Text = "📍 Inventario en Cuadrante A-05",
+            FontSize = 14.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+        };
+        var txtInventarioSubtitulo = new TextBlock
+        {
+            Text = "Nivel Medio (Altura de cabeza / Media rotación / Herramientas)",
+            FontSize = 11.5,
+            Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        rightHeaderStack.Children.Add(txtInventarioTitulo);
+        rightHeaderStack.Children.Add(txtInventarioSubtitulo);
+        rightHeaderDock.Children.Add(rightHeaderStack);
+        rightHeaderBorder.Child = rightHeaderDock;
+        Grid.SetRow(rightHeaderBorder, 0);
+        rightGrid.Children.Add(rightHeaderBorder);
+
+        // Right Row 1: Asignación rápida de artículo/herramienta al cuadrante actual (para el cuerpo técnico / almacén)
+        var assignBorder = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(239, 246, 255)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(191, 219, 254)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 7, 10, 7),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        var assignStack = new StackPanel();
+        assignStack.Children.Add(new TextBlock
+        {
+            Text = "📌Ubicar / Mover artículo o herramienta a este cuadrante (según acomodo físico):",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(30, 58, 138)),
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        var assignRow = new Grid();
+        assignRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        assignRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var cboAsignarItem = new ComboBox
+        {
+            IsEditable = true,
+            IsTextSearchEnabled = true,
+            Padding = new Thickness(6, 4, 6, 4),
+            FontSize = 11.5,
+            Margin = new Thickness(0, 0, 6, 0),
+            ToolTip = "Escriba o seleccione un producto (PRD-xxxx) o herramienta individual (HER-xxxx) para asignarle la coordenada seleccionada"
+        };
+        Grid.SetColumn(cboAsignarItem, 0);
+        assignRow.Children.Add(cboAsignarItem);
+
+        var btnAsignarAqui = new System.Windows.Controls.Button
+        {
+            Content = "Ubicar Aquí",
+            Padding = new Thickness(12, 4, 12, 4),
+            FontWeight = FontWeights.SemiBold,
+            Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+            Foreground = Brushes.White,
+            Cursor = Cursors.Hand
+        };
+        Grid.SetColumn(btnAsignarAqui, 1);
+        assignRow.Children.Add(btnAsignarAqui);
+        assignStack.Children.Add(assignRow);
+        assignBorder.Child = assignStack;
+        Grid.SetRow(assignBorder, 1);
+        rightGrid.Children.Add(assignBorder);
+
+        // Right Row 2: Tabla de Productos / Materiales en el cuadrante
+        var prodDock = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var txtHeaderProd = new TextBlock
+        {
+            Text = "📦 Materiales, Consumibles y Artículos de Catálogo (0)",
+            FontSize = 12.5,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4),
+            Foreground = new SolidColorBrush(Color.FromRgb(31, 41, 55))
+        };
+        DockPanel.SetDock(txtHeaderProd, Dock.Top);
+        prodDock.Children.Add(txtHeaderProd);
+
+        var dgProdCuadrante = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            CanUserAddRows = false,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+            RowBackground = Brushes.White,
+            AlternatingRowBackground = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
+            FontSize = 11.5
+        };
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 80 });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("CodigoInterno"), Width = 85 });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Artículo / Material", Binding = new System.Windows.Data.Binding("Nombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Stock", Binding = new System.Windows.Data.Binding("StockActual") { StringFormat = "0.##" }, Width = 65 });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), Width = 70 });
+        prodDock.Children.Add(dgProdCuadrante);
+        Grid.SetRow(prodDock, 2);
+        rightGrid.Children.Add(prodDock);
+
+        // Right Row 3: Tabla de Herramientas Individuales (HER-xxxx) en el cuadrante
+        var herDock = new DockPanel();
+        var txtHeaderHer = new TextBlock
+        {
+            Text = "🔧 Herramientas Individuales HER-xxxx Asignadas a esta Posición (0)",
+            FontSize = 12.5,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4),
+            Foreground = new SolidColorBrush(Color.FromRgb(31, 41, 55))
+        };
+        DockPanel.SetDock(txtHeaderHer, Dock.Top);
+        herDock.Children.Add(txtHeaderHer);
+
+        var dgHerCuadrante = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            CanUserAddRows = false,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+            RowBackground = Brushes.White,
+            AlternatingRowBackground = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
+            FontSize = 11.5
+        };
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 80 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "ID HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 85 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Herramienta", Binding = new System.Windows.Data.Binding("ProductoNombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Núm. Serie", Binding = new System.Windows.Data.Binding("NumeroSerie"), Width = 95 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Estado", Binding = new System.Windows.Data.Binding("Estado"), Width = 90 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "En Resguardo De", Binding = new System.Windows.Data.Binding("EncargadoActual"), Width = 125 });
+        herDock.Children.Add(dgHerCuadrante);
+        Grid.SetRow(herDock, 3);
+        rightGrid.Children.Add(herDock);
+
+        rightCard.Child = rightGrid;
+        Grid.SetColumn(rightCard, 2);
+        mainSplit.Children.Add(rightCard);
+
+        Grid.SetRow(mainSplit, 1);
+        root.Children.Add(mainSplit);
+
+        // --- ROW 2: BARRA INFERIOR DE ACCIONES ---
+        var footerDock = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
+        var rightButtons = new StackPanel { Orientation = Orientation.Horizontal };
+        DockPanel.SetDock(rightButtons, Dock.Right);
+
+        var btnSeleccionar = new System.Windows.Controls.Button
+        {
+            Content = $"✔ Usar Coordenada {estanteActual}-{cuadranteActual}",
+            Padding = new Thickness(16, 7, 16, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            FontWeight = FontWeights.Bold,
+            Background = new SolidColorBrush(Color.FromRgb(22, 163, 74)),
+            Foreground = Brushes.White,
+            Cursor = Cursors.Hand,
+            Visibility = modoSelector ? Visibility.Visible : Visibility.Collapsed
+        };
+        rightButtons.Children.Add(btnSeleccionar);
+
+        var btnCerrar = new System.Windows.Controls.Button
+        {
+            Content = modoSelector ? "Cancelar" : "Cerrar Mapa",
+            Padding = new Thickness(16, 7, 16, 7),
+            Cursor = Cursors.Hand
+        };
+        btnCerrar.Click += (_, _) => win.Close();
+        rightButtons.Children.Add(btnCerrar);
+        footerDock.Children.Add(rightButtons);
+
+        var txtResumenGlobal = new TextBlock
+        {
+            Text = "",
+            FontSize = 11.5,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99))
+        };
+        footerDock.Children.Add(txtResumenGlobal);
+        Grid.SetRow(footerDock, 2);
+        root.Children.Add(footerDock);
+
+        // --- LÓGICA INTERACTIVA DE ACTUALIZACIÓN DEL MAPA E INVENTARIO ---
+        List<Producto> todosProductos = new();
+        List<HerramientaActivo> todasHerramientas = new();
+
+        string ObtenerSubContenedorElegido()
+        {
+            if (cboSubContenedor.SelectedIndex <= 0) return "";
+            string raw = cboSubContenedor.SelectedItem?.ToString() ?? "";
+            int idx = raw.IndexOf(' ');
+            return idx > 0 ? raw[..idx].Trim() : raw.Trim();
+        }
+
+        string ConstruirCoordenadaFinal()
+        {
+            string cuad = cuadranteActual == "TODOS" ? "01" : cuadranteActual;
+            string coord = $"{estanteActual}-{cuad}";
+            string sub = ObtenerSubContenedorElegido();
+            if (!string.IsNullOrEmpty(sub))
+                coord += $"-{sub}";
+            return coord;
+        }
+
+        string ObtenerDescripcionNivel(string cuad) => cuad switch
+        {
+            "07" or "08" or "09" => "Nivel Superior — Baja rotación / No alcanza sin escalera",
+            "04" or "05" or "06" => "Nivel Medio — Altura de cabeza / Media rotación / Herramientas",
+            "01" or "02" or "03" => "Nivel Inferior — Fácil acceso / Material pesado o frecuente",
+            _ => "Todos los 9 cuadrantes del anaquel"
+        };
+
+        void RecargarDatosBase()
+        {
+            todosProductos = DatabaseService.ObtenerProductos();
+            todasHerramientas = DatabaseService.ObtenerHerramientas();
+
+            var opcionesCombo = new List<ComboOpcionAsignacionUbicacion>();
+            foreach (var p in todosProductos.OrderBy(x => x.Nombre))
+            {
+                string ubiActual = string.IsNullOrWhiteSpace(p.Ubicacion) ? "Sin ubicación" : p.Ubicacion;
+                opcionesCombo.Add(new ComboOpcionAsignacionUbicacion
+                {
+                    EsHerramientaIndividual = false,
+                    Id = p.Id,
+                    Etiqueta = $"📦 [{p.CodigoInterno}] {p.Nombre} (Ubic. actual: {ubiActual})"
+                });
+            }
+            foreach (var h in todasHerramientas.OrderBy(x => x.CodigoIndividual))
+            {
+                string ubiActual = string.IsNullOrWhiteSpace(h.Ubicacion) ? "Sin ubicación" : h.Ubicacion;
+                opcionesCombo.Add(new ComboOpcionAsignacionUbicacion
+                {
+                    EsHerramientaIndividual = true,
+                    Id = h.Id,
+                    Etiqueta = $"🔧 [{h.CodigoIndividual}] {h.ProductoNombre} - Serie: {h.NumeroSerie} (Ubic. actual: {ubiActual})"
+                });
+            }
+            cboAsignarItem.ItemsSource = opcionesCombo;
+            cboAsignarItem.DisplayMemberPath = nameof(ComboOpcionAsignacionUbicacion.Etiqueta);
+        }
+
+        void RenderizarTodo()
+        {
+            // 1. Renderizar botones de Anaqueles (A..F y PISO)
+            rackButtonsPanel.Children.Clear();
+            string[] estantes = { "A", "B", "C", "D", "E", "F", "PISO" };
+            foreach (var est in estantes)
+            {
+                int cantProdEst = todosProductos.Count(p => CoincideConEstanteYCuadrante(p.Ubicacion, est, "TODOS"));
+                int cantHerEst = todasHerramientas.Count(h => CoincideConEstanteYCuadrante(h.Ubicacion, est, "TODOS"));
+                bool activo = string.Equals(estanteActual, est, StringComparison.OrdinalIgnoreCase);
+
+                string tituloBtn = est == "PISO"
+                    ? $"🏗️ ZONA PISO / EXT ({cantProdEst + cantHerEst})"
+                    : $"🗄️ Anaquel {est} ({cantProdEst + cantHerEst})";
+
+                var btnEst = new System.Windows.Controls.Button
+                {
+                    Content = tituloBtn,
+                    Padding = new Thickness(14, 7, 14, 7),
+                    Margin = new Thickness(0, 0, 8, 4),
+                    FontWeight = activo ? FontWeights.Bold : FontWeights.SemiBold,
+                    FontSize = 12.5,
+                    Cursor = Cursors.Hand,
+                    Background = activo
+                        ? new SolidColorBrush(Color.FromRgb(30, 64, 175))
+                        : new SolidColorBrush(Color.FromRgb(243, 244, 246)),
+                    Foreground = activo ? Brushes.White : new SolidColorBrush(Color.FromRgb(31, 41, 55)),
+                    BorderBrush = activo
+                        ? new SolidColorBrush(Color.FromRgb(30, 58, 138))
+                        : new SolidColorBrush(Color.FromRgb(209, 213, 219))
+                };
+                string estCopy = est;
+                btnEst.Click += (_, _) =>
+                {
+                    estanteActual = estCopy;
+                    if (cuadranteActual == "TODOS") cuadranteActual = "05";
+                    RenderizarTodo();
+                };
+                rackButtonsPanel.Children.Add(btnEst);
+            }
+
+            txtTituloAnaquel.Text = estanteActual == "PISO"
+                ? "Vista de Posiciones — Zona PISO / Voluminosos (PISO-01 a PISO-09)"
+                : $"Vista Frontal Parado Frente al Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)";
+
+            // 2. Renderizar matriz 3x3 (Fila 0: 07,08,09 | Fila 1: 04,05,06 | Fila 2: 01,02,03)
+            shelfGrid.Children.Clear();
+            string[,] mapaCuadrantes = new string[3, 3]
+            {
+                { "07", "08", "09" }, // Nivel Superior (Baja rotación / Escalera)
+                { "04", "05", "06" }, // Nivel Medio (Altura de cabeza / Media rotación / Herramientas)
+                { "01", "02", "03" }  // Nivel Inferior (Fácil acceso)
+            };
+
+            for (int fila = 0; fila < 3; fila++)
+            {
+                for (int col = 0; col < 3; col++)
+                {
+                    string cuad = mapaCuadrantes[fila, col];
+                    string coordLabel = $"{estanteActual}-{cuad}";
+                    bool seleccionado = string.Equals(cuadranteActual, cuad, StringComparison.OrdinalIgnoreCase);
+
+                    var prodsCuad = todosProductos.Where(p => CoincideConEstanteYCuadrante(p.Ubicacion, estanteActual, cuad)).ToList();
+                    var hersCuad = todasHerramientas.Where(h => CoincideConEstanteYCuadrante(h.Ubicacion, estanteActual, cuad)).ToList();
+                    int hersPrestadas = hersCuad.Count(h => string.Equals(h.Estado, "En Préstamo", StringComparison.OrdinalIgnoreCase));
+
+                    // Colores por nivel ergonómico
+                    Color headerBg = fila switch
+                    {
+                        0 => Color.FromRgb(254, 243, 199), // Superior: Ámbar
+                        1 => Color.FromRgb(219, 234, 254), // Medio: Azul
+                        _ => Color.FromRgb(220, 252, 231)  // Inferior: Verde
+                    };
+                    Color headerFg = fila switch
+                    {
+                        0 => Color.FromRgb(146, 64, 14),
+                        1 => Color.FromRgb(30, 64, 175),
+                        _ => Color.FromRgb(22, 101, 52)
+                    };
+                    string nivelCorto = fila switch
+                    {
+                        0 => "Superior (Escalera)",
+                        1 => "Medio (Cabeza/Herr.)",
+                        _ => "Inferior (Fácil acceso)"
+                    };
+
+                    var cellBorder = new Border
+                    {
+                        Margin = new Thickness(4),
+                        CornerRadius = new CornerRadius(8),
+                        BorderThickness = new Thickness(seleccionado ? 2.5 : 1),
+                        BorderBrush = seleccionado
+                            ? new SolidColorBrush(Color.FromRgb(37, 99, 235))
+                            : new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+                        Background = seleccionado
+                            ? new SolidColorBrush(Color.FromRgb(239, 246, 255))
+                            : Brushes.White,
+                        Cursor = Cursors.Hand
+                    };
+
+                    var cellDock = new DockPanel();
+
+                    // Franja superior de la celda
+                    var cellHeader = new Border
+                    {
+                        Background = new SolidColorBrush(headerBg),
+                        CornerRadius = new CornerRadius(6, 6, 0, 0),
+                        Padding = new Thickness(8, 5, 8, 5)
+                    };
+                    var cellHeaderDock = new DockPanel();
+                    var txtNivelTag = new TextBlock
+                    {
+                        Text = nivelCorto,
+                        FontSize = 10,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(headerFg),
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    DockPanel.SetDock(txtNivelTag, Dock.Right);
+                    cellHeaderDock.Children.Add(txtNivelTag);
+
+                    cellHeaderDock.Children.Add(new TextBlock
+                    {
+                        Text = coordLabel,
+                        FontSize = 14,
+                        FontWeight = FontWeights.Bold,
+                        FontFamily = new FontFamily("Consolas"),
+                        Foreground = new SolidColorBrush(headerFg)
+                    });
+                    cellHeader.Child = cellHeaderDock;
+                    DockPanel.SetDock(cellHeader, Dock.Top);
+                    cellDock.Children.Add(cellHeader);
+
+                    // Cuerpo de la celda (Contadores y vista previa)
+                    var cellBody = new StackPanel { Margin = new Thickness(8, 6, 8, 6) };
+                    var badgesPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+                    badgesPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"📦 {prodsCuad.Count} art.",
+                        FontSize = 11.5,
+                        FontWeight = prodsCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
+                        Foreground = prodsCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(17, 24, 39)) : new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                        Margin = new Thickness(0, 0, 10, 0)
+                    });
+                    badgesPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"🔧 {hersCuad.Count} herr.",
+                        FontSize = 11.5,
+                        FontWeight = hersCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
+                        Foreground = hersCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(30, 64, 175)) : new SolidColorBrush(Color.FromRgb(156, 163, 175))
+                    });
+                    cellBody.Children.Add(badgesPanel);
+
+                    if (hersPrestadas > 0)
+                    {
+                        cellBody.Children.Add(new TextBlock
+                        {
+                            Text = $"⚠️ {hersPrestadas} en préstamo fuera",
+                            FontSize = 10.5,
+                            FontWeight = FontWeights.SemiBold,
+                            Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9)),
+                            Margin = new Thickness(0, 0, 0, 2)
+                        });
+                    }
+
+                    // Preview de hasta 3 nombres en este cuadrante
+                    var previews = prodsCuad.Select(p => p.Nombre)
+                        .Concat(hersCuad.Select(h => $"{h.CodigoIndividual}: {h.ProductoNombre}"))
+                        .Distinct()
+                        .Take(3)
+                        .ToList();
+
+                    if (previews.Count > 0)
+                    {
+                        foreach (var prev in previews)
+                        {
+                            cellBody.Children.Add(new TextBlock
+                            {
+                                Text = "• " + prev,
+                                FontSize = 10.5,
+                                Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+                                TextTrimming = TextTrimming.CharacterEllipsis
+                            });
+                        }
+                    }
+                    else
+                    {
+                        cellBody.Children.Add(new TextBlock
+                        {
+                            Text = "(Cuadrante vacío / disponible)",
+                            FontSize = 10.5,
+                            FontStyle = FontStyles.Italic,
+                            Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                            Margin = new Thickness(0, 4, 0, 0)
+                        });
+                    }
+
+                    cellDock.Children.Add(cellBody);
+                    cellBorder.Child = cellDock;
+
+                    string cuadCopy = cuad;
+                    cellBorder.MouseLeftButtonDown += (_, ev) =>
+                    {
+                        cuadranteActual = cuadCopy;
+                        RenderizarTodo();
+                        if (ev.ClickCount == 2 && modoSelector)
+                        {
+                            alSeleccionarCoordenada?.Invoke(ConstruirCoordenadaFinal());
+                            win.DialogResult = true;
+                            win.Close();
+                        }
+                    };
+
+                    Grid.SetRow(cellBorder, fila);
+                    Grid.SetColumn(cellBorder, col);
+                    shelfGrid.Children.Add(cellBorder);
+                }
+            }
+
+            // 3. Actualizar Tablas de Inventario en el Panel Derecho
+            var prodsFiltrados = todosProductos
+                .Where(p => CoincideConEstanteYCuadrante(p.Ubicacion, estanteActual, cuadranteActual))
+                .OrderBy(p => p.Ubicacion)
+                .ThenBy(p => p.Nombre)
+                .ToList();
+
+            var hersFiltradas = todasHerramientas
+                .Where(h => CoincideConEstanteYCuadrante(h.Ubicacion, estanteActual, cuadranteActual))
+                .OrderBy(h => h.Ubicacion)
+                .ThenBy(h => h.CodigoIndividual)
+                .ToList();
+
+            string etiquetaPos = cuadranteActual == "TODOS"
+                ? $"Todo el Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)"
+                : $"Cuadrante {estanteActual}-{cuadranteActual}";
+
+            txtInventarioTitulo.Text = $"📍 Inventario en {etiquetaPos}";
+            txtInventarioSubtitulo.Text = ObtenerDescripcionNivel(cuadranteActual);
+
+            int dispHer = hersFiltradas.Count(h => string.Equals(h.Estado, "Disponible", StringComparison.OrdinalIgnoreCase));
+            int prestHer = hersFiltradas.Count(h => string.Equals(h.Estado, "En Préstamo", StringComparison.OrdinalIgnoreCase));
+
+            txtHeaderProd.Text = $"📦 Materiales, Consumibles y Artículos de Catálogo ({prodsFiltrados.Count} SKUs | {prodsFiltrados.Sum(x => x.StockActual):0.##} u. en stock)";
+            txtHeaderHer.Text = $"🔧 Herramientas Individuales HER-xxxx ({hersFiltradas.Count} registradas: {dispHer} en sitio, {prestHer} en préstamo)";
+
+            dgProdCuadrante.ItemsSource = prodsFiltrados;
+            dgHerCuadrante.ItemsSource = hersFiltradas;
+
+            string coordFinal = ConstruirCoordenadaFinal();
+            btnSeleccionar.Content = $"✔ Usar Coordenada {coordFinal}";
+            btnAsignarAqui.Content = $"📌 Ubicar en {coordFinal}";
+
+            int totalUbicadosProd = todosProductos.Count(p => !string.IsNullOrEmpty(ParsearCoordenadaAlmacen(p.Ubicacion).Estante));
+            int totalUbicadosHer = todasHerramientas.Count(h => !string.IsNullOrEmpty(ParsearCoordenadaAlmacen(h.Ubicacion).Estante));
+            txtResumenGlobal.Text = $"Resumen Bodega (A–F y PISO): {totalUbicadosProd} de {todosProductos.Count} productos y {totalUbicadosHer} de {todasHerramientas.Count} herramientas tienen coordenada estandarizada.";
+        }
+
+        cboSubContenedor.SelectionChanged += (_, _) =>
+        {
+            string coordFinal = ConstruirCoordenadaFinal();
+            btnSeleccionar.Content = $"✔ Usar Coordenada {coordFinal}";
+            btnAsignarAqui.Content = $"📌 Ubicar en {coordFinal}";
+        };
+
+        btnVerTodoEstante.Click += (_, _) =>
+        {
+            cuadranteActual = "TODOS";
+            RenderizarTodo();
+        };
+
+        btnAsignarAqui.Click += (_, _) =>
+        {
+            if (cboAsignarItem.SelectedItem is not ComboOpcionAsignacionUbicacion sel)
+            {
+                System.Windows.MessageBox.Show(win, "Seleccione un artículo del catálogo o una herramienta individual en el desplegable para asignarle esta ubicación.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            string coordDestino = ConstruirCoordenadaFinal();
+            if (sel.EsHerramientaIndividual)
+            {
+                DatabaseService.ActualizarUbicacionHerramientaIndividual(sel.Id, coordDestino);
+            }
+            else
+            {
+                DatabaseService.ActualizarUbicacionProducto(sel.Id, coordDestino, sincronizarHerramientas: true);
+                if (_productoEnEdicion != null && _productoEnEdicion.Id == sel.Id && TxtProdUbicacion != null)
+                {
+                    _productoEnEdicion.Ubicacion = coordDestino;
+                    TxtProdUbicacion.Text = coordDestino;
+                }
+            }
+
+            RecargarDatosBase();
+            RenderizarTodo();
+            CargarTodoElSistema();
+        };
+
+        btnExportarCuadranteCsv.Click += (_, _) =>
+        {
+            var prodsFiltrados = (dgProdCuadrante.ItemsSource as IEnumerable<Producto>)?.ToList() ?? new List<Producto>();
+            var hersFiltradas = (dgHerCuadrante.ItemsSource as IEnumerable<HerramientaActivo>)?.ToList() ?? new List<HerramientaActivo>();
+
+            string sufijo = cuadranteActual == "TODOS" ? $"Anaquel_{estanteActual}_Completo" : $"{estanteActual}-{cuadranteActual}";
+            var sfd = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Exportar Inventario por Cuadrante / Anaquel",
+                Filter = "Archivo CSV para Excel (*.csv)|*.csv",
+                FileName = $"Inventario_Ubicacion_{sufijo}_{DateTime.Now:yyyyMMdd}.csv"
+            };
+            if (sfd.ShowDialog(win) != true) return;
+
+            var sb = new StringBuilder();
+            sb.AppendLine("COORDENADA_UBICACION,TIPO_REGISTRO,CODIGO,DESCRIPCION_ARTICULO,SERIE_O_MARCA,CANTIDAD_STOCK,UNIDAD,ESTADO_ACTUAL,RESGUARDANTE_ACTUAL");
+            foreach (var p in prodsFiltrados)
+            {
+                sb.AppendLine($"{EscaparCsv(p.Ubicacion)},MATERIAL_CATALOGO,{EscaparCsv(p.CodigoInterno)},{EscaparCsv(p.Nombre)},{EscaparCsv(p.CategoriaNombre)},{p.StockActual:0.##},{EscaparCsv(p.UnidadAlmacen)},{(p.StockActual > 0 ? "Con Existencia" : "Sin Stock")},Almacén");
+            }
+            foreach (var h in hersFiltradas)
+            {
+                sb.AppendLine($"{EscaparCsv(h.Ubicacion)},HERRAMIENTA_INDIVIDUAL,{EscaparCsv(h.CodigoIndividual)},{EscaparCsv(h.ProductoNombre)},{EscaparCsv($"{h.MarcaModelo} / SN:{h.NumeroSerie}")},1,Pieza,{EscaparCsv(h.Estado)},{EscaparCsv(h.EncargadoActual)}");
+            }
+            File.WriteAllText(sfd.FileName, sb.ToString(), new UTF8Encoding(true));
+            System.Windows.MessageBox.Show(win, $"Inventario de la posición {sufijo} exportado correctamente en:\n{sfd.FileName}", "Inventario Exportado", MessageBoxButton.OK, MessageBoxImage.Information);
+        };
+
+        btnSeleccionar.Click += (_, _) =>
+        {
+            alSeleccionarCoordenada?.Invoke(ConstruirCoordenadaFinal());
+            win.DialogResult = true;
+            win.Close();
+        };
+
+        RecargarDatosBase();
+        RenderizarTodo();
+
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    private static Border CrearBadgeLeyendaNivel(string texto, Color bg, Color fg)
+    {
+        return new Border
+        {
+            Background = new SolidColorBrush(bg),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 3, 6, 3),
+            Margin = new Thickness(2, 0, 2, 0),
+            Child = new TextBlock
+            {
+                Text = texto,
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(fg),
+                TextAlignment = TextAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            }
+        };
+    }
+
+    private sealed class ComboOpcionAsignacionUbicacion
+    {
+        public bool EsHerramientaIndividual { get; set; }
+        public int Id { get; set; }
+        public string Etiqueta { get; set; } = string.Empty;
+    }
+
+    private static string EscaparCsv(string? valor)
+    {
+        if (string.IsNullOrEmpty(valor)) return "";
+        string limpio = valor.Replace("\r", " ").Replace("\n", " ").Trim();
+        if (limpio.Contains(',') || limpio.Contains('"') || limpio.Contains(';'))
+            return "\"" + limpio.Replace("\"", "\"\"") + "\"";
+        return limpio;
     }
 
     private static decimal ParseDecimal(string? txt, decimal defecto)
