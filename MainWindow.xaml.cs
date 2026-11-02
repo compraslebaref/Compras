@@ -10127,6 +10127,16 @@ public partial class MainWindow : FluentWindow
         MostrarPanelEditorCatalogo(!actualmenteVisible);
     }
 
+    private void BtnToggleWhatsappSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (PnlWhatsappCaptura == null || BtnToggleWhatsappSolicitud == null) return;
+        bool visible = PnlWhatsappCaptura.Visibility == Visibility.Visible;
+        PnlWhatsappCaptura.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        BtnToggleWhatsappSolicitud.Content = visible ? "💬 Pegar Texto WhatsApp ▾" : "💬 Ocultar WhatsApp ▴";
+        if (!visible)
+            TxtWhatsappInput?.Focus();
+    }
+
     private void BadgeUbicacionCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.Tag is Producto p)

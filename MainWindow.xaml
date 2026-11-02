@@ -27,132 +27,117 @@
                      ShowMaximize="True"
                      ShowMinimize="True" />
 
-        <!-- Barra Superior Unificada: Menú de Comandos + Escáner Omnisciente -->
+        <!-- Barra Superior Unificada en 1 Sola Franja: Menús + Escáner Omnisciente + Mapa y Perfil -->
         <Border Grid.Row="1"
                 Margin="14,2,14,8"
-                Padding="12,8"
+                Padding="10,6"
                 CornerRadius="8"
                 Background="{DynamicResource ControlFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                 BorderThickness="1">
-            <StackPanel>
-                <!-- Fila 1: Menú Superior de Opciones del Sistema + Accesos Rápidos -->
-                <DockPanel Margin="0,0,0,6">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Padding="7,3" CornerRadius="4" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" Margin="0,0,8,0" ToolTip="Atajos rápidos de teclado en cualquier pantalla">
-                            <TextBlock Text="⌨️ F2: Escáner  |  F3: Catálogo  |  F4: Mapa A–F  |  F5: Refrescar" FontSize="10.5" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center" />
-                        </Border>
-                        <ui:Button Content="🗺️ Mapa A–F"
-                                   FontSize="11.5"
-                                   Padding="10,4"
-                                   Margin="0,0,6,0"
-                                   ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
-                                   Click="BtnAbrirMapaAnaqueles_Click" />
-                        <ui:Button x:Name="BtnPerfilAdmin"
-                                   Content="Perfil: Estándar"
-                                   FontSize="11.5"
-                                   Padding="10,4"
-                                   ToolTip="Activar o cerrar sesión de Perfil Administrador (PIN por defecto: 1234)"
-                                   Margin="0,0,6,0"
-                                   Click="BtnPerfilAdmin_Click" />
-                        <ui:Button x:Name="BtnCambiarPinAdmin"
-                                   Content="PIN Admin"
-                                   FontSize="11.5"
-                                   Padding="10,4"
-                                   ToolTip="Cambiar la clave PIN del Perfil Administrador"
-                                   Click="BtnCambiarPinAdmin_Click" />
-                    </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                    <Menu Background="Transparent" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold">
-                        <MenuItem Header="📦 Almacén y Logística ▾" Padding="8,4">
-                            <MenuItem Header="🗺️ Mapa Gráfico de Anaqueles (A–F y PISO)" InputGestureText="F4" Click="BtnAbrirMapaAnaqueles_Click" />
-                            <MenuItem Header="🔍 Ir al Catálogo Visual de Productos" InputGestureText="F3" Click="MenuIrCatalogo_Click" />
-                            <MenuItem Header="➕ Dar de Alta Nuevo Producto en Catálogo" Click="MenuNuevoProductoCatalogo_Click" />
-                            <Separator />
-                            <MenuItem Header="📥 Registrar Entrada a Almacén (Recepción OC)" Click="BtnIrRecepciones_Click" />
-                            <MenuItem Header="📤 Registrar Salida de Material (Vale de Salida)" Click="BtnIrAlmacenPos_Click" />
-                            <MenuItem Header="🔄 Devolver Material Sobrante a Almacén" Click="BtnDevolverMaterialSalida_Click" />
-                            <Separator />
-                            <MenuItem Header="🏷️ Imprimir Catálogo de Códigos de Barras" Click="BtnImprimirCatalogoCodigos_Click" />
-                        </MenuItem>
+                <!-- Izquierda: 5 Menús Desplegables Globales -->
+                <Menu Grid.Column="0" Background="Transparent" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0">
+                    <MenuItem Header="📦 Almacén ▾" Padding="7,4">
+                        <MenuItem Header="🗺️ Mapa Gráfico de Anaqueles (A–F y PISO)" InputGestureText="F4" Click="BtnAbrirMapaAnaqueles_Click" />
+                        <MenuItem Header="🔍 Ir al Catálogo Visual de Productos" InputGestureText="F3" Click="MenuIrCatalogo_Click" />
+                        <MenuItem Header="➕ Dar de Alta Nuevo Producto en Catálogo" Click="MenuNuevoProductoCatalogo_Click" />
+                        <Separator />
+                        <MenuItem Header="📥 Registrar Entrada a Almacén (Recepción OC)" Click="BtnIrRecepciones_Click" />
+                        <MenuItem Header="📤 Registrar Salida de Material (Vale de Salida)" Click="BtnIrAlmacenPos_Click" />
+                        <MenuItem Header="🔄 Devolver Material Sobrante a Almacén" Click="BtnDevolverMaterialSalida_Click" />
+                        <Separator />
+                        <MenuItem Header="🏷️ Imprimir Catálogo de Códigos de Barras" Click="BtnImprimirCatalogoCodigos_Click" />
+                    </MenuItem>
 
-                        <MenuItem Header="📋 Solicitudes y Compras ▾" Padding="8,4">
-                            <MenuItem Header="📝 Nueva Solicitud / Carrito de Material" Click="MenuNuevaSolicitud_Click" />
-                            <MenuItem Header="📥 Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
-                            <MenuItem Header="📄 Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
-                            <MenuItem Header="📊 Exportar Existencias Actuales de Almacén (.csv)" Click="BtnExportarExistenciasCatalogo_Click" />
-                            <Separator />
-                            <MenuItem Header="⚖️ Ir a Cuadro Comparativo de Cotizaciones" Click="MenuIrComparativa_Click" />
-                            <MenuItem Header="🧾 Consultar y Emitir Órdenes de Compra" Click="BtnIrRecepciones_Click" />
-                            <MenuItem Header="📂 Importar y Consultar Facturas CFDI (XML)" Click="MenuIrFacturasXml_Click" />
-                        </MenuItem>
+                    <MenuItem Header="📋 Compras ▾" Padding="7,4">
+                        <MenuItem Header="📝 Nueva Solicitud / Carrito de Material" Click="MenuNuevaSolicitud_Click" />
+                        <MenuItem Header="📥 Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
+                        <MenuItem Header="📄 Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
+                        <MenuItem Header="📊 Exportar Existencias Actuales de Almacén (.csv)" Click="BtnExportarExistenciasCatalogo_Click" />
+                        <Separator />
+                        <MenuItem Header="⚖️ Ir a Cuadro Comparativo de Cotizaciones" Click="MenuIrComparativa_Click" />
+                        <MenuItem Header="🧾 Consultar y Emitir Órdenes de Compra" Click="BtnIrRecepciones_Click" />
+                        <MenuItem Header="📂 Importar y Consultar Facturas CFDI (XML)" Click="MenuIrFacturasXml_Click" />
+                    </MenuItem>
 
-                        <MenuItem Header="🔧 Herramientas y Resguardos ▾" Padding="8,4">
-                            <MenuItem Header="🤝 Vale de Préstamo / Devolución de Herramientas" Click="BtnIrAlmacenPos_Click" />
-                            <MenuItem Header="🔧 Directorio Individual de Herramientas (HER-xxxx)" Click="MenuIrDirectorioHerramientas_Click" />
-                            <MenuItem Header="🗺️ Consultar Herramientas por Cuadrante (Mapa A–F)" Click="BtnAbrirMapaAnaqueles_Click" />
-                            <Separator />
-                            <MenuItem Header="🦺 Generar e Imprimir Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
-                        </MenuItem>
+                    <MenuItem Header="🔧 Herramientas ▾" Padding="7,4">
+                        <MenuItem Header="🤝 Vale de Préstamo / Devolución de Herramientas" Click="BtnIrAlmacenPos_Click" />
+                        <MenuItem Header="🔧 Directorio Individual de Herramientas (HER-xxxx)" Click="MenuIrDirectorioHerramientas_Click" />
+                        <MenuItem Header="🗺️ Consultar Herramientas por Cuadrante (Mapa A–F)" Click="BtnAbrirMapaAnaqueles_Click" />
+                        <Separator />
+                        <MenuItem Header="🦺 Generar e Imprimir Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
+                    </MenuItem>
 
-                        <MenuItem Header="📊 Reportes y Análisis ▾" Padding="8,4">
-                            <MenuItem Header="📈 Ranking de Materiales y Proyección de Compras" Click="MenuIrAnalisisRanking_Click" />
-                            <MenuItem Header="📉 Gráficas e Historial de Precios por Producto" Click="MenuIrAnalisisGraficas_Click" />
-                            <MenuItem Header="🗺️ Exportar Inventario por Cuadrante / Anaquel (CSV)" Click="BtnAbrirMapaAnaqueles_Click" />
-                            <Separator />
-                            <MenuItem Header="🔄 Actualizar / Refrescar Todo el Sistema" InputGestureText="F5" Click="MenuRefrescarSistema_Click" />
-                        </MenuItem>
+                    <MenuItem Header="📊 Reportes ▾" Padding="7,4">
+                        <MenuItem Header="📈 Ranking de Materiales y Proyección de Compras" Click="MenuIrAnalisisRanking_Click" />
+                        <MenuItem Header="📉 Gráficas e Historial de Precios por Producto" Click="MenuIrAnalisisGraficas_Click" />
+                        <MenuItem Header="🗺️ Exportar Inventario por Cuadrante / Anaquel (CSV)" Click="BtnAbrirMapaAnaqueles_Click" />
+                        <Separator />
+                        <MenuItem Header="🔄 Actualizar / Refrescar Todo el Sistema" InputGestureText="F5" Click="MenuRefrescarSistema_Click" />
+                    </MenuItem>
 
-                        <MenuItem Header="⚙️ Sistema y Seguridad ▾" Padding="8,4">
-                            <MenuItem Header="🔓 Activar / Cerrar Sesión Perfil Administrador" Click="BtnPerfilAdmin_Click" />
-                            <MenuItem Header="🔑 Cambiar PIN de Administrador" Click="BtnCambiarPinAdmin_Click" />
-                            <MenuItem Header="💾 Crear Respaldo Local de Base de Datos (SQLite)" Click="BtnRespaldarDb_Click" />
-                            <Separator />
-                            <MenuItem Header="📚 Directorios Maestros (Proveedores, Proyectos, Personal)" Click="MenuIrDirectorios_Click" />
-                        </MenuItem>
-                    </Menu>
-                </DockPanel>
+                    <MenuItem Header="⚙️ Sistema ▾" Padding="7,4">
+                        <MenuItem Header="🔓 Activar / Cerrar Sesión Perfil Administrador" Click="BtnPerfilAdmin_Click" />
+                        <MenuItem Header="🔑 Cambiar PIN de Administrador" Click="BtnCambiarPinAdmin_Click" />
+                        <MenuItem Header="💾 Crear Respaldo Local de Base de Datos (SQLite)" Click="BtnRespaldarDb_Click" />
+                        <Separator />
+                        <MenuItem Header="📚 Directorios Maestros (Proveedores, Proyectos, Personal)" Click="MenuIrDirectorios_Click" />
+                    </MenuItem>
+                </Menu>
 
-                <!-- Fila 2: Barra del Escáner Omnisciente -->
-                <Grid>
+                <!-- Centro: Escáner Omnisciente -->
+                <Grid Grid.Column="1" Margin="4,0,8,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-
                     <ui:SymbolIcon Grid.Column="0"
                                    Symbol="BarcodeScanner24"
-                                   FontSize="20"
-                                   Margin="4,0,10,0"
+                                   FontSize="18"
+                                   Margin="0,0,8,0"
                                    VerticalAlignment="Center"
                                    Foreground="#0078D4" />
-
                     <ui:TextBox x:Name="TxtOmniScanner"
                                 Grid.Column="1"
-                                PlaceholderText="Escanear código de barras, código HER-xxxx, producto PRD-xxxx o folio (F2)..."
+                                PlaceholderText="Escanear código o folio (F2: Escáner | F3: Catálogo | F4: Mapa A–F)..."
                                 VerticalContentAlignment="Center"
-                                FontSize="13"
+                                FontSize="12.5"
                                 FontFamily="Consolas"
                                 PreviewKeyDown="TxtOmniScanner_KeyDown"
                                 TextChanged="TxtOmniScanner_TextChanged" />
-
                     <ui:Button Grid.Column="2"
-                               Margin="8,0,0,0"
+                               Margin="6,0,0,0"
                                Appearance="Primary"
                                Icon="{ui:SymbolIcon Search24}"
                                Content="Buscar"
                                Click="BtnProcesarOmniScanner_Click" />
-
-                    <ui:Button Grid.Column="3"
-                               Content="Imprimir Códigos"
-                               Icon="{ui:SymbolIcon Print24}"
-                               ToolTip="Imprimir catálogo de códigos de barras en hoja Carta"
-                               Margin="8,0,0,0"
-                               Click="BtnImprimirCatalogoCodigos_Click" />
                 </Grid>
-            </StackPanel>
+
+                <!-- Derecha: Solo 2 Botones Limpios (Mapa A–F y Perfil) -->
+                <ui:Button Grid.Column="2"
+                           Content="🗺️ Mapa A–F"
+                           FontSize="11.5"
+                           Padding="10,5"
+                           Margin="0,0,6,0"
+                           ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
+                           Click="BtnAbrirMapaAnaqueles_Click" />
+                <ui:Button x:Name="BtnPerfilAdmin"
+                           Grid.Column="3"
+                           Content="Perfil: Estándar"
+                           FontSize="11.5"
+                           Padding="10,5"
+                           ToolTip="Activar o cerrar sesión de Perfil Administrador (PIN por defecto: 1234)"
+                           Click="BtnPerfilAdmin_Click" />
+            </Grid>
         </Border>
 
         <!-- Cuerpo Principal -->
@@ -461,7 +446,6 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0"
                                                        Text="Carrito / Solicitud Destino:"
@@ -482,13 +466,8 @@
                                                        Margin="0,0,6,0"
                                                        Content="A Salida Almacén"
                                                        Click="BtnEnviarCarritoASalida_Click" />
-                                            <ui:Button Grid.Column="4"
-                                                       Margin="0,0,6,0"
-                                                       Content="🗺️ Mapa Anaqueles (A–F)"
-                                                       ToolTip="Abrir consulta e inventario gráfico por estante y cuadrante (A-01 a F-09 y PISO)"
-                                                       Click="BtnAbrirMapaAnaqueles_Click" />
                                             <ui:Button x:Name="BtnToggleEditorCatalogo"
-                                                       Grid.Column="5"
+                                                       Grid.Column="4"
                                                        Content="⟪ Ocultar Editor"
                                                        ToolTip="Ocultar o mostrar el panel lateral de edición para ver el catálogo a pantalla completa"
                                                        Click="BtnToggleEditorCatalogo_Click" />
@@ -612,32 +591,11 @@
                                                         </StackPanel>
                                                     </Grid>
 
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <ui:Button Grid.Column="0"
-                                                                   HorizontalAlignment="Stretch"
-                                                                   Appearance="Primary"
-                                                                   Content="Agregar"
-                                                                   Tag="{Binding}"
-                                                                   Click="BtnAgregarProductoCarrito_Click" />
-                                                        <ui:Button Grid.Column="1"
-                                                                   Margin="6,0,0,0"
-                                                                   Icon="{ui:SymbolIcon Edit24}"
-                                                                   ToolTip="Editar producto"
-                                                                   Tag="{Binding}"
-                                                                   Click="BtnEditarProductoCatalogo_Click" />
-                                                        <ui:Button Grid.Column="2"
-                                                                   Margin="6,0,0,0"
-                                                                   Appearance="Danger"
-                                                                   Icon="{ui:SymbolIcon Delete24}"
-                                                                   ToolTip="Eliminar producto"
-                                                                   Tag="{Binding}"
-                                                                   Click="BtnEliminarProductoCatalogoCard_Click" />
-                                                    </Grid>
+                                                    <ui:Button HorizontalAlignment="Stretch"
+                                                               Appearance="Primary"
+                                                               Content="➕ Agregar al Carrito"
+                                                               Tag="{Binding}"
+                                                               Click="BtnAgregarProductoCarrito_Click" />
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
@@ -959,18 +917,18 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <!-- Captura Rápida -->
-                                    <Border Padding="10" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,10">
+                                    <!-- Captura Rápida Compacta (Plantilla Excel / Web y WhatsApp Colapsable) -->
+                                    <Border Padding="8,6" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
                                         <StackPanel>
-                                            <DockPanel Margin="0,0,0,6">
+                                            <DockPanel>
                                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
-                                                    <ui:Button Content="Exportar Existencias" FontSize="11" Margin="0,0,6,0" ToolTip="Exportar reporte CSV de existencias actuales de Almacén para compartir con gerencias" Click="BtnExportarExistenciasCatalogo_Click" />
-                                                    <ui:Button Content="Exportar Plantilla" FontSize="11" Margin="0,0,6,0" Click="BtnExportarPlantillaSolicitud_Click" />
-                                                    <ui:Button Content="Importar" FontSize="11" Click="BtnImportarPlantillaSolicitud_Click" />
+                                                    <ui:Button Content="📄 Formato Excel" FontSize="11" Padding="8,3" Margin="0,0,6,0" ToolTip="Descargar formato estándar de Solicitud en Excel (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
+                                                    <ui:Button Content="📥 Importar Solicitud" FontSize="11" Padding="8,3" Margin="0,0,6,0" ToolTip="Cargar una Solicitud desde archivo Excel/CSV" Click="BtnImportarPlantillaSolicitud_Click" />
+                                                    <ui:Button x:Name="BtnToggleWhatsappSolicitud" Content="💬 Pegar Texto WhatsApp ▾" FontSize="11" Padding="8,3" Click="BtnToggleWhatsappSolicitud_Click" />
                                                 </StackPanel>
-                                                <TextBlock Text="Captura Rápida (WhatsApp / Plantilla)" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="Carga por Plantilla o Lista Rápida" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                             </DockPanel>
-                                            <Grid>
+                                            <Grid x:Name="PnlWhatsappCaptura" Visibility="Collapsed" Margin="0,6,0,0">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
@@ -983,6 +941,7 @@
                                                             PlaceholderText="Pegue aquí el texto de WhatsApp (ej. 5 Tornillo 1/4, 2 Cable calibre 12)..." />
                                                 <ui:Button Grid.Column="1"
                                                            Margin="8,0,0,0"
+                                                           Appearance="Primary"
                                                            Content="Interpretar"
                                                            Click="BtnInterpretarWhatsapp_Click" />
                                             </Grid>
@@ -1071,39 +1030,28 @@
                                     <TextBlock Text="Seleccione cualquier solicitud para revisar existencias, editar partidas o enviarla a comparativa." FontSize="11.5" Opacity="0.72" Margin="0,2,0,0" />
                                 </StackPanel>
 
-                                <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ui:Button Grid.Column="0"
-                                                   Margin="0,0,6,0"
-                                                   HorizontalAlignment="Stretch"
-                                                   Content="Ir al Catálogo"
-                                                   ToolTip="Ir al Catálogo Visual con la Solicitud seleccionada activa"
-                                                   Click="BtnIrCatalogoConSolicitud_Click" />
-                                        <ui:Button Grid.Column="1"
-                                                   Margin="0,0,6,0"
-                                                   Content="Descargar"
-                                                   ToolTip="Descargar Solicitud como archivo PDF, Imagen PNG o Excel CSV"
-                                                   Click="BtnDescargarSolicitudArchivo_Click" />
-                                        <ui:Button Grid.Column="2"
-                                                   Margin="0,0,6,0"
-                                                   Content="Imprimir"
-                                                   ToolTip="Vista previa e impresión de la Solicitud seleccionada (sin precios)"
-                                                   Click="BtnImprimirSolicitud_Click" />
-                                        <ui:Button Grid.Column="3"
-                                                   Content="Eliminar"
-                                                   Click="BtnEliminarSolicitud_Click" />
-                                    </Grid>
-                                    <ui:Button Appearance="Primary"
+                                <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:Button Grid.Column="0"
+                                               Appearance="Primary"
                                                HorizontalAlignment="Stretch"
-                                               Content="Abrir Solicitud en Comparativa"
+                                               Margin="0,0,6,0"
+                                               Content="⚖️ Abrir Solicitud en Comparativa"
                                                Click="BtnEnviarSolicitudAComparativa_Click" />
-                                </StackPanel>
+                                    <Menu Grid.Column="1" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+                                        <MenuItem Header="📄 Acciones ▾" Padding="10,6" FontWeight="SemiBold">
+                                            <MenuItem Header="🛒 Ir al Catálogo con esta Solicitud" Click="BtnIrCatalogoConSolicitud_Click" />
+                                            <MenuItem Header="🖨️ Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
+                                            <MenuItem Header="📥 Descargar Solicitud (PDF / PNG / CSV)" Click="BtnDescargarSolicitudArchivo_Click" />
+                                            <MenuItem Header="📊 Exportar Existencias de Almacén (CSV)" Click="BtnExportarExistenciasCatalogo_Click" />
+                                            <Separator />
+                                            <MenuItem Header="🗑️ Eliminar Solicitud" Click="BtnEliminarSolicitud_Click" />
+                                        </MenuItem>
+                                    </Menu>
+                                </Grid>
 
                                 <DataGrid x:Name="DgHistorialSolicitudes"
                                           AutoGenerateColumns="False"
@@ -1152,26 +1100,18 @@
                                     <TextBlock x:Name="TxtCompInfoSolicitud" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap" />
                                     <TextBlock x:Name="TxtCompAvanceDecision" FontSize="11.5" Foreground="#059669" FontWeight="Bold" Margin="0,2,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <WrapPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                    <ui:Button Content="Copiar Lista p/ Cotizar"
-                                               Margin="0,2,6,2"
-                                               ToolTip="Copia al portapapeles la lista limpia de materiales para enviar a proveedores"
-                                               Click="BtnCopiarListaParaCotizar_Click" />
-                                    <ui:Button Content="Descargar Archivo"
-                                               Margin="0,2,6,2"
-                                               ToolTip="Descargar Cuadro Comparativo como archivo PDF, Imagen PNG o Excel CSV"
-                                               Click="BtnDescargarComparativaArchivo_Click" />
-                                    <ui:Button Content="Imprimir Comparativa"
-                                               Margin="0,2,6,2"
-                                               Click="BtnImprimirComparativa_Click" />
-                                    <ui:Button Content="Auto-Elegir Mejor Precio"
-                                               Margin="0,2,6,2"
-                                               Click="BtnSeleccionarMejorPrecioPorPartida_Click" />
-                                    <ui:Button Content="Guardar Borrador"
-                                               Margin="0,2,0,2"
-                                               Appearance="Secondary"
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <MenuItem Header="📤 Exportar / Imprimir ▾" Padding="10,6" FontWeight="SemiBold">
+                                            <MenuItem Header="📋 Copiar Lista Limpia para Cotizar" Click="BtnCopiarListaParaCotizar_Click" />
+                                            <MenuItem Header="🖨️ Vista Previa / Imprimir Comparativa" Click="BtnImprimirComparativa_Click" />
+                                            <MenuItem Header="📄 Descargar Comparativa (PDF / PNG / CSV)" Click="BtnDescargarComparativaArchivo_Click" />
+                                        </MenuItem>
+                                    </Menu>
+                                    <ui:Button Content="💾 Guardar Borrador"
+                                               Appearance="Primary"
                                                Click="BtnGuardarBorradorComparativa_Click" />
-                                </WrapPanel>
+                                </StackPanel>
                             </Grid>
                         </Border>
 
@@ -1568,24 +1508,17 @@
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                                         <DockPanel Margin="0,0,0,8">
-                                            <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
-                                                <ui:Button Content="Liquidar sin Factura"
-                                                           FontSize="11.5"
-                                                           Margin="0,2,6,2"
-                                                           ToolTip="Liquidar esta OC mediante Nota de Remisión o Ticket (sin XML)"
-                                                           Click="BtnLiquidarOcSinFactura_Click" />
-                                                <ui:Button Content="Forzar Estatus (Admin)"
-                                                           FontSize="11.5"
-                                                           Margin="0,2,6,2"
-                                                           ToolTip="Marcar OC como Recibida Completa, Cerrada Parcial o Cancelada con PIN de Administrador"
-                                                           Click="BtnForzarEstatusOcAdmin_Click" />
-                                                <ui:Button Content="Descargar OC"
-                                                           FontSize="11.5"
-                                                           Margin="0,2,6,2"
-                                                           ToolTip="Descargar Orden de Compra como archivo PDF, Imagen PNG o Excel CSV"
-                                                           Click="BtnDescargarOcSeleccionada_Click" />
-                                                <ui:Button Content="Imprimir OC" Margin="0,2,0,2" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirOcSeleccionada_Click" />
-                                            </WrapPanel>
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
+                                                <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0">
+                                                    <MenuItem Header="⚙️ Acciones OC ▾" Padding="10,5" FontWeight="SemiBold" FontSize="11.5">
+                                                        <MenuItem Header="📄 Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
+                                                        <MenuItem Header="🧾 Liquidar sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
+                                                        <Separator />
+                                                        <MenuItem Header="🔐 Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
+                                                    </MenuItem>
+                                                </Menu>
+                                                <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirOcSeleccionada_Click" />
+                                            </StackPanel>
                                             <TextBlock Text="Órdenes de Compra" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
                                         </DockPanel>
 
@@ -1818,22 +1751,12 @@
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Top">
                                         <DockPanel Margin="0,0,0,8">
-                                            <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
-                                                <ui:Button Content="Cargar de OC Recibida"
-                                                           FontSize="11"
-                                                           Margin="0,0,6,0"
-                                                           ToolTip="Cargar automáticamente los artículos recibidos de una Orden de Compra para darles salida"
-                                                           Click="BtnCargarMaterialOcRecibidaEnSalida_Click" />
-                                                <ui:Button Content="Devolver Material"
-                                                           FontSize="11"
-                                                           Margin="0,0,6,0"
-                                                           ToolTip="Registrar reingreso total o parcial de material sobrante de una Salida de Almacén"
-                                                           Click="BtnDevolverMaterialSalida_Click" />
-                                                <ui:Button Content="Carta Responsiva EPP"
-                                                           FontSize="11"
-                                                           ToolTip="Generar e imprimir Carta de Aceptación de Responsabilidad de EPP (cascos, botas, chalecos, guantes, etc.) para firma del Técnico y Gerencia"
-                                                           Click="BtnImprimirCartaResponsivaEpp_Click" />
-                                            </WrapPanel>
+                                            <ui:Button DockPanel.Dock="Right"
+                                                       Content="📥 Cargar de OC Recibida"
+                                                       FontSize="11"
+                                                       Margin="8,0,0,0"
+                                                       ToolTip="Cargar automáticamente los artículos recibidos de una Orden de Compra para darles salida"
+                                                       Click="BtnCargarMaterialOcRecibidaEnSalida_Click" />
                                             <TextBlock Text="Salida de Material" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
                                         </DockPanel>
 
@@ -2064,7 +1987,6 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
                                                 <ComboBox x:Name="CboEstadoRetornoHerramienta" Grid.Column="0" SelectedIndex="0" Margin="0,0,6,0">
                                                     <ComboBoxItem Content="Bueno (Completo)" />
@@ -2074,13 +1996,19 @@
                                                 </ComboBox>
                                                 <ui:TextBox x:Name="TxtObsRetornoHerramienta" Grid.Column="1" Margin="0,0,6,0" PlaceholderText="Observaciones al devolver (ej. faltó accesorio, se devuelve 1 de 2)..." />
                                                 <ui:Button Grid.Column="2" Content="Registrar Devolución" Appearance="Primary" Margin="0,0,6,0" Click="BtnRegistrarDevolucionHerramienta_Click" />
-                                                <ui:Button Grid.Column="3" Content="Imprimir Hoja" Margin="0,0,6,0" Click="BtnReimprimirValePrestamo_Click" />
-                                                <ui:Button Grid.Column="4" Content="Descargar" ToolTip="Descargar hoja de préstamo en PDF, PNG o Excel CSV" Click="BtnDescargarValePrestamo_Click" />
+                                                <ui:Button Grid.Column="3" Content="Imprimir Vale" Click="BtnReimprimirValePrestamo_Click" />
                                             </Grid>
                                         </StackPanel>
                                     </Border>
 
                                     <DataGrid x:Name="DgPrestamosHerramientas" AutoGenerateColumns="False" IsReadOnly="True">
+                                        <DataGrid.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="✔ Registrar Devolución de Herramienta" Click="BtnRegistrarDevolucionHerramienta_Click" FontWeight="Bold" />
+                                                <MenuItem Header="🖨️ Imprimir Hoja de Resguardo (PRE-xxxx)" Click="BtnReimprimirValePrestamo_Click" />
+                                                <MenuItem Header="📄 Descargar Hoja de Resguardo (PDF / PNG / CSV)" Click="BtnDescargarValePrestamo_Click" />
+                                            </ContextMenu>
+                                        </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Folio" Binding="{Binding FolioVale}" Width="90" />
                                             <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="78" />
@@ -2099,24 +2027,28 @@
                         <Border Grid.Row="2" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                    <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
-                                        <ui:Button Content="Carta Responsiva EPP"
-                                                   Margin="0,2,8,2"
-                                                   ToolTip="Imprimir o descargar Carta de Aceptación de Responsabilidad de EPP del vale SAL-xxxx seleccionado"
-                                                   Click="BtnImprimirCartaResponsivaEpp_Click" />
-                                        <ui:Button Content="Devolver Material de Salida"
-                                                   Margin="0,2,8,2"
-                                                   ToolTip="Selecciona un vale SAL-xxxx para registrar devolución parcial o completa de material e imprimir el comprobante"
-                                                   Click="BtnDevolverMaterialSalida_Click" />
-                                        <ui:Button Content="Descargar Vale"
-                                                   Margin="0,2,8,2"
-                                                   ToolTip="Descargar el Vale seleccionado como archivo PDF, Imagen PNG o Excel CSV"
-                                                   Click="BtnDescargarMovimientoAlmacen_Click" />
-                                        <ui:Button Content="Ver / Imprimir Vale" Margin="0,2,0,2" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirMovimientoAlmacen_Click" />
-                                    </WrapPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
+                                        <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0">
+                                            <MenuItem Header="📄 Opciones del Vale ▾" Padding="10,5" FontWeight="SemiBold">
+                                                <MenuItem Header="📥 Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
+                                                <MenuItem Header="🔄 Devolver Material Sobrante de Salida" Click="BtnDevolverMaterialSalida_Click" />
+                                                <MenuItem Header="🦺 Generar Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
+                                            </MenuItem>
+                                        </Menu>
+                                        <ui:Button Content="Ver / Imprimir Vale" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirMovimientoAlmacen_Click" />
+                                    </StackPanel>
                                     <TextBlock Text="Historial de Entradas, Salidas y Devoluciones de Almacén" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" />
                                 </DockPanel>
                                 <DataGrid x:Name="DgMovimientosAlmacen" AutoGenerateColumns="False" IsReadOnly="True">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="🖨️ Ver / Imprimir Vale" Click="BtnImprimirMovimientoAlmacen_Click" FontWeight="Bold" />
+                                            <MenuItem Header="📥 Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
+                                            <Separator />
+                                            <MenuItem Header="🔄 Registrar Devolución de Material Sobrante" Click="BtnDevolverMaterialSalida_Click" />
+                                            <MenuItem Header="🦺 Generar Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="125" />
                                         <DataGridTextColumn Header="Tipo" Binding="{Binding TipoMovimiento}" Width="95" />
@@ -2152,11 +2084,10 @@
                                     <Border Grid.Row="0" Padding="14" CornerRadius="8" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <StackPanel>
                                             <DockPanel Margin="0,0,0,8">
-                                                <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
-                                                    <ui:Button Margin="0,0,8,0" Content="Subir XML" Click="BtnSubirArchivoXml_Click" />
-                                                    <ui:Button Margin="0,0,8,0" Content="XML Demo" Click="BtnCargarXmlDemo_Click" />
-                                                    <ui:Button Appearance="Primary" Content="Guardar Factura" Click="BtnGuardarFacturaXml_Click" />
-                                                </WrapPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                    <ui:Button Margin="0,0,8,0" Content="📂 Subir XML" Click="BtnSubirArchivoXml_Click" />
+                                                    <ui:Button Appearance="Primary" Content="💾 Guardar Factura" Click="BtnGuardarFacturaXml_Click" />
+                                                </StackPanel>
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock Text="Facturas XML CFDI" FontSize="15.5" FontWeight="Bold" />
                                                     <TextBlock x:Name="TxtXmlResumenActual" Text="Seleccione un archivo XML para cargar sus conceptos." FontSize="12" Opacity="0.78" TextWrapping="Wrap" />
