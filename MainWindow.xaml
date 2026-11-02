@@ -27,7 +27,7 @@
                      ShowMaximize="True"
                      ShowMinimize="True" />
 
-        <!-- Barra Superior Compacta del Escáner -->
+        <!-- Barra Superior Unificada: Menú de Comandos + Escáner Omnisciente -->
         <Border Grid.Row="1"
                 Margin="14,2,14,8"
                 Padding="12,8"
@@ -35,54 +35,124 @@
                 Background="{DynamicResource ControlFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                 BorderThickness="1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+            <StackPanel>
+                <!-- Fila 1: Menú Superior de Opciones del Sistema + Accesos Rápidos -->
+                <DockPanel Margin="0,0,0,6">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Padding="7,3" CornerRadius="4" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" Margin="0,0,8,0" ToolTip="Atajos rápidos de teclado en cualquier pantalla">
+                            <TextBlock Text="⌨️ F2: Escáner  |  F3: Catálogo  |  F4: Mapa A–F  |  F5: Refrescar" FontSize="10.5" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center" />
+                        </Border>
+                        <ui:Button Content="🗺️ Mapa A–F"
+                                   FontSize="11.5"
+                                   Padding="10,4"
+                                   Margin="0,0,6,0"
+                                   ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
+                                   Click="BtnAbrirMapaAnaqueles_Click" />
+                        <ui:Button x:Name="BtnPerfilAdmin"
+                                   Content="Perfil: Estándar"
+                                   FontSize="11.5"
+                                   Padding="10,4"
+                                   ToolTip="Activar o cerrar sesión de Perfil Administrador (PIN por defecto: 1234)"
+                                   Margin="0,0,6,0"
+                                   Click="BtnPerfilAdmin_Click" />
+                        <ui:Button x:Name="BtnCambiarPinAdmin"
+                                   Content="PIN Admin"
+                                   FontSize="11.5"
+                                   Padding="10,4"
+                                   ToolTip="Cambiar la clave PIN del Perfil Administrador"
+                                   Click="BtnCambiarPinAdmin_Click" />
+                    </StackPanel>
 
-                <ui:SymbolIcon Grid.Column="0"
-                               Symbol="BarcodeScanner24"
-                               FontSize="20"
-                               Margin="4,0,10,0"
-                               VerticalAlignment="Center"
-                               Foreground="#0078D4" />
+                    <Menu Background="Transparent" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold">
+                        <MenuItem Header="📦 Almacén y Logística ▾" Padding="8,4">
+                            <MenuItem Header="🗺️ Mapa Gráfico de Anaqueles (A–F y PISO)" InputGestureText="F4" Click="BtnAbrirMapaAnaqueles_Click" />
+                            <MenuItem Header="🔍 Ir al Catálogo Visual de Productos" InputGestureText="F3" Click="MenuIrCatalogo_Click" />
+                            <MenuItem Header="➕ Dar de Alta Nuevo Producto en Catálogo" Click="MenuNuevoProductoCatalogo_Click" />
+                            <Separator />
+                            <MenuItem Header="📥 Registrar Entrada a Almacén (Recepción OC)" Click="BtnIrRecepciones_Click" />
+                            <MenuItem Header="📤 Registrar Salida de Material (Vale de Salida)" Click="BtnIrAlmacenPos_Click" />
+                            <MenuItem Header="🔄 Devolver Material Sobrante a Almacén" Click="BtnDevolverMaterialSalida_Click" />
+                            <Separator />
+                            <MenuItem Header="🏷️ Imprimir Catálogo de Códigos de Barras" Click="BtnImprimirCatalogoCodigos_Click" />
+                        </MenuItem>
 
-                <ui:TextBox x:Name="TxtOmniScanner"
-                            Grid.Column="1"
-                            PlaceholderText="Escanear código o folio (F2)..."
-                            VerticalContentAlignment="Center"
-                            FontSize="13"
-                            FontFamily="Consolas"
-                            PreviewKeyDown="TxtOmniScanner_KeyDown"
-                            TextChanged="TxtOmniScanner_TextChanged" />
+                        <MenuItem Header="📋 Solicitudes y Compras ▾" Padding="8,4">
+                            <MenuItem Header="📝 Nueva Solicitud / Carrito de Material" Click="MenuNuevaSolicitud_Click" />
+                            <MenuItem Header="📥 Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
+                            <MenuItem Header="📄 Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
+                            <MenuItem Header="📊 Exportar Existencias Actuales de Almacén (.csv)" Click="BtnExportarExistenciasCatalogo_Click" />
+                            <Separator />
+                            <MenuItem Header="⚖️ Ir a Cuadro Comparativo de Cotizaciones" Click="MenuIrComparativa_Click" />
+                            <MenuItem Header="🧾 Consultar y Emitir Órdenes de Compra" Click="BtnIrRecepciones_Click" />
+                            <MenuItem Header="📂 Importar y Consultar Facturas CFDI (XML)" Click="MenuIrFacturasXml_Click" />
+                        </MenuItem>
 
-                <ui:Button Grid.Column="2"
-                           Margin="8,0,0,0"
-                           Appearance="Primary"
-                           Icon="{ui:SymbolIcon Search24}"
-                           Content="Buscar"
-                           Click="BtnProcesarOmniScanner_Click" />
+                        <MenuItem Header="🔧 Herramientas y Resguardos ▾" Padding="8,4">
+                            <MenuItem Header="🤝 Vale de Préstamo / Devolución de Herramientas" Click="BtnIrAlmacenPos_Click" />
+                            <MenuItem Header="🔧 Directorio Individual de Herramientas (HER-xxxx)" Click="MenuIrDirectorioHerramientas_Click" />
+                            <MenuItem Header="🗺️ Consultar Herramientas por Cuadrante (Mapa A–F)" Click="BtnAbrirMapaAnaqueles_Click" />
+                            <Separator />
+                            <MenuItem Header="🦺 Generar e Imprimir Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
+                        </MenuItem>
 
-                <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
-                    <ui:Button Content="Códigos"
+                        <MenuItem Header="📊 Reportes y Análisis ▾" Padding="8,4">
+                            <MenuItem Header="📈 Ranking de Materiales y Proyección de Compras" Click="MenuIrAnalisisRanking_Click" />
+                            <MenuItem Header="📉 Gráficas e Historial de Precios por Producto" Click="MenuIrAnalisisGraficas_Click" />
+                            <MenuItem Header="🗺️ Exportar Inventario por Cuadrante / Anaquel (CSV)" Click="BtnAbrirMapaAnaqueles_Click" />
+                            <Separator />
+                            <MenuItem Header="🔄 Actualizar / Refrescar Todo el Sistema" InputGestureText="F5" Click="MenuRefrescarSistema_Click" />
+                        </MenuItem>
+
+                        <MenuItem Header="⚙️ Sistema y Seguridad ▾" Padding="8,4">
+                            <MenuItem Header="🔓 Activar / Cerrar Sesión Perfil Administrador" Click="BtnPerfilAdmin_Click" />
+                            <MenuItem Header="🔑 Cambiar PIN de Administrador" Click="BtnCambiarPinAdmin_Click" />
+                            <MenuItem Header="💾 Crear Respaldo Local de Base de Datos (SQLite)" Click="BtnRespaldarDb_Click" />
+                            <Separator />
+                            <MenuItem Header="📚 Directorios Maestros (Proveedores, Proyectos, Personal)" Click="MenuIrDirectorios_Click" />
+                        </MenuItem>
+                    </Menu>
+                </DockPanel>
+
+                <!-- Fila 2: Barra del Escáner Omnisciente -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:SymbolIcon Grid.Column="0"
+                                   Symbol="BarcodeScanner24"
+                                   FontSize="20"
+                                   Margin="4,0,10,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="#0078D4" />
+
+                    <ui:TextBox x:Name="TxtOmniScanner"
+                                Grid.Column="1"
+                                PlaceholderText="Escanear código de barras, código HER-xxxx, producto PRD-xxxx o folio (F2)..."
+                                VerticalContentAlignment="Center"
+                                FontSize="13"
+                                FontFamily="Consolas"
+                                PreviewKeyDown="TxtOmniScanner_KeyDown"
+                                TextChanged="TxtOmniScanner_TextChanged" />
+
+                    <ui:Button Grid.Column="2"
+                               Margin="8,0,0,0"
+                               Appearance="Primary"
+                               Icon="{ui:SymbolIcon Search24}"
+                               Content="Buscar"
+                               Click="BtnProcesarOmniScanner_Click" />
+
+                    <ui:Button Grid.Column="3"
+                               Content="Imprimir Códigos"
                                Icon="{ui:SymbolIcon Print24}"
                                ToolTip="Imprimir catálogo de códigos de barras en hoja Carta"
-                               Margin="0,0,8,0"
+                               Margin="8,0,0,0"
                                Click="BtnImprimirCatalogoCodigos_Click" />
-                    <ui:Button x:Name="BtnPerfilAdmin"
-                               Content="Perfil: Estándar"
-                               ToolTip="Activar o cerrar sesión de Perfil Administrador (PIN por defecto: 1234)"
-                               Margin="0,0,6,0"
-                               Click="BtnPerfilAdmin_Click" />
-                    <ui:Button x:Name="BtnCambiarPinAdmin"
-                               Content="PIN Admin"
-                               ToolTip="Cambiar la clave PIN del Perfil Administrador"
-                               Click="BtnCambiarPinAdmin_Click" />
-                </StackPanel>
-            </Grid>
+                </Grid>
+            </StackPanel>
         </Border>
 
         <!-- Cuerpo Principal -->
@@ -288,6 +358,14 @@
                                             <TextBlock Text="Órdenes Pendientes" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DataGrid x:Name="DgDashboardOcs" AutoGenerateColumns="False" IsReadOnly="True" Height="195" HeadersVisibility="Column">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="📥 Ir a Recepción de Mercancía de esta OC" Click="CtxDashboardOcRecibir_Click" />
+                                                    <MenuItem Header="🖨️ Imprimir / Ver Orden de Compra" Click="CtxDashboardOcImprimir_Click" />
+                                                    <Separator />
+                                                    <MenuItem Header="📋 Copiar Folio de OC" Click="CtxDashboardOcCopiarFolio_Click" />
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="110" />
                                                 <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
@@ -307,6 +385,13 @@
                                             <TextBlock Text="Alertas de Inventario" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DataGrid x:Name="DgDashboardAlertas" AutoGenerateColumns="False" IsReadOnly="True" Height="195" HeadersVisibility="Column">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="🛒 Agregar a Solicitud de Compra (Reabastecer)" Click="CtxAlertaStockAgregarSolicitud_Click" />
+                                                    <MenuItem Header="🗺️ Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxAlertaStockMapa_Click" />
+                                                    <MenuItem Header="✏️ Abrir Ficha del Producto en Catálogo" Click="CtxAlertaStockEditar_Click" />
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Código" Binding="{Binding CodigoInterno}" Width="95" />
                                                 <DataGridTextColumn Header="Producto" Binding="{Binding Nombre}" Width="*" />
@@ -327,11 +412,11 @@
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="360" />
+                            <ColumnDefinition x:Name="ColEditorCatalogo" Width="360" />
                         </Grid.ColumnDefinitions>
 
                         <!-- Izquierda: Catálogo Visual -->
-                        <DockPanel Grid.Column="0" Margin="0,0,12,0">
+                        <DockPanel x:Name="DockCatalogoIzquierda" Grid.Column="0" Margin="0,0,12,0">
                             <Border DockPanel.Dock="Top" Padding="12" CornerRadius="8" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,8">
@@ -374,6 +459,7 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0"
                                                        Text="Carrito / Solicitud Destino:"
@@ -395,9 +481,15 @@
                                                        Content="A Salida Almacén"
                                                        Click="BtnEnviarCarritoASalida_Click" />
                                             <ui:Button Grid.Column="4"
+                                                       Margin="0,0,6,0"
                                                        Content="🗺️ Mapa Anaqueles (A–F)"
                                                        ToolTip="Abrir consulta e inventario gráfico por estante y cuadrante (A-01 a F-09 y PISO)"
                                                        Click="BtnAbrirMapaAnaqueles_Click" />
+                                            <ui:Button x:Name="BtnToggleEditorCatalogo"
+                                                       Grid.Column="5"
+                                                       Content="⟪ Ocultar Editor"
+                                                       ToolTip="Ocultar o mostrar el panel lateral de edición para ver el catálogo a pantalla completa"
+                                                       Click="BtnToggleEditorCatalogo_Click" />
                                         </Grid>
                                     </Border>
                                 </StackPanel>
@@ -420,7 +512,22 @@
                                                     CornerRadius="10"
                                                     Cursor="Hand"
                                                     Tag="{Binding}"
+                                                    ToolTip="Clic izquierdo: Seleccionar / Editar | Clic derecho: Menú de opciones rápidas"
                                                     MouseLeftButtonUp="CardProductoCatalogo_MouseLeftButtonUp">
+                                                <Border.ContextMenu>
+                                                    <ContextMenu Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                                        <MenuItem Header="🛒 Agregar al Carrito / Solicitud (+1)" Tag="{Binding}" Click="CtxCardAgregarCarrito_Click" FontWeight="Bold" />
+                                                        <MenuItem Header="📤 Enviar directo a Salida de Almacén" Tag="{Binding}" Click="CtxCardEnviarSalida_Click" />
+                                                        <Separator />
+                                                        <MenuItem Header="✏️ Editar Ficha del Producto" Tag="{Binding}" Click="CtxCardEditarProducto_Click" />
+                                                        <MenuItem Header="🗺️ Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Tag="{Binding}" Click="CtxCardAbrirMapaUbicacion_Click" />
+                                                        <MenuItem Header="🔧 Abrir Ficha Individual de Herramienta (HER-xxxx)" Tag="{Binding}" Click="CtxCardAbrirFichaHerramienta_Click" />
+                                                        <MenuItem Header="📈 Ver Historial de Precios y Gráficas en Análisis" Tag="{Binding}" Click="CtxCardVerAnalisisPrecio_Click" />
+                                                        <Separator />
+                                                        <MenuItem Header="📋 Copiar Código Interno (PRD-xxxx)" Tag="{Binding}" Click="CtxCardCopiarCodigo_Click" />
+                                                        <MenuItem Header="🗑️ Eliminar Producto del Catálogo" Tag="{Binding}" Click="CtxCardEliminarProducto_Click" />
+                                                    </ContextMenu>
+                                                </Border.ContextMenu>
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
@@ -463,6 +570,20 @@
                                                             </Border>
                                                             <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" Padding="6,2" CornerRadius="4" Background="#0F172A">
                                                                 <TextBlock Text="{Binding CodigoInterno}" Foreground="White" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" />
+                                                            </Border>
+                                                            <Border HorizontalAlignment="Left"
+                                                                    VerticalAlignment="Bottom"
+                                                                    Margin="6"
+                                                                    Padding="6,2"
+                                                                    CornerRadius="4"
+                                                                    Background="#DCFCE7"
+                                                                    BorderBrush="#86EFAC"
+                                                                    BorderThickness="1"
+                                                                    Cursor="Hand"
+                                                                    Tag="{Binding}"
+                                                                    ToolTip="Clic para abrir el Mapa de Anaqueles en esta coordenada"
+                                                                    MouseLeftButtonDown="BadgeUbicacionCard_MouseLeftButtonDown">
+                                                                <TextBlock Text="{Binding UbicacionBadgeTexto, Mode=OneWay}" Foreground="#166534" FontFamily="Consolas" FontSize="10" FontWeight="Bold" />
                                                             </Border>
                                                         </Grid>
                                                     </Border>
@@ -986,6 +1107,17 @@
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
                                           SelectionChanged="DgHistorialSolicitudes_SelectionChanged">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="⚖️ Abrir Solicitud en Cuadro Comparativo" Click="BtnEnviarSolicitudAComparativa_Click" FontWeight="Bold" />
+                                            <MenuItem Header="🛒 Ir al Catálogo Visual con esta Solicitud activa" Click="BtnIrCatalogoConSolicitud_Click" />
+                                            <Separator />
+                                            <MenuItem Header="🖨️ Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
+                                            <MenuItem Header="📄 Descargar Solicitud (PDF / PNG / CSV)" Click="BtnDescargarSolicitudArchivo_Click" />
+                                            <Separator />
+                                            <MenuItem Header="🗑️ Eliminar Solicitud" Click="BtnEliminarSolicitud_Click" />
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="100" />
                                         <DataGridTextColumn Header="Modalidad" Binding="{Binding TipoSolicitud}" Width="135" />
@@ -1501,6 +1633,18 @@
                                               AutoGenerateColumns="False"
                                               IsReadOnly="True"
                                               SelectionChanged="DgOrdenesCompra_SelectionChanged">
+                                        <DataGrid.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="📥 Recibir Todo lo Pendiente de esta OC" Click="BtnRecibirTodoPendienteOc_Click" FontWeight="Bold" />
+                                                <MenuItem Header="🖨️ Imprimir Orden de Compra" Click="BtnImprimirOcSeleccionada_Click" />
+                                                <MenuItem Header="📄 Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
+                                                <Separator />
+                                                <MenuItem Header="🧾 Liquidar OC sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
+                                                <MenuItem Header="🔐 Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
+                                                <Separator />
+                                                <MenuItem Header="📋 Copiar Folio de OC" Click="CtxOrdenCompraCopiarFolio_Click" />
+                                            </ContextMenu>
+                                        </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="105" />
                                             <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
@@ -2241,6 +2385,13 @@
                                               AutoGenerateColumns="False"
                                               IsReadOnly="True"
                                               SelectionChanged="DgRankingMaterialesAnalisis_SelectionChanged">
+                                        <DataGrid.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="🛒 Mandar Artículo a Solicitud / Cotización" Click="BtnEnviarRankingASolicitud_Click" FontWeight="Bold" />
+                                                <MenuItem Header="🗺️ Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxRankingAbrirMapa_Click" />
+                                                <MenuItem Header="✏️ Abrir Ficha del Producto en Catálogo" Click="CtxRankingEditarProducto_Click" />
+                                            </ContextMenu>
+                                        </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" Width="88" />
                                             <DataGridTextColumn Header="Artículo / Material" Binding="{Binding ProductoNombre}" Width="*" />
@@ -2752,6 +2903,17 @@
                                                       AutoGenerateColumns="False"
                                                       IsReadOnly="True"
                                                       SelectionChanged="DgDirHerramientas_SelectionChanged">
+                                                <DataGrid.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="🤝 Prestar esta Herramienta (Ir a Vale de Préstamo)" Click="CtxDirHerPrestar_Click" FontWeight="Bold" />
+                                                        <MenuItem Header="🗺️ Reubicar en Mapa Gráfico 3×3 (A–F)" Click="CtxDirHerReubicarMapa_Click" />
+                                                        <Separator />
+                                                        <MenuItem Header="✅ Marcar como Disponible" Click="CtxDirHerMarcarDisponible_Click" />
+                                                        <MenuItem Header="🛠️ Marcar como Dañada / Mantenimiento" Click="CtxDirHerMarcarDanada_Click" />
+                                                        <Separator />
+                                                        <MenuItem Header="📋 Copiar Código HER-xxxx y Serie" Click="CtxDirHerCopiarCodigo_Click" />
+                                                    </ContextMenu>
+                                                </DataGrid.ContextMenu>
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="95" />
                                                     <DataGridTextColumn Header="Herramienta" Binding="{Binding ProductoNombre}" Width="*" />

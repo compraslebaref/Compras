@@ -76,7 +76,22 @@ public class Producto : INotifyPropertyChanged
     public decimal StockMinimo { get; set; } = 5m;
     public decimal UltimoCostoCompra { get; set; }            // Por UnidadCompra (con IVA)
     public decimal CostoUnitarioAlmacen => FactorConversion > 0 ? Math.Round(UltimoCostoCompra / FactorConversion, 2) : UltimoCostoCompra;
-    public string Ubicacion { get; set; } = "A-01";
+    private string _ubicacion = "A-01";
+    public string Ubicacion
+    {
+        get => _ubicacion;
+        set
+        {
+            string val = value ?? string.Empty;
+            if (_ubicacion != val)
+            {
+                _ubicacion = val;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Ubicacion)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UbicacionBadgeTexto)));
+            }
+        }
+    }
+    public string UbicacionBadgeTexto => string.IsNullOrWhiteSpace(_ubicacion) ? "📍 Sin ubic." : $"📍 {_ubicacion.Trim()}";
     public string ImagenRuta
     {
         get => _imagenRuta;

@@ -329,6 +329,22 @@ public partial class MainWindow : FluentWindow
             }
             e.Handled = true;
         }
+        else if (e.Key == Key.F3)
+        {
+            CambiarSeccion(1);
+            TxtBuscarCatalogo?.Focus();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F4)
+        {
+            MostrarSelectorYMapaAnaqueles(null, null, this);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F5)
+        {
+            CargarTodoElSistema();
+            e.Handled = true;
+        }
         else if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && MainTabControl.SelectedIndex == 1)
         {
             if (Clipboard.ContainsImage())
@@ -1758,6 +1774,7 @@ public partial class MainWindow : FluentWindow
 
     private void CargarProductoEnEditor(Producto p)
     {
+        MostrarPanelEditorCatalogo(true);
         _modoAltaNuevoProducto = false;
         _productoEnEdicion = p;
         TxtProdCodigoInterno.Text = p.CodigoInterno;
@@ -1835,6 +1852,7 @@ public partial class MainWindow : FluentWindow
 
     private void LimpiarEditorProducto()
     {
+        MostrarPanelEditorCatalogo(true);
         _modoAltaNuevoProducto = true;
         string sig = DatabaseService.GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
         _productoEnEdicion = new Producto { Id = 0, CodigoInterno = sig, CodigoBarras = sig };
@@ -9793,6 +9811,50 @@ public partial class MainWindow : FluentWindow
                         }
                     };
 
+                    // Menú contextual de clic derecho sobre cada cuadrante 3x3
+                    var ctxCell = new ContextMenu();
+                    var miVerCuad = new System.Windows.Controls.MenuItem { Header = $"👁️ Consultar inventario de {coordLabel}", FontWeight = FontWeights.Bold };
+                    miVerCuad.Click += (_, _) =>
+                    {
+                        cuadranteActual = cuadCopy;
+                        RenderizarTodo();
+                    };
+                    ctxCell.Items.Add(miVerCuad);
+
+                    var miAsignarACuad = new System.Windows.Controls.MenuItem { Header = $"📌 Ubicar un artículo o herramienta en {coordLabel}" };
+                    miAsignarACuad.Click += (_, _) =>
+                    {
+                        cuadranteActual = cuadCopy;
+                        RenderizarTodo();
+                        cboAsignarItem.Focus();
+                        cboAsignarItem.IsDropDownOpen = true;
+                    };
+                    ctxCell.Items.Add(miAsignarACuad);
+
+                    var miExportarCuad = new System.Windows.Controls.MenuItem { Header = $"📄 Exportar inventario de {coordLabel} (CSV)" };
+                    miExportarCuad.Click += (_, _) =>
+                    {
+                        cuadranteActual = cuadCopy;
+                        RenderizarTodo();
+                        btnExportarCuadranteCsv.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                    };
+                    ctxCell.Items.Add(miExportarCuad);
+
+                    if (modoSelector)
+                    {
+                        ctxCell.Items.Add(new Separator());
+                        var miElegirCoord = new System.Windows.Controls.MenuItem { Header = $"✔ Usar coordenada {coordLabel}", FontWeight = FontWeights.Bold };
+                        miElegirCoord.Click += (_, _) =>
+                        {
+                            cuadranteActual = cuadCopy;
+                            alSeleccionarCoordenada?.Invoke(ConstruirCoordenadaFinal());
+                            win.DialogResult = true;
+                            win.Close();
+                        };
+                        ctxCell.Items.Add(miElegirCoord);
+                    }
+                    cellBorder.ContextMenu = ctxCell;
+
                     Grid.SetRow(cellBorder, fila);
                     Grid.SetColumn(cellBorder, col);
                     shelfGrid.Children.Add(cellBorder);
@@ -9913,6 +9975,77 @@ public partial class MainWindow : FluentWindow
             win.Close();
         };
 
+        // Menús de clic derecho en las tablas derechas del Mapa de Anaqueles
+        var ctxDgProd = new ContextMenu();
+        var miProdCarrito = new System.Windows.Controls.MenuItem { Header = "🛒 Agregar al Carrito / Solicitud (+1)", FontWeight = FontWeights.Bold };
+        miProdCarrito.Click += (_, _) =>
+        {
+            if (dgProdCuadrante.SelectedItem is Producto p)
+                AgregarAlCarritoTienda(p, 1m);
+        };
+        ctxDgProd.Items.Add(miProdCarrito);
+
+        var miProdEditar = new System.Windows.Controls.MenuItem { Header = "✏️ Editar Ficha del Producto en Catálogo" };
+        miProdEditar.Click += (_, _) =>
+        {
+            if (dgProdCuadrante.SelectedItem is Producto p)
+            {
+                win.Close();
+                CambiarSeccion(1);
+                CargarProductoEnEditor(p);
+            }
+        };
+        ctxDgProd.Items.Add(miProdEditar);
+
+        var miProdCopiar = new System.Windows.Controls.MenuItem { Header = "📋 Copiar Código Interno (PRD-xxxx)" };
+        miProdCopiar.Click += (_, _) =>
+        {
+            if (dgProdCuadrante.SelectedItem is Producto p && !string.IsNullOrWhiteSpace(p.CodigoInterno))
+                Clipboard.SetText(p.CodigoInterno);
+        };
+        ctxDgProd.Items.Add(miProdCopiar);
+        dgProdCuadrante.ContextMenu = ctxDgProd;
+
+        var ctxDgHer = new ContextMenu();
+        var miHerPrestar = new System.Windows.Controls.MenuItem { Header = "🤝 Prestar Herramienta (Ir a Vale de Préstamo)", FontWeight = FontWeights.Bold };
+        miHerPrestar.Click += (_, _) =>
+        {
+            if (dgHerCuadrante.SelectedItem is HerramientaActivo h)
+            {
+                win.Close();
+                CambiarSeccion(5);
+                if (CboHerramientaDisponible?.ItemsSource is IEnumerable<HerramientaActivo> disp)
+                {
+                    var match = disp.FirstOrDefault(x => x.Id == h.Id);
+                    if (match != null)
+                        CboHerramientaDisponible.SelectedItem = match;
+                }
+            }
+        };
+        ctxDgHer.Items.Add(miHerPrestar);
+
+        var miHerDir = new System.Windows.Controls.MenuItem { Header = "🔧 Ver en Directorio de Herramientas" };
+        miHerDir.Click += (_, _) =>
+        {
+            if (dgHerCuadrante.SelectedItem is HerramientaActivo h)
+            {
+                win.Close();
+                MenuIrDirectorioHerramientas_Click(win, new RoutedEventArgs());
+                if (DgDirHerramientas?.ItemsSource is IEnumerable<HerramientaActivo> lista)
+                    DgDirHerramientas.SelectedItem = lista.FirstOrDefault(x => x.Id == h.Id);
+            }
+        };
+        ctxDgHer.Items.Add(miHerDir);
+
+        var miHerCopiar = new System.Windows.Controls.MenuItem { Header = "📋 Copiar Código HER-xxxx y Serie" };
+        miHerCopiar.Click += (_, _) =>
+        {
+            if (dgHerCuadrante.SelectedItem is HerramientaActivo h)
+                Clipboard.SetText($"{h.CodigoIndividual} | SN: {h.NumeroSerie}");
+        };
+        ctxDgHer.Items.Add(miHerCopiar);
+        dgHerCuadrante.ContextMenu = ctxDgHer;
+
         RecargarDatosBase();
         RenderizarTodo();
 
@@ -9954,6 +10087,366 @@ public partial class MainWindow : FluentWindow
         if (limpio.Contains(',') || limpio.Contains('"') || limpio.Contains(';'))
             return "\"" + limpio.Replace("\"", "\"\"") + "\"";
         return limpio;
+    }
+
+    // =====================================================================
+    // BARRA SUPERIOR DE COMANDOS, PANEL EDITOR COLAPSABLE Y MENÚS DE CLIC DERECHO
+    // =====================================================================
+
+    private void MostrarPanelEditorCatalogo(bool visible)
+    {
+        if (ColEditorCatalogo == null || SvEditorProducto == null || BtnToggleEditorCatalogo == null || DockCatalogoIzquierda == null)
+            return;
+
+        if (visible)
+        {
+            ColEditorCatalogo.Width = new GridLength(360);
+            SvEditorProducto.Visibility = Visibility.Visible;
+            DockCatalogoIzquierda.Margin = new Thickness(0, 0, 12, 0);
+            BtnToggleEditorCatalogo.Content = "⟪ Ocultar Editor";
+        }
+        else
+        {
+            ColEditorCatalogo.Width = new GridLength(0);
+            SvEditorProducto.Visibility = Visibility.Collapsed;
+            DockCatalogoIzquierda.Margin = new Thickness(0);
+            BtnToggleEditorCatalogo.Content = "⟫ Mostrar Editor";
+        }
+    }
+
+    private void BtnToggleEditorCatalogo_Click(object sender, RoutedEventArgs e)
+    {
+        bool actualmenteVisible = SvEditorProducto?.Visibility == Visibility.Visible;
+        MostrarPanelEditorCatalogo(!actualmenteVisible);
+    }
+
+    private void BadgeUbicacionCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is Producto p)
+        {
+            e.Handled = true;
+            MostrarSelectorYMapaAnaqueles(p.Ubicacion, nuevaCoord =>
+            {
+                DatabaseService.ActualizarUbicacionProducto(p.Id, nuevaCoord, sincronizarHerramientas: true);
+                p.Ubicacion = nuevaCoord;
+                if (_productoEnEdicion.Id == p.Id && TxtProdUbicacion != null)
+                    TxtProdUbicacion.Text = nuevaCoord;
+                CargarTodoElSistema();
+            }, this);
+        }
+    }
+
+    // --- ACCIONES DE LA BARRA SUPERIOR DE MENÚS ---
+    private void MenuIrCatalogo_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(1);
+        TxtBuscarCatalogo?.Focus();
+    }
+
+    private void MenuNuevoProductoCatalogo_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(1);
+        LimpiarEditorProducto();
+        TxtProdNombre?.Focus();
+    }
+
+    private void MenuNuevaSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(2);
+        IniciarNuevaSolicitudVacia();
+    }
+
+    private void MenuIrComparativa_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(3);
+    }
+
+    private void MenuIrFacturasXml_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(6);
+    }
+
+    private void MenuIrDirectorioHerramientas_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(8);
+        if (DgDirHerramientas != null)
+        {
+            var tabControl = BuscarTabControlPadre(DgDirHerramientas);
+            if (tabControl != null && tabControl.Items.Count >= 4)
+                tabControl.SelectedIndex = 3;
+        }
+    }
+
+    private void MenuIrAnalisisRanking_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(7);
+        if (DgRankingMaterialesAnalisis != null)
+        {
+            var tabControl = BuscarTabControlPadre(DgRankingMaterialesAnalisis);
+            if (tabControl != null && tabControl.Items.Count >= 1)
+                tabControl.SelectedIndex = 0;
+        }
+    }
+
+    private void MenuIrAnalisisGraficas_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(7);
+        if (CboProductoAnalisis != null)
+        {
+            var tabControl = BuscarTabControlPadre(CboProductoAnalisis);
+            if (tabControl != null && tabControl.Items.Count >= 2)
+                tabControl.SelectedIndex = 1;
+        }
+    }
+
+    private void MenuRefrescarSistema_Click(object sender, RoutedEventArgs e)
+    {
+        CargarTodoElSistema();
+    }
+
+    private void MenuIrDirectorios_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(8);
+    }
+
+    private static TabControl? BuscarTabControlPadre(DependencyObject? child)
+    {
+        while (child != null)
+        {
+            child = VisualTreeHelper.GetParent(child);
+            if (child is TabControl tc && tc.Name != "MainTabControl")
+                return tc;
+        }
+        return null;
+    }
+
+    private static Producto? ExtraerProductoDesdeMenuItem(object sender)
+    {
+        if (sender is System.Windows.Controls.MenuItem mi)
+        {
+            if (mi.Tag is Producto p1) return p1;
+            if (mi.DataContext is Producto p2) return p2;
+            if (mi.Parent is ContextMenu cm)
+            {
+                if (cm.Tag is Producto p3) return p3;
+                if (cm.PlacementTarget is FrameworkElement fe && fe.Tag is Producto p4) return p4;
+                if (cm.PlacementTarget is FrameworkElement fe2 && fe2.DataContext is Producto p5) return p5;
+            }
+        }
+        return null;
+    }
+
+    // --- CLIC DERECHO EN TARJETAS DEL CATÁLOGO VISUAL ---
+    private void CtxCardAgregarCarrito_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p != null) AgregarAlCarritoTienda(p, 1m);
+    }
+
+    private void CtxCardEnviarSalida_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p == null) return;
+        AgregarAlCarritoTienda(p, 1m);
+        BtnEnviarCarritoASalida_Click(sender, e);
+    }
+
+    private void CtxCardEditarProducto_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p == null) return;
+        CambiarSeccion(1);
+        CargarProductoEnEditor(p);
+    }
+
+    private void CtxCardAbrirMapaUbicacion_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p == null) return;
+        MostrarSelectorYMapaAnaqueles(p.Ubicacion, nuevaCoord =>
+        {
+            DatabaseService.ActualizarUbicacionProducto(p.Id, nuevaCoord, sincronizarHerramientas: true);
+            p.Ubicacion = nuevaCoord;
+            if (_productoEnEdicion.Id == p.Id && TxtProdUbicacion != null)
+                TxtProdUbicacion.Text = nuevaCoord;
+            CargarTodoElSistema();
+        }, this);
+    }
+
+    private void CtxCardAbrirFichaHerramienta_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p == null) return;
+        MostrarModalRegistroHerramienta(p);
+    }
+
+    private void CtxCardVerAnalisisPrecio_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p == null) return;
+        MenuIrAnalisisGraficas_Click(sender, e);
+        if (CboProductoAnalisis?.ItemsSource is IEnumerable<Producto> items)
+        {
+            var match = items.FirstOrDefault(x => x.Id == p.Id);
+            if (match != null)
+                CboProductoAnalisis.SelectedItem = match;
+        }
+    }
+
+    private void CtxCardCopiarCodigo_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p != null && !string.IsNullOrWhiteSpace(p.CodigoInterno))
+            Clipboard.SetText(p.CodigoInterno);
+    }
+
+    private void CtxCardEliminarProducto_Click(object sender, RoutedEventArgs e)
+    {
+        var p = ExtraerProductoDesdeMenuItem(sender);
+        if (p == null) return;
+        CargarProductoEnEditor(p);
+        BtnEliminarProducto_Click(sender, e);
+    }
+
+    // --- CLIC DERECHO EN TABLAS DE INICIO (DASHBOARD OCS Y ALERTAS DE STOCK) ---
+    private void CtxDashboardOcRecibir_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardOcs?.SelectedItem is OrdenCompra oc)
+        {
+            CambiarSeccion(4);
+            if (DgOrdenesCompra?.ItemsSource is IEnumerable<OrdenCompra> lista)
+                DgOrdenesCompra.SelectedItem = lista.FirstOrDefault(x => x.Id == oc.Id);
+        }
+    }
+
+    private void CtxDashboardOcImprimir_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardOcs?.SelectedItem is OrdenCompra oc)
+        {
+            CambiarSeccion(4);
+            if (DgOrdenesCompra?.ItemsSource is IEnumerable<OrdenCompra> lista)
+                DgOrdenesCompra.SelectedItem = lista.FirstOrDefault(x => x.Id == oc.Id);
+            BtnImprimirOcSeleccionada_Click(sender, e);
+        }
+    }
+
+    private void CtxDashboardOcCopiarFolio_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardOcs?.SelectedItem is OrdenCompra oc && !string.IsNullOrWhiteSpace(oc.Folio))
+            Clipboard.SetText(oc.Folio);
+    }
+
+    private void CtxAlertaStockAgregarSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAlertas?.SelectedItem is Producto p)
+        {
+            decimal sugerido = Math.Max(1m, p.StockMinimo - p.StockActual);
+            AgregarProductoAPartidasSolicitud(p, sugerido, "Reabastecimiento por alerta de stock mínimo");
+            CambiarSeccion(2);
+        }
+    }
+
+    private void CtxAlertaStockMapa_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAlertas?.SelectedItem is Producto p)
+        {
+            MostrarSelectorYMapaAnaqueles(p.Ubicacion, nuevaCoord =>
+            {
+                DatabaseService.ActualizarUbicacionProducto(p.Id, nuevaCoord, sincronizarHerramientas: true);
+                CargarTodoElSistema();
+            }, this);
+        }
+    }
+
+    private void CtxAlertaStockEditar_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAlertas?.SelectedItem is Producto p)
+        {
+            CambiarSeccion(1);
+            CargarProductoEnEditor(p);
+        }
+    }
+
+    // --- CLIC DERECHO EN ÓRDENES DE COMPRA, RANKING Y DIRECTORIO DE HERRAMIENTAS ---
+    private void CtxOrdenCompraCopiarFolio_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra?.SelectedItem is OrdenCompra oc && !string.IsNullOrWhiteSpace(oc.Folio))
+            Clipboard.SetText(oc.Folio);
+    }
+
+    private void CtxRankingAbrirMapa_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgRankingMaterialesAnalisis?.SelectedItem is MaterialRankingAnalisis item && item.ProductoId > 0)
+        {
+            var prod = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.Id == item.ProductoId);
+            if (prod != null)
+            {
+                MostrarSelectorYMapaAnaqueles(prod.Ubicacion, nuevaCoord =>
+                {
+                    DatabaseService.ActualizarUbicacionProducto(prod.Id, nuevaCoord, sincronizarHerramientas: true);
+                    CargarTodoElSistema();
+                }, this);
+            }
+        }
+    }
+
+    private void CtxRankingEditarProducto_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgRankingMaterialesAnalisis?.SelectedItem is MaterialRankingAnalisis item && item.ProductoId > 0)
+        {
+            var prod = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.Id == item.ProductoId);
+            if (prod != null)
+            {
+                CambiarSeccion(1);
+                CargarProductoEnEditor(prod);
+            }
+        }
+    }
+
+    private void CtxDirHerPrestar_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDirHerramientas?.SelectedItem is not HerramientaActivo h) return;
+        CambiarSeccion(5);
+        if (CboHerramientaDisponible?.ItemsSource is IEnumerable<HerramientaActivo> disp)
+        {
+            var match = disp.FirstOrDefault(x => x.Id == h.Id);
+            if (match != null)
+                CboHerramientaDisponible.SelectedItem = match;
+        }
+    }
+
+    private void CtxDirHerReubicarMapa_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDirHerramientas?.SelectedItem is not HerramientaActivo h) return;
+        MostrarSelectorYMapaAnaqueles(h.Ubicacion, nuevaCoord =>
+        {
+            DatabaseService.ActualizarUbicacionHerramientaIndividual(h.Id, nuevaCoord);
+            if (TxtDirHerUbicacion != null)
+                TxtDirHerUbicacion.Text = nuevaCoord;
+            CargarTodoElSistema();
+        }, this);
+    }
+
+    private void CtxDirHerMarcarDisponible_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDirHerramientas?.SelectedItem is not HerramientaActivo h) return;
+        h.Estado = "Disponible";
+        DatabaseService.GuardarHerramientaActivo(h);
+        CargarTodoElSistema();
+    }
+
+    private void CtxDirHerMarcarDanada_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDirHerramientas?.SelectedItem is not HerramientaActivo h) return;
+        h.Estado = "Dañada";
+        DatabaseService.GuardarHerramientaActivo(h);
+        CargarTodoElSistema();
+    }
+
+    private void CtxDirHerCopiarCodigo_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDirHerramientas?.SelectedItem is HerramientaActivo h)
+            Clipboard.SetText($"{h.CodigoIndividual} | SN: {h.NumeroSerie}");
     }
 
     private static decimal ParseDecimal(string? txt, decimal defecto)
