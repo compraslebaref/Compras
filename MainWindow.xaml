@@ -614,15 +614,16 @@
                                 <StackPanel>
                                     <Grid Margin="0,0,0,8">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" MinWidth="150" />
                                             <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="185" />
-                                            <ColumnDefinition Width="185" />
+                                            <ColumnDefinition Width="155" />
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="180" />
                                         </Grid.ColumnDefinitions>
                                         <ui:TextBox x:Name="TxtBuscarCatalogo"
                                                     Grid.Column="0"
                                                     Margin="0,0,8,0"
-                                                    PlaceholderText="Buscar producto, familia o escanear código (PRD, ENT, SAL, OC)..."
+                                                    PlaceholderText="Buscar producto, familia, ubicación o escanear código (PRD, ENT, SAL, OC)..."
                                                     VerticalContentAlignment="Center"
                                                     KeyDown="TxtBuscarCatalogo_KeyDown"
                                                     TextChanged="TxtBuscarCatalogo_TextChanged" />
@@ -640,8 +641,13 @@
                                                   SelectionChanged="CboFiltroCategoria_SelectionChanged" />
                                         <ComboBox x:Name="CboFiltroFamilia"
                                                   Grid.Column="3"
+                                                  Margin="0,0,6,0"
                                                   ToolTip="Filtrar por Familia / Agrupador Genérico"
                                                   SelectionChanged="CboFiltroFamilia_SelectionChanged" />
+                                        <ComboBox x:Name="CboFiltroUbicacion"
+                                                  Grid.Column="4"
+                                                  ToolTip="Filtrar por Ubicación en Almacén (Zona, Anaquel o Nivel)"
+                                                  SelectionChanged="CboFiltroUbicacion_SelectionChanged" />
                                     </Grid>
 
                                     <Border Padding="8,6" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">

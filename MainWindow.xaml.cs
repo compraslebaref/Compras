@@ -522,6 +522,13 @@ public partial class MainWindow : FluentWindow
                 TxtProdUnidadAlmacen.Text = uaActual;
             }
             var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
+            if (CboFiltroUbicacion != null)
+            {
+                string ubiFiltroPrevia = CboFiltroUbicacion.SelectedItem as string ?? "Todas las ubicaciones";
+                var opcionesFiltroUbi = ObtenerOpcionesFiltroUbicacionCatalogo();
+                CboFiltroUbicacion.ItemsSource = opcionesFiltroUbi;
+                CboFiltroUbicacion.SelectedItem = opcionesFiltroUbi.FirstOrDefault(u => u.Equals(ubiFiltroPrevia, StringComparison.OrdinalIgnoreCase)) ?? opcionesFiltroUbi[0];
+            }
             if (TxtProdUbicacion != null)
             {
                 string ubiActual = TxtProdUbicacion.Text;
@@ -1455,6 +1462,7 @@ public partial class MainWindow : FluentWindow
 
         int catId = (CboFiltroCategoria?.SelectedItem as Categoria)?.Id ?? 0;
         string famFiltro = CboFiltroFamilia?.SelectedItem as string ?? "Todas las familias";
+        string ubiFiltro = CboFiltroUbicacion?.SelectedItem as string ?? "Todas las ubicaciones";
 
         IEnumerable<Producto> query = _cacheProductos;
         if (catId > 0)
@@ -1465,12 +1473,18 @@ public partial class MainWindow : FluentWindow
         {
             query = query.Where(p => string.Equals(p.Familia, famFiltro, StringComparison.OrdinalIgnoreCase));
         }
+        if (!string.IsNullOrWhiteSpace(ubiFiltro) && !ubiFiltro.Equals("Todas las ubicaciones", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(p => CoincideFiltroUbicacionProducto(p, ubiFiltro));
+        }
 
         if (!string.IsNullOrWhiteSpace(filtroRaw))
         {
             query = query.Where(p =>
                 p.Nombre.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
                 p.Familia.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.Ubicacion.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
+                p.Ubicacion.Contains(filtroNorm, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoInterno.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoInterno.Contains(filtroNorm, StringComparison.OrdinalIgnoreCase) ||
                 p.CodigoBarras.Contains(filtroRaw, StringComparison.OrdinalIgnoreCase) ||
@@ -1635,6 +1649,86 @@ public partial class MainWindow : FluentWindow
     {
         if (!IsLoaded || _actualizandoCombosBase) return;
         RefrescarCatalogoVisual();
+    }
+
+    private void CboFiltroUbicacion_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _actualizandoCombosBase) return;
+        RefrescarCatalogoVisual();
+    }
+
+    private static List<string> ObtenerOpcionesFiltroUbicacionCatalogo()
+    {
+        var lista = new List<string>
+        {
+            "Todas las ubicaciones",
+            "⚠️ Sin ubicación asignada",
+            "🧱 Zona: DETRAS-A (Detrás de A / Pared)",
+            "🏗️ Zona: PISO (Piso / Exterior)",
+            "🚪 Zona: GABINETE (Todos los 5 niveles)",
+            "📦 Zona: Anaquel A (A-01 a A-09)",
+            "📦 Zona: Anaquel B (B-01 a B-09)",
+            "📦 Zona: Anaquel C (C-01 a C-09)",
+            "📦 Zona: Anaquel D (D-01 a D-09)",
+            "📦 Zona: Anaquel E (E-01 a E-09)",
+            "📦 Zona: Anaquel F (F-01 a F-09)"
+        };
+
+        // Agregar los 5 niveles individuales del Gabinete y las 54 posiciones de Anaqueles A–F
+        foreach (var item in ObtenerCatalogoUbicacionesDesplegable())
+        {
+            // DETRAS-A y PISO ya están como opciones de zona única arriba
+            if (item.StartsWith("DETRAS-A", StringComparison.OrdinalIgnoreCase) ||
+                item.StartsWith("PISO", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            lista.Add(item);
+        }
+
+        return lista;
+    }
+
+    private static bool CoincideFiltroUbicacionProducto(Producto p, string filtroUbi)
+    {
+        if (string.IsNullOrWhiteSpace(filtroUbi) || filtroUbi.Equals("Todas las ubicaciones", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (filtroUbi.StartsWith("⚠️", StringComparison.Ordinal))
+            return string.IsNullOrWhiteSpace(p.Ubicacion);
+
+        if (string.IsNullOrWhiteSpace(p.Ubicacion))
+            return false;
+
+        var (estProd, cuadProd, _) = ParsearCoordenadaAlmacen(p.Ubicacion);
+
+        // Filtros por Zona completa (DETRAS-A, PISO, GABINETE completo o Anaquel A..F completo)
+        if (filtroUbi.Contains("Zona: DETRAS-A", StringComparison.OrdinalIgnoreCase))
+            return string.Equals(estProd, "DETRAS-A", StringComparison.OrdinalIgnoreCase);
+
+        if (filtroUbi.Contains("Zona: PISO", StringComparison.OrdinalIgnoreCase))
+            return string.Equals(estProd, "PISO", StringComparison.OrdinalIgnoreCase);
+
+        if (filtroUbi.Contains("Zona: GABINETE", StringComparison.OrdinalIgnoreCase))
+            return string.Equals(estProd, "GABINETE", StringComparison.OrdinalIgnoreCase);
+
+        string[] anaqueles = { "A", "B", "C", "D", "E", "F" };
+        foreach (var est in anaqueles)
+        {
+            if (filtroUbi.Contains($"Zona: Anaquel {est} ", StringComparison.OrdinalIgnoreCase))
+                return string.Equals(estProd, est, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Filtro por nivel específico (ej. GABINETE-03 o A-04)
+        string codFiltro = ExtraerCodigoUbicacionLimpio(filtroUbi);
+        var (estFiltro, cuadFiltro, _) = ParsearCoordenadaAlmacen(codFiltro);
+        if (!string.IsNullOrEmpty(estFiltro))
+        {
+            return string.Equals(estProd, estFiltro, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(cuadProd, cuadFiltro, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return p.Ubicacion.Contains(codFiltro, StringComparison.OrdinalIgnoreCase);
     }
 
     private void BtnGestionarFamilias_Click(object sender, RoutedEventArgs e)
