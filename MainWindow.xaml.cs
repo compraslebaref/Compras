@@ -1118,7 +1118,7 @@ public partial class MainWindow : FluentWindow
         TxtOmniScanner.Clear();
         TxtUltimoEscaneo.Text = $"Último escaneo: {code}";
 
-        // 1. ¿Es el folio de una Orden de Compra (OC-xxxx)? -> Abrir recepción parcial/total de esa OC
+        // 1. ¿Es el folio de una Orden de Compra (OC-xxxx)? -> Abrir modal de recepción parcial/total de esa OC
         if (code.StartsWith("OC-"))
         {
             var ocs = DatabaseService.ObtenerOrdenesCompra();
@@ -1127,9 +1127,7 @@ public partial class MainWindow : FluentWindow
             {
                 CambiarSeccion(4);
                 DgOrdenesCompra.SelectedItem = DgOrdenesCompra.Items.Cast<OrdenCompra>().FirstOrDefault(x => x.Id == oc.Id);
-                System.Windows.MessageBox.Show(this,
-                    $"Orden de Compra {oc.Folio} ({oc.ProveedorNombre}) localizada.\nEstatus actual: {oc.Estatus}.\n\nLista para registrar recepción parcial o total en almacén.",
-                    "Escaneo de Orden de Compra", MessageBoxButton.OK, MessageBoxImage.Information);
+                MostrarModalRecepcionOrdenCompraAgrupada(oc);
                 return;
             }
         }
@@ -1180,7 +1178,7 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        // 4. ¿Es un Vale de Entrada (ENT-xxxx) o Vale de Salida (SAL-xxxx)? -> Localizar y abrir su vista previa impresa
+        // 4. ¿Es un Vale de Entrada (ENT-xxxx) o Vale de Salida (SAL-xxxx)? -> Abrir el modal de siguiente acción
         if (code.StartsWith("ENT-"))
         {
             var ent = DatabaseService.ObtenerEntradasAlmacen().FirstOrDefault(x => CoincideFolioFlexible(x.Folio, code));
@@ -1189,7 +1187,7 @@ public partial class MainWindow : FluentWindow
                 if (MainTabControl.SelectedIndex == 5)
                 {
                     RefrescarAlmacenPosYPrestamos();
-                    var filaMov = DgMovimientosAlmacen.Items.Cast<MovimientoAlmacenFila>().FirstOrDefault(m => m.TipoMovimiento == "ENTRADA" && m.Folio == ent.Folio);
+                    var filaMov = DgMovimientosAlmacen.Items.Cast<MovimientoAlmacenFila>().FirstOrDefault(m => m.Folio == ent.Folio);
                     if (filaMov != null)
                     {
                         DgMovimientosAlmacen.SelectedItem = filaMov;
@@ -1205,7 +1203,7 @@ public partial class MainWindow : FluentWindow
                         DgEntradasHistorial.ScrollIntoView(filaEnt);
                     }
                 }
-                BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent);
+                MostrarModalAccionEntradaAlmacen(ent);
                 return;
             }
         }
@@ -7379,6 +7377,30 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    private void DgOrdenesCompra_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
+        {
+            MostrarModalRecepcionOrdenCompraAgrupada(oc);
+        }
+    }
+
+    private void BtnAbrirModalRecepcionOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
+        {
+            MostrarModalRecepcionOrdenCompraAgrupada(oc);
+        }
+    }
+
+    private void DgEntradasHistorial_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DgEntradasHistorial.SelectedItem is EntradaAlmacen ent)
+        {
+            MostrarModalAccionEntradaAlmacen(ent);
+        }
+    }
+
     private void DgMovimientosAlmacen_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (DgMovimientosAlmacen.SelectedItem is MovimientoAlmacenFila filaMov)
@@ -7388,11 +7410,747 @@ public partial class MainWindow : FluentWindow
                 var sal = DatabaseService.ObtenerSalidasAlmacen().FirstOrDefault(s => s.Id == filaMov.SalidaOriginal.Id) ?? filaMov.SalidaOriginal;
                 MostrarModalDevolucionMaterialSalida(sal);
             }
+            else if (filaMov.EntradaOriginal != null)
+            {
+                var ent = DatabaseService.ObtenerEntradasAlmacen().FirstOrDefault(x => x.Id == filaMov.EntradaOriginal.Id) ?? filaMov.EntradaOriginal;
+                MostrarModalAccionEntradaAlmacen(ent);
+            }
             else
             {
                 AbrirVistaPreviaMovimientoAlmacen(filaMov);
             }
         }
+    }
+
+    private void MostrarModalRecepcionOrdenCompraAgrupada(OrdenCompra? ocPreseleccionada)
+    {
+        var todasOcs = DatabaseService.ObtenerOrdenesCompra();
+        if (todasOcs.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this,
+                "Aún no existen Órdenes de Compra (OC-xxxx) emitidas en el sistema.",
+                "Sin órdenes de compra", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
+
+        var win = new Window
+        {
+            Title = "Recepción Agrupada de Orden de Compra en Almacén (OC-xxxx → ENT-xxxx)",
+            Width = 1040,
+            Height = 640,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+        };
+
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "📥 Recepción de Mercancía por Orden de Compra (OC-xxxx → Vale de Entrada ENT-xxxx)",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+        });
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "Marque con ☑ los artículos que SÍ llegaron del proveedor hoy, ajuste la cantidad recibida si fue entrega parcial y asigne su ubicación en anaquel:",
+            FontSize = 11.5,
+            Foreground = Brushes.DimGray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var selGrid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        selGrid.Children.Add(new TextBlock
+        {
+            Text = "Orden de Compra (OC-xxxx):",
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+
+        var cboOcs = new ComboBox
+        {
+            Margin = new Thickness(0, 0, 8, 0),
+            ItemsSource = todasOcs
+        };
+        Grid.SetColumn(cboOcs, 1);
+        selGrid.Children.Add(cboOcs);
+
+        var btnRecibirTodo = new System.Windows.Controls.Button
+        {
+            Content = "☑ Llegó Todo lo Pendiente",
+            Padding = new Thickness(10, 5, 10, 5),
+            Margin = new Thickness(0, 0, 6, 0),
+            FontWeight = FontWeights.SemiBold,
+            Cursor = Cursors.Hand
+        };
+        Grid.SetColumn(btnRecibirTodo, 2);
+        selGrid.Children.Add(btnRecibirTodo);
+
+        var btnLimpiarCero = new System.Windows.Controls.Button
+        {
+            Content = "☐ Desmarcar Todo (0)",
+            Padding = new Thickness(10, 5, 10, 5),
+            Cursor = Cursors.Hand
+        };
+        Grid.SetColumn(btnLimpiarCero, 3);
+        selGrid.Children.Add(btnLimpiarCero);
+        topPanel.Children.Add(selGrid);
+
+        // Barra rápida para escanear productos con el modal abierto
+        var scanGrid = new Grid();
+        scanGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        scanGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        scanGrid.Children.Add(new TextBlock
+        {
+            Text = "🔫 Escanear artículo dentro de la OC:",
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(3, 105, 161)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        var txtScanProdModal = new System.Windows.Controls.TextBox
+        {
+            Padding = new Thickness(8, 4, 8, 4),
+            ToolTip = "Escanee un código PRD-xxxx o EAN con esta ventana abierta para marcarlo o sumar +1 recibido"
+        };
+        Grid.SetColumn(txtScanProdModal, 1);
+        scanGrid.Children.Add(txtScanProdModal);
+        topPanel.Children.Add(scanGrid);
+
+        Grid.SetRow(topPanel, 0);
+        root.Children.Add(topPanel);
+
+        var infoBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var txtInfoOc = new TextBlock
+        {
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            TextWrapping = TextWrapping.Wrap
+        };
+        infoBorder.Child = txtInfoOc;
+        Grid.SetRow(infoBorder, 1);
+        root.Children.Add(infoBorder);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            Background = Brushes.White,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+
+        var colCheckOc = new DataGridTemplateColumn { Header = "☑ ¿Llegó Hoy?", Width = 100 };
+        var chkOcFactory = new FrameworkElementFactory(typeof(CheckBox));
+        chkOcFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoRecibir")
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+        });
+        chkOcFactory.SetBinding(UIElement.IsEnabledProperty, new System.Windows.Data.Binding("TienePendientePorRecibir"));
+        chkOcFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        chkOcFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        colCheckOc.CellTemplate = new DataTemplate { VisualTree = chkOcFactory };
+        dg.Columns.Add(colCheckOc);
+
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 85 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Artículo / Concepto", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { Header = "U. Compra", Binding = new System.Windows.Data.Binding("UnidadCompra"), IsReadOnly = true, Width = 78 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Pedida", Binding = new System.Windows.Data.Binding("CantidadPedida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 68 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Recibida", Binding = new System.Windows.Data.Binding("CantidadRecibida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 72 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Pendiente", Binding = new System.Windows.Data.Binding("CantidadPendiente") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 78 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Recibir Hoy", Binding = new System.Windows.Data.Binding("CantidadRecibirAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 105 });
+
+        var colUbiOc = new DataGridTemplateColumn { Header = "📍 Ubicación en Almacén", Width = 185 };
+        var cboUbiFactory = new FrameworkElementFactory(typeof(ComboBox));
+        cboUbiFactory.SetValue(ComboBox.IsEditableProperty, true);
+        cboUbiFactory.SetValue(ItemsControl.ItemsSourceProperty, ubicacionesCatalogo);
+        cboUbiFactory.SetBinding(ComboBox.TextProperty, new System.Windows.Data.Binding("UbicacionDestino")
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.LostFocus
+        });
+        cboUbiFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2));
+        colUbiOc.CellTemplate = new DataTemplate { VisualTree = cboUbiFactory };
+        dg.Columns.Add(colUbiOc);
+
+        Grid.SetRow(dg, 2);
+        root.Children.Add(dg);
+
+        var extraGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        extraGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        extraGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        extraGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var spRem = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+        spRem.Children.Add(new TextBlock { Text = "Folio Remisión / Factura Proveedor:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtRemision = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 5, 6, 5) };
+        spRem.Children.Add(txtRemision);
+        Grid.SetColumn(spRem, 0);
+        extraGrid.Children.Add(spRem);
+
+        var spObs = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+        spObs.Children.Add(new TextBlock { Text = "Observaciones de la Recepción:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtNotas = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 5, 6, 5), Text = "Recepción verificada en almacén." };
+        spObs.Children.Add(txtNotas);
+        Grid.SetColumn(spObs, 1);
+        extraGrid.Children.Add(spObs);
+
+        var chkReservar = new CheckBox
+        {
+            Content = "Reservar stock p/ Proyecto\n(Desmarque para pasar a Salida)",
+            IsChecked = false,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
+        Grid.SetColumn(chkReservar, 2);
+        extraGrid.Children.Add(chkReservar);
+
+        Grid.SetRow(extraGrid, 3);
+        root.Children.Add(extraGrid);
+
+        var bottomDock = new DockPanel();
+        var btnSoloImprimirOc = new System.Windows.Controls.Button
+        {
+            Content = "🖨️ Solo Ver / Reimprimir OC",
+            Padding = new Thickness(12, 7, 12, 7),
+            Cursor = Cursors.Hand
+        };
+        DockPanel.SetDock(btnSoloImprimirOc, Dock.Left);
+        bottomDock.Children.Add(btnSoloImprimirOc);
+
+        var bottomPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancelar = new System.Windows.Controls.Button
+        {
+            Content = "Cancelar",
+            Padding = new Thickness(14, 7, 14, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            Cursor = Cursors.Hand
+        };
+        var btnConfirmar = new System.Windows.Controls.Button
+        {
+            Content = "✅ Registrar Entrada de Seleccionados (☑) e Imprimir Vale ENT-xxxx",
+            Padding = new Thickness(16, 7, 16, 7),
+            Background = new SolidColorBrush(Color.FromRgb(22, 163, 74)),
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.Bold,
+            Cursor = Cursors.Hand
+        };
+        bottomPanel.Children.Add(btnCancelar);
+        bottomPanel.Children.Add(btnConfirmar);
+        bottomDock.Children.Add(bottomPanel);
+        Grid.SetRow(bottomDock, 4);
+        root.Children.Add(bottomDock);
+
+        void CargarPartidasDeOc(OrdenCompra? oc)
+        {
+            if (oc == null)
+            {
+                txtInfoOc.Text = "Seleccione una Orden de Compra...";
+                dg.ItemsSource = null;
+                btnConfirmar.IsEnabled = false;
+                return;
+            }
+
+            foreach (var p in oc.Partidas)
+            {
+                p.CantidadRecibirAhora = p.CantidadPendiente;
+                if (p.ProductoId > 0 && prodsDict.TryGetValue(p.ProductoId, out var prodExist) && !string.IsNullOrWhiteSpace(prodExist.Ubicacion))
+                {
+                    p.UbicacionDestino = prodExist.Ubicacion;
+                }
+            }
+
+            bool tienePendientes = oc.Partidas.Any(x => x.CantidadPendiente > 0m) && oc.Estatus != "Cancelada";
+            btnConfirmar.IsEnabled = tienePendientes;
+
+            if (!tienePendientes)
+            {
+                infoBorder.Background = new SolidColorBrush(Color.FromRgb(220, 252, 231));
+                infoBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(134, 239, 172));
+                txtInfoOc.Text = $"✔ {oc.Folio} ({oc.ProveedorNombre}) — Estatus: {oc.Estatus} ({oc.AvanceRecepcionTexto}). Esta Orden de Compra ya no tiene artículos pendientes por recibir. Puede consultar o reimprimir el documento con el botón inferior izquierdo.";
+            }
+            else
+            {
+                infoBorder.Background = Brushes.White;
+                infoBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240));
+                txtInfoOc.Text = $"Folio: {oc.Folio}  |  Proveedor: {oc.ProveedorNombre}  |  Destino: {oc.ProyectoNombre} ({oc.DepartamentoNombre})  |  Estatus: {oc.Estatus} ({oc.AvanceRecepcionTexto})";
+            }
+
+            dg.ItemsSource = null;
+            dg.ItemsSource = oc.Partidas;
+        }
+
+        cboOcs.SelectionChanged += (_, _) => CargarPartidasDeOc(cboOcs.SelectedItem as OrdenCompra);
+
+        btnRecibirTodo.Click += (_, _) =>
+        {
+            if (cboOcs.SelectedItem is OrdenCompra oc)
+            {
+                foreach (var p in oc.Partidas)
+                    p.CantidadRecibirAhora = p.CantidadPendiente;
+                dg.Items.Refresh();
+            }
+        };
+
+        btnLimpiarCero.Click += (_, _) =>
+        {
+            if (cboOcs.SelectedItem is OrdenCompra oc)
+            {
+                foreach (var p in oc.Partidas)
+                    p.CantidadRecibirAhora = 0m;
+                dg.Items.Refresh();
+            }
+        };
+
+        txtScanProdModal.KeyDown += (_, ev) =>
+        {
+            if (ev.Key == Key.Enter && cboOcs.SelectedItem is OrdenCompra oc)
+            {
+                string code = NormalizarCodigoEscaneado(txtScanProdModal.Text);
+                txtScanProdModal.Clear();
+                if (string.IsNullOrWhiteSpace(code)) return;
+
+                var prod = DatabaseService.BuscarProductoPorCodigo(code);
+                var part = oc.Partidas.FirstOrDefault(p =>
+                    (prod != null && p.ProductoId == prod.Id) ||
+                    CoincideFolioFlexible(p.ProductoCodigo, code) ||
+                    p.ProductoNombre.Contains(code, StringComparison.OrdinalIgnoreCase));
+
+                if (part != null && part.CantidadPendiente > 0m)
+                {
+                    if (!part.SeleccionadoRecibir)
+                        part.CantidadRecibirAhora = 1m;
+                    else
+                        part.CantidadRecibirAhora = Math.Min(part.CantidadPendiente, part.CantidadRecibirAhora + 1m);
+                    dg.SelectedItem = part;
+                    dg.ScrollIntoView(part);
+                    dg.Items.Refresh();
+                }
+                ev.Handled = true;
+            }
+        };
+
+        btnSoloImprimirOc.Click += (_, _) =>
+        {
+            if (cboOcs.SelectedItem is OrdenCompra oc)
+            {
+                win.Close();
+                BarcodePrintService.MostrarVistaPreviaEImprimirOrdenCompra(this, oc);
+            }
+        };
+
+        btnCancelar.Click += (_, _) => win.Close();
+
+        btnConfirmar.Click += (_, _) =>
+        {
+            dg.CommitEdit(DataGridEditingUnit.Cell, true);
+            dg.CommitEdit(DataGridEditingUnit.Row, true);
+
+            if (cboOcs.SelectedItem is not OrdenCompra ocSel)
+                return;
+
+            var aRecibir = ocSel.Partidas
+                .Where(p => p.SeleccionadoRecibir && p.CantidadRecibirAhora > 0)
+                .Select(p => (p, p.CantidadRecibirAhora))
+                .ToList();
+
+            if (aRecibir.Count == 0)
+            {
+                System.Windows.MessageBox.Show(win,
+                    "Marque con ☑ al menos un artículo y verifique que su cantidad en '✏️ Recibir Hoy' sea mayor a 0.",
+                    "Sin cantidades por recibir", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var conceptosAbiertos = aRecibir.Where(x => x.p.ProductoId <= 0).Select(x => x.p).ToList();
+            if (conceptosAbiertos.Count > 0 && !ConfirmarNombresConceptosAbiertosEnRecepcion(ocSel, conceptosAbiertos))
+                return;
+
+            string rem = txtRemision.Text.Trim();
+            string not = txtNotas.Text.Trim();
+            string notasCompletas = !string.IsNullOrWhiteSpace(rem)
+                ? (string.IsNullOrWhiteSpace(not) ? $"Remisión/Nota Proveedor: {rem}" : $"Remisión/Nota: {rem} | {not}")
+                : not;
+
+            bool reservarProy = chkReservar.IsChecked == true;
+            var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(ocSel, aRecibir, notasCompletas, reservarProy);
+
+            // Actualizar ubicación en almacén si el almacenista la especificó en la tabla de recepción
+            var prodsActualizados = DatabaseService.ObtenerProductos().ToDictionary(x => x.Id);
+            foreach (var (partOc, _) in aRecibir)
+            {
+                string ubiElegida = ExtraerCodigoUbicacionLimpio(partOc.UbicacionDestino);
+                if (partOc.ProductoId > 0 && !string.IsNullOrWhiteSpace(ubiElegida) &&
+                    prodsActualizados.TryGetValue(partOc.ProductoId, out var prodDb) &&
+                    !string.Equals(prodDb.Ubicacion, ubiElegida, StringComparison.OrdinalIgnoreCase))
+                {
+                    prodDb.Ubicacion = ubiElegida;
+                    DatabaseService.GuardarProducto(prodDb);
+                }
+            }
+
+            // Si se recibieron herramientas, abrir el modal de registro HER-xxxx
+            prodsActualizados = DatabaseService.ObtenerProductos().ToDictionary(x => x.Id);
+            var partidasHer = entrada.Partidas
+                .Where(ep => prodsActualizados.TryGetValue(ep.ProductoId, out var pr) && (pr.EsHerramienta || pr.CategoriaId == 4))
+                .ToList();
+            foreach (var ep in partidasHer)
+            {
+                if (prodsActualizados.TryGetValue(ep.ProductoId, out var prodHer))
+                {
+                    int cantHer = Math.Max(1, (int)Math.Round(ep.CantidadIngresadaAlmacen));
+                    MostrarModalRegistroHerramienta(prodHer, cantHer);
+                }
+            }
+
+            CargarTodoElSistema();
+            win.Close();
+            BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, entrada);
+
+            if (!reservarProy && entrada.Partidas.Count > 0)
+            {
+                var respSal = System.Windows.MessageBox.Show(this,
+                    $"¿Desea cargar los artículos recién recibidos de {ocSel.Folio} ({entrada.Folio}) en 'Salida de Material' para entregarlos de una vez al área solicitante ({ocSel.DepartamentoNombre})?",
+                    "Pasar a Salida de Material (SAL-xxxx)",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (respSal == System.Windows.MessageBoxResult.Yes)
+                {
+                    CargarPartidasDeEntradaEnSalidaPos(entrada, ocSel);
+                    CambiarSeccion(5);
+                }
+            }
+        };
+
+        var inicial = ocPreseleccionada != null
+            ? todasOcs.FirstOrDefault(o => o.Id == ocPreseleccionada.Id)
+            : todasOcs.FirstOrDefault(o => o.Partidas.Any(p => p.CantidadPendiente > 0)) ?? todasOcs.FirstOrDefault();
+
+        cboOcs.SelectedItem = inicial;
+        CargarPartidasDeOc(inicial);
+
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    private void MostrarModalAccionEntradaAlmacen(EntradaAlmacen? entradaPreseleccionada)
+    {
+        var todasEntradas = DatabaseService.ObtenerEntradasAlmacen();
+        if (todasEntradas.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this,
+                "Aún no existen Vales de Entrada (ENT-xxxx) registrados en el sistema.",
+                "Sin entradas registradas", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
+
+        var win = new Window
+        {
+            Title = "Siguiente Acción del Vale de Entrada (ENT-xxxx): Acomodo en Anaquel o Salida de Material",
+            Width = 960,
+            Height = 580,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+        };
+
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "📦 Siguiente Acción para Vale de Entrada (ENT-xxxx): Acomodar Ubicación o Surtir en Salida (SAL-xxxx)",
+            FontSize = 15.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+        });
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "Seleccione qué artículos de esta entrada desea surtir en un Vale de Salida (SAL-xxxx) o actualice su coordenada de anaquel en almacén:",
+            FontSize = 11.5,
+            Foreground = Brushes.DimGray,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var selGrid = new Grid();
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        selGrid.Children.Add(new TextBlock
+        {
+            Text = "Vale de Entrada (ENT-xxxx):",
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        var cboEntradas = new ComboBox { ItemsSource = todasEntradas };
+        Grid.SetColumn(cboEntradas, 1);
+        selGrid.Children.Add(cboEntradas);
+        topPanel.Children.Add(selGrid);
+        Grid.SetRow(topPanel, 0);
+        root.Children.Add(topPanel);
+
+        var infoBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var txtInfoEnt = new TextBlock
+        {
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            TextWrapping = TextWrapping.Wrap
+        };
+        infoBorder.Child = txtInfoEnt;
+        Grid.SetRow(infoBorder, 1);
+        root.Children.Add(infoBorder);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            Background = Brushes.White,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+
+        var colChk = new DataGridTemplateColumn { Header = "☑ Surtir", Width = 75 };
+        var chkFactory = new FrameworkElementFactory(typeof(CheckBox));
+        chkFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoAccion")
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+        });
+        chkFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        chkFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        colChk.CellTemplate = new DataTemplate { VisualTree = chkFactory };
+        dg.Columns.Add(colChk);
+
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 90 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Artículo Ingresado", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Ingresó a Stock", Binding = new System.Windows.Data.Binding("CantidadIngresadaAlmacen") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 105 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 75 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Cant. a Surtir", Binding = new System.Windows.Data.Binding("CantidadParaSalida") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 110 });
+
+        var colUbi = new DataGridTemplateColumn { Header = "📍 Ubicación en Almacén (Anaquel)", Width = 210 };
+        var cboUbiFactory = new FrameworkElementFactory(typeof(ComboBox));
+        cboUbiFactory.SetValue(ComboBox.IsEditableProperty, true);
+        cboUbiFactory.SetValue(ItemsControl.ItemsSourceProperty, ubicacionesCatalogo);
+        cboUbiFactory.SetBinding(ComboBox.TextProperty, new System.Windows.Data.Binding("UbicacionAlmacen")
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.LostFocus
+        });
+        cboUbiFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2));
+        colUbi.CellTemplate = new DataTemplate { VisualTree = cboUbiFactory };
+        dg.Columns.Add(colUbi);
+
+        Grid.SetRow(dg, 2);
+        root.Children.Add(dg);
+
+        var bottomDock = new DockPanel();
+        var btnSoloImprimirEnt = new System.Windows.Controls.Button
+        {
+            Content = "🖨️ Solo Ver / Reimprimir Vale ENT-xxxx",
+            Padding = new Thickness(12, 7, 12, 7),
+            Cursor = Cursors.Hand
+        };
+        DockPanel.SetDock(btnSoloImprimirEnt, Dock.Left);
+        bottomDock.Children.Add(btnSoloImprimirEnt);
+
+        var rightButtons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancelar = new System.Windows.Controls.Button
+        {
+            Content = "Cancelar",
+            Padding = new Thickness(14, 7, 14, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            Cursor = Cursors.Hand
+        };
+        var btnGuardarUbicaciones = new System.Windows.Controls.Button
+        {
+            Content = "📍 Guardar Ubicaciones en Anaquel",
+            Padding = new Thickness(14, 7, 14, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            FontWeight = FontWeights.SemiBold,
+            Cursor = Cursors.Hand
+        };
+        var btnPasarASalida = new System.Windows.Controls.Button
+        {
+            Content = "📤 Cargar Seleccionados (☑) en Salida de Material (SAL-xxxx)",
+            Padding = new Thickness(16, 7, 16, 7),
+            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.Bold,
+            Cursor = Cursors.Hand
+        };
+        rightButtons.Children.Add(btnCancelar);
+        rightButtons.Children.Add(btnGuardarUbicaciones);
+        rightButtons.Children.Add(btnPasarASalida);
+        bottomDock.Children.Add(rightButtons);
+        Grid.SetRow(bottomDock, 3);
+        root.Children.Add(bottomDock);
+
+        void CargarPartidasDeEntrada(EntradaAlmacen? ent)
+        {
+            if (ent == null)
+            {
+                txtInfoEnt.Text = "Seleccione un vale de entrada...";
+                dg.ItemsSource = null;
+                return;
+            }
+
+            foreach (var p in ent.Partidas)
+            {
+                p.CantidadParaSalida = p.CantidadIngresadaAlmacen;
+                p.SeleccionadoAccion = true;
+                if (prodsDict.TryGetValue(p.ProductoId, out var prodObj))
+                {
+                    p.UbicacionAlmacen = prodObj.Ubicacion;
+                }
+            }
+
+            txtInfoEnt.Text = $"Folio: {ent.Folio}  |  Fecha: {ent.Fecha}  |  Proveedor: {ent.ProveedorNombre}  |  OC Origen: {(string.IsNullOrWhiteSpace(ent.OrdenCompraFolio) ? "Directa" : ent.OrdenCompraFolio)}  |  Proyecto: {ent.ProyectoNombre}";
+            dg.ItemsSource = null;
+            dg.ItemsSource = ent.Partidas;
+        }
+
+        void GuardarUbicacionesDePartidas(EntradaAlmacen ent)
+        {
+            dg.CommitEdit(DataGridEditingUnit.Cell, true);
+            dg.CommitEdit(DataGridEditingUnit.Row, true);
+            var dictActual = DatabaseService.ObtenerProductos().ToDictionary(x => x.Id);
+            foreach (var ep in ent.Partidas)
+            {
+                string ubiLimpia = ExtraerCodigoUbicacionLimpio(ep.UbicacionAlmacen);
+                if (ep.ProductoId > 0 && !string.IsNullOrWhiteSpace(ubiLimpia) &&
+                    dictActual.TryGetValue(ep.ProductoId, out var prodDb) &&
+                    !string.Equals(prodDb.Ubicacion, ubiLimpia, StringComparison.OrdinalIgnoreCase))
+                {
+                    prodDb.Ubicacion = ubiLimpia;
+                    DatabaseService.GuardarProducto(prodDb);
+                }
+            }
+        }
+
+        cboEntradas.SelectionChanged += (_, _) => CargarPartidasDeEntrada(cboEntradas.SelectedItem as EntradaAlmacen);
+
+        btnSoloImprimirEnt.Click += (_, _) =>
+        {
+            if (cboEntradas.SelectedItem is EntradaAlmacen ent)
+            {
+                win.Close();
+                BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent);
+            }
+        };
+
+        btnCancelar.Click += (_, _) => win.Close();
+
+        btnGuardarUbicaciones.Click += (_, _) =>
+        {
+            if (cboEntradas.SelectedItem is not EntradaAlmacen ent) return;
+            GuardarUbicacionesDePartidas(ent);
+            CargarTodoElSistema();
+            System.Windows.MessageBox.Show(win, "Las coordenadas de almacén de los artículos de esta entrada se actualizaron correctamente.", "Ubicaciones Guardadas", MessageBoxButton.OK, MessageBoxImage.Information);
+        };
+
+        btnPasarASalida.Click += (_, _) =>
+        {
+            if (cboEntradas.SelectedItem is not EntradaAlmacen ent) return;
+            GuardarUbicacionesDePartidas(ent);
+
+            var seleccionadas = ent.Partidas.Where(x => x.SeleccionadoAccion && x.CantidadParaSalida > 0).ToList();
+            if (seleccionadas.Count == 0)
+            {
+                System.Windows.MessageBox.Show(win, "Marque con ☑ al menos un artículo para cargarlo en el Vale de Salida.", "Sin artículos seleccionados", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            CargarTodoElSistema();
+            _partidasSalidaPos.Clear();
+            var dictProds = _cacheProductos.ToDictionary(x => x.Id);
+            foreach (var ep in seleccionadas)
+            {
+                if (dictProds.TryGetValue(ep.ProductoId, out var prod))
+                {
+                    AgregarProductoAValeSalidaPos(prod, ep.CantidadParaSalida);
+                }
+            }
+
+            if (ent.OrdenCompraId.HasValue)
+            {
+                var ocOrigen = DatabaseService.ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == ent.OrdenCompraId.Value);
+                if (ocOrigen != null)
+                {
+                    if (CboSalDepartamento != null && !string.IsNullOrWhiteSpace(ocOrigen.DepartamentoNombre))
+                    {
+                        var dep = CboSalDepartamento.Items.Cast<Departamento>().FirstOrDefault(d => d.Nombre.Equals(ocOrigen.DepartamentoNombre, StringComparison.OrdinalIgnoreCase));
+                        if (dep != null) CboSalDepartamento.SelectedItem = dep;
+                    }
+                    if (CboSalProyecto != null && ocOrigen.ProyectoId > 0)
+                    {
+                        var proy = CboSalProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == ocOrigen.ProyectoId);
+                        if (proy != null) CboSalProyecto.SelectedItem = proy;
+                    }
+                }
+            }
+            if (TxtSalNotas != null)
+            {
+                TxtSalNotas.Text = $"Surtido desde Vale de Entrada {ent.Folio}";
+            }
+
+            win.Close();
+            CambiarSeccion(5);
+        };
+
+        var inicial = entradaPreseleccionada != null
+            ? todasEntradas.FirstOrDefault(x => x.Id == entradaPreseleccionada.Id)
+            : todasEntradas.FirstOrDefault();
+
+        cboEntradas.SelectedItem = inicial;
+        CargarPartidasDeEntrada(inicial);
+
+        win.Content = root;
+        win.ShowDialog();
     }
 
     private void MostrarModalDevolucionPrestamoHerramienta(PrestamoHerramienta? prestamoPreseleccionado, string? codigoHerEscaneado = null)
@@ -7498,6 +8256,7 @@ public partial class MainWindow : FluentWindow
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 0, 10)
         };
+        var infoStack = new StackPanel();
         var txtInfoPrestamo = new TextBlock
         {
             FontSize = 11.5,
@@ -7505,7 +8264,29 @@ public partial class MainWindow : FluentWindow
             Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
             Text = "Seleccione un vale de préstamo..."
         };
-        infoBorder.Child = txtInfoPrestamo;
+        infoStack.Children.Add(txtInfoPrestamo);
+
+        var scanRowPre = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        scanRowPre.Children.Add(new TextBlock
+        {
+            Text = "🔫 Escanear Código Individual (HER-xxxx) para marcar ☑:",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        var txtScanHerModal = new System.Windows.Controls.TextBox
+        {
+            Width = 220,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(6, 3, 6, 3),
+            ToolTip = "Escanee el código HER-xxxx de la herramienta devuelta para marcarla automáticamente"
+        };
+        scanRowPre.Children.Add(txtScanHerModal);
+        infoStack.Children.Add(scanRowPre);
+
+        infoBorder.Child = infoStack;
         Grid.SetRow(infoBorder, 1);
         root.Children.Add(infoBorder);
 
@@ -7638,10 +8419,38 @@ public partial class MainWindow : FluentWindow
                 }
             }
 
-            txtInfoPrestamo.Text = $"Folio: {pre.Folio}  |  Recibió: {pre.PersonaRecibeEfectiva} ({pre.DepartamentoNombre})  |  Proyecto: {pre.ProyectoNombre}  |  Fecha Compromiso: {pre.FechaCompromiso}  |  Pendientes: {pre.PendientesDevolver} de {pre.TotalHerramientas}";
+            bool tienePendientes = pre.Partidas.Any(p => p.EstaPendienteDevolucion);
+            btnConfirmar.IsEnabled = tienePendientes;
+            btnMarcarTodas.IsEnabled = tienePendientes;
+
+            string avisoPreCompleto = tienePendientes
+                ? ""
+                : "  ⚠️ [100% DEVUELTO - Use '🖨️ Solo Ver / Reimprimir Vale' para consultar]";
+            txtInfoPrestamo.Text = $"Folio: {pre.Folio}  |  Recibió: {pre.PersonaRecibeEfectiva} ({pre.DepartamentoNombre})  |  Proyecto: {pre.ProyectoNombre}  |  Fecha Compromiso: {pre.FechaCompromiso}  |  Pendientes: {pre.PendientesDevolver} de {pre.TotalHerramientas}{avisoPreCompleto}";
             dg.ItemsSource = null;
             dg.ItemsSource = pre.Partidas;
         }
+
+        txtScanHerModal.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            string scan = NormalizarCodigoEscaneado(txtScanHerModal.Text);
+            txtScanHerModal.Clear();
+            if (string.IsNullOrWhiteSpace(scan) || cboPrestamos.SelectedItem is not PrestamoHerramienta pre) return;
+
+            var match = pre.Partidas.FirstOrDefault(p =>
+                CoincideFolioFlexible(p.CodigoIndividual, scan) ||
+                p.ProductoNombre.Contains(scan, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null && match.EstaPendienteDevolucion)
+            {
+                match.SeleccionadoDevolver = true;
+                dg.SelectedItem = match;
+                dg.ScrollIntoView(match);
+                dg.Items.Refresh();
+            }
+            e.Handled = true;
+        };
 
         cboPrestamos.SelectionChanged += (_, _) =>
         {
@@ -7886,6 +8695,7 @@ public partial class MainWindow : FluentWindow
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 0, 10)
         };
+        var infoStackSal = new StackPanel();
         var txtInfoSalida = new TextBlock
         {
             FontSize = 11.5,
@@ -7893,7 +8703,29 @@ public partial class MainWindow : FluentWindow
             Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
             Text = "Seleccione un vale de salida..."
         };
-        infoBorder.Child = txtInfoSalida;
+        infoStackSal.Children.Add(txtInfoSalida);
+
+        var scanRowSal = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        scanRowSal.Children.Add(new TextBlock
+        {
+            Text = "🔫 Escanear Código de Producto (PRD-xxxx / EAN) para marcar ☑:",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        var txtScanSalModal = new System.Windows.Controls.TextBox
+        {
+            Width = 220,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(6, 3, 6, 3),
+            ToolTip = "Escanee un artículo dentro de este vale para marcarlo y enfocar su fila"
+        };
+        scanRowSal.Children.Add(txtScanSalModal);
+        infoStackSal.Children.Add(scanRowSal);
+
+        infoBorder.Child = infoStackSal;
         Grid.SetRow(infoBorder, 1);
         root.Children.Add(infoBorder);
 
@@ -8006,10 +8838,42 @@ public partial class MainWindow : FluentWindow
             {
                 p.CantidadDevolverAhora = p.CantidadPendienteDevolver;
             }
-            txtInfoSalida.Text = $"Folio: {sal.Folio}  |  Recibió: {sal.PersonaRecibeEfectiva} ({sal.DepartamentoNombre})  |  Proyecto: {sal.ProyectoNombre}  |  Estado actual: {sal.EstatusDevolucionTexto}";
+            bool tienePendientes = sal.Partidas.Any(p => p.TienePendientePorDevolver);
+            btnConfirmar.IsEnabled = tienePendientes;
+            btnDevolverTodo.IsEnabled = tienePendientes;
+
+            string avisoSalCompleta = tienePendientes
+                ? ""
+                : "  ⚠️ [100% DEVUELTO - Use '🖨️ Solo Ver / Reimprimir Vale Original' para consultar]";
+            txtInfoSalida.Text = $"Folio: {sal.Folio}  |  Recibió: {sal.PersonaRecibeEfectiva} ({sal.DepartamentoNombre})  |  Proyecto: {sal.ProyectoNombre}  |  Estado actual: {sal.EstatusDevolucionTexto}{avisoSalCompleta}";
             dg.ItemsSource = null;
             dg.ItemsSource = sal.Partidas;
         }
+
+        txtScanSalModal.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            string scan = NormalizarCodigoEscaneado(txtScanSalModal.Text);
+            txtScanSalModal.Clear();
+            if (string.IsNullOrWhiteSpace(scan) || cboSalidas.SelectedItem is not SalidaAlmacen sal) return;
+
+            var match = sal.Partidas.FirstOrDefault(p => CoincideFolioFlexible(p.ProductoCodigo, scan));
+            if (match == null)
+            {
+                var prod = DatabaseService.BuscarProductoPorCodigo(scan);
+                if (prod != null)
+                    match = sal.Partidas.FirstOrDefault(p => p.ProductoId == prod.Id);
+            }
+
+            if (match != null && match.TienePendientePorDevolver)
+            {
+                match.SeleccionadoDevolver = true;
+                dg.SelectedItem = match;
+                dg.ScrollIntoView(match);
+                dg.Items.Refresh();
+            }
+            e.Handled = true;
+        };
 
         cboSalidas.SelectionChanged += (_, _) =>
         {

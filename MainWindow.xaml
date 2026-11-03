@@ -1783,10 +1783,12 @@
                                     <DataGrid x:Name="DgOrdenesCompra"
                                               AutoGenerateColumns="False"
                                               IsReadOnly="True"
-                                              SelectionChanged="DgOrdenesCompra_SelectionChanged">
+                                              SelectionChanged="DgOrdenesCompra_SelectionChanged"
+                                              MouseDoubleClick="DgOrdenesCompra_MouseDoubleClick">
                                         <DataGrid.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="📥 Recibir Todo lo Pendiente de esta OC" Click="BtnRecibirTodoPendienteOc_Click" FontWeight="Bold" />
+                                                <MenuItem Header="📥 Abrir Recepción Agrupada de esta OC (Modal)" Click="BtnAbrirModalRecepcionOc_Click" FontWeight="Bold" />
+                                                <MenuItem Header="📥 Recibir Todo lo Pendiente de esta OC" Click="BtnRecibirTodoPendienteOc_Click" />
                                                 <MenuItem Header="🖨️ Imprimir Orden de Compra" Click="BtnImprimirOcSeleccionada_Click" />
                                                 <MenuItem Header="📄 Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
                                                 <Separator />
@@ -1892,7 +1894,10 @@
                                                   Unchecked="ChkFiltrarEntradasPorOc_Changed" />
                                     </WrapPanel>
                                 </DockPanel>
-                                <DataGrid x:Name="DgEntradasHistorial" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid x:Name="DgEntradasHistorial"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          MouseDoubleClick="DgEntradasHistorial_MouseDoubleClick">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="120" />
                                         <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="130" />

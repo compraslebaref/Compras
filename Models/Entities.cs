@@ -520,8 +520,12 @@ public class OrdenCompra
     public override string ToString() => Id == 0 ? Folio : $"{Folio} - {ProveedorNombre} ({Estatus}) - ${TotalConIva:N2}";
 }
 
-public class OrdenCompraPartida
+public class OrdenCompraPartida : INotifyPropertyChanged
 {
+    private decimal _cantidadRecibirAhora;
+    private bool _seleccionadoRecibir;
+    private string _ubicacionDestino = "Almacén General";
+
     public int Id { get; set; }
     public int OrdenCompraId { get; set; }
     public int ProductoId { get; set; }
@@ -534,11 +538,81 @@ public class OrdenCompraPartida
     public decimal CantidadPedida { get; set; }
     public decimal CantidadRecibida { get; set; }
     public decimal CantidadPendiente => Math.Max(0, CantidadPedida - CantidadRecibida);
-    public decimal CantidadRecibirAhora { get; set; } // Para pantalla de recepción parcial
+    public bool TienePendientePorRecibir => CantidadPendiente > 0m;
+
+    public bool SeleccionadoRecibir
+    {
+        get => _seleccionadoRecibir;
+        set
+        {
+            if (_seleccionadoRecibir != value)
+            {
+                _seleccionadoRecibir = value;
+                if (_seleccionadoRecibir && _cantidadRecibirAhora <= 0m && CantidadPendiente > 0m)
+                {
+                    _cantidadRecibirAhora = CantidadPendiente;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadRecibirAhora)));
+                }
+                else if (!_seleccionadoRecibir && _cantidadRecibirAhora > 0m)
+                {
+                    _cantidadRecibirAhora = 0m;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadRecibirAhora)));
+                }
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoRecibir)));
+            }
+        }
+    }
+
+    public decimal CantidadRecibirAhora
+    {
+        get => _cantidadRecibirAhora;
+        set
+        {
+            decimal max = CantidadPendiente > 0m ? CantidadPendiente : Math.Max(0m, value);
+            decimal ajustado = Math.Clamp(value, 0m, max);
+            if (_cantidadRecibirAhora != ajustado)
+            {
+                _cantidadRecibirAhora = ajustado;
+                bool debeSel = _cantidadRecibirAhora > 0m;
+                if (_seleccionadoRecibir != debeSel)
+                {
+                    _seleccionadoRecibir = debeSel;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoRecibir)));
+                }
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadRecibirAhora)));
+            }
+        }
+    }
+
+    public string UbicacionDestino
+    {
+        get => _ubicacionDestino;
+        set
+        {
+            string val = ExtraerCodigoUbicacionSimple(value);
+            if (_ubicacionDestino != val)
+            {
+                _ubicacionDestino = val;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UbicacionDestino)));
+            }
+        }
+    }
+
+    private static string ExtraerCodigoUbicacionSimple(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return "Almacén General";
+        string s = texto.Trim();
+        int idx = s.IndexOf(" — ", StringComparison.Ordinal);
+        if (idx > 0) s = s[..idx].Trim();
+        return s;
+    }
+
     public decimal PrecioUnitarioSinIva { get; set; }
     public decimal PrecioUnitarioConIva => Math.Round(PrecioUnitarioSinIva * 1.16m, 2);
     public decimal ImporteSubtotal => Math.Round(CantidadPedida * PrecioUnitarioSinIva, 2);
     public decimal ImporteConIva => Math.Round(ImporteSubtotal * 1.16m, 2);
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public class EntradaAlmacen
@@ -555,10 +629,16 @@ public class EntradaAlmacen
     public string Notas { get; set; } = string.Empty;
     public string FacturaReferencia => !string.IsNullOrWhiteSpace(FacturaUuid) ? FacturaUuid : Notas;
     public List<EntradaPartida> Partidas { get; set; } = new();
+    public override string ToString() =>
+        $"{Folio} — Prov: {ProveedorNombre} | OC: {(string.IsNullOrWhiteSpace(OrdenCompraFolio) ? "Directa" : OrdenCompraFolio)} | Proy: {ProyectoNombre} ({Fecha})";
 }
 
-public class EntradaPartida
+public class EntradaPartida : INotifyPropertyChanged
 {
+    private bool _seleccionadoAccion = true;
+    private decimal _cantidadParaSalida;
+    private string _ubicacionAlmacen = "Almacén General";
+
     public int Id { get; set; }
     public int EntradaAlmacenId { get; set; }
     public int ProductoId { get; set; }
@@ -570,6 +650,67 @@ public class EntradaPartida
     public decimal CantidadIngresadaAlmacen { get; set; }
     public string UnidadAlmacen { get; set; } = "Pieza";
     public decimal CostoUnitarioCompraConIva { get; set; }
+
+    public bool SeleccionadoAccion
+    {
+        get => _seleccionadoAccion;
+        set
+        {
+            if (_seleccionadoAccion != value)
+            {
+                _seleccionadoAccion = value;
+                if (_seleccionadoAccion && _cantidadParaSalida <= 0m && CantidadIngresadaAlmacen > 0m)
+                {
+                    _cantidadParaSalida = CantidadIngresadaAlmacen;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadParaSalida)));
+                }
+                else if (!_seleccionadoAccion && _cantidadParaSalida > 0m)
+                {
+                    _cantidadParaSalida = 0m;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadParaSalida)));
+                }
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoAccion)));
+            }
+        }
+    }
+
+    public decimal CantidadParaSalida
+    {
+        get => _cantidadParaSalida;
+        set
+        {
+            decimal ajustado = Math.Clamp(value, 0m, Math.Max(CantidadIngresadaAlmacen, value));
+            if (_cantidadParaSalida != ajustado)
+            {
+                _cantidadParaSalida = ajustado;
+                bool debeSel = _cantidadParaSalida > 0m;
+                if (_seleccionadoAccion != debeSel)
+                {
+                    _seleccionadoAccion = debeSel;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoAccion)));
+                }
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadParaSalida)));
+            }
+        }
+    }
+
+    public string UbicacionAlmacen
+    {
+        get => _ubicacionAlmacen;
+        set
+        {
+            string s = (value ?? string.Empty).Trim();
+            int idx = s.IndexOf(" — ", StringComparison.Ordinal);
+            if (idx > 0) s = s[..idx].Trim();
+            if (_ubicacionAlmacen != s)
+            {
+                _ubicacionAlmacen = s;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UbicacionAlmacen)));
+            }
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public class SalidaAlmacen
