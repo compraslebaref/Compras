@@ -201,6 +201,7 @@ public partial class MainWindow : FluentWindow
         // Tab 1: Catálogo
         EstablecerPlaceholderCombo(CboProdCategoria, "Seleccione la categoría del artículo...");
         EstablecerPlaceholderCombo(CboProdFamilia, "Seleccione o escriba familia (ej. JABON, MICROFIBRA)...");
+        EstablecerPlaceholderCombo(TxtProdUbicacion, "Seleccione o escriba ubicación (ej. A-01, DETRAS-A, GABINETE)...");
 
         // Tab 2: Solicitudes
         EstablecerPlaceholderCombo(CboSolDepartamento, "Seleccione departamento solicitante...");
@@ -241,6 +242,7 @@ public partial class MainWindow : FluentWindow
         EstablecerPlaceholderCombo(CboAltaEncargadoDepto, "Seleccione departamento al que pertenece...");
         EstablecerPlaceholderCombo(CboDirHerProducto, "Seleccione producto base (herramienta)...");
         EstablecerPlaceholderCombo(CboDirHerEstado, "Seleccione estado físico de la herramienta...");
+        EstablecerPlaceholderCombo(TxtDirHerUbicacion, "Seleccione o escriba ubicación (ej. A-04, DETRAS-A, GABINETE)...");
     }
 
     private void EstablecerPlaceholderCombo(ComboBox? combo, string placeholder)
@@ -518,6 +520,21 @@ public partial class MainWindow : FluentWindow
                 string uaActual = TxtProdUnidadAlmacen.Text;
                 TxtProdUnidadAlmacen.ItemsSource = DatabaseService.UnidadesMedidaEstandar;
                 TxtProdUnidadAlmacen.Text = uaActual;
+            }
+            var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
+            if (TxtProdUbicacion != null)
+            {
+                string ubiActual = TxtProdUbicacion.Text;
+                TxtProdUbicacion.ItemsSource = ubicacionesCatalogo;
+                TxtProdUbicacion.SelectedIndex = -1;
+                TxtProdUbicacion.Text = ubiActual;
+            }
+            if (TxtDirHerUbicacion != null)
+            {
+                string ubiHerActual = TxtDirHerUbicacion.Text;
+                TxtDirHerUbicacion.ItemsSource = ubicacionesCatalogo;
+                TxtDirHerUbicacion.SelectedIndex = -1;
+                TxtDirHerUbicacion.Text = ubiHerActual;
             }
 
             // Solicitudes (en blanco por defecto si no se está editando)
@@ -2050,7 +2067,11 @@ public partial class MainWindow : FluentWindow
         TxtProdStock.Text = string.Empty;
         TxtProdStockMin.Text = string.Empty;
         TxtProdCosto.Text = string.Empty;
-        TxtProdUbicacion.Text = string.Empty;
+        if (TxtProdUbicacion != null)
+        {
+            TxtProdUbicacion.SelectedIndex = -1;
+            TxtProdUbicacion.Text = string.Empty;
+        }
         ChkProdEsHerramienta.IsChecked = false;
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = null;
@@ -2088,7 +2109,11 @@ public partial class MainWindow : FluentWindow
         TxtProdStock.Text = string.Empty;
         TxtProdStockMin.Text = string.Empty;
         TxtProdCosto.Text = string.Empty;
-        TxtProdUbicacion.Text = string.Empty;
+        if (TxtProdUbicacion != null)
+        {
+            TxtProdUbicacion.SelectedIndex = -1;
+            TxtProdUbicacion.Text = string.Empty;
+        }
         ChkProdEsHerramienta.IsChecked = false;
         ImgPreviewProducto.Source = null;
         ImgBarcodeProductoEditor.Source = BarcodePrintService.CrearImagenCodigoBarras(sig);
@@ -2267,7 +2292,8 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.StockActual = ParseDecimal(TxtProdStock.Text, 0m);
         _productoEnEdicion.StockMinimo = ParseDecimal(TxtProdStockMin.Text, 5m);
         _productoEnEdicion.UltimoCostoCompra = ParseDecimal(TxtProdCosto.Text, 0m);
-        _productoEnEdicion.Ubicacion = string.IsNullOrWhiteSpace(TxtProdUbicacion.Text) ? "A-01" : TxtProdUbicacion.Text.Trim();
+        string ubiLimpiaProd = ExtraerCodigoUbicacionLimpio(TxtProdUbicacion.Text);
+        _productoEnEdicion.Ubicacion = string.IsNullOrWhiteSpace(ubiLimpiaProd) ? "A-01" : ubiLimpiaProd;
         _productoEnEdicion.EsHerramienta = ChkProdEsHerramienta.IsChecked == true;
 
         Producto? prodGuardado = null;
@@ -2543,22 +2569,29 @@ public partial class MainWindow : FluentWindow
         row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.2, GridUnitType.Star) });
 
         var spUbi = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
-        spUbi.Children.Add(new TextBlock { Text = "Ubicación en Almacén (Estante-Cuadrante)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        spUbi.Children.Add(new TextBlock { Text = "Ubicación en Almacén (Anaquel / Zona)", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
         var gridUbi = new Grid();
         gridUbi.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         gridUbi.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var txtUbi = new System.Windows.Controls.TextBox { Padding = new Thickness(6, 4, 6, 4) };
+        var txtUbi = new ComboBox
+        {
+            IsEditable = true,
+            IsTextSearchEnabled = true,
+            ItemsSource = ObtenerCatalogoUbicacionesDesplegable(),
+            Padding = new Thickness(6, 4, 6, 4)
+        };
+        txtUbi.SelectionChanged += CboUbicacionAlmacen_SelectionChanged;
         Grid.SetColumn(txtUbi, 0);
         gridUbi.Children.Add(txtUbi);
         var btnMapaUbi = new System.Windows.Controls.Button
         {
-            Content = "🗺️",
+            Content = "🗺️ Mapa",
             Padding = new Thickness(8, 4, 8, 4),
             Margin = new Thickness(4, 0, 0, 0),
             Cursor = Cursors.Hand,
-            ToolTip = "Abrir selector gráfico 3x3 de anaquel y cuadrante (A-01 a F-09)"
+            ToolTip = "Abrir selector gráfico 3x3 de anaquel y cuadrante (A–F, Detrás de A, Gabinete y Piso)"
         };
-        btnMapaUbi.Click += (_, _) => MostrarSelectorYMapaAnaqueles(txtUbi.Text, nuevaCoord => txtUbi.Text = nuevaCoord, win);
+        btnMapaUbi.Click += (_, _) => MostrarSelectorYMapaAnaqueles(ExtraerCodigoUbicacionLimpio(txtUbi.Text), nuevaCoord => txtUbi.Text = nuevaCoord, win);
         Grid.SetColumn(btnMapaUbi, 1);
         gridUbi.Children.Add(btnMapaUbi);
         spUbi.Children.Add(gridUbi);
@@ -2740,7 +2773,8 @@ public partial class MainWindow : FluentWindow
 
             string serie = string.IsNullOrWhiteSpace(txtSerie.Text) ? "S/N" : txtSerie.Text.Trim();
             string marca = string.IsNullOrWhiteSpace(txtMarca.Text) ? pSel.Nombre : txtMarca.Text.Trim();
-            string ubi = string.IsNullOrWhiteSpace(txtUbi.Text) ? "Gabinete H-1" : txtUbi.Text.Trim();
+            string ubiLimpiaModal = ExtraerCodigoUbicacionLimpio(txtUbi.Text);
+            string ubi = string.IsNullOrWhiteSpace(ubiLimpiaModal) ? "GABINETE-01" : ubiLimpiaModal;
             string est = cboEstado.SelectedItem?.ToString() ?? "Disponible";
             string notas = txtNotas.Text.Trim();
 
@@ -9148,7 +9182,11 @@ public partial class MainWindow : FluentWindow
         TxtDirHerSerie.Clear();
         TxtDirHerMarca.Clear();
         CboDirHerEstado.SelectedIndex = -1;
-        TxtDirHerUbicacion.Clear();
+        if (TxtDirHerUbicacion != null)
+        {
+            TxtDirHerUbicacion.SelectedIndex = -1;
+            TxtDirHerUbicacion.Text = string.Empty;
+        }
         TxtDirHerNotas.Clear();
     }
 
@@ -9164,6 +9202,7 @@ public partial class MainWindow : FluentWindow
             ? DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual")
             : TxtDirHerCodigo.Text.Trim();
         string estado = (CboDirHerEstado.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Disponible";
+        string ubiLimpiaHer = ExtraerCodigoUbicacionLimpio(TxtDirHerUbicacion.Text);
 
         DatabaseService.GuardarHerramientaActivo(new HerramientaActivo
         {
@@ -9173,7 +9212,7 @@ public partial class MainWindow : FluentWindow
             NumeroSerie = string.IsNullOrWhiteSpace(TxtDirHerSerie.Text) ? "S/N" : TxtDirHerSerie.Text.Trim(),
             MarcaModelo = TxtDirHerMarca.Text.Trim(),
             Estado = estado,
-            Ubicacion = string.IsNullOrWhiteSpace(TxtDirHerUbicacion.Text) ? "Almacén Herramientas" : TxtDirHerUbicacion.Text.Trim(),
+            Ubicacion = string.IsNullOrWhiteSpace(ubiLimpiaHer) ? "GABINETE-01" : ubiLimpiaHer,
             NotasEstado = TxtDirHerNotas.Text.Trim()
         });
 
@@ -9285,6 +9324,69 @@ public partial class MainWindow : FluentWindow
     // MAPA GRÁFICO DE ANAQUELES (A–F y PISO) Y CONSULTA POR CUADRANTE (3x3)
     // =====================================================================
 
+    private static List<string> ObtenerCatalogoUbicacionesDesplegable()
+    {
+        var lista = new List<string>
+        {
+            "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
+            "GABINETE — Gabinete de Almacén"
+        };
+
+        for (int i = 1; i <= 9; i++)
+            lista.Add($"DETRAS-A-{i:00} — Detrás de A / Pared (Posición {i:00})");
+
+        for (int i = 1; i <= 9; i++)
+            lista.Add($"GABINETE-{i:00} — Gabinete de Almacén (Entrepaño {i:00})");
+
+        string[] anaqueles = { "A", "B", "C", "D", "E", "F" };
+        foreach (var est in anaqueles)
+        {
+            for (int i = 1; i <= 9; i++)
+            {
+                string nivel = i <= 3 ? "Inferior" : (i <= 6 ? "Medio" : "Superior");
+                lista.Add($"{est}-{i:00} — Anaquel {est} (Nivel {nivel})");
+            }
+        }
+
+        for (int i = 1; i <= 9; i++)
+            lista.Add($"PISO-{i:00} — Zona Piso / Tapanco / Exterior (Posición {i:00})");
+
+        return lista;
+    }
+
+    private static string ExtraerCodigoUbicacionLimpio(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+            return string.Empty;
+
+        string s = texto.Trim();
+        int idxGuionLargo = s.IndexOf(" — ", StringComparison.Ordinal);
+        if (idxGuionLargo > 0)
+            s = s[..idxGuionLargo].Trim();
+
+        int idxParen = s.IndexOf(" (", StringComparison.Ordinal);
+        if (idxParen > 0)
+            s = s[..idxParen].Trim();
+
+        return s;
+    }
+
+    private void CboUbicacionAlmacen_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox cbo || cbo.SelectedItem is not string itemSel)
+            return;
+
+        string limpio = ExtraerCodigoUbicacionLimpio(itemSel);
+        if (!string.IsNullOrEmpty(limpio) && !string.Equals(cbo.Text, limpio, StringComparison.Ordinal))
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                cbo.SelectedIndex = -1;
+                cbo.Text = limpio;
+            }), DispatcherPriority.Background);
+        }
+    }
+
     private void BtnAbrirMapaAnaqueles_Click(object sender, RoutedEventArgs e)
     {
         MostrarSelectorYMapaAnaqueles(null, null, this);
@@ -9292,34 +9394,81 @@ public partial class MainWindow : FluentWindow
 
     private void BtnSelectorUbicacionProducto_Click(object sender, RoutedEventArgs e)
     {
-        MostrarSelectorYMapaAnaqueles(TxtProdUbicacion?.Text, nuevaCoord =>
+        MostrarSelectorYMapaAnaqueles(ExtraerCodigoUbicacionLimpio(TxtProdUbicacion?.Text), nuevaCoord =>
         {
             if (TxtProdUbicacion != null)
+            {
+                TxtProdUbicacion.SelectedIndex = -1;
                 TxtProdUbicacion.Text = nuevaCoord;
+            }
         }, this);
     }
 
     private void BtnSelectorUbicacionDirHer_Click(object sender, RoutedEventArgs e)
     {
-        MostrarSelectorYMapaAnaqueles(TxtDirHerUbicacion?.Text, nuevaCoord =>
+        MostrarSelectorYMapaAnaqueles(ExtraerCodigoUbicacionLimpio(TxtDirHerUbicacion?.Text), nuevaCoord =>
         {
             if (TxtDirHerUbicacion != null)
+            {
+                TxtDirHerUbicacion.SelectedIndex = -1;
                 TxtDirHerUbicacion.Text = nuevaCoord;
+            }
         }, this);
     }
 
     private static (string Estante, string Cuadrante, string SubContenedor) ParsearCoordenadaAlmacen(string? ubicacion)
     {
-        if (string.IsNullOrWhiteSpace(ubicacion))
+        string limpio = ExtraerCodigoUbicacionLimpio(ubicacion);
+        if (string.IsNullOrWhiteSpace(limpio))
             return ("", "", "");
 
-        string raw = ubicacion.Trim().ToUpperInvariant()
+        string raw = limpio.Trim().ToUpperInvariant()
             .Replace("ESTANTE ", "")
             .Replace("ANAQUEL ", "")
             .Replace("RACK ", "")
             .Trim();
 
-        // Buscar patrón PISO-01 o A-01 (con o sin subcontenedor -G1 / -C1)
+        // 1. Detrás de A (Entre Anaquel A y Pared)
+        string[] prefijosDetrasA = { "DETRAS-A", "DETRÁS-A", "DETRAS DE A", "DETRÁS DE A", "DETRAS A", "PARED-A", "PARED A" };
+        foreach (var pref in prefijosDetrasA)
+        {
+            if (raw.StartsWith(pref, StringComparison.OrdinalIgnoreCase))
+            {
+                string resto = raw[pref.Length..].Trim('-', ' ', '/');
+                if (string.IsNullOrEmpty(resto))
+                    return ("DETRAS-A", "01", "");
+
+                var pResto = resto.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (pResto.Length >= 1 && int.TryParse(pResto[0], out int nDet) && nDet >= 1 && nDet <= 9)
+                {
+                    string subDet = pResto.Length >= 2 ? pResto[1] : "";
+                    return ("DETRAS-A", nDet.ToString("00"), subDet);
+                }
+                return ("DETRAS-A", "01", "");
+            }
+        }
+
+        // 2. Gabinete de Almacén
+        if (raw.StartsWith("GABINETE", StringComparison.OrdinalIgnoreCase) || raw.StartsWith("GAB", StringComparison.OrdinalIgnoreCase))
+        {
+            string prefGab = raw.StartsWith("GABINETE", StringComparison.OrdinalIgnoreCase) ? "GABINETE" : "GAB";
+            string resto = raw[prefGab.Length..].Trim('-', ' ', '/');
+            if (string.IsNullOrEmpty(resto))
+                return ("GABINETE", "01", "");
+
+            var pResto = resto.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var tok in pResto)
+            {
+                if (int.TryParse(tok, out int nGab) && nGab >= 1 && nGab <= 9)
+                {
+                    string subGab = pResto.Length >= 2 && pResto[^1] != tok ? pResto[^1] : "";
+                    return ("GABINETE", nGab.ToString("00"), subGab);
+                }
+            }
+            return ("GABINETE", "01", "");
+        }
+
+        // 3. Buscar patrón PISO-01 o A-01..F-09 (con o sin subcontenedor -G1 / -C1)
         var partes = raw.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
         if (partes.Length >= 2)
         {
@@ -9333,6 +9482,10 @@ public partial class MainWindow : FluentWindow
                     return (est, cuad, sub);
                 }
             }
+        }
+        else if (partes.Length == 1 && partes[0] is "A" or "B" or "C" or "D" or "E" or "F")
+        {
+            return (partes[0], "01", "");
         }
 
         // Si solo puso "PISO"
@@ -9438,7 +9591,7 @@ public partial class MainWindow : FluentWindow
         });
         titleStack.Children.Add(new TextBlock
         {
-            Text = "Seleccione un Anaquel (A a F o Zona PISO) y haga clic en cualquiera de los 9 cuadrantes para consultar su inventario o asignar ubicación.",
+            Text = "Seleccione un Anaquel (A a F), Detrás de A (Entre Anaquel y Pared), Gabinete o Zona PISO y haga clic en cualquiera de sus 9 posiciones.",
             FontSize = 11.5,
             Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99))
         });
@@ -9798,26 +9951,30 @@ public partial class MainWindow : FluentWindow
 
         void RenderizarTodo()
         {
-            // 1. Renderizar botones de Anaqueles (A..F y PISO)
+            // 1. Renderizar botones de Anaqueles (A..F, DETRAS-A, GABINETE y PISO)
             rackButtonsPanel.Children.Clear();
-            string[] estantes = { "A", "B", "C", "D", "E", "F", "PISO" };
+            string[] estantes = { "A", "B", "C", "D", "E", "F", "DETRAS-A", "GABINETE", "PISO" };
             foreach (var est in estantes)
             {
                 int cantProdEst = todosProductos.Count(p => CoincideConEstanteYCuadrante(p.Ubicacion, est, "TODOS"));
                 int cantHerEst = todasHerramientas.Count(h => CoincideConEstanteYCuadrante(h.Ubicacion, est, "TODOS"));
                 bool activo = string.Equals(estanteActual, est, StringComparison.OrdinalIgnoreCase);
 
-                string tituloBtn = est == "PISO"
-                    ? $"🏗️ ZONA PISO / EXT ({cantProdEst + cantHerEst})"
-                    : $"🗄️ Anaquel {est} ({cantProdEst + cantHerEst})";
+                string tituloBtn = est switch
+                {
+                    "DETRAS-A" => $"🧱 Detrás de A / Pared ({cantProdEst + cantHerEst})",
+                    "GABINETE" => $"🚪 Gabinete ({cantProdEst + cantHerEst})",
+                    "PISO" => $"🏗️ Zona Piso / Ext ({cantProdEst + cantHerEst})",
+                    _ => $"🗄️ Anaquel {est} ({cantProdEst + cantHerEst})"
+                };
 
                 var btnEst = new System.Windows.Controls.Button
                 {
                     Content = tituloBtn,
-                    Padding = new Thickness(14, 7, 14, 7),
-                    Margin = new Thickness(0, 0, 8, 4),
+                    Padding = new Thickness(12, 7, 12, 7),
+                    Margin = new Thickness(0, 0, 6, 4),
                     FontWeight = activo ? FontWeights.Bold : FontWeights.SemiBold,
-                    FontSize = 12.5,
+                    FontSize = 12,
                     Cursor = Cursors.Hand,
                     Background = activo
                         ? new SolidColorBrush(Color.FromRgb(30, 64, 175))
@@ -9837,9 +9994,13 @@ public partial class MainWindow : FluentWindow
                 rackButtonsPanel.Children.Add(btnEst);
             }
 
-            txtTituloAnaquel.Text = estanteActual == "PISO"
-                ? "Vista de Posiciones — Zona PISO / Voluminosos (PISO-01 a PISO-09)"
-                : $"Vista Frontal Parado Frente al Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)";
+            txtTituloAnaquel.Text = estanteActual switch
+            {
+                "DETRAS-A" => "Vista de Posiciones — Detrás de A (Entre Anaquel A y Pared: DETRAS-A-01 a 09)",
+                "GABINETE" => "Vista de Posiciones — Gabinete de Almacén (Entrepaños GABINETE-01 a 09)",
+                "PISO" => "Vista de Posiciones — Zona PISO / Tapanco / Exterior (PISO-01 a PISO-09)",
+                _ => $"Vista Frontal Parado Frente al Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)"
+            };
 
             // 2. Renderizar matriz 3x3 (Fila 0: 07,08,09 | Fila 1: 04,05,06 | Fila 2: 01,02,03)
             shelfGrid.Children.Clear();
@@ -10072,9 +10233,17 @@ public partial class MainWindow : FluentWindow
                 .ThenBy(h => h.CodigoIndividual)
                 .ToList();
 
+            string nombreEstanteMostrar = estanteActual switch
+            {
+                "DETRAS-A" => "Detrás de A (Entre Anaquel y Pared)",
+                "GABINETE" => "Gabinete de Almacén",
+                "PISO" => "Zona Piso / Exterior",
+                _ => $"Anaquel {estanteActual}"
+            };
+
             string etiquetaPos = cuadranteActual == "TODOS"
-                ? $"Todo el Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)"
-                : $"Cuadrante {estanteActual}-{cuadranteActual}";
+                ? $"Todo {nombreEstanteMostrar} ({estanteActual}-01 a {estanteActual}-09)"
+                : $"{nombreEstanteMostrar} — Posición {estanteActual}-{cuadranteActual}";
 
             txtInventarioTitulo.Text = $"📍 Inventario en {etiquetaPos}";
             txtInventarioSubtitulo.Text = ObtenerDescripcionNivel(cuadranteActual);

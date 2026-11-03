@@ -1003,46 +1003,44 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Ubicación en Almacén (Estante-Cuadrante)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <ui:TextBox x:Name="TxtProdUbicacion" Grid.Column="0" PlaceholderText="Ej. A-01" />
-                                                <ui:Button Grid.Column="1"
-                                                           Content="🗺️"
-                                                           FontSize="12"
-                                                           Padding="8,5"
-                                                           Margin="4,0,0,0"
-                                                           ToolTip="Abrir selector gráfico 3x3 de anaquel y cuadrante (A-01 a F-09)"
-                                                           Click="BtnSelectorUbicacionProducto_Click" />
-                                            </Grid>
-                                        </StackPanel>
-                                        <CheckBox x:Name="ChkProdEsHerramienta"
-                                                  Grid.Column="1"
-                                                  Content="Herramienta"
-                                                  VerticalAlignment="Bottom"
-                                                  Margin="8,0,0,4"
-                                                  ToolTip="Marcar si es una herramienta de resguardo en almacén (abre el registro de ficha individual HER-xxxx)"
-                                                  Click="ChkProdEsHerramienta_Click" />
-                                        <ui:Button x:Name="BtnConfigurarHerramientaCatalogo"
-                                                   Grid.Column="2"
-                                                   Content="🔧 Ficha HER"
-                                                   FontSize="11"
-                                                   Padding="8,5"
-                                                   VerticalAlignment="Bottom"
-                                                   Margin="6,0,0,2"
-                                                   ToolTip="Abrir modal de información de la herramienta (Número de serie, código individual HER-xxxx, ubicación y estado)"
-                                                   Click="BtnConfigurarHerramientaCatalogo_Click" />
-                                    </Grid>
+                                    <StackPanel Margin="0,0,0,8">
+                                        <TextBlock Text="Ubicación en Almacén (Anaquel A–F, Detrás de A, Gabinete o Piso)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3" />
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="TxtProdUbicacion"
+                                                      Grid.Column="0"
+                                                      IsEditable="True"
+                                                      IsTextSearchEnabled="True"
+                                                      ToolTip="Seleccione de la lista desplegable o escriba la ubicación (Ej. A-01, DETRAS-A-01, GABINETE-01, PISO-01)"
+                                                      SelectionChanged="CboUbicacionAlmacen_SelectionChanged" />
+                                            <ui:Button Grid.Column="1"
+                                                       Content="🗺️ Mapa"
+                                                       FontSize="11.5"
+                                                       Padding="10,5"
+                                                       Margin="6,0,0,0"
+                                                       ToolTip="Abrir selector gráfico 3x3 de anaqueles (A–F, Detrás de A, Gabinete y Piso)"
+                                                       Click="BtnSelectorUbicacionProducto_Click" />
+                                        </Grid>
+                                        <Border Padding="8,5" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                            <DockPanel>
+                                                <ui:Button x:Name="BtnConfigurarHerramientaCatalogo"
+                                                           DockPanel.Dock="Right"
+                                                           Content="🔧 Configurar Ficha HER"
+                                                           FontSize="11"
+                                                           Padding="10,4"
+                                                           ToolTip="Abrir modal de información de la herramienta (Número de serie, código individual HER-xxxx, ubicación y estado)"
+                                                           Click="BtnConfigurarHerramientaCatalogo_Click" />
+                                                <CheckBox x:Name="ChkProdEsHerramienta"
+                                                          Content="Es Herramienta de Resguardo"
+                                                          VerticalAlignment="Center"
+                                                          ToolTip="Marcar si es una herramienta de resguardo en almacén (abre el registro de ficha individual HER-xxxx)"
+                                                          Click="ChkProdEsHerramienta_Click" />
+                                            </DockPanel>
+                                        </Border>
+                                    </StackPanel>
 
                                     <Image x:Name="ImgBarcodeProductoEditor" Height="44" Stretch="Fill" Margin="0,2,0,8" />
 
@@ -3131,34 +3129,34 @@
                                                 <TextBlock Text="Marca / Modelo" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                 <ui:TextBox x:Name="TxtDirHerMarca" Margin="0,0,0,6" PlaceholderText="Ej. Bosch GSB 16 RE" />
 
-                                                <UniformGrid Columns="2" Margin="0,0,0,6">
-                                                    <StackPanel Margin="0,0,4,0">
-                                                        <TextBlock Text="Estado" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                        <ComboBox x:Name="CboDirHerEstado">
-                                                            <ComboBoxItem Content="Disponible" />
-                                                            <ComboBoxItem Content="En Préstamo" />
-                                                            <ComboBoxItem Content="Dañada" />
-                                                            <ComboBoxItem Content="Extraviada / Baja" />
-                                                        </ComboBox>
-                                                    </StackPanel>
-                                                    <StackPanel Margin="4,0,0,0">
-                                                        <TextBlock Text="Ubicación (Estante-Cuadrante)" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <ui:TextBox x:Name="TxtDirHerUbicacion" Grid.Column="0" PlaceholderText="Ej. A-04" />
-                                                            <ui:Button Grid.Column="1"
-                                                                       Content="🗺️"
-                                                                       FontSize="12"
-                                                                       Padding="8,5"
-                                                                       Margin="4,0,0,0"
-                                                                       ToolTip="Abrir selector gráfico 3x3 de anaquel y cuadrante (A-01 a F-09)"
-                                                                       Click="BtnSelectorUbicacionDirHer_Click" />
-                                                        </Grid>
-                                                    </StackPanel>
-                                                </UniformGrid>
+                                                <TextBlock Text="Estado" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <ComboBox x:Name="CboDirHerEstado" Margin="0,0,0,6">
+                                                    <ComboBoxItem Content="Disponible" />
+                                                    <ComboBoxItem Content="En Préstamo" />
+                                                    <ComboBoxItem Content="Dañada" />
+                                                    <ComboBoxItem Content="Extraviada / Baja" />
+                                                </ComboBox>
+
+                                                <TextBlock Text="Ubicación en Almacén (Anaquel A–F, Detrás de A, Gabinete o Piso)" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox x:Name="TxtDirHerUbicacion"
+                                                              Grid.Column="0"
+                                                              IsEditable="True"
+                                                              IsTextSearchEnabled="True"
+                                                              ToolTip="Seleccione de la lista desplegable o escriba la ubicación (Ej. A-04, DETRAS-A-01, GABINETE-01)"
+                                                              SelectionChanged="CboUbicacionAlmacen_SelectionChanged" />
+                                                    <ui:Button Grid.Column="1"
+                                                               Content="🗺️ Mapa"
+                                                               FontSize="11.5"
+                                                               Padding="10,5"
+                                                               Margin="6,0,0,0"
+                                                               ToolTip="Abrir selector gráfico 3x3 de anaquel y cuadrante"
+                                                               Click="BtnSelectorUbicacionDirHer_Click" />
+                                                </Grid>
 
                                                 <TextBlock Text="Notas / Accesorios Incluidos" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                 <ui:TextBox x:Name="TxtDirHerNotas" Margin="0,0,0,10" PlaceholderText="Ej. En maletín con llave de mandril..." />
