@@ -58,7 +58,7 @@
                     </MenuItem>
 
                     <MenuItem Header="📋 Compras ▾" Padding="7,4">
-                        <MenuItem Header="📝 Nueva Solicitud / Carrito de Material" Click="MenuNuevaSolicitud_Click" />
+                        <MenuItem Header="📝 Nueva Solicitud de Compra" Click="MenuNuevaSolicitud_Click" />
                         <MenuItem Header="📥 Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
                         <MenuItem Header="📄 Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
                         <MenuItem Header="📊 Exportar Existencias Actuales de Almacén (.csv)" Click="BtnExportarExistenciasCatalogo_Click" />
@@ -254,7 +254,7 @@
                             Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                         <StackPanel>
                             <TextBlock x:Name="TxtStatusCarrito"
-                                       Text="Carrito: 0 artículos"
+                                       Text="Solicitud: 0 artículos"
                                        FontWeight="Bold"
                                        Foreground="#2563EB"
                                        FontSize="12" />
@@ -651,10 +651,9 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0"
-                                                       Text="Carrito / Solicitud Destino:"
+                                                       Text="Agregando a Solicitud:"
                                                        FontWeight="SemiBold"
                                                        FontSize="12"
                                                        VerticalAlignment="Center"
@@ -662,18 +661,17 @@
                                             <ComboBox x:Name="CboCarritoSolicitudDestino"
                                                       Grid.Column="1"
                                                       Margin="0,0,8,0"
+                                                      ToolTip="Seleccione a qué Solicitud de Compra se agregarán directamente los artículos que elija en el catálogo"
                                                       SelectionChanged="CboCarritoSolicitudDestino_SelectionChanged" />
-                                            <ui:Button Grid.Column="2"
+                                            <ui:Button x:Name="BtnIrSolicitudDesdeCatalogo"
+                                                       Grid.Column="2"
                                                        Margin="0,0,6,0"
-                                                       Content="Ver Carrito / Solicitud"
+                                                       Content="📋 Ir a la Solicitud"
+                                                       ToolTip="Abrir la Solicitud de Compra activa en el Módulo 2"
                                                        Appearance="Primary"
                                                        Click="BtnEnviarCarritoASolicitud_Click" />
-                                            <ui:Button Grid.Column="3"
-                                                       Margin="0,0,6,0"
-                                                       Content="A Salida Almacén"
-                                                       Click="BtnEnviarCarritoASalida_Click" />
                                             <ui:Button x:Name="BtnToggleEditorCatalogo"
-                                                       Grid.Column="4"
+                                                       Grid.Column="3"
                                                        Content="⟪ Ocultar Editor"
                                                        ToolTip="Ocultar o mostrar el panel lateral de edición para ver el catálogo a pantalla completa"
                                                        Click="BtnToggleEditorCatalogo_Click" />
@@ -703,7 +701,7 @@
                                                     MouseLeftButtonUp="CardProductoCatalogo_MouseLeftButtonUp">
                                                 <Border.ContextMenu>
                                                     <ContextMenu Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
-                                                        <MenuItem Header="🛒 Agregar al Carrito / Solicitud (+1)" Tag="{Binding}" Click="CtxCardAgregarCarrito_Click" FontWeight="Bold" />
+                                                        <MenuItem Header="📋 Agregar a la Solicitud (+1)" Tag="{Binding}" Click="CtxCardAgregarCarrito_Click" FontWeight="Bold" />
                                                         <MenuItem Header="📤 Enviar directo a Salida de Almacén" Tag="{Binding}" Click="CtxCardEnviarSalida_Click" />
                                                         <Separator />
                                                         <MenuItem Header="✏️ Editar Ficha del Producto" Tag="{Binding}" Click="CtxCardEditarProducto_Click" />
@@ -799,7 +797,7 @@
 
                                                     <ui:Button HorizontalAlignment="Stretch"
                                                                Appearance="Primary"
-                                                               Content="➕ Agregar al Carrito"
+                                                               Content="➕ Agregar a Solicitud"
                                                                Tag="{Binding}"
                                                                Click="BtnAgregarProductoCarrito_Click" />
                                                 </StackPanel>
@@ -1078,19 +1076,19 @@
                             <ColumnDefinition Width="0.82*" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- Izquierda: Editor de Solicitud / Carrito -->
+                        <!-- Izquierda: Editor de Solicitud de Compra -->
                         <Border Grid.Column="0" Margin="0,0,10,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                             <DockPanel>
                                 <StackPanel DockPanel.Dock="Top">
                                     <DockPanel Margin="0,0,0,10">
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                                            <ui:Button x:Name="BtnNuevaSolicitudVacia" Content="+ Nuevo Carrito" FontSize="11.5" Margin="0,0,6,0" Click="BtnNuevaSolicitudVacia_Click" />
-                                            <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="Escoger del Catálogo Visual" Appearance="Primary" FontSize="11.5" Click="BtnCrearCarritoEIrCatalogo_Click" />
+                                            <ui:Button x:Name="BtnNuevaSolicitudVacia" Content="+ Nueva Solicitud" FontSize="11.5" Margin="0,0,6,0" Click="BtnNuevaSolicitudVacia_Click" />
+                                            <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="➕ Escoger del Catálogo Visual" Appearance="Primary" FontSize="11.5" Click="BtnCrearCarritoEIrCatalogo_Click" />
                                         </StackPanel>
                                         <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock x:Name="TxtTituloEditorSolicitud" Text="Nueva Solicitud (Carrito)" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="TxtTituloEditorSolicitud" Text="Nueva Solicitud de Compra" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="Wrap" />
                                             <Border x:Name="BdrEstadoEditorSolicitud" Padding="8,2" CornerRadius="4" Background="#1D4ED8" VerticalAlignment="Center">
-                                                <TextBlock x:Name="TxtEstadoEditorSolicitud" Text="NUEVO CARRITO" FontSize="10.5" FontWeight="Bold" Foreground="White" />
+                                                <TextBlock x:Name="TxtEstadoEditorSolicitud" Text="EN CAPTURA" FontSize="10.5" FontWeight="Bold" Foreground="White" />
                                             </Border>
                                         </WrapPanel>
                                     </DockPanel>
@@ -1307,7 +1305,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Solicitud (Carrito) a Cotizar por Producto" FontWeight="Bold" FontSize="12" Margin="0,0,0,2" />
+                                    <TextBlock Text="Solicitud de Compra a Cotizar por Producto" FontWeight="Bold" FontSize="12" Margin="0,0,0,2" />
                                     <ComboBox x:Name="CboCompSolicitud" SelectionChanged="CboCompSolicitud_SelectionChanged" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">

@@ -211,7 +211,7 @@ public class Solicitud
     public bool EsEditable => !string.Equals(Estatus, "OC Generada", StringComparison.OrdinalIgnoreCase) &&
                               !string.Equals(Estatus, "Atendida", StringComparison.OrdinalIgnoreCase);
     public override string ToString() => Id == 0
-        ? "[Nuevo Carrito Temporal] (Sin guardar aún)"
+        ? "📋 [Nueva Solicitud en Captura]"
         : $"{Folio} | {ProyectoMostrar} [{TipoSolicitud}] ({TotalSkus} art. - {EncargadoNombre})";
 }
 

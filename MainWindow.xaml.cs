@@ -209,7 +209,7 @@ public partial class MainWindow : FluentWindow
         EstablecerPlaceholderCombo(CboSolProductoAgregar, "Busque arriba o despliegue para elegir artículo del catálogo...");
 
         // Tab 3: Comparativa
-        EstablecerPlaceholderCombo(CboCompSolicitud, "Seleccione una Solicitud / Carrito para cotizar...");
+        EstablecerPlaceholderCombo(CboCompSolicitud, "Seleccione una Solicitud de Compra para cotizar...");
         EstablecerPlaceholderCombo(CboCompReferenciasSimilares, "Seleccione una compra previa similar si desea aplicarla...");
         EstablecerPlaceholderCombo(CboCompProv1, "Seleccione proveedor para Opción 1...");
         EstablecerPlaceholderCombo(CboCompProv2, "Seleccione proveedor para Opción 2...");
@@ -1878,6 +1878,30 @@ public partial class MainWindow : FluentWindow
     private void CboCarritoSolicitudDestino_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded || _sincronizandoSolicitudes) return;
+
+        if (CboCarritoSolicitudDestino?.SelectedItem is Solicitud sol)
+        {
+            if (sol.Id > 0 && _solicitudEditandoId != sol.Id)
+            {
+                _sincronizandoSolicitudes = true;
+                try
+                {
+                    var enHist = DgHistorialSolicitudes?.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
+                    if (enHist != null && DgHistorialSolicitudes != null)
+                        DgHistorialSolicitudes.SelectedItem = enHist;
+                }
+                finally
+                {
+                    _sincronizandoSolicitudes = false;
+                }
+                CargarSolicitudEnEditor(sol);
+            }
+            else if (sol.Id == 0 && _solicitudEditandoId > 0)
+            {
+                IniciarNuevaSolicitudVacia();
+            }
+        }
+
         ActualizarIndicadorCarritoSuperior();
     }
 
@@ -1888,11 +1912,18 @@ public partial class MainWindow : FluentWindow
         if (CboCarritoSolicitudDestino?.SelectedItem is Solicitud sol && sol.Id > 0)
         {
             TxtStatusCarrito.Text = $"{sol.Folio}: {sol.TotalArticulos:0.##} art. ({sol.TotalSkus} SKUs)";
+            if (BtnIrSolicitudDesdeCatalogo != null)
+                BtnIrSolicitudDesdeCatalogo.Content = $"📋 Ir a {sol.Folio} ({sol.TotalSkus} art.)";
         }
         else
         {
-            decimal totalItems = _carritoTienda.Sum(x => x.cantidad);
-            TxtStatusCarrito.Text = $"Carrito: {totalItems:0.##} art. ({_carritoTienda.Count} SKUs)";
+            decimal totalItems = _partidasNuevaSolicitud.Sum(x => x.CantidadSolicitada);
+            int totalSkus = _partidasNuevaSolicitud.Count;
+            TxtStatusCarrito.Text = $"Solicitud activa: {totalItems:0.##} art. ({totalSkus} SKUs)";
+            if (BtnIrSolicitudDesdeCatalogo != null)
+                BtnIrSolicitudDesdeCatalogo.Content = totalSkus > 0
+                    ? $"📋 Ir a la Solicitud ({totalSkus} art.)"
+                    : "📋 Ir a la Solicitud";
         }
     }
 
@@ -1903,9 +1934,10 @@ public partial class MainWindow : FluentWindow
             try
             {
                 var solActualizada = DatabaseService.AgregarOIncrementarPartidaEnSolicitud(solDestino.Id, p.Id, cantidad, "Catálogo Visual");
+                _solicitudEditandoId = solActualizada.Id;
                 RefrescarSolicitudes(solActualizada.Id);
                 RefrescarDashboard();
-                TxtStatusCarrito.Text = $"{solActualizada.Folio}: {solActualizada.TotalArticulos:0.##} art. ({solActualizada.TotalSkus} SKUs)";
+                ActualizarIndicadorCarritoSuperior();
                 return;
             }
             catch (Exception ex)
@@ -1915,12 +1947,12 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        var idx = _carritoTienda.FindIndex(x => x.producto.Id == p.Id);
-        if (idx >= 0)
-            _carritoTienda[idx] = (p, _carritoTienda[idx].cantidad + cantidad);
-        else
-            _carritoTienda.Add((p, cantidad));
+        if (_solicitudEditandoId > 0)
+        {
+            IniciarNuevaSolicitudVacia();
+        }
 
+        AgregarProductoAPartidasSolicitud(p, cantidad, "Catálogo Visual");
         ActualizarIndicadorCarritoSuperior();
     }
 
@@ -2861,37 +2893,8 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (_carritoTienda.Count == 0)
-        {
-            CambiarSeccion(2);
-            return;
-        }
-
-        if (_solicitudEditandoId > 0)
-        {
-            IniciarNuevaSolicitudVacia();
-        }
-
-        foreach (var (prod, cant) in _carritoTienda)
-        {
-            var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == prod.Id);
-            if (existente != null)
-                existente.CantidadSolicitada += cant;
-            else
-                _partidasNuevaSolicitud.Add(new SolicitudPartida
-                {
-                    ProductoId = prod.Id,
-                    ProductoCodigo = prod.CodigoInterno,
-                    ProductoNombre = prod.Nombre,
-                    UnidadCompra = prod.UnidadCompra,
-                    CantidadSolicitada = cant,
-                    StockActualAlmacen = prod.StockActual,
-                    NotasPartida = "Catálogo Visual"
-                });
-        }
-        _carritoTienda.Clear();
-        ActualizarIndicadorCarritoSuperior();
         DgPartidasNuevaSolicitud.Items.Refresh();
+        ActualizarIndicadorCarritoSuperior();
         CambiarSeccion(2);
     }
 
@@ -3190,17 +3193,17 @@ public partial class MainWindow : FluentWindow
 
         if (sol == null || sol.Id == 0)
         {
-            TxtTituloEditorSolicitud.Text = "Nueva Solicitud (Carrito)";
-            TxtEstadoEditorSolicitud.Text = "NUEVO CARRITO";
+            TxtTituloEditorSolicitud.Text = "Nueva Solicitud de Compra";
+            TxtEstadoEditorSolicitud.Text = "EN CAPTURA";
             BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(29, 78, 216));
-            BtnGuardarSolicitud.Content = "Crear / Guardar Carrito de Solicitud";
+            BtnGuardarSolicitud.Content = "Guardar Solicitud de Compra";
             BtnGuardarSolicitud.IsEnabled = true;
             BtnLimpiarPartidasSolicitud.IsEnabled = true;
         }
         else if (sol.EsEditable)
         {
-            TxtTituloEditorSolicitud.Text = $"Editando Carrito: {sol.Folio}";
-            TxtEstadoEditorSolicitud.Text = $"CARRITO ABIERTO ({sol.TotalSkus} SKUs)";
+            TxtTituloEditorSolicitud.Text = $"Editando Solicitud: {sol.Folio}";
+            TxtEstadoEditorSolicitud.Text = $"ABIERTA ({sol.TotalSkus} SKUs)";
             BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(5, 150, 105));
             BtnGuardarSolicitud.Content = $"Guardar Cambios en {sol.Folio} e Ir a Comparativa";
             BtnGuardarSolicitud.IsEnabled = true;
@@ -3309,6 +3312,7 @@ public partial class MainWindow : FluentWindow
 
     private void PersistirCambioSiSolicitudEnEdicion()
     {
+        ActualizarIndicadorCarritoSuperior();
         if (_solicitudEditandoId <= 0) return;
 
         var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
@@ -3343,7 +3347,7 @@ public partial class MainWindow : FluentWindow
             var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
             if (solActual != null && !solActual.EsEditable)
             {
-                System.Windows.MessageBox.Show(this, $"La solicitud {solActual.Folio} ya tiene Orden de Compra generada y no puede modificarse.\n\nHaga clic en '+ Nuevo Carrito' para crear una nueva solicitud.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show(this, $"La solicitud {solActual.Folio} ya tiene Orden de Compra generada y no puede modificarse.\n\nHaga clic en '+ Nueva Solicitud' para crear una nueva solicitud.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
         }
@@ -3370,6 +3374,7 @@ public partial class MainWindow : FluentWindow
         }
 
         PersistirCambioSiSolicitudEnEdicion();
+        ActualizarIndicadorCarritoSuperior();
     }
 
     private void AgregarConceptoLibreAPartidasSolicitud(string concepto, decimal cant, string notas = "Concepto Abierto")
@@ -3408,6 +3413,7 @@ public partial class MainWindow : FluentWindow
         }
 
         PersistirCambioSiSolicitudEnEdicion();
+        ActualizarIndicadorCarritoSuperior();
     }
 
     private void BtnAgregarPartidaSolicitud_Click(object sender, RoutedEventArgs e)
@@ -3547,7 +3553,21 @@ public partial class MainWindow : FluentWindow
         if (CboSolDepartamento.SelectedItem is not Departamento dep ||
             CboSolEncargado.SelectedItem is not Encargado enc)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione Departamento y Solicitante para crear o vincular el Carrito de Solicitud (el Proyecto es opcional).", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            // Si aún no eligen Departamento/Encargado, llevarlos directo al Catálogo con [Nueva Solicitud en Captura]
+            if (_solicitudEditandoId <= 0 && CboCarritoSolicitudDestino?.ItemsSource is IEnumerable<Solicitud> opciones)
+            {
+                _sincronizandoSolicitudes = true;
+                try
+                {
+                    CboCarritoSolicitudDestino.SelectedItem = opciones.FirstOrDefault(s => s.Id == 0);
+                }
+                finally
+                {
+                    _sincronizandoSolicitudes = false;
+                }
+                ActualizarIndicadorCarritoSuperior();
+            }
+            CambiarSeccion(1);
             return;
         }
 
@@ -3599,7 +3619,7 @@ public partial class MainWindow : FluentWindow
 
         if (!sol.EsEditable)
         {
-            System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no admite más artículos.\n\nUse '+ Nuevo Carrito' para abrir una solicitud nueva.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no admite más artículos.\n\nUse '+ Nueva Solicitud' para abrir una solicitud nueva.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3653,11 +3673,11 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (!SolicitarAutorizacionAdmin($"Eliminar carrito/solicitud {sol.Folio}"))
+        if (!SolicitarAutorizacionAdmin($"Eliminar solicitud {sol.Folio}"))
             return;
 
         var resp = System.Windows.MessageBox.Show(this,
-            $"¿Está seguro de eliminar el carrito/solicitud {sol.Folio} ({sol.ProyectoNombre}) con {sol.TotalSkus} partidas?",
+            $"¿Está seguro de eliminar la solicitud {sol.Folio} ({sol.ProyectoNombre}) con {sol.TotalSkus} partidas?",
             "Confirmar eliminación",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -4181,8 +4201,8 @@ public partial class MainWindow : FluentWindow
         if (_solicitudEditandoId > 0)
         {
             var resp = System.Windows.MessageBox.Show(this,
-                "¿Desea vaciar todos los artículos de este carrito de solicitud?",
-                "Vaciar carrito",
+                "¿Desea vaciar todos los artículos de esta solicitud de compra?",
+                "Vaciar solicitud",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
             if (resp != System.Windows.MessageBoxResult.Yes) return;
@@ -10155,7 +10175,7 @@ public partial class MainWindow : FluentWindow
 
         // Menús de clic derecho en las tablas derechas del Mapa de Anaqueles
         var ctxDgProd = new ContextMenu();
-        var miProdCarrito = new System.Windows.Controls.MenuItem { Header = "🛒 Agregar al Carrito / Solicitud (+1)", FontWeight = FontWeights.Bold };
+        var miProdCarrito = new System.Windows.Controls.MenuItem { Header = "📋 Agregar a la Solicitud (+1)", FontWeight = FontWeights.Bold };
         miProdCarrito.Click += (_, _) =>
         {
             if (dgProdCuadrante.SelectedItem is Producto p)
@@ -10435,8 +10455,8 @@ public partial class MainWindow : FluentWindow
     {
         var p = ExtraerProductoDesdeMenuItem(sender);
         if (p == null) return;
-        AgregarAlCarritoTienda(p, 1m);
-        BtnEnviarCarritoASalida_Click(sender, e);
+        AgregarProductoAValeSalidaPos(p, 1m);
+        CambiarSeccion(5);
     }
 
     private void CtxCardEditarProducto_Click(object sender, RoutedEventArgs e)
