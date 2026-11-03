@@ -11,10 +11,46 @@
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Colores de selección persistentes incluso al pasar el foco al formulario derecho -->
-            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#CBE4FF" />
-            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#CBE4FF" />
-            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#002B5C" />
-            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#002B5C" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#DBEAFE" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#E0F2FE" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#0F172A" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#0F172A" />
+
+            <!-- Sombra sutil ejecutiva para tarjetas y superficies principales -->
+            <DropShadowEffect x:Key="CardElevationShadow"
+                              BlurRadius="14"
+                              ShadowDepth="2"
+                              Direction="270"
+                              Color="#0F172A"
+                              Opacity="0.06" />
+
+            <!-- Estilo global para Tablas Modernas (DataGrid) -->
+            <Style TargetType="DataGrid">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="GridLinesVisibility" Value="Horizontal" />
+                <Setter Property="HorizontalGridLinesBrush" Value="#2294A3B8" />
+                <Setter Property="VerticalGridLinesBrush" Value="Transparent" />
+                <Setter Property="RowHeaderWidth" Value="0" />
+                <Setter Property="HeadersVisibility" Value="Column" />
+                <Setter Property="FontSize" Value="12.2" />
+                <Setter Property="SnapsToDevicePixels" Value="True" />
+            </Style>
+
+            <!-- Estilo global para Encabezados de Columna de Tablas (DataGridColumnHeader) -->
+            <Style TargetType="DataGridColumnHeader">
+                <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Setter Property="FontWeight" Value="Bold" />
+                <Setter Property="FontSize" Value="11.2" />
+                <Setter Property="Padding" Value="10,8" />
+                <Setter Property="BorderBrush" Value="#3094A3B8" />
+                <Setter Property="BorderThickness" Value="0,0,0,1.5" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Cursor" Value="Hand" />
+            </Style>
 
             <!-- Estilo global para filas de tablas (DataGridRow) -->
             <Style TargetType="DataGridRow">
@@ -31,13 +67,13 @@
                             <Condition Property="IsSelected" Value="False" />
                         </MultiTrigger.Conditions>
                         <Setter Property="Background" Value="#EDF5FF" />
-                        <Setter Property="BorderBrush" Value="#90C8F6" />
-                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="BorderBrush" Value="#93C5FD" />
+                        <Setter Property="Foreground" Value="#0F172A" />
                     </MultiTrigger>
                     <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="#CBE4FF" />
-                        <Setter Property="BorderBrush" Value="#0078D4" />
-                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="Background" Value="#DBEAFE" />
+                        <Setter Property="BorderBrush" Value="#2563EB" />
+                        <Setter Property="Foreground" Value="#0F172A" />
                         <Setter Property="FontWeight" Value="SemiBold" />
                     </Trigger>
                 </Style.Triggers>
@@ -45,7 +81,7 @@
 
             <!-- Estilo global para celdas de tablas (DataGridCell) -->
             <Style TargetType="DataGridCell">
-                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="Padding" Value="10,7" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -65,29 +101,29 @@
                 </Setter>
                 <Style.Triggers>
                     <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="#CBE4FF" />
-                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="Background" Value="#DBEAFE" />
+                        <Setter Property="Foreground" Value="#0F172A" />
                     </Trigger>
                 </Style.Triggers>
             </Style>
 
             <!-- Estilo para elementos de listas desplegables (ComboBoxItem) -->
             <Style TargetType="ComboBoxItem">
-                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="Padding" Value="10,7" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Style.Triggers>
                     <Trigger Property="IsHighlighted" Value="True">
                         <Setter Property="Background" Value="#EDF5FF" />
-                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="Foreground" Value="#0F172A" />
                     </Trigger>
                     <Trigger Property="IsMouseOver" Value="True">
                         <Setter Property="Background" Value="#EDF5FF" />
-                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="Foreground" Value="#0F172A" />
                     </Trigger>
                     <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="#CBE4FF" />
-                        <Setter Property="Foreground" Value="#002B5C" />
+                        <Setter Property="Background" Value="#DBEAFE" />
+                        <Setter Property="Foreground" Value="#0F172A" />
                         <Setter Property="FontWeight" Value="SemiBold" />
                     </Trigger>
                 </Style.Triggers>
@@ -104,12 +140,13 @@
                 </Setter>
             </Style>
 
-            <!-- Estilo global para sub-pestañas (TabItem en Directorios) -->
+            <!-- Estilo global tipo Segmented Pill para sub-pestañas (TabItem) -->
             <Style TargetType="TabItem">
-                <Setter Property="Padding" Value="14,8" />
+                <Setter Property="Padding" Value="16,8" />
                 <Setter Property="Margin" Value="0,0,6,6" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="12.5" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="Template">
                     <Setter.Value>
@@ -117,7 +154,7 @@
                             <Border x:Name="TabBorder"
                                     Padding="{TemplateBinding Padding}"
                                     Margin="{TemplateBinding Margin}"
-                                    CornerRadius="6"
+                                    CornerRadius="8"
                                     Background="{DynamicResource ControlFillColorDefaultBrush}"
                                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                                     BorderThickness="1"
@@ -134,18 +171,123 @@
                                         <Condition Property="IsSelected" Value="False" />
                                     </MultiTrigger.Conditions>
                                     <Setter TargetName="TabBorder" Property="Background" Value="#EDF5FF" />
-                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#90C8F6" />
-                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="#002B5C" />
+                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#93C5FD" />
+                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="#0F172A" />
                                 </MultiTrigger>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="TabBorder" Property="Background" Value="#0078D4" />
-                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#005A9E" />
+                                    <Setter TargetName="TabBorder" Property="Background" Value="#2563EB" />
+                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#1D4ED8" />
                                     <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="White" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
+            </Style>
+
+            <!-- Estilo reusable para Píldoras de Estado (Status Pill) en celdas de DataGrid -->
+            <Style x:Key="StatusPillBorderStyle" TargetType="Border">
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Padding" Value="9,3" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Background" Value="#E2E8F0" />
+                <Setter Property="TextElement.Foreground" Value="#334155" />
+                <Setter Property="TextElement.FontWeight" Value="Bold" />
+                <Setter Property="TextElement.FontSize" Value="10.8" />
+                <Style.Triggers>
+                    <!-- Estados Verdes / Completados / Disponibles -->
+                    <DataTrigger Binding="{Binding}" Value="Disponible">
+                        <Setter Property="Background" Value="#DCFCE7" />
+                        <Setter Property="TextElement.Foreground" Value="#166534" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Recibida Completa">
+                        <Setter Property="Background" Value="#DCFCE7" />
+                        <Setter Property="TextElement.Foreground" Value="#166534" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Atendida">
+                        <Setter Property="Background" Value="#DCFCE7" />
+                        <Setter Property="TextElement.Foreground" Value="#166534" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="OC Generada">
+                        <Setter Property="Background" Value="#DCFCE7" />
+                        <Setter Property="TextElement.Foreground" Value="#166534" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Completado">
+                        <Setter Property="Background" Value="#DCFCE7" />
+                        <Setter Property="TextElement.Foreground" Value="#166534" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Devuelto Completo">
+                        <Setter Property="Background" Value="#DCFCE7" />
+                        <Setter Property="TextElement.Foreground" Value="#166534" />
+                    </DataTrigger>
+
+                    <!-- Estados Azules / Emitidos / En Proceso -->
+                    <DataTrigger Binding="{Binding}" Value="Emitida">
+                        <Setter Property="Background" Value="#DBEAFE" />
+                        <Setter Property="TextElement.Foreground" Value="#1E40AF" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="En Comparativa">
+                        <Setter Property="Background" Value="#DBEAFE" />
+                        <Setter Property="TextElement.Foreground" Value="#1E40AF" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Cotización Entregada">
+                        <Setter Property="Background" Value="#E0E7FF" />
+                        <Setter Property="TextElement.Foreground" Value="#3730A3" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Pagada / Lista para Almacén">
+                        <Setter Property="Background" Value="#DBEAFE" />
+                        <Setter Property="TextElement.Foreground" Value="#1E40AF" />
+                    </DataTrigger>
+
+                    <!-- Estados Ámbar / Pendientes / Parciales / En Préstamo -->
+                    <DataTrigger Binding="{Binding}" Value="Pendiente">
+                        <Setter Property="Background" Value="#FEF3C7" />
+                        <Setter Property="TextElement.Foreground" Value="#92400E" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Recibida Parcialmente">
+                        <Setter Property="Background" Value="#FEF3C7" />
+                        <Setter Property="TextElement.Foreground" Value="#92400E" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="En Préstamo">
+                        <Setter Property="Background" Value="#F3E8FF" />
+                        <Setter Property="TextElement.Foreground" Value="#6B21A8" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Activo">
+                        <Setter Property="Background" Value="#FEF3C7" />
+                        <Setter Property="TextElement.Foreground" Value="#92400E" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="🟠 Alta (≤50%)">
+                        <Setter Property="Background" Value="#FFEDD5" />
+                        <Setter Property="TextElement.Foreground" Value="#9A3412" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="🟡 Media">
+                        <Setter Property="Background" Value="#FEF9C3" />
+                        <Setter Property="TextElement.Foreground" Value="#854D0E" />
+                    </DataTrigger>
+
+                    <!-- Estados Rojos / Críticos / Cancelados / Dañados -->
+                    <DataTrigger Binding="{Binding}" Value="🔴 Crítica (Agotado)">
+                        <Setter Property="Background" Value="#FEE2E2" />
+                        <Setter Property="TextElement.Foreground" Value="#991B1B" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Cancelada">
+                        <Setter Property="Background" Value="#FEE2E2" />
+                        <Setter Property="TextElement.Foreground" Value="#991B1B" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Dañada">
+                        <Setter Property="Background" Value="#FEE2E2" />
+                        <Setter Property="TextElement.Foreground" Value="#991B1B" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Extraviada / Baja">
+                        <Setter Property="Background" Value="#FEE2E2" />
+                        <Setter Property="TextElement.Foreground" Value="#991B1B" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding}" Value="Alta">
+                        <Setter Property="Background" Value="#FEE2E2" />
+                        <Setter Property="TextElement.Foreground" Value="#991B1B" />
+                    </DataTrigger>
+                </Style.Triggers>
             </Style>
         </ResourceDictionary>
     </Application.Resources>

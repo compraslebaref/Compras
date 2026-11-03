@@ -62,6 +62,8 @@ public partial class MainWindow : FluentWindow
     private DateTime _ultimoPulsoPistolaUtc = DateTime.MinValue;
     private int _rachaPulsosRapidosPistola = 0;
     private string _origenAutoEscaneo = string.Empty;
+    private bool _temaOscuroActivo = false;
+    private bool _sidebarColapsado = false;
 
     public class PrestamoVistaFila
     {
@@ -129,6 +131,7 @@ public partial class MainWindow : FluentWindow
 
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         PreviewTextInput += MainWindow_PreviewTextInput;
+        RegistrarSuscripcionesMediator();
         Loaded += async (_, _) =>
         {
             await EjecutarConIndicadorCargaAsync("Cargando sistema y catálogos...", () =>
@@ -141,6 +144,56 @@ public partial class MainWindow : FluentWindow
             });
             TxtOmniScanner.Focus();
         };
+    }
+
+    private void RegistrarSuscripcionesMediator()
+    {
+        var med = AppMediator.Instance;
+
+        med.Suscribir<NavegarModuloMessage>(msg =>
+        {
+            CambiarSeccion((int)msg.Modulo);
+            if (!string.IsNullOrWhiteSpace(msg.FiltroBusqueda))
+            {
+                if (msg.Modulo == ModuloSistema.Catalogo && TxtBuscarCatalogo != null)
+                {
+                    TxtBuscarCatalogo.Text = msg.FiltroBusqueda;
+                    RefrescarCatalogoVisual();
+                }
+                else if (msg.Modulo == ModuloSistema.AlmacenPos && TxtBuscarAlmacen != null)
+                {
+                    TxtBuscarAlmacen.Text = msg.FiltroBusqueda;
+                }
+            }
+        });
+
+        med.Suscribir<AbrirMapaAnaquelesMessage>(msg =>
+        {
+            MostrarSelectorYMapaAnaqueles(msg.CoordenadaInicial, msg.AlSeleccionarCoordenada, this);
+        });
+
+        med.Suscribir<ProcesarScannerMessage>(msg =>
+        {
+            ProcesarCodigoEscaneado(msg.CodigoRaw);
+        });
+
+        med.Suscribir<DatosActualizadosMessage>(msg =>
+        {
+            CargarTodoElSistema(msg.ConservarScrollCatalogo);
+        });
+
+        med.Suscribir<CarritoActualizadoMessage>(msg =>
+        {
+            if (TxtStatusCarrito != null)
+            {
+                TxtStatusCarrito.Text = $"Carrito: {msg.TotalSkus} SKUs ({msg.TotalUnidades:0.##} u.)";
+            }
+        });
+
+        med.Suscribir<AlternarTemaVisualMessage>(_ =>
+        {
+            AlternarTemaVisualInterno();
+        });
     }
 
     private void ConfigurarPlaceholdersInicialesCombos()
@@ -569,12 +622,97 @@ public partial class MainWindow : FluentWindow
     {
         if (sender is FrameworkElement fe && int.TryParse(fe.Tag?.ToString(), out int idx))
         {
-            CambiarSeccion(idx);
+            AppMediator.Instance.Publicar(new NavegarModuloMessage((ModuloSistema)idx));
         }
     }
 
-    private void BtnIrRecepciones_Click(object sender, RoutedEventArgs e) => CambiarSeccion(4);
-    private void BtnIrAlmacenPos_Click(object sender, RoutedEventArgs e) => CambiarSeccion(5);
+    private void BtnIrRecepciones_Click(object sender, RoutedEventArgs e) =>
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.OrdenesCompra));
+
+    private void BtnIrAlmacenPos_Click(object sender, RoutedEventArgs e) =>
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.AlmacenPos));
+
+    // --- NAVEGACIÓN DESDE TARJETAS KPI INTERACTIVAS DEL DASHBOARD (VÍA MEDIATOR) ---
+    private void KpiCardSolicitudes_Click(object sender, MouseButtonEventArgs e) =>
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Solicitudes));
+
+    private void KpiCardOrdenes_Click(object sender, MouseButtonEventArgs e) =>
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.OrdenesCompra));
+
+    private void KpiCardAlertas_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (DgDashboardAlertas?.Items.Count > 0)
+        {
+            DgDashboardAlertas.Focus();
+            DgDashboardAlertas.SelectedIndex = 0;
+            DgDashboardAlertas.ScrollIntoView(DgDashboardAlertas.SelectedItem);
+        }
+        else
+        {
+            AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Catalogo));
+        }
+    }
+
+    private void KpiCardHerramientas_Click(object sender, MouseButtonEventArgs e) =>
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.AlmacenPos));
+
+    private void KpiCardAnalisis_Click(object sender, MouseButtonEventArgs e) =>
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Analisis));
+
+    // --- ALTERNAR TEMA CLARO / OSCURO Y COLAPSAR SIDEBAR ---
+    private void BtnAlternarTema_Click(object sender, RoutedEventArgs e) =>
+        AppMediator.Instance.Publicar(new AlternarTemaVisualMessage());
+
+    private void AlternarTemaVisualInterno()
+    {
+        _temaOscuroActivo = !_temaOscuroActivo;
+        var nuevoTema = _temaOscuroActivo ? ApplicationTheme.Dark : ApplicationTheme.Light;
+        ApplicationThemeManager.Apply(nuevoTema, WindowBackdropType.Mica, false);
+
+        if (BtnAlternarTema != null)
+        {
+            BtnAlternarTema.Content = _temaOscuroActivo ? "☀️ Claro" : "🌙 Oscuro";
+        }
+    }
+
+    private void BtnToggleSidebar_Click(object sender, RoutedEventArgs e)
+    {
+        _sidebarColapsado = !_sidebarColapsado;
+        if (ColSidebarNavegacion != null)
+        {
+            ColSidebarNavegacion.Width = new GridLength(_sidebarColapsado ? 68 : 232);
+        }
+
+        Visibility visTexto = _sidebarColapsado ? Visibility.Collapsed : Visibility.Visible;
+        if (PnlMarcaSidebar != null) PnlMarcaSidebar.Visibility = visTexto;
+        if (PnlFooterSidebar != null) PnlFooterSidebar.Visibility = visTexto;
+        if (LblSecGeneral != null) LblSecGeneral.Visibility = visTexto;
+        if (LblSecCompras != null) LblSecCompras.Visibility = visTexto;
+        if (LblSecAlmacen != null) LblSecAlmacen.Visibility = visTexto;
+        if (BtnToggleSidebar != null) BtnToggleSidebar.Content = _sidebarColapsado ? "⟫" : "⟪";
+
+        var navItems = new (Wpf.Ui.Controls.Button? btn, string label)[]
+        {
+            (NavDashboard, "Inicio"),
+            (NavCatalogo, "Catálogo"),
+            (NavSolicitudes, "Solicitudes"),
+            (NavComparativa, "Comparativa"),
+            (NavOrdenes, "Órdenes de Compra"),
+            (NavAlmacenPos, "Almacén"),
+            (NavFacturasXml, "Facturas"),
+            (NavAnalisis, "Análisis"),
+            (NavDirectorios, "Directorios")
+        };
+
+        foreach (var (btn, label) in navItems)
+        {
+            if (btn == null) continue;
+            btn.Content = _sidebarColapsado ? null : label;
+            btn.HorizontalContentAlignment = _sidebarColapsado ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        }
+
+        RefrescarDashboard();
+    }
 
     private void BtnPerfilAdmin_Click(object sender, RoutedEventArgs e)
     {
@@ -1127,16 +1265,49 @@ public partial class MainWindow : FluentWindow
             .ThenBy(p => p.StockActual)
             .ToList();
 
-        KpiSolicitudes.Text = sols.Count(s => s.Estatus == "Pendiente").ToString();
-        KpiOcsAbiertas.Text = ocs.Count(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToString();
-        KpiStockBajo.Text = alertasStock.Count.ToString();
-        KpiHerramientasPrestadas.Text = her.Count(h => h.Estado == "En Préstamo").ToString();
+        int cantSolsPendientes = sols.Count(s => s.Estatus == "Pendiente");
+        int cantOcsAbiertas = ocs.Count(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)");
+        int cantAlertas = alertasStock.Count;
+        int cantPrestamos = her.Count(h => h.Estado == "En Préstamo");
+
+        KpiSolicitudes.Text = cantSolsPendientes.ToString();
+        KpiOcsAbiertas.Text = cantOcsAbiertas.ToString();
+        KpiStockBajo.Text = cantAlertas.ToString();
+        KpiHerramientasPrestadas.Text = cantPrestamos.ToString();
         KpiGastoTotal.Text = ocs.Where(o => o.Estatus != "Cancelada").Sum(o => o.TotalConIva).ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
+
+        ActualizarBadgesSidebar(cantAlertas, cantSolsPendientes, cantOcsAbiertas, cantPrestamos);
 
         DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToList();
         DgDashboardAlertas.ItemsSource = alertasStock;
 
         RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void ActualizarBadgesSidebar(int alertas, int solicitudes, int ocs, int prestamos)
+    {
+        bool mostrar = !_sidebarColapsado;
+
+        if (BdgSidebarAlertas != null && TxtBadgeSidebarAlertas != null)
+        {
+            TxtBadgeSidebarAlertas.Text = alertas.ToString();
+            BdgSidebarAlertas.Visibility = (mostrar && alertas > 0) ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (BdgSidebarSolicitudes != null && TxtBadgeSidebarSolicitudes != null)
+        {
+            TxtBadgeSidebarSolicitudes.Text = solicitudes.ToString();
+            BdgSidebarSolicitudes.Visibility = (mostrar && solicitudes > 0) ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (BdgSidebarOcs != null && TxtBadgeSidebarOcs != null)
+        {
+            TxtBadgeSidebarOcs.Text = ocs.ToString();
+            BdgSidebarOcs.Visibility = (mostrar && ocs > 0) ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (BdgSidebarPrestamos != null && TxtBadgeSidebarPrestamos != null)
+        {
+            TxtBadgeSidebarPrestamos.Text = prestamos.ToString();
+            BdgSidebarPrestamos.Visibility = (mostrar && prestamos > 0) ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private void RefrescarCalendarioYAgendaDashboard()
@@ -10142,50 +10313,50 @@ public partial class MainWindow : FluentWindow
         if (sender is FrameworkElement fe && fe.Tag is Producto p)
         {
             e.Handled = true;
-            MostrarSelectorYMapaAnaqueles(p.Ubicacion, nuevaCoord =>
+            AppMediator.Instance.Publicar(new AbrirMapaAnaquelesMessage(p.Ubicacion, nuevaCoord =>
             {
                 DatabaseService.ActualizarUbicacionProducto(p.Id, nuevaCoord, sincronizarHerramientas: true);
                 p.Ubicacion = nuevaCoord;
                 if (_productoEnEdicion.Id == p.Id && TxtProdUbicacion != null)
                     TxtProdUbicacion.Text = nuevaCoord;
-                CargarTodoElSistema();
-            }, this);
+                AppMediator.Instance.Publicar(new DatosActualizadosMessage("BadgeUbicacion"));
+            }));
         }
     }
 
-    // --- ACCIONES DE LA BARRA SUPERIOR DE MENÚS ---
+    // --- ACCIONES DE LA BARRA SUPERIOR DE MENÚS (VÍA APP MEDIATOR) ---
     private void MenuIrCatalogo_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(1);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Catalogo));
         TxtBuscarCatalogo?.Focus();
     }
 
     private void MenuNuevoProductoCatalogo_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(1);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Catalogo));
         LimpiarEditorProducto();
         TxtProdNombre?.Focus();
     }
 
     private void MenuNuevaSolicitud_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(2);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Solicitudes));
         IniciarNuevaSolicitudVacia();
     }
 
     private void MenuIrComparativa_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(3);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Comparativa));
     }
 
     private void MenuIrFacturasXml_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(6);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.FacturasXml));
     }
 
     private void MenuIrDirectorioHerramientas_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(8);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Directorios));
         if (DgDirHerramientas != null)
         {
             var tabControl = BuscarTabControlPadre(DgDirHerramientas);
@@ -10196,7 +10367,7 @@ public partial class MainWindow : FluentWindow
 
     private void MenuIrAnalisisRanking_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(7);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Analisis));
         if (DgRankingMaterialesAnalisis != null)
         {
             var tabControl = BuscarTabControlPadre(DgRankingMaterialesAnalisis);
@@ -10207,7 +10378,7 @@ public partial class MainWindow : FluentWindow
 
     private void MenuIrAnalisisGraficas_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(7);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Analisis));
         if (CboProductoAnalisis != null)
         {
             var tabControl = BuscarTabControlPadre(CboProductoAnalisis);
@@ -10218,12 +10389,12 @@ public partial class MainWindow : FluentWindow
 
     private void MenuRefrescarSistema_Click(object sender, RoutedEventArgs e)
     {
-        CargarTodoElSistema();
+        AppMediator.Instance.Publicar(new DatosActualizadosMessage("MenuRefrescar", ConservarScrollCatalogo: false));
     }
 
     private void MenuIrDirectorios_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(8);
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Directorios));
     }
 
     private static TabControl? BuscarTabControlPadre(DependencyObject? child)

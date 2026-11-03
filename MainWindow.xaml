@@ -122,14 +122,22 @@
                                Click="BtnProcesarOmniScanner_Click" />
                 </Grid>
 
-                <!-- Derecha: Solo 2 Botones Limpios (Mapa A–F y Perfil) -->
-                <ui:Button Grid.Column="2"
-                           Content="🗺️ Mapa A–F"
-                           FontSize="11.5"
-                           Padding="10,5"
-                           Margin="0,0,6,0"
-                           ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
-                           Click="BtnAbrirMapaAnaqueles_Click" />
+                <!-- Derecha: Botones Ejecutivos (Mapa A–F, Tema Claro/Oscuro y Perfil) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button Content="🗺️ Mapa A–F"
+                               FontSize="11.5"
+                               Padding="10,5"
+                               Margin="0,0,6,0"
+                               ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
+                               Click="BtnAbrirMapaAnaqueles_Click" />
+                    <ui:Button x:Name="BtnAlternarTema"
+                               Content="🌙 Oscuro"
+                               FontSize="11.5"
+                               Padding="10,5"
+                               Margin="0,0,6,0"
+                               ToolTip="Alternar entre Modo Claro de Alto Contraste (Bodega) y Modo Oscuro Slate (Oficina)"
+                               Click="BtnAlternarTema_Click" />
+                </StackPanel>
                 <ui:Button x:Name="BtnPerfilAdmin"
                            Grid.Column="3"
                            Content="Perfil: Estándar"
@@ -143,44 +151,117 @@
         <!-- Cuerpo Principal -->
         <Grid Grid.Row="2" Margin="14,0,14,14">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="215" />
+                <ColumnDefinition x:Name="ColSidebarNavegacion" Width="232" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Menú Lateral Limpio -->
+            <!-- Menú Lateral Ejecutivo con Secciones, Badges en Vivo y Modo Colapsable -->
             <Border Grid.Column="0"
                     Margin="0,0,12,0"
-                    Padding="8,10"
-                    CornerRadius="8"
+                    Padding="10,12"
+                    CornerRadius="12"
                     Background="{DynamicResource ControlFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                    BorderThickness="1">
+                    BorderThickness="1"
+                    Effect="{StaticResource CardElevationShadow}">
                 <DockPanel LastChildFill="False">
-                    <StackPanel DockPanel.Dock="Top">
-                        <ui:Button x:Name="NavDashboard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Appearance="Primary" Icon="{ui:SymbolIcon Home24}" Content="Inicio" Click="NavButton_Click" Tag="0" />
-                        <ui:Button x:Name="NavCatalogo" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon Grid24}" Content="Catálogo" Click="NavButton_Click" Tag="1" />
-                        <ui:Button x:Name="NavSolicitudes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon ClipboardTaskListLtr24}" Content="Solicitudes" Click="NavButton_Click" Tag="2" />
-                        <ui:Button x:Name="NavComparativa" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon Scales24}" Content="Comparativa" Click="NavButton_Click" Tag="3" />
-                        <ui:Button x:Name="NavOrdenes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon DocumentText24}" Content="Órdenes de Compra" Click="NavButton_Click" Tag="4" />
-                        <ui:Button x:Name="NavAlmacenPos" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon Box24}" Content="Almacén" Click="NavButton_Click" Tag="5" />
-                        <ui:Button x:Name="NavFacturasXml" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon ReceiptMoney24}" Content="Facturas" Click="NavButton_Click" Tag="6" />
-                        <ui:Button x:Name="NavAnalisis" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon DataTrending24}" Content="Análisis" Click="NavButton_Click" Tag="7" />
-                        <ui:Button x:Name="NavDirectorios" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="12,10" Icon="{ui:SymbolIcon Settings24}" Content="Directorios" Click="NavButton_Click" Tag="8" />
-                    </StackPanel>
+                    <!-- Cabecera de Identidad Corporativa + Botón Colapsar -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="8,6"
+                            Margin="0,0,0,10"
+                            CornerRadius="8"
+                            Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0"
+                                    Width="32"
+                                    Height="32"
+                                    CornerRadius="8"
+                                    Background="#2563EB"
+                                    VerticalAlignment="Center">
+                                <ui:SymbolIcon Symbol="BoxMultiple24" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel x:Name="PnlMarcaSidebar" Grid.Column="1" Margin="9,0,4,0" VerticalAlignment="Center">
+                                <TextBlock Text="LEBAREF" FontWeight="Bold" FontSize="12.5" Foreground="#2563EB" />
+                                <TextBlock Text="Compras &amp; WMS" FontSize="10.5" Opacity="0.72" />
+                            </StackPanel>
+                            <ui:Button x:Name="BtnToggleSidebar"
+                                       Grid.Column="2"
+                                       Content="⟪"
+                                       Padding="6,3"
+                                       FontSize="11"
+                                       ToolTip="Contraer o expandir menú lateral para ganar espacio en pantalla"
+                                       Click="BtnToggleSidebar_Click" />
+                        </Grid>
+                    </Border>
 
-                    <Border DockPanel.Dock="Bottom"
-                            CornerRadius="6"
+                    <!-- Navegación Agrupada por Flujo de Trabajo con Contadores Dinámicos -->
+                    <ScrollViewer DockPanel.Dock="Top" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock x:Name="LblSecGeneral" Text="OPERACIÓN GENERAL" FontSize="10" FontWeight="Bold" Opacity="0.52" Margin="8,2,0,4" />
+
+                            <ui:Button x:Name="NavDashboard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Appearance="Primary" Icon="{ui:SymbolIcon Home24}" Content="Inicio" ToolTip="Inicio y Resumen Ejecutivo" Click="NavButton_Click" Tag="0" />
+
+                            <Grid>
+                                <ui:Button x:Name="NavCatalogo" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Grid24}" Content="Catálogo" ToolTip="Catálogo Visual, Alertas y Coordenadas 3x3 (Atajo: F3)" Click="NavButton_Click" Tag="1" />
+                                <Border x:Name="BdgSidebarAlertas" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#FEE2E2" BorderBrush="#FCA5A5" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                    <TextBlock x:Name="TxtBadgeSidebarAlertas" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#991B1B" />
+                                </Border>
+                            </Grid>
+
+                            <TextBlock x:Name="LblSecCompras" Text="ABASTECIMIENTO Y COMPRAS" FontSize="10" FontWeight="Bold" Opacity="0.52" Margin="8,10,0,4" />
+
+                            <Grid>
+                                <ui:Button x:Name="NavSolicitudes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon ClipboardTaskListLtr24}" Content="Solicitudes" ToolTip="Solicitudes de Compra y Carritos" Click="NavButton_Click" Tag="2" />
+                                <Border x:Name="BdgSidebarSolicitudes" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#DBEAFE" BorderBrush="#93C5FD" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                    <TextBlock x:Name="TxtBadgeSidebarSolicitudes" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#1E40AF" />
+                                </Border>
+                            </Grid>
+
+                            <ui:Button x:Name="NavComparativa" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Scales24}" Content="Comparativa" ToolTip="Cuadro Comparativo Multiproveedor" Click="NavButton_Click" Tag="3" />
+
+                            <Grid>
+                                <ui:Button x:Name="NavOrdenes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon DocumentText24}" Content="Órdenes de Compra" ToolTip="Órdenes de Compra y Recepción de Mercancía" Click="NavButton_Click" Tag="4" />
+                                <Border x:Name="BdgSidebarOcs" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#FEF3C7" BorderBrush="#FCD34D" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                    <TextBlock x:Name="TxtBadgeSidebarOcs" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#92400E" />
+                                </Border>
+                            </Grid>
+
+                            <ui:Button x:Name="NavFacturasXml" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon ReceiptMoney24}" Content="Facturas" ToolTip="Facturas CFDI 4.0 y Notas de Compra" Click="NavButton_Click" Tag="6" />
+
+                            <TextBlock x:Name="LblSecAlmacen" Text="BODEGA Y CONTROL" FontSize="10" FontWeight="Bold" Opacity="0.52" Margin="8,10,0,4" />
+
+                            <Grid>
+                                <ui:Button x:Name="NavAlmacenPos" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Box24}" Content="Almacén" ToolTip="Salidas de Almacén y Préstamos de Herramientas" Click="NavButton_Click" Tag="5" />
+                                <Border x:Name="BdgSidebarPrestamos" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#F3E8FF" BorderBrush="#D8B4FE" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                    <TextBlock x:Name="TxtBadgeSidebarPrestamos" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#6B21A8" />
+                                </Border>
+                            </Grid>
+
+                            <ui:Button x:Name="NavAnalisis" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon DataTrending24}" Content="Análisis" ToolTip="Ranking de Consumo e Historial Gráfico de Precios" Click="NavButton_Click" Tag="7" />
+                            <ui:Button x:Name="NavDirectorios" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Settings24}" Content="Directorios" ToolTip="Proveedores, Proyectos, Personal y Herramientas" Click="NavButton_Click" Tag="8" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Border x:Name="PnlFooterSidebar"
+                            DockPanel.Dock="Bottom"
+                            CornerRadius="8"
                             Padding="10"
                             Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                         <StackPanel>
                             <TextBlock x:Name="TxtStatusCarrito"
                                        Text="Carrito: 0 artículos"
-                                       FontWeight="SemiBold"
+                                       FontWeight="Bold"
+                                       Foreground="#2563EB"
                                        FontSize="12" />
                             <TextBlock x:Name="TxtUltimoEscaneo"
                                        Text="Escáner listo"
                                        FontSize="11"
-                                       Opacity="0.7"
+                                       Opacity="0.72"
                                        Margin="0,2,0,8"
                                        TextWrapping="Wrap" />
                             <ui:Button Content="Respaldar Datos"
@@ -209,38 +290,131 @@
                 <TabItem>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <TextBlock Text="Resumen General" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" />
+                            <DockPanel Margin="0,0,0,12">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ui:Button Content="🗺️ Abrir Mapa de Bodega 3×3" Margin="0,0,8,0" Click="BtnAbrirMapaAnaqueles_Click" />
+                                    <ui:Button Content="+ Nueva Solicitud" Appearance="Primary" Click="MenuNuevaSolicitud_Click" />
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Panel de Control Ejecutivo" FontSize="21" FontWeight="Bold" />
+                                    <TextBlock Text="Haz clic en cualquier indicador KPI para navegar directamente al módulo correspondiente." FontSize="11.5" Opacity="0.7" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </DockPanel>
 
                             <UniformGrid Columns="5" Margin="0,0,0,16">
-                                <Border Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                    <StackPanel>
-                                        <TextBlock Text="Solicitudes Pendientes" FontSize="12" Opacity="0.75" />
-                                        <TextBlock x:Name="KpiSolicitudes" Text="0" FontSize="26" FontWeight="Bold" Foreground="#0078D4" Margin="0,4,0,0" />
-                                    </StackPanel>
+                                <!-- KPI 1: Solicitudes Pendientes -->
+                                <Border Margin="0,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="#93C5FD" BorderThickness="1,1,1,3"
+                                        Effect="{StaticResource CardElevationShadow}"
+                                        ToolTip="Clic para abrir Solicitudes de Compra pendientes"
+                                        MouseLeftButtonUp="KpiCardSolicitudes_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="SOLICITUDES PENDIENTES" FontSize="10.2" FontWeight="Bold" Opacity="0.65" />
+                                            <TextBlock x:Name="KpiSolicitudes" Text="0" FontSize="28" FontWeight="Bold" Foreground="#2563EB" Margin="0,4,0,2" />
+                                            <TextBlock Text="Ir a Solicitudes →" FontSize="10.5" Foreground="#2563EB" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#DBEAFE" VerticalAlignment="Top">
+                                            <ui:SymbolIcon Symbol="ClipboardTaskListLtr24" Foreground="#1D4ED8" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
                                 </Border>
-                                <Border Margin="4,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                    <StackPanel>
-                                        <TextBlock Text="Órdenes Abiertas" FontSize="12" Opacity="0.75" />
-                                        <TextBlock x:Name="KpiOcsAbiertas" Text="0" FontSize="26" FontWeight="Bold" Foreground="#D83B01" Margin="0,4,0,0" />
-                                    </StackPanel>
+
+                                <!-- KPI 2: Órdenes Abiertas -->
+                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="#FDBA74" BorderThickness="1,1,1,3"
+                                        Effect="{StaticResource CardElevationShadow}"
+                                        ToolTip="Clic para ir a Recepción de Órdenes de Compra abiertas"
+                                        MouseLeftButtonUp="KpiCardOrdenes_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="ÓRDENES ABIERTAS" FontSize="10.2" FontWeight="Bold" Opacity="0.65" />
+                                            <TextBlock x:Name="KpiOcsAbiertas" Text="0" FontSize="28" FontWeight="Bold" Foreground="#EA580C" Margin="0,4,0,2" />
+                                            <TextBlock Text="Recibir Mercancía →" FontSize="10.5" Foreground="#EA580C" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#FFEDD5" VerticalAlignment="Top">
+                                            <ui:SymbolIcon Symbol="DocumentText24" Foreground="#C2410C" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
                                 </Border>
-                                <Border Margin="4,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                    <StackPanel>
-                                        <TextBlock Text="Stock Mínimo" FontSize="12" Opacity="0.75" />
-                                        <TextBlock x:Name="KpiStockBajo" Text="0" FontSize="26" FontWeight="Bold" Foreground="#C50F1F" Margin="0,4,0,0" />
-                                    </StackPanel>
+
+                                <!-- KPI 3: Alertas Stock Mínimo -->
+                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="#FCA5A5" BorderThickness="1,1,1,3"
+                                        Effect="{StaticResource CardElevationShadow}"
+                                        ToolTip="Clic para filtrar productos con Stock Mínimo mayor al Actual"
+                                        MouseLeftButtonUp="KpiCardAlertas_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="DÉFICIT DE STOCK" FontSize="10.2" FontWeight="Bold" Opacity="0.65" />
+                                            <TextBlock x:Name="KpiStockBajo" Text="0" FontSize="28" FontWeight="Bold" Foreground="#DC2626" Margin="0,4,0,2" />
+                                            <TextBlock Text="Reabastecer Stock →" FontSize="10.5" Foreground="#DC2626" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#FEE2E2" VerticalAlignment="Top">
+                                            <ui:SymbolIcon Symbol="Warning24" Foreground="#B91C1C" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
                                 </Border>
-                                <Border Margin="4,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                    <StackPanel>
-                                        <TextBlock Text="Herramientas Prestadas" FontSize="12" Opacity="0.75" />
-                                        <TextBlock x:Name="KpiHerramientasPrestadas" Text="0" FontSize="26" FontWeight="Bold" Foreground="#5C2D91" Margin="0,4,0,0" />
-                                    </StackPanel>
+
+                                <!-- KPI 4: Herramientas Prestadas -->
+                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="#D8B4FE" BorderThickness="1,1,1,3"
+                                        Effect="{StaticResource CardElevationShadow}"
+                                        ToolTip="Clic para gestionar préstamos y devoluciones de herramientas"
+                                        MouseLeftButtonUp="KpiCardHerramientas_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="EN RESGUARDO (HER)" FontSize="10.2" FontWeight="Bold" Opacity="0.65" />
+                                            <TextBlock x:Name="KpiHerramientasPrestadas" Text="0" FontSize="28" FontWeight="Bold" Foreground="#7C3AED" Margin="0,4,0,2" />
+                                            <TextBlock Text="Ver Préstamos →" FontSize="10.5" Foreground="#7C3AED" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#F3E8FF" VerticalAlignment="Top">
+                                            <ui:SymbolIcon Symbol="Wrench24" Foreground="#6D28D9" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
                                 </Border>
-                                <Border Margin="4,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                    <StackPanel>
-                                        <TextBlock Text="Compras Totales" FontSize="12" Opacity="0.75" />
-                                        <TextBlock x:Name="KpiGastoTotal" Text="$0.00" FontSize="24" FontWeight="Bold" Foreground="#107C10" Margin="0,4,0,0" />
-                                    </StackPanel>
+
+                                <!-- KPI 5: Compras Totales -->
+                                <Border Margin="4,0,0,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="#86EFAC" BorderThickness="1,1,1,3"
+                                        Effect="{StaticResource CardElevationShadow}"
+                                        ToolTip="Clic para abrir Analítica e Historial de Compras"
+                                        MouseLeftButtonUp="KpiCardAnalisis_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="COMPRAS ACUMULADAS" FontSize="10.2" FontWeight="Bold" Opacity="0.65" />
+                                            <TextBlock x:Name="KpiGastoTotal" Text="$0.00" FontSize="22" FontWeight="Bold" Foreground="#16A34A" Margin="0,6,0,4" />
+                                            <TextBlock Text="Ver Analítica →" FontSize="10.5" Foreground="#16A34A" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#DCFCE7" VerticalAlignment="Top">
+                                            <ui:SymbolIcon Symbol="DataTrending24" Foreground="#15803D" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
                                 </Border>
                             </UniformGrid>
 
@@ -312,8 +486,24 @@
                                                 <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria}" Width="140" />
                                                 <DataGridTextColumn Header="Evento / Recordatorio" Binding="{Binding Titulo}" Width="*" />
                                                 <DataGridTextColumn Header="Detalle / Referencia" Binding="{Binding Descripcion}" Width="210" />
-                                                <DataGridTextColumn Header="Prioridad" Binding="{Binding Prioridad}" Width="75" />
-                                                <DataGridTextColumn Header="Estado" Binding="{Binding EstatusTexto}" Width="100" />
+                                                <DataGridTemplateColumn Header="Prioridad" Width="85">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Prioridad}">
+                                                                <TextBlock Text="{Binding}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTemplateColumn Header="Estado" Width="115">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding EstatusTexto}">
+                                                                <TextBlock Text="{Binding}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
                                                 <DataGridTemplateColumn Header="Acciones" Width="135">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
@@ -336,7 +526,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
-                                <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
                                     <StackPanel>
                                         <DockPanel Margin="0,0,0,10">
                                             <ui:Button DockPanel.Dock="Right" Content="Ver Órdenes" Margin="8,0,0,0" Click="BtnIrRecepciones_Click" />
@@ -354,20 +544,28 @@
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="110" />
                                                 <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="135" />
-                                                <DataGridTextColumn Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="90" />
-                                                <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="120" />
+                                                <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="130" />
+                                                <DataGridTextColumn Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="88" />
+                                                <DataGridTemplateColumn Header="Estatus" Width="138">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
+                                                                <TextBlock Text="{Binding}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
                                                 <DataGridTextColumn Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </StackPanel>
                                 </Border>
 
-                                <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
                                     <StackPanel>
                                         <DockPanel Margin="0,0,0,10">
                                             <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" Margin="8,0,0,0" Click="BtnIrAlmacenPos_Click" />
-                                            <TextBlock Text="Alertas de Inventario" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                                            <TextBlock Text="Alertas de Inventario (Stock Mínimo &gt; Actual)" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DataGrid x:Name="DgDashboardAlertas" AutoGenerateColumns="False" IsReadOnly="True" Height="195" HeadersVisibility="Column">
                                             <DataGrid.ContextMenu>
@@ -378,7 +576,15 @@
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Prioridad" Binding="{Binding PrioridadAlertaStock}" Width="125" />
+                                                <DataGridTemplateColumn Header="Prioridad" Width="140">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding PrioridadAlertaStock}">
+                                                                <TextBlock Text="{Binding}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
                                                 <DataGridTextColumn Header="Código" Binding="{Binding CodigoInterno}" Width="82" />
                                                 <DataGridTextColumn Header="Producto" Binding="{Binding Nombre}" Width="*" />
                                                 <DataGridTextColumn Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="62" />
@@ -1073,7 +1279,15 @@
                                         <DataGridTextColumn Header="Modalidad" Binding="{Binding TipoSolicitud}" Width="135" />
                                         <DataGridTextColumn Header="Destino / Proyecto" Binding="{Binding ProyectoMostrar}" Width="*" />
                                         <DataGridTextColumn Header="Artículos" Binding="{Binding ResumenArticulos}" Width="100" />
-                                        <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="100" />
+                                        <DataGridTemplateColumn Header="Estatus" Width="125">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
+                                                        <TextBlock Text="{Binding}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
@@ -1587,7 +1801,15 @@
                                             <DataGridTextColumn Header="Condición" Binding="{Binding CondicionPago}" Width="105" />
                                             <DataGridTextColumn Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="82" />
                                             <DataGridTextColumn Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="88" />
-                                            <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="135" />
+                                            <DataGridTemplateColumn Header="Estatus" Width="145">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
+                                                            <TextBlock Text="{Binding}" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -2852,7 +3074,15 @@
                                                     <DataGridTextColumn Header="Herramienta" Binding="{Binding ProductoNombre}" Width="*" />
                                                     <DataGridTextColumn Header="Marca / Modelo" Binding="{Binding MarcaModelo}" Width="140" />
                                                     <DataGridTextColumn Header="Núm. Serie" Binding="{Binding NumeroSerie}" Width="115" />
-                                                    <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="110" />
+                                                    <DataGridTemplateColumn Header="Estado" Width="125">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estado}">
+                                                                    <TextBlock Text="{Binding}" />
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
                                                     <DataGridTextColumn Header="Ubicación" Binding="{Binding Ubicacion}" Width="105" />
                                                     <DataGridTextColumn Header="En Resguardo De" Binding="{Binding EncargadoActual}" Width="135" />
                                                 </DataGrid.Columns>
