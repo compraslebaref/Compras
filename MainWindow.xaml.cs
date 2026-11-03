@@ -525,7 +525,7 @@ public partial class MainWindow : FluentWindow
             if (CboFiltroUbicacion != null)
             {
                 string ubiFiltroPrevia = CboFiltroUbicacion.SelectedItem as string ?? "Todas las ubicaciones";
-                var opcionesFiltroUbi = ObtenerOpcionesFiltroUbicacionCatalogo();
+                var opcionesFiltroUbi = ObtenerOpcionesFiltroUbicacionCatalogo(productos);
                 CboFiltroUbicacion.ItemsSource = opcionesFiltroUbi;
                 CboFiltroUbicacion.SelectedItem = opcionesFiltroUbi.FirstOrDefault(u => u.Equals(ubiFiltroPrevia, StringComparison.OrdinalIgnoreCase)) ?? opcionesFiltroUbi[0];
             }
@@ -1657,11 +1657,12 @@ public partial class MainWindow : FluentWindow
         RefrescarCatalogoVisual();
     }
 
-    private static List<string> ObtenerOpcionesFiltroUbicacionCatalogo()
+    private static List<string> ObtenerOpcionesFiltroUbicacionCatalogo(IEnumerable<Producto>? productos = null)
     {
         var lista = new List<string>
         {
             "Todas las ubicaciones",
+            "🏢 Zona: Almacén General (Sin anaquel específico)",
             "⚠️ Sin ubicación asignada",
             "🧱 Zona: DETRAS-A (Detrás de A / Pared)",
             "🏗️ Zona: PISO (Piso / Exterior)",
@@ -1677,13 +1678,29 @@ public partial class MainWindow : FluentWindow
         // Agregar los 5 niveles individuales del Gabinete y las 54 posiciones de Anaqueles A–F
         foreach (var item in ObtenerCatalogoUbicacionesDesplegable())
         {
-            // DETRAS-A y PISO ya están como opciones de zona única arriba
-            if (item.StartsWith("DETRAS-A", StringComparison.OrdinalIgnoreCase) ||
+            // Almacén General, DETRAS-A y PISO ya están como opciones de zona única arriba
+            if (item.StartsWith("Almacén General", StringComparison.OrdinalIgnoreCase) ||
+                item.StartsWith("DETRAS-A", StringComparison.OrdinalIgnoreCase) ||
                 item.StartsWith("PISO", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
             lista.Add(item);
+        }
+
+        // Incluir cualquier otra ubicación personalizada que exista en los productos de la base de datos
+        if (productos != null)
+        {
+            var extras = productos
+                .Select(p => p.Ubicacion?.Trim() ?? string.Empty)
+                .Where(u => !string.IsNullOrWhiteSpace(u) && string.IsNullOrEmpty(ParsearCoordenadaAlmacen(u).Estante))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(u => u);
+
+            foreach (var extra in extras)
+            {
+                lista.Add(extra);
+            }
         }
 
         return lista;
@@ -1702,7 +1719,10 @@ public partial class MainWindow : FluentWindow
 
         var (estProd, cuadProd, _) = ParsearCoordenadaAlmacen(p.Ubicacion);
 
-        // Filtros por Zona completa (DETRAS-A, PISO, GABINETE completo o Anaquel A..F completo)
+        // Filtros por Zona completa (Almacén General, DETRAS-A, PISO, GABINETE completo o Anaquel A..F completo)
+        if (filtroUbi.Contains("Zona: Almacén General", StringComparison.OrdinalIgnoreCase))
+            return string.Equals(estProd, "ALMACEN-GENERAL", StringComparison.OrdinalIgnoreCase);
+
         if (filtroUbi.Contains("Zona: DETRAS-A", StringComparison.OrdinalIgnoreCase))
             return string.Equals(estProd, "DETRAS-A", StringComparison.OrdinalIgnoreCase);
 
@@ -9422,6 +9442,7 @@ public partial class MainWindow : FluentWindow
     {
         var lista = new List<string>
         {
+            "Almacén General — Sin anaquel específico (Pendiente de acomodar)",
             "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
             "PISO — Zona Piso / Exterior",
             "GABINETE-01 — Gabinete Nivel 1 (Inferior)",
@@ -9518,6 +9539,15 @@ public partial class MainWindow : FluentWindow
             .Replace("RACK ", "")
             .Trim();
 
+        // 0. Almacén General (sin anaquel específico asignado aún) -> Ubicación única sin más divisiones
+        if (raw.StartsWith("ALMACEN GENERAL", StringComparison.OrdinalIgnoreCase) ||
+            raw.StartsWith("ALMACÉN GENERAL", StringComparison.OrdinalIgnoreCase) ||
+            raw.StartsWith("ALMACEN-GENERAL", StringComparison.OrdinalIgnoreCase) ||
+            raw.StartsWith("ALMACÉN-GENERAL", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("ALMACEN-GENERAL", "01", "");
+        }
+
         // 1. Detrás de A (Entre Anaquel A y Pared) -> Ubicación única sin más divisiones
         string[] prefijosDetrasA = { "DETRAS-A", "DETRÁS-A", "DETRAS DE A", "DETRÁS DE A", "DETRAS A", "PARED-A", "PARED A" };
         foreach (var pref in prefijosDetrasA)
@@ -9604,7 +9634,8 @@ public partial class MainWindow : FluentWindow
         if (!string.Equals(parsed.Estante, estante, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (string.Equals(estante, "DETRAS-A", StringComparison.OrdinalIgnoreCase) ||
+        if (string.Equals(estante, "ALMACEN-GENERAL", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(estante, "DETRAS-A", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(estante, "PISO", StringComparison.OrdinalIgnoreCase))
             return true;
 
@@ -10008,6 +10039,11 @@ public partial class MainWindow : FluentWindow
         string ConstruirCoordenadaFinal()
         {
             string sub = ObtenerSubContenedorElegido();
+            if (string.Equals(estanteActual, "ALMACEN-GENERAL", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Almacén General";
+            }
+
             if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
             {
                 return string.IsNullOrEmpty(sub) ? "DETRAS-A" : $"DETRAS-A-{sub}";
@@ -10033,6 +10069,9 @@ public partial class MainWindow : FluentWindow
 
         string ObtenerDescripcionNivel(string cuad)
         {
+            if (string.Equals(estanteActual, "ALMACEN-GENERAL", StringComparison.OrdinalIgnoreCase))
+                return "Artículos registrados en Almacén General (sin anaquel específico asignado aún)";
+
             if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
                 return "Ubicación única detrás del Anaquel A (entre el anaquel y la pared)";
 
@@ -10093,9 +10132,9 @@ public partial class MainWindow : FluentWindow
 
         void RenderizarTodo()
         {
-            // 1. Renderizar botones de Anaqueles (A..F, DETRAS-A, GABINETE y PISO)
+            // 1. Renderizar botones de Anaqueles (A..F, DETRAS-A, GABINETE, PISO y ALMACEN-GENERAL)
             rackButtonsPanel.Children.Clear();
-            string[] estantes = { "A", "B", "C", "D", "E", "F", "DETRAS-A", "GABINETE", "PISO" };
+            string[] estantes = { "A", "B", "C", "D", "E", "F", "DETRAS-A", "GABINETE", "PISO", "ALMACEN-GENERAL" };
             foreach (var est in estantes)
             {
                 int cantProdEst = todosProductos.Count(p => CoincideConEstanteYCuadrante(p.Ubicacion, est, "TODOS"));
@@ -10107,6 +10146,7 @@ public partial class MainWindow : FluentWindow
                     "DETRAS-A" => $"🧱 Detrás de A / Pared ({cantProdEst + cantHerEst})",
                     "GABINETE" => $"🚪 Gabinete ({cantProdEst + cantHerEst})",
                     "PISO" => $"🏗️ Zona Piso / Ext ({cantProdEst + cantHerEst})",
+                    "ALMACEN-GENERAL" => $"🏢 Almacén General ({cantProdEst + cantHerEst})",
                     _ => $"🗄️ Anaquel {est} ({cantProdEst + cantHerEst})"
                 };
 
@@ -10130,7 +10170,7 @@ public partial class MainWindow : FluentWindow
                 btnEst.Click += (_, _) =>
                 {
                     estanteActual = estCopy;
-                    if (estanteActual is "DETRAS-A" or "PISO")
+                    if (estanteActual is "DETRAS-A" or "PISO" or "ALMACEN-GENERAL")
                         cuadranteActual = "01";
                     else if (estanteActual == "GABINETE" && cuadranteActual is not ("01" or "02" or "03" or "04" or "05" or "TODOS"))
                         cuadranteActual = "03";
@@ -10146,11 +10186,12 @@ public partial class MainWindow : FluentWindow
                 "DETRAS-A" => "Ubicación Única — Detrás de A (Entre Anaquel A y Pared, sin más divisiones)",
                 "GABINETE" => "Vista Frontal — Gabinete de Almacén (5 Niveles sin divisiones horizontales)",
                 "PISO" => "Ubicación Única — Zona PISO / Exterior (Sin más divisiones)",
+                "ALMACEN-GENERAL" => "Ubicación General — Almacén General (Sin anaquel específico asignado)",
                 _ => $"Vista Frontal Parado Frente al Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)"
             };
 
             // 2. Renderizar estructura visual según el tipo de ubicación:
-            //    - DETRAS-A y PISO: 1 sola celda completa (sin divisiones)
+            //    - DETRAS-A, PISO y ALMACEN-GENERAL: 1 sola celda completa (sin divisiones)
             //    - GABINETE: 5 niveles horizontales (Nivel 5 Superior down to Nivel 1 Inferior)
             //    - A..F: Matriz 3x3 (01..09)
             shelfGrid.Children.Clear();
@@ -10168,6 +10209,10 @@ public partial class MainWindow : FluentWindow
             else if (string.Equals(estanteActual, "PISO", StringComparison.OrdinalIgnoreCase))
             {
                 celdasRender.Add((0, 0, 3, 3, "01", "PISO", "Zona Única (Piso / Exterior)"));
+            }
+            else if (string.Equals(estanteActual, "ALMACEN-GENERAL", StringComparison.OrdinalIgnoreCase))
+            {
+                celdasRender.Add((0, 0, 3, 3, "01", "Almacén General", "Zona General (Por ubicar en anaquel)"));
             }
             else if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
             {
@@ -10430,6 +10475,7 @@ public partial class MainWindow : FluentWindow
                 "DETRAS-A" => "Detrás de A (Entre Anaquel y Pared)",
                 "GABINETE" => "Gabinete de Almacén",
                 "PISO" => "Zona Piso / Exterior",
+                "ALMACEN-GENERAL" => "Almacén General",
                 _ => $"Anaquel {estanteActual}"
             };
 
@@ -10437,6 +10483,7 @@ public partial class MainWindow : FluentWindow
             {
                 "DETRAS-A" => "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
                 "PISO" => "PISO — Zona Piso / Exterior",
+                "ALMACEN-GENERAL" => "Almacén General — Sin anaquel específico asignado",
                 "GABINETE" => cuadranteActual == "TODOS"
                     ? "Todo el Gabinete de Almacén (Niveles 1 a 5)"
                     : $"Gabinete de Almacén — Nivel {int.Parse(cuadranteActual)} (GABINETE-{cuadranteActual})",
