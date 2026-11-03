@@ -9331,8 +9331,10 @@ public partial class MainWindow : FluentWindow
             "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
             "PISO — Zona Piso / Exterior",
             "GABINETE-01 — Gabinete Nivel 1 (Inferior)",
-            "GABINETE-02 — Gabinete Nivel 2 (Medio)",
-            "GABINETE-03 — Gabinete Nivel 3 (Superior)"
+            "GABINETE-02 — Gabinete Nivel 2",
+            "GABINETE-03 — Gabinete Nivel 3 (Medio)",
+            "GABINETE-04 — Gabinete Nivel 4",
+            "GABINETE-05 — Gabinete Nivel 5 (Superior)"
         };
 
         string[] anaqueles = { "A", "B", "C", "D", "E", "F" };
@@ -9440,7 +9442,7 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        // 2. Gabinete de Almacén -> Solo 3 niveles (01 Inferior, 02 Medio, 03 Superior) sin más divisiones
+        // 2. Gabinete de Almacén -> 5 niveles (01 Inferior a 05 Superior) sin más divisiones
         if (raw.StartsWith("GABINETE", StringComparison.OrdinalIgnoreCase) || raw.StartsWith("GAB", StringComparison.OrdinalIgnoreCase))
         {
             string prefGab = raw.StartsWith("GABINETE", StringComparison.OrdinalIgnoreCase) ? "GABINETE" : "GAB";
@@ -9454,7 +9456,7 @@ public partial class MainWindow : FluentWindow
                 string tLimpio = tok.TrimStart('N', 'n');
                 if (int.TryParse(tLimpio, out int nGab) && nGab >= 1)
                 {
-                    int nivelGab = Math.Clamp(nGab, 1, 3);
+                    int nivelGab = Math.Clamp(nGab, 1, 5);
                     string subGab = pResto.Length >= 2 && pResto[^1] != tok ? pResto[^1] : "";
                     return ("GABINETE", nivelGab.ToString("00"), subGab);
                 }
@@ -9924,7 +9926,7 @@ public partial class MainWindow : FluentWindow
 
             if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
             {
-                string nivGab = cuadranteActual is "01" or "02" or "03" ? cuadranteActual : "01";
+                string nivGab = cuadranteActual is "01" or "02" or "03" or "04" or "05" ? cuadranteActual : "01";
                 return string.IsNullOrEmpty(sub) ? $"GABINETE-{nivGab}" : $"GABINETE-{nivGab}-{sub}";
             }
 
@@ -9947,10 +9949,12 @@ public partial class MainWindow : FluentWindow
             {
                 return cuad switch
                 {
-                    "03" => "Gabinete Nivel 3 (Superior) — Sin divisiones horizontales",
-                    "02" => "Gabinete Nivel 2 (Medio) — Sin divisiones horizontales",
+                    "05" => "Gabinete Nivel 5 (Superior) — Sin divisiones horizontales",
+                    "04" => "Gabinete Nivel 4 — Sin divisiones horizontales",
+                    "03" => "Gabinete Nivel 3 (Medio) — Sin divisiones horizontales",
+                    "02" => "Gabinete Nivel 2 — Sin divisiones horizontales",
                     "01" => "Gabinete Nivel 1 (Inferior) — Sin divisiones horizontales",
-                    _ => "Todos los 3 niveles del Gabinete de Almacén"
+                    _ => "Todos los 5 niveles del Gabinete de Almacén"
                 };
             }
 
@@ -10034,8 +10038,8 @@ public partial class MainWindow : FluentWindow
                     estanteActual = estCopy;
                     if (estanteActual is "DETRAS-A" or "PISO")
                         cuadranteActual = "01";
-                    else if (estanteActual == "GABINETE" && cuadranteActual is not ("01" or "02" or "03" or "TODOS"))
-                        cuadranteActual = "02";
+                    else if (estanteActual == "GABINETE" && cuadranteActual is not ("01" or "02" or "03" or "04" or "05" or "TODOS"))
+                        cuadranteActual = "03";
                     else if (cuadranteActual == "TODOS")
                         cuadranteActual = "05";
                     RenderizarTodo();
@@ -10046,16 +10050,21 @@ public partial class MainWindow : FluentWindow
             txtTituloAnaquel.Text = estanteActual switch
             {
                 "DETRAS-A" => "Ubicación Única — Detrás de A (Entre Anaquel A y Pared, sin más divisiones)",
-                "GABINETE" => "Vista Frontal — Gabinete de Almacén (3 Niveles sin divisiones horizontales)",
+                "GABINETE" => "Vista Frontal — Gabinete de Almacén (5 Niveles sin divisiones horizontales)",
                 "PISO" => "Ubicación Única — Zona PISO / Exterior (Sin más divisiones)",
                 _ => $"Vista Frontal Parado Frente al Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)"
             };
 
             // 2. Renderizar estructura visual según el tipo de ubicación:
             //    - DETRAS-A y PISO: 1 sola celda completa (sin divisiones)
-            //    - GABINETE: 3 niveles horizontales (Nivel 3 Superior, Nivel 2 Medio, Nivel 1 Inferior)
+            //    - GABINETE: 5 niveles horizontales (Nivel 5 Superior down to Nivel 1 Inferior)
             //    - A..F: Matriz 3x3 (01..09)
             shelfGrid.Children.Clear();
+            shelfGrid.RowDefinitions.Clear();
+            int totalFilasGrid = string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase) ? 5 : 3;
+            for (int r = 0; r < totalFilasGrid; r++)
+                shelfGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
             var celdasRender = new List<(int fila, int col, int rowSpan, int colSpan, string cuad, string coordLabel, string nivelCorto)>();
 
             if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
@@ -10068,9 +10077,11 @@ public partial class MainWindow : FluentWindow
             }
             else if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
             {
-                celdasRender.Add((0, 0, 1, 3, "03", "GABINETE-03", "Nivel 3 — Superior (Entrepaño completo)"));
-                celdasRender.Add((1, 0, 1, 3, "02", "GABINETE-02", "Nivel 2 — Medio (Entrepaño completo)"));
-                celdasRender.Add((2, 0, 1, 3, "01", "GABINETE-01", "Nivel 1 — Inferior (Entrepaño completo)"));
+                celdasRender.Add((0, 0, 1, 3, "05", "GABINETE-05", "Nivel 5 — Superior (Entrepaño completo)"));
+                celdasRender.Add((1, 0, 1, 3, "04", "GABINETE-04", "Nivel 4 — Medio-Alto (Entrepaño completo)"));
+                celdasRender.Add((2, 0, 1, 3, "03", "GABINETE-03", "Nivel 3 — Medio (Entrepaño completo)"));
+                celdasRender.Add((3, 0, 1, 3, "02", "GABINETE-02", "Nivel 2 — Medio-Bajo (Entrepaño completo)"));
+                celdasRender.Add((4, 0, 1, 3, "01", "GABINETE-01", "Nivel 1 — Inferior (Entrepaño completo)"));
             }
             else
             {
@@ -10112,13 +10123,16 @@ public partial class MainWindow : FluentWindow
                 int hersPrestadas = hersCuad.Count(h => string.Equals(h.Estado, "En Préstamo", StringComparison.OrdinalIgnoreCase));
 
                 // Colores por nivel ergonómico
-                Color headerBg = fila switch
+                int bandaColor = totalFilasGrid == 5
+                    ? (fila == 0 ? 0 : (fila <= 2 ? 1 : 2))
+                    : fila;
+                Color headerBg = bandaColor switch
                 {
                     0 => Color.FromRgb(254, 243, 199), // Superior: Ámbar
                     1 => Color.FromRgb(219, 234, 254), // Medio: Azul
                     _ => Color.FromRgb(220, 252, 231)  // Inferior: Verde
                 };
-                Color headerFg = fila switch
+                Color headerFg = bandaColor switch
                 {
                     0 => Color.FromRgb(146, 64, 14),
                     1 => Color.FromRgb(30, 64, 175),
@@ -10330,7 +10344,7 @@ public partial class MainWindow : FluentWindow
                 "DETRAS-A" => "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
                 "PISO" => "PISO — Zona Piso / Exterior",
                 "GABINETE" => cuadranteActual == "TODOS"
-                    ? "Todo el Gabinete de Almacén (Niveles 1 a 3)"
+                    ? "Todo el Gabinete de Almacén (Niveles 1 a 5)"
                     : $"Gabinete de Almacén — Nivel {int.Parse(cuadranteActual)} (GABINETE-{cuadranteActual})",
                 _ => cuadranteActual == "TODOS"
                     ? $"Todo {nombreEstanteMostrar} ({estanteActual}-01 a {estanteActual}-09)"
