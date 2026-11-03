@@ -9329,6 +9329,7 @@ public partial class MainWindow : FluentWindow
         var lista = new List<string>
         {
             "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
+            "PISO — Zona Piso / Exterior",
             "GABINETE-01 — Gabinete Nivel 1 (Inferior)",
             "GABINETE-02 — Gabinete Nivel 2 (Medio)",
             "GABINETE-03 — Gabinete Nivel 3 (Superior)"
@@ -9343,9 +9344,6 @@ public partial class MainWindow : FluentWindow
                 lista.Add($"{est}-{i:00} — Anaquel {est} (Nivel {nivel})");
             }
         }
-
-        for (int i = 1; i <= 9; i++)
-            lista.Add($"PISO-{i:00} — Zona Piso / Tapanco / Exterior (Posición {i:00})");
 
         return lista;
     }
@@ -9464,12 +9462,26 @@ public partial class MainWindow : FluentWindow
             return ("GABINETE", "01", "");
         }
 
-        // 3. Buscar patrón PISO-01 o A-01..F-09 (con o sin subcontenedor -G1 / -C1)
+        // 3. Zona PISO / Exterior -> Ubicación única sin más divisiones
+        if (raw.StartsWith("PISO", StringComparison.OrdinalIgnoreCase))
+        {
+            string resto = raw["PISO".Length..].Trim('-', ' ', '/');
+            string subPiso = "";
+            if (!string.IsNullOrEmpty(resto))
+            {
+                var pResto = resto.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                var tokSub = pResto.FirstOrDefault(t => t.StartsWith("G", StringComparison.OrdinalIgnoreCase) || t.StartsWith("C", StringComparison.OrdinalIgnoreCase));
+                if (tokSub != null) subPiso = tokSub;
+            }
+            return ("PISO", "01", subPiso);
+        }
+
+        // 4. Buscar patrón A-01..F-09 (con o sin subcontenedor -G1 / -C1)
         var partes = raw.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
         if (partes.Length >= 2)
         {
             string est = partes[0];
-            if (est is "A" or "B" or "C" or "D" or "E" or "F" or "PISO")
+            if (est is "A" or "B" or "C" or "D" or "E" or "F")
             {
                 if (int.TryParse(partes[1], out int num) && num >= 1 && num <= 9)
                 {
@@ -9484,10 +9496,6 @@ public partial class MainWindow : FluentWindow
             return (partes[0], "01", "");
         }
 
-        // Si solo puso "PISO"
-        if (raw.StartsWith("PISO", StringComparison.OrdinalIgnoreCase))
-            return ("PISO", "01", "");
-
         return ("", "", "");
     }
 
@@ -9500,7 +9508,8 @@ public partial class MainWindow : FluentWindow
         if (!string.Equals(parsed.Estante, estante, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (string.Equals(estante, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(estante, "DETRAS-A", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(estante, "PISO", StringComparison.OrdinalIgnoreCase))
             return true;
 
         if (string.IsNullOrWhiteSpace(cuadrante) || cuadrante == "TODOS")
@@ -9908,6 +9917,11 @@ public partial class MainWindow : FluentWindow
                 return string.IsNullOrEmpty(sub) ? "DETRAS-A" : $"DETRAS-A-{sub}";
             }
 
+            if (string.Equals(estanteActual, "PISO", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrEmpty(sub) ? "PISO" : $"PISO-{sub}";
+            }
+
             if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
             {
                 string nivGab = cuadranteActual is "01" or "02" or "03" ? cuadranteActual : "01";
@@ -9925,6 +9939,9 @@ public partial class MainWindow : FluentWindow
         {
             if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
                 return "Ubicación única detrás del Anaquel A (entre el anaquel y la pared)";
+
+            if (string.Equals(estanteActual, "PISO", StringComparison.OrdinalIgnoreCase))
+                return "Ubicación única en Zona Piso / Exterior (sin más divisiones)";
 
             if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
             {
@@ -10015,7 +10032,7 @@ public partial class MainWindow : FluentWindow
                 btnEst.Click += (_, _) =>
                 {
                     estanteActual = estCopy;
-                    if (estanteActual == "DETRAS-A")
+                    if (estanteActual is "DETRAS-A" or "PISO")
                         cuadranteActual = "01";
                     else if (estanteActual == "GABINETE" && cuadranteActual is not ("01" or "02" or "03" or "TODOS"))
                         cuadranteActual = "02";
@@ -10030,20 +10047,24 @@ public partial class MainWindow : FluentWindow
             {
                 "DETRAS-A" => "Ubicación Única — Detrás de A (Entre Anaquel A y Pared, sin más divisiones)",
                 "GABINETE" => "Vista Frontal — Gabinete de Almacén (3 Niveles sin divisiones horizontales)",
-                "PISO" => "Vista de Posiciones — Zona PISO / Tapanco / Exterior (PISO-01 a PISO-09)",
+                "PISO" => "Ubicación Única — Zona PISO / Exterior (Sin más divisiones)",
                 _ => $"Vista Frontal Parado Frente al Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)"
             };
 
             // 2. Renderizar estructura visual según el tipo de ubicación:
-            //    - DETRAS-A: 1 sola celda completa (sin divisiones)
+            //    - DETRAS-A y PISO: 1 sola celda completa (sin divisiones)
             //    - GABINETE: 3 niveles horizontales (Nivel 3 Superior, Nivel 2 Medio, Nivel 1 Inferior)
-            //    - A..F y PISO: Matriz 3x3 (01..09)
+            //    - A..F: Matriz 3x3 (01..09)
             shelfGrid.Children.Clear();
             var celdasRender = new List<(int fila, int col, int rowSpan, int colSpan, string cuad, string coordLabel, string nivelCorto)>();
 
             if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
             {
                 celdasRender.Add((0, 0, 3, 3, "01", "DETRAS-A", "Zona Única (Entre Anaquel A y Pared)"));
+            }
+            else if (string.Equals(estanteActual, "PISO", StringComparison.OrdinalIgnoreCase))
+            {
+                celdasRender.Add((0, 0, 3, 3, "01", "PISO", "Zona Única (Piso / Exterior)"));
             }
             else if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
             {
@@ -10083,6 +10104,7 @@ public partial class MainWindow : FluentWindow
                 string coordLabel = celda.coordLabel;
                 string nivelCorto = celda.nivelCorto;
                 bool seleccionado = string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(estanteActual, "PISO", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(cuadranteActual, cuad, StringComparison.OrdinalIgnoreCase);
 
                 var prodsCuad = todosProductos.Where(p => CoincideConEstanteYCuadrante(p.Ubicacion, estanteActual, cuad)).ToList();
@@ -10306,6 +10328,7 @@ public partial class MainWindow : FluentWindow
             string etiquetaPos = estanteActual switch
             {
                 "DETRAS-A" => "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
+                "PISO" => "PISO — Zona Piso / Exterior",
                 "GABINETE" => cuadranteActual == "TODOS"
                     ? "Todo el Gabinete de Almacén (Niveles 1 a 3)"
                     : $"Gabinete de Almacén — Nivel {int.Parse(cuadranteActual)} (GABINETE-{cuadranteActual})",
