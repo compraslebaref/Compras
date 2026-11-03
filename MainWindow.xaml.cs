@@ -78,6 +78,7 @@ public partial class MainWindow : FluentWindow
         public string ProyectoNombre { get; set; } = string.Empty;
         public string FechaPromesa { get; set; } = string.Empty;
         public string EstadoDevolucion { get; set; } = string.Empty;
+        public string GrupoValeResumen { get; set; } = string.Empty;
         public PrestamoHerramienta PrestamoOriginal { get; set; } = null!;
     }
 
@@ -1152,9 +1153,8 @@ public partial class MainWindow : FluentWindow
             {
                 DgPrestamosHerramientas.SelectedItem = match;
                 DgPrestamosHerramientas.ScrollIntoView(match);
-                System.Windows.MessageBox.Show(this,
-                    $"Resguardo localizado: {match.FolioVale}\nHerramienta: {match.CodigoIndividual} ({match.HerramientaDescripcion})\nEncargado: {match.EncargadoNombre}\n\nSeleccione el estado de retorno (Bueno / Dañado / Extraviado) y haga clic en 'Registrar Devolución'.",
-                    "Escaneo de Herramienta / Resguardo", MessageBoxButton.OK, MessageBoxImage.Information);
+                string? herEspecifica = code.StartsWith("HER-", StringComparison.OrdinalIgnoreCase) ? match.CodigoIndividual : null;
+                MostrarModalDevolucionPrestamoHerramienta(match.PrestamoOriginal, herEspecifica);
                 return;
             }
 
@@ -1216,13 +1216,13 @@ public partial class MainWindow : FluentWindow
             {
                 CambiarSeccion(5);
                 RefrescarAlmacenPosYPrestamos();
-                var filaMov = DgMovimientosAlmacen.Items.Cast<MovimientoAlmacenFila>().FirstOrDefault(m => m.TipoMovimiento == "SALIDA" && m.Folio == sal.Folio);
+                var filaMov = DgMovimientosAlmacen.Items.Cast<MovimientoAlmacenFila>().FirstOrDefault(m => m.Folio == sal.Folio);
                 if (filaMov != null)
                 {
                     DgMovimientosAlmacen.SelectedItem = filaMov;
                     DgMovimientosAlmacen.ScrollIntoView(filaMov);
                 }
-                BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, sal);
+                MostrarModalDevolucionMaterialSalida(sal);
                 return;
             }
         }
@@ -6347,6 +6347,13 @@ public partial class MainWindow : FluentWindow
         var filas = new List<PrestamoVistaFila>();
         foreach (var pre in prestamos)
         {
+            int totalHer = pre.Partidas.Count;
+            int pendHer = pre.Partidas.Count(x => string.Equals(x.EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase));
+            string estadoGrupo = pendHer > 0
+                ? $"⏳ {pendHer} pendiente(s) de {totalHer}"
+                : $"✔ Devuelto ({totalHer}/{totalHer})";
+            string resumenGrupo = $"📄 {pre.Folio} — Recibió: {pre.PersonaRecibeEfectiva} ({pre.DepartamentoNombre}) | Proy: {pre.ProyectoNombre} [{estadoGrupo}]";
+
             foreach (var part in pre.Partidas)
             {
                 filas.Add(new PrestamoVistaFila
@@ -6362,6 +6369,7 @@ public partial class MainWindow : FluentWindow
                     ProyectoNombre = pre.ProyectoNombre,
                     FechaPromesa = pre.FechaCompromiso,
                     EstadoDevolucion = part.EstadoDevolucion,
+                    GrupoValeResumen = resumenGrupo,
                     PrestamoOriginal = pre
                 });
             }
@@ -6725,6 +6733,13 @@ public partial class MainWindow : FluentWindow
         return false;
     }
 
+    private void AsignarItemsPrestamosConAgrupacion(List<PrestamoVistaFila> lista)
+    {
+        var cvs = new System.Windows.Data.CollectionViewSource { Source = lista };
+        cvs.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(PrestamoVistaFila.GrupoValeResumen)));
+        DgPrestamosHerramientas.ItemsSource = cvs.View;
+    }
+
     private void AplicarFiltroAlmacen()
     {
         string raw = TxtBuscarAlmacen?.Text?.Trim() ?? string.Empty;
@@ -6734,7 +6749,7 @@ public partial class MainWindow : FluentWindow
 
         if (string.IsNullOrWhiteSpace(raw))
         {
-            DgPrestamosHerramientas.ItemsSource = _todosPrestamosFilas;
+            AsignarItemsPrestamosConAgrupacion(_todosPrestamosFilas);
             DgMovimientosAlmacen.ItemsSource = _todosMovimientosAlmacen;
             return;
         }
@@ -6759,7 +6774,7 @@ public partial class MainWindow : FluentWindow
             m.ProyectoNombre.Contains(raw, StringComparison.OrdinalIgnoreCase) ||
             m.DetalleResumen.Contains(raw, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        DgPrestamosHerramientas.ItemsSource = prestamosFiltrados;
+        AsignarItemsPrestamosConAgrupacion(prestamosFiltrados);
         if (prestamosFiltrados.Count == 1)
             DgPrestamosHerramientas.SelectedItem = prestamosFiltrados[0];
 
@@ -7319,28 +7334,405 @@ public partial class MainWindow : FluentWindow
 
     private void BtnRegistrarDevolucionHerramienta_Click(object sender, RoutedEventArgs e)
     {
-        if (DgPrestamosHerramientas.SelectedItem is not PrestamoVistaFila fila)
+        if (DgPrestamosHerramientas.SelectedItem is PrestamoVistaFila fila)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione en la tabla la herramienta en préstamo que desea devolver (o escanee el código PRE-xxxx / HER-xxxx).", "Seleccione un préstamo", MessageBoxButton.OK, MessageBoxImage.Information);
+            MostrarModalDevolucionPrestamoHerramienta(fila.PrestamoOriginal, null);
             return;
         }
 
-        string estado = (CboEstadoRetornoHerramienta.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Bueno (Completo)";
-        DatabaseService.DevolverHerramientaPartida(fila.PrestamoPartidaId, fila.HerramientaId, fila.PrestamoId, estado, TxtObsRetornoHerramienta.Text);
-        TxtObsRetornoHerramienta.Clear();
-        CargarTodoElSistema();
+        var primerActivo = _todosPrestamosFilas.FirstOrDefault(f => f.EstadoDevolucion == "Pendiente")?.PrestamoOriginal
+                           ?? _todosPrestamosFilas.FirstOrDefault()?.PrestamoOriginal;
+        MostrarModalDevolucionPrestamoHerramienta(primerActivo, null);
+    }
 
-        var prestamoActualizado = DatabaseService.ObtenerPrestamosHerramienta().FirstOrDefault(p => p.Id == fila.PrestamoId);
-        if (prestamoActualizado != null)
+    private void DgPrestamosHerramientas_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DgPrestamosHerramientas.SelectedItem is PrestamoVistaFila fila)
         {
-            BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, prestamoActualizado);
+            MostrarModalDevolucionPrestamoHerramienta(fila.PrestamoOriginal, null);
         }
-        else
+    }
+
+    private void HeaderGrupoPrestamo_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string grupoNombre })
+        {
+            var fila = _todosPrestamosFilas.FirstOrDefault(f => string.Equals(f.GrupoValeResumen, grupoNombre, StringComparison.Ordinal));
+            if (fila != null)
+            {
+                MostrarModalDevolucionPrestamoHerramienta(fila.PrestamoOriginal, null);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void BtnAbrirDevolucionGrupoPrestamo_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string grupoNombre })
+        {
+            var fila = _todosPrestamosFilas.FirstOrDefault(f => string.Equals(f.GrupoValeResumen, grupoNombre, StringComparison.Ordinal));
+            if (fila != null)
+            {
+                MostrarModalDevolucionPrestamoHerramienta(fila.PrestamoOriginal, null);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void DgMovimientosAlmacen_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DgMovimientosAlmacen.SelectedItem is MovimientoAlmacenFila filaMov)
+        {
+            if (filaMov.SalidaOriginal != null)
+            {
+                var sal = DatabaseService.ObtenerSalidasAlmacen().FirstOrDefault(s => s.Id == filaMov.SalidaOriginal.Id) ?? filaMov.SalidaOriginal;
+                MostrarModalDevolucionMaterialSalida(sal);
+            }
+            else
+            {
+                AbrirVistaPreviaMovimientoAlmacen(filaMov);
+            }
+        }
+    }
+
+    private void MostrarModalDevolucionPrestamoHerramienta(PrestamoHerramienta? prestamoPreseleccionado, string? codigoHerEscaneado = null)
+    {
+        var todosPrestamos = DatabaseService.ObtenerPrestamosHerramienta();
+        if (todosPrestamos.Count == 0)
         {
             System.Windows.MessageBox.Show(this,
-                $"Devolución registrada para {fila.CodigoIndividual} con estado '{estado}'.",
-                "Herramienta Devuelta", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Aún no existen Vales de Préstamo de Herramienta (PRE-xxxx) registrados en el sistema.",
+                "Sin préstamos registrados", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
         }
+
+        string estadoGlobalUI = (CboEstadoRetornoHerramienta?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Bueno (Completo)";
+        string obsGlobalUI = TxtObsRetornoHerramienta?.Text?.Trim() ?? string.Empty;
+
+        var win = new Window
+        {
+            Title = "Devolución Agrupada de Préstamo de Herramientas (PRE-xxxx)",
+            Width = 940,
+            Height = 580,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+        };
+
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "🔧 Devolución Agrupada de Herramientas por Vale de Resguardo (PRE-xxxx)",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+        });
+        topPanel.Children.Add(new TextBlock
+        {
+            Text = "Marque con ☑ las herramientas que SÍ regresaron hoy y desmarque (☐) las que NO llegaron (seguirán pendientes en resguardo). Puede indicar el estado individual de cada pieza:",
+            FontSize = 11.5,
+            Foreground = Brushes.DimGray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var selGrid = new Grid();
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        selGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        selGrid.Children.Add(new TextBlock
+        {
+            Text = "Vale de Préstamo (PRE-xxxx):",
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+
+        var cboPrestamos = new ComboBox
+        {
+            Margin = new Thickness(0, 0, 8, 0),
+            ItemsSource = todosPrestamos
+        };
+        Grid.SetColumn(cboPrestamos, 1);
+        selGrid.Children.Add(cboPrestamos);
+
+        var btnMarcarTodas = new System.Windows.Controls.Button
+        {
+            Content = "☑ Llegaron Todas (Bueno)",
+            Padding = new Thickness(10, 5, 10, 5),
+            Margin = new Thickness(0, 0, 6, 0),
+            FontWeight = FontWeights.SemiBold,
+            Cursor = Cursors.Hand
+        };
+        Grid.SetColumn(btnMarcarTodas, 2);
+        selGrid.Children.Add(btnMarcarTodas);
+
+        var btnDesmarcarTodas = new System.Windows.Controls.Button
+        {
+            Content = "☐ Desmarcar Todas",
+            Padding = new Thickness(10, 5, 10, 5),
+            Cursor = Cursors.Hand
+        };
+        Grid.SetColumn(btnDesmarcarTodas, 3);
+        selGrid.Children.Add(btnDesmarcarTodas);
+
+        topPanel.Children.Add(selGrid);
+        Grid.SetRow(topPanel, 0);
+        root.Children.Add(topPanel);
+
+        var infoBorder = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var txtInfoPrestamo = new TextBlock
+        {
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            Text = "Seleccione un vale de préstamo..."
+        };
+        infoBorder.Child = txtInfoPrestamo;
+        Grid.SetRow(infoBorder, 1);
+        root.Children.Add(infoBorder);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            Background = Brushes.White,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+
+        var colCheck = new DataGridTemplateColumn { Header = "☑ ¿Llegó Hoy?", Width = 105 };
+        var chkFactory = new FrameworkElementFactory(typeof(CheckBox));
+        chkFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoDevolver")
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+        });
+        chkFactory.SetBinding(UIElement.IsEnabledProperty, new System.Windows.Data.Binding("EstaPendienteDevolucion"));
+        chkFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        chkFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        colCheck.CellTemplate = new DataTemplate { VisualTree = chkFactory };
+        dg.Columns.Add(colCheck);
+
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), IsReadOnly = true, Width = 95 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Herramienta", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Marca / Modelo", Binding = new System.Windows.Data.Binding("MarcaModelo"), IsReadOnly = true, Width = 135 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Estatus Actual", Binding = new System.Windows.Data.Binding("EstadoDevolucion"), IsReadOnly = true, Width = 115 });
+
+        var estadosRetorno = new[] { "Bueno (Completo)", "Incompleto / Falta Pieza", "Dañado", "Extraviado" };
+        var colEstado = new DataGridTemplateColumn { Header = "Estado en que Regresa", Width = 165 };
+        var cboEstFactory = new FrameworkElementFactory(typeof(ComboBox));
+        cboEstFactory.SetValue(ItemsControl.ItemsSourceProperty, estadosRetorno);
+        cboEstFactory.SetBinding(System.Windows.Controls.Primitives.Selector.SelectedItemProperty, new System.Windows.Data.Binding("EstadoRetornoSeleccionado")
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+        });
+        cboEstFactory.SetBinding(UIElement.IsEnabledProperty, new System.Windows.Data.Binding("EstaPendienteDevolucion"));
+        cboEstFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2));
+        colEstado.CellTemplate = new DataTemplate { VisualTree = cboEstFactory };
+        dg.Columns.Add(colEstado);
+
+        dg.Columns.Add(new DataGridTextColumn
+        {
+            Header = "✏️ Observaciones / Incidencia",
+            Binding = new System.Windows.Data.Binding("ObservacionesRetorno") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged },
+            IsReadOnly = false,
+            Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+        });
+
+        Grid.SetRow(dg, 2);
+        root.Children.Add(dg);
+
+        var obsStack = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        obsStack.Children.Add(new TextBlock
+        {
+            Text = "Nota general de recepción (se aplicará a las herramientas que no tengan observación individual):",
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.DarkSlateGray,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        var txtObsGeneral = new System.Windows.Controls.TextBox
+        {
+            Padding = new Thickness(8, 6, 8, 6),
+            Text = !string.IsNullOrWhiteSpace(obsGlobalUI) ? obsGlobalUI : "Devolución recibida en almacén."
+        };
+        obsStack.Children.Add(txtObsGeneral);
+        Grid.SetRow(obsStack, 3);
+        root.Children.Add(obsStack);
+
+        var bottomDock = new DockPanel();
+        var btnSoloImprimir = new System.Windows.Controls.Button
+        {
+            Content = "🖨️ Solo Ver / Reimprimir Vale",
+            Padding = new Thickness(12, 7, 12, 7),
+            Cursor = Cursors.Hand
+        };
+        DockPanel.SetDock(btnSoloImprimir, Dock.Left);
+        bottomDock.Children.Add(btnSoloImprimir);
+
+        var bottomPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancelar = new System.Windows.Controls.Button
+        {
+            Content = "Cancelar",
+            Padding = new Thickness(14, 7, 14, 7),
+            Margin = new Thickness(0, 0, 8, 0),
+            Cursor = Cursors.Hand
+        };
+        var btnConfirmar = new System.Windows.Controls.Button
+        {
+            Content = "✅ Registrar Devolución de Seleccionadas (☑) e Imprimir",
+            Padding = new Thickness(16, 7, 16, 7),
+            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.Bold,
+            Cursor = Cursors.Hand
+        };
+        bottomPanel.Children.Add(btnCancelar);
+        bottomPanel.Children.Add(btnConfirmar);
+        bottomDock.Children.Add(bottomPanel);
+        Grid.SetRow(bottomDock, 4);
+        root.Children.Add(bottomDock);
+
+        void CargarPartidasDePrestamo(PrestamoHerramienta? pre)
+        {
+            if (pre == null)
+            {
+                txtInfoPrestamo.Text = "Seleccione un vale de préstamo...";
+                dg.ItemsSource = null;
+                return;
+            }
+
+            foreach (var p in pre.Partidas)
+            {
+                if (p.EstaPendienteDevolucion)
+                {
+                    p.SeleccionadoDevolver = string.IsNullOrWhiteSpace(codigoHerEscaneado) ||
+                                             CoincideFolioFlexible(p.CodigoIndividual, codigoHerEscaneado);
+                    p.EstadoRetornoSeleccionado = estadoGlobalUI;
+                    p.ObservacionesRetorno = obsGlobalUI;
+                }
+                else
+                {
+                    p.SeleccionadoDevolver = false;
+                    p.EstadoRetornoSeleccionado = p.EstadoDevolucion;
+                    p.ObservacionesRetorno = p.Observaciones;
+                }
+            }
+
+            txtInfoPrestamo.Text = $"Folio: {pre.Folio}  |  Recibió: {pre.PersonaRecibeEfectiva} ({pre.DepartamentoNombre})  |  Proyecto: {pre.ProyectoNombre}  |  Fecha Compromiso: {pre.FechaCompromiso}  |  Pendientes: {pre.PendientesDevolver} de {pre.TotalHerramientas}";
+            dg.ItemsSource = null;
+            dg.ItemsSource = pre.Partidas;
+        }
+
+        cboPrestamos.SelectionChanged += (_, _) =>
+        {
+            codigoHerEscaneado = null;
+            CargarPartidasDePrestamo(cboPrestamos.SelectedItem as PrestamoHerramienta);
+        };
+
+        btnMarcarTodas.Click += (_, _) =>
+        {
+            if (cboPrestamos.SelectedItem is PrestamoHerramienta pre)
+            {
+                foreach (var p in pre.Partidas.Where(x => x.EstaPendienteDevolucion))
+                {
+                    p.SeleccionadoDevolver = true;
+                    p.EstadoRetornoSeleccionado = "Bueno (Completo)";
+                }
+                dg.Items.Refresh();
+            }
+        };
+
+        btnDesmarcarTodas.Click += (_, _) =>
+        {
+            if (cboPrestamos.SelectedItem is PrestamoHerramienta pre)
+            {
+                foreach (var p in pre.Partidas)
+                    p.SeleccionadoDevolver = false;
+                dg.Items.Refresh();
+            }
+        };
+
+        btnSoloImprimir.Click += (_, _) =>
+        {
+            if (cboPrestamos.SelectedItem is PrestamoHerramienta pre)
+            {
+                win.Close();
+                BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, pre);
+            }
+        };
+
+        btnCancelar.Click += (_, _) => win.Close();
+
+        btnConfirmar.Click += (_, _) =>
+        {
+            dg.CommitEdit(DataGridEditingUnit.Cell, true);
+            dg.CommitEdit(DataGridEditingUnit.Row, true);
+
+            if (cboPrestamos.SelectedItem is not PrestamoHerramienta preSel)
+            {
+                System.Windows.MessageBox.Show(win, "Seleccione un Vale de Préstamo (PRE-xxxx).", "Falta vale", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var seleccionadas = preSel.Partidas
+                .Where(p => p.EstaPendienteDevolucion && p.SeleccionadoDevolver)
+                .ToList();
+
+            if (seleccionadas.Count == 0)
+            {
+                System.Windows.MessageBox.Show(win,
+                    "Marque con ☑ al menos una herramienta pendiente que haya regresado hoy (o use '🖨️ Solo Ver / Reimprimir Vale' si solo desea consultar el documento).",
+                    "Sin herramientas marcadas", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string obsGen = txtObsGeneral.Text.Trim();
+            foreach (var part in seleccionadas)
+            {
+                string obsFinal = !string.IsNullOrWhiteSpace(part.ObservacionesRetorno) ? part.ObservacionesRetorno.Trim() : obsGen;
+                DatabaseService.DevolverHerramientaPartida(part.Id, part.HerramientaActivoId, preSel.Id, part.EstadoRetornoSeleccionado, obsFinal);
+            }
+
+            TxtObsRetornoHerramienta?.Clear();
+            CargarTodoElSistema();
+            win.Close();
+
+            var prestamoActualizado = DatabaseService.ObtenerPrestamosHerramienta().FirstOrDefault(p => p.Id == preSel.Id);
+            if (prestamoActualizado != null)
+            {
+                BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, prestamoActualizado);
+            }
+        };
+
+        var inicial = prestamoPreseleccionado != null
+            ? todosPrestamos.FirstOrDefault(p => p.Id == prestamoPreseleccionado.Id)
+            : todosPrestamos.FirstOrDefault(p => p.PendientesDevolver > 0) ?? todosPrestamos.FirstOrDefault();
+
+        cboPrestamos.SelectedItem = inicial;
+        CargarPartidasDePrestamo(inicial);
+
+        win.Content = root;
+        win.ShowDialog();
     }
 
     private void BtnReimprimirValePrestamo_Click(object sender, RoutedEventArgs e)
@@ -7514,13 +7906,27 @@ public partial class MainWindow : FluentWindow
             Background = Brushes.White,
             Margin = new Thickness(0, 0, 0, 10)
         };
-        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 90 });
+
+        var colCheckMat = new DataGridTemplateColumn { Header = "☑ ¿Regresó?", Width = 95 };
+        var chkMatFactory = new FrameworkElementFactory(typeof(CheckBox));
+        chkMatFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoDevolver")
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+        });
+        chkMatFactory.SetBinding(UIElement.IsEnabledProperty, new System.Windows.Data.Binding("TienePendientePorDevolver"));
+        chkMatFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        chkMatFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        colCheckMat.CellTemplate = new DataTemplate { VisualTree = chkMatFactory };
+        dg.Columns.Add(colCheckMat);
+
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 85 });
         dg.Columns.Add(new DataGridTextColumn { Header = "Material / Artículo", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 75 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Entregado", Binding = new System.Windows.Data.Binding("CantidadEntregada") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 90 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Ya Devuelto", Binding = new System.Windows.Data.Binding("CantidadDevuelta") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 95 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Pendiente Máx.", Binding = new System.Windows.Data.Binding("CantidadPendienteDevolver") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 105 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Devolver Hoy", Binding = new System.Windows.Data.Binding("CantidadDevolverAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 115 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 70 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Entregado", Binding = new System.Windows.Data.Binding("CantidadEntregada") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 85 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Ya Devuelto", Binding = new System.Windows.Data.Binding("CantidadDevuelta") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 90 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Pendiente Máx.", Binding = new System.Windows.Data.Binding("CantidadPendienteDevolver") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 100 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Cuánto Regresó Hoy", Binding = new System.Windows.Data.Binding("CantidadDevolverAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 135 });
 
         Grid.SetRow(dg, 2);
         root.Children.Add(dg);
@@ -7545,6 +7951,16 @@ public partial class MainWindow : FluentWindow
         root.Children.Add(obsStack);
 
         // Botones inferiores
+        var bottomDock = new DockPanel();
+        var btnSoloReimprimir = new System.Windows.Controls.Button
+        {
+            Content = "🖨️ Solo Ver / Reimprimir Vale Original",
+            Padding = new Thickness(12, 7, 12, 7),
+            Cursor = Cursors.Hand
+        };
+        DockPanel.SetDock(btnSoloReimprimir, Dock.Left);
+        bottomDock.Children.Add(btnSoloReimprimir);
+
         var bottomPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var btnCancelar = new System.Windows.Controls.Button
         {
@@ -7564,8 +7980,18 @@ public partial class MainWindow : FluentWindow
         };
         bottomPanel.Children.Add(btnCancelar);
         bottomPanel.Children.Add(btnConfirmar);
-        Grid.SetRow(bottomPanel, 4);
-        root.Children.Add(bottomPanel);
+        bottomDock.Children.Add(bottomPanel);
+        Grid.SetRow(bottomDock, 4);
+        root.Children.Add(bottomDock);
+
+        btnSoloReimprimir.Click += (_, _) =>
+        {
+            if (cboSalidas.SelectedItem is SalidaAlmacen sal)
+            {
+                win.Close();
+                BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, sal);
+            }
+        };
 
         void CargarPartidasDeSalida(SalidaAlmacen? sal)
         {

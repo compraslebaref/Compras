@@ -599,10 +599,16 @@ public class SalidaAlmacen
             return $"Devuelto Parcial ({TotalUnidadesDevueltas:0.##}/{TotalUnidadesEntregadas:0.##})";
         }
     }
+
+    public override string ToString() =>
+        $"{Folio} — Recibió: {PersonaRecibeEfectiva} ({DepartamentoNombre}) | Proy: {ProyectoNombre} [{EstatusDevolucionTexto}]";
 }
 
-public class SalidaPartida
+public class SalidaPartida : INotifyPropertyChanged
 {
+    private decimal _cantidadDevolverAhora;
+    private bool _seleccionadoDevolver;
+
     public int Id { get; set; }
     public int SalidaAlmacenId { get; set; }
     public int ProductoId { get; set; }
@@ -612,10 +618,56 @@ public class SalidaPartida
     public decimal CantidadDevuelta { get; set; }
     public decimal CantidadNetaConsumida => Math.Max(0m, CantidadEntregada - CantidadDevuelta);
     public decimal CantidadPendienteDevolver => Math.Max(0m, CantidadEntregada - CantidadDevuelta);
-    public decimal CantidadDevolverAhora { get; set; }
+    public bool TienePendientePorDevolver => CantidadPendienteDevolver > 0m;
+
+    public bool SeleccionadoDevolver
+    {
+        get => _seleccionadoDevolver;
+        set
+        {
+            if (_seleccionadoDevolver != value)
+            {
+                _seleccionadoDevolver = value;
+                if (_seleccionadoDevolver && _cantidadDevolverAhora <= 0m && CantidadPendienteDevolver > 0m)
+                {
+                    _cantidadDevolverAhora = CantidadPendienteDevolver;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadDevolverAhora)));
+                }
+                else if (!_seleccionadoDevolver && _cantidadDevolverAhora > 0m)
+                {
+                    _cantidadDevolverAhora = 0m;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadDevolverAhora)));
+                }
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoDevolver)));
+            }
+        }
+    }
+
+    public decimal CantidadDevolverAhora
+    {
+        get => _cantidadDevolverAhora;
+        set
+        {
+            decimal ajustado = Math.Clamp(value, 0m, CantidadPendienteDevolver > 0m ? CantidadPendienteDevolver : Math.Max(0m, value));
+            if (_cantidadDevolverAhora != ajustado)
+            {
+                _cantidadDevolverAhora = ajustado;
+                bool debeEstarSel = _cantidadDevolverAhora > 0m;
+                if (_seleccionadoDevolver != debeEstarSel)
+                {
+                    _seleccionadoDevolver = debeEstarSel;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoDevolver)));
+                }
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadDevolverAhora)));
+            }
+        }
+    }
+
     public string UnidadAlmacen { get; set; } = "Pieza";
     public decimal CostoUnitarioAlmacen { get; set; }
     public decimal ImporteCosto => Math.Round(CantidadNetaConsumida * CostoUnitarioAlmacen, 2);
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public class PrestamoHerramienta
@@ -637,10 +689,18 @@ public class PrestamoHerramienta
     public string Notas { get; set; } = string.Empty;
     public List<PrestamoPartida> Partidas { get; set; } = new();
     public string ResumenHerramientas => Partidas.Count > 0 ? string.Join(", ", Partidas.Select(p => $"{p.CodigoIndividual} {p.ProductoNombre}")) : Notas;
+    public int TotalHerramientas => Partidas.Count;
+    public int PendientesDevolver => Partidas.Count(p => string.Equals(p.EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase));
+    public override string ToString() =>
+        $"{Folio} — Recibió: {PersonaRecibeEfectiva} ({DepartamentoNombre}) | Pendientes: {PendientesDevolver}/{TotalHerramientas} [{Estatus}]";
 }
 
-public class PrestamoPartida
+public class PrestamoPartida : INotifyPropertyChanged
 {
+    private bool _seleccionadoDevolver;
+    private string _estadoRetornoSeleccionado = "Bueno (Completo)";
+    private string _observacionesRetorno = string.Empty;
+
     public int Id { get; set; }
     public int PrestamoHerramientaId { get; set; }
     public int HerramientaActivoId { get; set; }
@@ -652,6 +712,49 @@ public class PrestamoPartida
     public string EstadoDevolucion { get; set; } = "Pendiente"; // Pendiente, Bueno, Dañado, Extraviado
     public string FechaDevuelto { get; set; } = string.Empty;
     public string Observaciones { get; set; } = string.Empty;
+
+    public bool EstaPendienteDevolucion => string.Equals(EstadoDevolucion, "Pendiente", StringComparison.OrdinalIgnoreCase);
+
+    public bool SeleccionadoDevolver
+    {
+        get => _seleccionadoDevolver;
+        set
+        {
+            if (_seleccionadoDevolver != value)
+            {
+                _seleccionadoDevolver = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoDevolver)));
+            }
+        }
+    }
+
+    public string EstadoRetornoSeleccionado
+    {
+        get => _estadoRetornoSeleccionado;
+        set
+        {
+            if (_estadoRetornoSeleccionado != value)
+            {
+                _estadoRetornoSeleccionado = value ?? "Bueno (Completo)";
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(EstadoRetornoSeleccionado)));
+            }
+        }
+    }
+
+    public string ObservacionesRetorno
+    {
+        get => _observacionesRetorno;
+        set
+        {
+            if (_observacionesRetorno != value)
+            {
+                _observacionesRetorno = value ?? string.Empty;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ObservacionesRetorno)));
+            }
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 public class FacturaXml

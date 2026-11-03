@@ -2225,10 +2225,61 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <DataGrid x:Name="DgPrestamosHerramientas" AutoGenerateColumns="False" IsReadOnly="True">
+                                    <DataGrid x:Name="DgPrestamosHerramientas"
+                                              AutoGenerateColumns="False"
+                                              IsReadOnly="True"
+                                              MouseDoubleClick="DgPrestamosHerramientas_MouseDoubleClick">
+                                        <DataGrid.GroupStyle>
+                                            <GroupStyle>
+                                                <GroupStyle.ContainerStyle>
+                                                    <Style TargetType="{x:Type GroupItem}">
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="{x:Type GroupItem}">
+                                                                    <StackPanel Margin="0,0,0,4">
+                                                                        <Border Background="#EFF6FF"
+                                                                                BorderBrush="#93C5FD"
+                                                                                BorderThickness="1"
+                                                                                CornerRadius="5"
+                                                                                Padding="8,5"
+                                                                                Margin="0,2,0,1"
+                                                                                Cursor="Hand"
+                                                                                Tag="{Binding Name}"
+                                                                                ToolTip="Clic para abrir devolución agrupada de este vale (seleccione qué sí y qué no llegó)"
+                                                                                MouseLeftButtonUp="HeaderGrupoPrestamo_MouseLeftButtonUp">
+                                                                            <DockPanel>
+                                                                                <Button DockPanel.Dock="Right"
+                                                                                        Content="🔄 Devolver / Revisar Vale"
+                                                                                        FontSize="10.5"
+                                                                                        FontWeight="Bold"
+                                                                                        Padding="8,2"
+                                                                                        Margin="8,0,0,0"
+                                                                                        Background="#2563EB"
+                                                                                        Foreground="White"
+                                                                                        BorderThickness="0"
+                                                                                        Cursor="Hand"
+                                                                                        Tag="{Binding Name}"
+                                                                                        Click="BtnAbrirDevolucionGrupoPrestamo_Click" />
+                                                                                <TextBlock Text="{Binding Name}"
+                                                                                           FontWeight="Bold"
+                                                                                           FontSize="11.5"
+                                                                                           Foreground="#1E3A8A"
+                                                                                           VerticalAlignment="Center"
+                                                                                           TextTrimming="CharacterEllipsis" />
+                                                                            </DockPanel>
+                                                                        </Border>
+                                                                        <ItemsPresenter />
+                                                                    </StackPanel>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Style>
+                                                </GroupStyle.ContainerStyle>
+                                            </GroupStyle>
+                                        </DataGrid.GroupStyle>
                                         <DataGrid.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="✔ Registrar Devolución de Herramienta" Click="BtnRegistrarDevolucionHerramienta_Click" FontWeight="Bold" />
+                                                <MenuItem Header="✔ Abrir Devolución Agrupada del Vale (PRE-xxxx)" Click="BtnRegistrarDevolucionHerramienta_Click" FontWeight="Bold" />
                                                 <MenuItem Header="🖨️ Imprimir Hoja de Resguardo (PRE-xxxx)" Click="BtnReimprimirValePrestamo_Click" />
                                                 <MenuItem Header="📄 Descargar Hoja de Resguardo (PDF / PNG / CSV)" Click="BtnDescargarValePrestamo_Click" />
                                             </ContextMenu>
@@ -2252,6 +2303,11 @@
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
+                                        <ui:Button Content="🔄 Devolver Material Sobrante"
+                                                   Appearance="Primary"
+                                                   Margin="0,0,6,0"
+                                                   ToolTip="Abrir ventana de devolución agrupada de material para indicar qué regresó y cuánto"
+                                                   Click="BtnDevolverMaterialSalida_Click" />
                                         <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0">
                                             <MenuItem Header="📄 Opciones del Vale ▾" Padding="10,5" FontWeight="SemiBold">
                                                 <MenuItem Header="📥 Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
@@ -2263,7 +2319,10 @@
                                     </StackPanel>
                                     <TextBlock Text="Historial de Entradas, Salidas y Devoluciones de Almacén" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" />
                                 </DockPanel>
-                                <DataGrid x:Name="DgMovimientosAlmacen" AutoGenerateColumns="False" IsReadOnly="True">
+                                <DataGrid x:Name="DgMovimientosAlmacen"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          MouseDoubleClick="DgMovimientosAlmacen_MouseDoubleClick">
                                     <DataGrid.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="🖨️ Ver / Imprimir Vale" Click="BtnImprimirMovimientoAlmacen_Click" FontWeight="Bold" />
