@@ -9329,14 +9329,10 @@ public partial class MainWindow : FluentWindow
         var lista = new List<string>
         {
             "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
-            "GABINETE — Gabinete de Almacén"
+            "GABINETE-01 — Gabinete Nivel 1 (Inferior)",
+            "GABINETE-02 — Gabinete Nivel 2 (Medio)",
+            "GABINETE-03 — Gabinete Nivel 3 (Superior)"
         };
-
-        for (int i = 1; i <= 9; i++)
-            lista.Add($"DETRAS-A-{i:00} — Detrás de A / Pared (Posición {i:00})");
-
-        for (int i = 1; i <= 9; i++)
-            lista.Add($"GABINETE-{i:00} — Gabinete de Almacén (Entrepaño {i:00})");
 
         string[] anaqueles = { "A", "B", "C", "D", "E", "F" };
         foreach (var est in anaqueles)
@@ -9428,27 +9424,25 @@ public partial class MainWindow : FluentWindow
             .Replace("RACK ", "")
             .Trim();
 
-        // 1. Detrás de A (Entre Anaquel A y Pared)
+        // 1. Detrás de A (Entre Anaquel A y Pared) -> Ubicación única sin más divisiones
         string[] prefijosDetrasA = { "DETRAS-A", "DETRÁS-A", "DETRAS DE A", "DETRÁS DE A", "DETRAS A", "PARED-A", "PARED A" };
         foreach (var pref in prefijosDetrasA)
         {
             if (raw.StartsWith(pref, StringComparison.OrdinalIgnoreCase))
             {
                 string resto = raw[pref.Length..].Trim('-', ' ', '/');
-                if (string.IsNullOrEmpty(resto))
-                    return ("DETRAS-A", "01", "");
-
-                var pResto = resto.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
-                if (pResto.Length >= 1 && int.TryParse(pResto[0], out int nDet) && nDet >= 1 && nDet <= 9)
+                string subDet = "";
+                if (!string.IsNullOrEmpty(resto))
                 {
-                    string subDet = pResto.Length >= 2 ? pResto[1] : "";
-                    return ("DETRAS-A", nDet.ToString("00"), subDet);
+                    var pResto = resto.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    var tokSub = pResto.FirstOrDefault(t => t.StartsWith("G", StringComparison.OrdinalIgnoreCase) || t.StartsWith("C", StringComparison.OrdinalIgnoreCase));
+                    if (tokSub != null) subDet = tokSub;
                 }
-                return ("DETRAS-A", "01", "");
+                return ("DETRAS-A", "01", subDet);
             }
         }
 
-        // 2. Gabinete de Almacén
+        // 2. Gabinete de Almacén -> Solo 3 niveles (01 Inferior, 02 Medio, 03 Superior) sin más divisiones
         if (raw.StartsWith("GABINETE", StringComparison.OrdinalIgnoreCase) || raw.StartsWith("GAB", StringComparison.OrdinalIgnoreCase))
         {
             string prefGab = raw.StartsWith("GABINETE", StringComparison.OrdinalIgnoreCase) ? "GABINETE" : "GAB";
@@ -9459,10 +9453,12 @@ public partial class MainWindow : FluentWindow
             var pResto = resto.Split(new[] { '-', ' ', '/' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var tok in pResto)
             {
-                if (int.TryParse(tok, out int nGab) && nGab >= 1 && nGab <= 9)
+                string tLimpio = tok.TrimStart('N', 'n');
+                if (int.TryParse(tLimpio, out int nGab) && nGab >= 1)
                 {
+                    int nivelGab = Math.Clamp(nGab, 1, 3);
                     string subGab = pResto.Length >= 2 && pResto[^1] != tok ? pResto[^1] : "";
-                    return ("GABINETE", nGab.ToString("00"), subGab);
+                    return ("GABINETE", nivelGab.ToString("00"), subGab);
                 }
             }
             return ("GABINETE", "01", "");
@@ -9503,6 +9499,9 @@ public partial class MainWindow : FluentWindow
 
         if (!string.Equals(parsed.Estante, estante, StringComparison.OrdinalIgnoreCase))
             return false;
+
+        if (string.Equals(estante, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
+            return true;
 
         if (string.IsNullOrWhiteSpace(cuadrante) || cuadrante == "TODOS")
             return true;
@@ -9903,21 +9902,49 @@ public partial class MainWindow : FluentWindow
 
         string ConstruirCoordenadaFinal()
         {
+            string sub = ObtenerSubContenedorElegido();
+            if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrEmpty(sub) ? "DETRAS-A" : $"DETRAS-A-{sub}";
+            }
+
+            if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
+            {
+                string nivGab = cuadranteActual is "01" or "02" or "03" ? cuadranteActual : "01";
+                return string.IsNullOrEmpty(sub) ? $"GABINETE-{nivGab}" : $"GABINETE-{nivGab}-{sub}";
+            }
+
             string cuad = cuadranteActual == "TODOS" ? "01" : cuadranteActual;
             string coord = $"{estanteActual}-{cuad}";
-            string sub = ObtenerSubContenedorElegido();
             if (!string.IsNullOrEmpty(sub))
                 coord += $"-{sub}";
             return coord;
         }
 
-        string ObtenerDescripcionNivel(string cuad) => cuad switch
+        string ObtenerDescripcionNivel(string cuad)
         {
-            "07" or "08" or "09" => "Nivel Superior — Baja rotación / No alcanza sin escalera",
-            "04" or "05" or "06" => "Nivel Medio — Altura de cabeza / Media rotación / Herramientas",
-            "01" or "02" or "03" => "Nivel Inferior — Fácil acceso / Material pesado o frecuente",
-            _ => "Todos los 9 cuadrantes del anaquel"
-        };
+            if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
+                return "Ubicación única detrás del Anaquel A (entre el anaquel y la pared)";
+
+            if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
+            {
+                return cuad switch
+                {
+                    "03" => "Gabinete Nivel 3 (Superior) — Sin divisiones horizontales",
+                    "02" => "Gabinete Nivel 2 (Medio) — Sin divisiones horizontales",
+                    "01" => "Gabinete Nivel 1 (Inferior) — Sin divisiones horizontales",
+                    _ => "Todos los 3 niveles del Gabinete de Almacén"
+                };
+            }
+
+            return cuad switch
+            {
+                "07" or "08" or "09" => "Nivel Superior — Baja rotación / No alcanza sin escalera",
+                "04" or "05" or "06" => "Nivel Medio — Altura de cabeza / Media rotación / Herramientas",
+                "01" or "02" or "03" => "Nivel Inferior — Fácil acceso / Material pesado o frecuente",
+                _ => "Todos los 9 cuadrantes del anaquel"
+            };
+        }
 
         void RecargarDatosBase()
         {
@@ -9988,7 +10015,12 @@ public partial class MainWindow : FluentWindow
                 btnEst.Click += (_, _) =>
                 {
                     estanteActual = estCopy;
-                    if (cuadranteActual == "TODOS") cuadranteActual = "05";
+                    if (estanteActual == "DETRAS-A")
+                        cuadranteActual = "01";
+                    else if (estanteActual == "GABINETE" && cuadranteActual is not ("01" or "02" or "03" or "TODOS"))
+                        cuadranteActual = "02";
+                    else if (cuadranteActual == "TODOS")
+                        cuadranteActual = "05";
                     RenderizarTodo();
                 };
                 rackButtonsPanel.Children.Add(btnEst);
@@ -9996,228 +10028,258 @@ public partial class MainWindow : FluentWindow
 
             txtTituloAnaquel.Text = estanteActual switch
             {
-                "DETRAS-A" => "Vista de Posiciones — Detrás de A (Entre Anaquel A y Pared: DETRAS-A-01 a 09)",
-                "GABINETE" => "Vista de Posiciones — Gabinete de Almacén (Entrepaños GABINETE-01 a 09)",
+                "DETRAS-A" => "Ubicación Única — Detrás de A (Entre Anaquel A y Pared, sin más divisiones)",
+                "GABINETE" => "Vista Frontal — Gabinete de Almacén (3 Niveles sin divisiones horizontales)",
                 "PISO" => "Vista de Posiciones — Zona PISO / Tapanco / Exterior (PISO-01 a PISO-09)",
                 _ => $"Vista Frontal Parado Frente al Anaquel {estanteActual} ({estanteActual}-01 a {estanteActual}-09)"
             };
 
-            // 2. Renderizar matriz 3x3 (Fila 0: 07,08,09 | Fila 1: 04,05,06 | Fila 2: 01,02,03)
+            // 2. Renderizar estructura visual según el tipo de ubicación:
+            //    - DETRAS-A: 1 sola celda completa (sin divisiones)
+            //    - GABINETE: 3 niveles horizontales (Nivel 3 Superior, Nivel 2 Medio, Nivel 1 Inferior)
+            //    - A..F y PISO: Matriz 3x3 (01..09)
             shelfGrid.Children.Clear();
-            string[,] mapaCuadrantes = new string[3, 3]
-            {
-                { "07", "08", "09" }, // Nivel Superior (Baja rotación / Escalera)
-                { "04", "05", "06" }, // Nivel Medio (Altura de cabeza / Media rotación / Herramientas)
-                { "01", "02", "03" }  // Nivel Inferior (Fácil acceso)
-            };
+            var celdasRender = new List<(int fila, int col, int rowSpan, int colSpan, string cuad, string coordLabel, string nivelCorto)>();
 
-            for (int fila = 0; fila < 3; fila++)
+            if (string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase))
             {
-                for (int col = 0; col < 3; col++)
+                celdasRender.Add((0, 0, 3, 3, "01", "DETRAS-A", "Zona Única (Entre Anaquel A y Pared)"));
+            }
+            else if (string.Equals(estanteActual, "GABINETE", StringComparison.OrdinalIgnoreCase))
+            {
+                celdasRender.Add((0, 0, 1, 3, "03", "GABINETE-03", "Nivel 3 — Superior (Entrepaño completo)"));
+                celdasRender.Add((1, 0, 1, 3, "02", "GABINETE-02", "Nivel 2 — Medio (Entrepaño completo)"));
+                celdasRender.Add((2, 0, 1, 3, "01", "GABINETE-01", "Nivel 1 — Inferior (Entrepaño completo)"));
+            }
+            else
+            {
+                string[,] mapaCuadrantes = new string[3, 3]
                 {
-                    string cuad = mapaCuadrantes[fila, col];
-                    string coordLabel = $"{estanteActual}-{cuad}";
-                    bool seleccionado = string.Equals(cuadranteActual, cuad, StringComparison.OrdinalIgnoreCase);
-
-                    var prodsCuad = todosProductos.Where(p => CoincideConEstanteYCuadrante(p.Ubicacion, estanteActual, cuad)).ToList();
-                    var hersCuad = todasHerramientas.Where(h => CoincideConEstanteYCuadrante(h.Ubicacion, estanteActual, cuad)).ToList();
-                    int hersPrestadas = hersCuad.Count(h => string.Equals(h.Estado, "En Préstamo", StringComparison.OrdinalIgnoreCase));
-
-                    // Colores por nivel ergonómico
-                    Color headerBg = fila switch
-                    {
-                        0 => Color.FromRgb(254, 243, 199), // Superior: Ámbar
-                        1 => Color.FromRgb(219, 234, 254), // Medio: Azul
-                        _ => Color.FromRgb(220, 252, 231)  // Inferior: Verde
-                    };
-                    Color headerFg = fila switch
-                    {
-                        0 => Color.FromRgb(146, 64, 14),
-                        1 => Color.FromRgb(30, 64, 175),
-                        _ => Color.FromRgb(22, 101, 52)
-                    };
-                    string nivelCorto = fila switch
+                    { "07", "08", "09" }, // Nivel Superior
+                    { "04", "05", "06" }, // Nivel Medio
+                    { "01", "02", "03" }  // Nivel Inferior
+                };
+                for (int r = 0; r < 3; r++)
+                {
+                    string niv = r switch
                     {
                         0 => "Superior (Escalera)",
                         1 => "Medio (Cabeza/Herr.)",
                         _ => "Inferior (Fácil acceso)"
                     };
-
-                    var cellBorder = new Border
+                    for (int c = 0; c < 3; c++)
                     {
-                        Margin = new Thickness(4),
-                        CornerRadius = new CornerRadius(8),
-                        BorderThickness = new Thickness(seleccionado ? 2.5 : 1),
-                        BorderBrush = seleccionado
-                            ? new SolidColorBrush(Color.FromRgb(37, 99, 235))
-                            : new SolidColorBrush(Color.FromRgb(203, 213, 225)),
-                        Background = seleccionado
-                            ? new SolidColorBrush(Color.FromRgb(239, 246, 255))
-                            : Brushes.White,
-                        Cursor = Cursors.Hand
-                    };
-
-                    var cellDock = new DockPanel();
-
-                    // Franja superior de la celda
-                    var cellHeader = new Border
-                    {
-                        Background = new SolidColorBrush(headerBg),
-                        CornerRadius = new CornerRadius(6, 6, 0, 0),
-                        Padding = new Thickness(8, 5, 8, 5)
-                    };
-                    var cellHeaderDock = new DockPanel();
-                    var txtNivelTag = new TextBlock
-                    {
-                        Text = nivelCorto,
-                        FontSize = 10,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(headerFg),
-                        VerticalAlignment = VerticalAlignment.Center
-                    };
-                    DockPanel.SetDock(txtNivelTag, Dock.Right);
-                    cellHeaderDock.Children.Add(txtNivelTag);
-
-                    cellHeaderDock.Children.Add(new TextBlock
-                    {
-                        Text = coordLabel,
-                        FontSize = 14,
-                        FontWeight = FontWeights.Bold,
-                        FontFamily = new FontFamily("Consolas"),
-                        Foreground = new SolidColorBrush(headerFg)
-                    });
-                    cellHeader.Child = cellHeaderDock;
-                    DockPanel.SetDock(cellHeader, Dock.Top);
-                    cellDock.Children.Add(cellHeader);
-
-                    // Cuerpo de la celda (Contadores y vista previa)
-                    var cellBody = new StackPanel { Margin = new Thickness(8, 6, 8, 6) };
-                    var badgesPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-                    badgesPanel.Children.Add(new TextBlock
-                    {
-                        Text = $"📦 {prodsCuad.Count} art.",
-                        FontSize = 11.5,
-                        FontWeight = prodsCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
-                        Foreground = prodsCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(17, 24, 39)) : new SolidColorBrush(Color.FromRgb(156, 163, 175)),
-                        Margin = new Thickness(0, 0, 10, 0)
-                    });
-                    badgesPanel.Children.Add(new TextBlock
-                    {
-                        Text = $"🔧 {hersCuad.Count} herr.",
-                        FontSize = 11.5,
-                        FontWeight = hersCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
-                        Foreground = hersCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(30, 64, 175)) : new SolidColorBrush(Color.FromRgb(156, 163, 175))
-                    });
-                    cellBody.Children.Add(badgesPanel);
-
-                    if (hersPrestadas > 0)
-                    {
-                        cellBody.Children.Add(new TextBlock
-                        {
-                            Text = $"⚠️ {hersPrestadas} en préstamo fuera",
-                            FontSize = 10.5,
-                            FontWeight = FontWeights.SemiBold,
-                            Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9)),
-                            Margin = new Thickness(0, 0, 0, 2)
-                        });
+                        string q = mapaCuadrantes[r, c];
+                        celdasRender.Add((r, c, 1, 1, q, $"{estanteActual}-{q}", niv));
                     }
-
-                    // Preview de hasta 3 nombres en este cuadrante
-                    var previews = prodsCuad.Select(p => p.Nombre)
-                        .Concat(hersCuad.Select(h => $"{h.CodigoIndividual}: {h.ProductoNombre}"))
-                        .Distinct()
-                        .Take(3)
-                        .ToList();
-
-                    if (previews.Count > 0)
-                    {
-                        foreach (var prev in previews)
-                        {
-                            cellBody.Children.Add(new TextBlock
-                            {
-                                Text = "• " + prev,
-                                FontSize = 10.5,
-                                Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
-                                TextTrimming = TextTrimming.CharacterEllipsis
-                            });
-                        }
-                    }
-                    else
-                    {
-                        cellBody.Children.Add(new TextBlock
-                        {
-                            Text = "(Cuadrante vacío / disponible)",
-                            FontSize = 10.5,
-                            FontStyle = FontStyles.Italic,
-                            Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
-                            Margin = new Thickness(0, 4, 0, 0)
-                        });
-                    }
-
-                    cellDock.Children.Add(cellBody);
-                    cellBorder.Child = cellDock;
-
-                    string cuadCopy = cuad;
-                    cellBorder.MouseLeftButtonDown += (_, ev) =>
-                    {
-                        cuadranteActual = cuadCopy;
-                        RenderizarTodo();
-                        if (ev.ClickCount == 2 && modoSelector)
-                        {
-                            alSeleccionarCoordenada?.Invoke(ConstruirCoordenadaFinal());
-                            win.DialogResult = true;
-                            win.Close();
-                        }
-                    };
-
-                    // Menú contextual de clic derecho sobre cada cuadrante 3x3
-                    var ctxCell = new ContextMenu();
-                    var miVerCuad = new System.Windows.Controls.MenuItem { Header = $"👁️ Consultar inventario de {coordLabel}", FontWeight = FontWeights.Bold };
-                    miVerCuad.Click += (_, _) =>
-                    {
-                        cuadranteActual = cuadCopy;
-                        RenderizarTodo();
-                    };
-                    ctxCell.Items.Add(miVerCuad);
-
-                    var miAsignarACuad = new System.Windows.Controls.MenuItem { Header = $"📌 Ubicar un artículo o herramienta en {coordLabel}" };
-                    miAsignarACuad.Click += (_, _) =>
-                    {
-                        cuadranteActual = cuadCopy;
-                        RenderizarTodo();
-                        cboAsignarItem.Focus();
-                        cboAsignarItem.IsDropDownOpen = true;
-                    };
-                    ctxCell.Items.Add(miAsignarACuad);
-
-                    var miExportarCuad = new System.Windows.Controls.MenuItem { Header = $"📄 Exportar inventario de {coordLabel} (CSV)" };
-                    miExportarCuad.Click += (_, _) =>
-                    {
-                        cuadranteActual = cuadCopy;
-                        RenderizarTodo();
-                        btnExportarCuadranteCsv.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-                    };
-                    ctxCell.Items.Add(miExportarCuad);
-
-                    if (modoSelector)
-                    {
-                        ctxCell.Items.Add(new Separator());
-                        var miElegirCoord = new System.Windows.Controls.MenuItem { Header = $"✔ Usar coordenada {coordLabel}", FontWeight = FontWeights.Bold };
-                        miElegirCoord.Click += (_, _) =>
-                        {
-                            cuadranteActual = cuadCopy;
-                            alSeleccionarCoordenada?.Invoke(ConstruirCoordenadaFinal());
-                            win.DialogResult = true;
-                            win.Close();
-                        };
-                        ctxCell.Items.Add(miElegirCoord);
-                    }
-                    cellBorder.ContextMenu = ctxCell;
-
-                    Grid.SetRow(cellBorder, fila);
-                    Grid.SetColumn(cellBorder, col);
-                    shelfGrid.Children.Add(cellBorder);
                 }
+            }
+
+            foreach (var celda in celdasRender)
+            {
+                int fila = celda.fila;
+                int col = celda.col;
+                string cuad = celda.cuad;
+                string coordLabel = celda.coordLabel;
+                string nivelCorto = celda.nivelCorto;
+                bool seleccionado = string.Equals(estanteActual, "DETRAS-A", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(cuadranteActual, cuad, StringComparison.OrdinalIgnoreCase);
+
+                var prodsCuad = todosProductos.Where(p => CoincideConEstanteYCuadrante(p.Ubicacion, estanteActual, cuad)).ToList();
+                var hersCuad = todasHerramientas.Where(h => CoincideConEstanteYCuadrante(h.Ubicacion, estanteActual, cuad)).ToList();
+                int hersPrestadas = hersCuad.Count(h => string.Equals(h.Estado, "En Préstamo", StringComparison.OrdinalIgnoreCase));
+
+                // Colores por nivel ergonómico
+                Color headerBg = fila switch
+                {
+                    0 => Color.FromRgb(254, 243, 199), // Superior: Ámbar
+                    1 => Color.FromRgb(219, 234, 254), // Medio: Azul
+                    _ => Color.FromRgb(220, 252, 231)  // Inferior: Verde
+                };
+                Color headerFg = fila switch
+                {
+                    0 => Color.FromRgb(146, 64, 14),
+                    1 => Color.FromRgb(30, 64, 175),
+                    _ => Color.FromRgb(22, 101, 52)
+                };
+
+                var cellBorder = new Border
+                {
+                    Margin = new Thickness(4),
+                    CornerRadius = new CornerRadius(8),
+                    BorderThickness = new Thickness(seleccionado ? 2.5 : 1),
+                    BorderBrush = seleccionado
+                        ? new SolidColorBrush(Color.FromRgb(37, 99, 235))
+                        : new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+                    Background = seleccionado
+                        ? new SolidColorBrush(Color.FromRgb(239, 246, 255))
+                        : Brushes.White,
+                    Cursor = Cursors.Hand
+                };
+
+                var cellDock = new DockPanel();
+
+                // Franja superior de la celda
+                var cellHeader = new Border
+                {
+                    Background = new SolidColorBrush(headerBg),
+                    CornerRadius = new CornerRadius(6, 6, 0, 0),
+                    Padding = new Thickness(8, 5, 8, 5)
+                };
+                var cellHeaderDock = new DockPanel();
+                var txtNivelTag = new TextBlock
+                {
+                    Text = nivelCorto,
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(headerFg),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                DockPanel.SetDock(txtNivelTag, Dock.Right);
+                cellHeaderDock.Children.Add(txtNivelTag);
+
+                cellHeaderDock.Children.Add(new TextBlock
+                {
+                    Text = coordLabel,
+                    FontSize = 14,
+                    FontWeight = FontWeights.Bold,
+                    FontFamily = new FontFamily("Consolas"),
+                    Foreground = new SolidColorBrush(headerFg)
+                });
+                cellHeader.Child = cellHeaderDock;
+                DockPanel.SetDock(cellHeader, Dock.Top);
+                cellDock.Children.Add(cellHeader);
+
+                // Cuerpo de la celda (Contadores y vista previa)
+                var cellBody = new StackPanel { Margin = new Thickness(8, 6, 8, 6) };
+                var badgesPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+                badgesPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📦 {prodsCuad.Count} art.",
+                    FontSize = 11.5,
+                    FontWeight = prodsCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
+                    Foreground = prodsCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(17, 24, 39)) : new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                    Margin = new Thickness(0, 0, 10, 0)
+                });
+                badgesPanel.Children.Add(new TextBlock
+                {
+                    Text = $"🔧 {hersCuad.Count} herr.",
+                    FontSize = 11.5,
+                    FontWeight = hersCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
+                    Foreground = hersCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(30, 64, 175)) : new SolidColorBrush(Color.FromRgb(156, 163, 175))
+                });
+                cellBody.Children.Add(badgesPanel);
+
+                if (hersPrestadas > 0)
+                {
+                    cellBody.Children.Add(new TextBlock
+                    {
+                        Text = $"⚠️ {hersPrestadas} en préstamo fuera",
+                        FontSize = 10.5,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9)),
+                        Margin = new Thickness(0, 0, 0, 2)
+                    });
+                }
+
+                // Preview de nombres en esta posición
+                int maxPreviews = celda.colSpan > 1 ? 6 : 3;
+                var previews = prodsCuad.Select(p => p.Nombre)
+                    .Concat(hersCuad.Select(h => $"{h.CodigoIndividual}: {h.ProductoNombre}"))
+                    .Distinct()
+                    .Take(maxPreviews)
+                    .ToList();
+
+                if (previews.Count > 0)
+                {
+                    foreach (var prev in previews)
+                    {
+                        cellBody.Children.Add(new TextBlock
+                        {
+                            Text = "• " + prev,
+                            FontSize = 10.5,
+                            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+                            TextTrimming = TextTrimming.CharacterEllipsis
+                        });
+                    }
+                }
+                else
+                {
+                    cellBody.Children.Add(new TextBlock
+                    {
+                        Text = "(Espacio vacío / disponible)",
+                        FontSize = 10.5,
+                        FontStyle = FontStyles.Italic,
+                        Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                        Margin = new Thickness(0, 4, 0, 0)
+                    });
+                }
+
+                cellDock.Children.Add(cellBody);
+                cellBorder.Child = cellDock;
+
+                string cuadCopy = cuad;
+                cellBorder.MouseLeftButtonDown += (_, ev) =>
+                {
+                    cuadranteActual = cuadCopy;
+                    RenderizarTodo();
+                    if (ev.ClickCount == 2 && modoSelector)
+                    {
+                        alSeleccionarCoordenada?.Invoke(ConstruirCoordenadaFinal());
+                        win.DialogResult = true;
+                        win.Close();
+                    }
+                };
+
+                // Menú contextual de clic derecho sobre la posición
+                var ctxCell = new ContextMenu();
+                var miVerCuad = new System.Windows.Controls.MenuItem { Header = $"👁️ Consultar inventario de {coordLabel}", FontWeight = FontWeights.Bold };
+                miVerCuad.Click += (_, _) =>
+                {
+                    cuadranteActual = cuadCopy;
+                    RenderizarTodo();
+                };
+                ctxCell.Items.Add(miVerCuad);
+
+                var miAsignarACuad = new System.Windows.Controls.MenuItem { Header = $"📌 Ubicar un artículo o herramienta en {coordLabel}" };
+                miAsignarACuad.Click += (_, _) =>
+                {
+                    cuadranteActual = cuadCopy;
+                    RenderizarTodo();
+                    cboAsignarItem.Focus();
+                    cboAsignarItem.IsDropDownOpen = true;
+                };
+                ctxCell.Items.Add(miAsignarACuad);
+
+                var miExportarCuad = new System.Windows.Controls.MenuItem { Header = $"📄 Exportar inventario de {coordLabel} (CSV)" };
+                miExportarCuad.Click += (_, _) =>
+                {
+                    cuadranteActual = cuadCopy;
+                    RenderizarTodo();
+                    btnExportarCuadranteCsv.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                };
+                ctxCell.Items.Add(miExportarCuad);
+
+                if (modoSelector)
+                {
+                    ctxCell.Items.Add(new Separator());
+                    var miElegirCoord = new System.Windows.Controls.MenuItem { Header = $"✔ Usar coordenada {coordLabel}", FontWeight = FontWeights.Bold };
+                    miElegirCoord.Click += (_, _) =>
+                    {
+                        cuadranteActual = cuadCopy;
+                        alSeleccionarCoordenada?.Invoke(ConstruirCoordenadaFinal());
+                        win.DialogResult = true;
+                        win.Close();
+                    };
+                    ctxCell.Items.Add(miElegirCoord);
+                }
+                cellBorder.ContextMenu = ctxCell;
+
+                Grid.SetRow(cellBorder, fila);
+                Grid.SetColumn(cellBorder, col);
+                Grid.SetRowSpan(cellBorder, celda.rowSpan);
+                Grid.SetColumnSpan(cellBorder, celda.colSpan);
+                shelfGrid.Children.Add(cellBorder);
             }
 
             // 3. Actualizar Tablas de Inventario en el Panel Derecho
@@ -10241,9 +10303,16 @@ public partial class MainWindow : FluentWindow
                 _ => $"Anaquel {estanteActual}"
             };
 
-            string etiquetaPos = cuadranteActual == "TODOS"
-                ? $"Todo {nombreEstanteMostrar} ({estanteActual}-01 a {estanteActual}-09)"
-                : $"{nombreEstanteMostrar} — Posición {estanteActual}-{cuadranteActual}";
+            string etiquetaPos = estanteActual switch
+            {
+                "DETRAS-A" => "DETRAS-A — Detrás de A (Entre Anaquel A y Pared)",
+                "GABINETE" => cuadranteActual == "TODOS"
+                    ? "Todo el Gabinete de Almacén (Niveles 1 a 3)"
+                    : $"Gabinete de Almacén — Nivel {int.Parse(cuadranteActual)} (GABINETE-{cuadranteActual})",
+                _ => cuadranteActual == "TODOS"
+                    ? $"Todo {nombreEstanteMostrar} ({estanteActual}-01 a {estanteActual}-09)"
+                    : $"{nombreEstanteMostrar} — Posición {estanteActual}-{cuadranteActual}"
+            };
 
             txtInventarioTitulo.Text = $"📍 Inventario en {etiquetaPos}";
             txtInventarioSubtitulo.Text = ObtenerDescripcionNivel(cuadranteActual);
