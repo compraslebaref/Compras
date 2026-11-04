@@ -98,8 +98,14 @@ public partial class MainWindow : FluentWindow
     {
         InitializeComponent();
 
-        // Fijar tema claro (Blanco) permanentemente
-        ApplicationThemeManager.Apply(ApplicationTheme.Light, WindowBackdropType.Mica, false);
+        // Integración nativa con Windows: tema (claro/oscuro) y color de acento del sistema
+        var temaSistema = ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark
+            ? ApplicationTheme.Dark
+            : ApplicationTheme.Light;
+        _temaOscuroActivo = temaSistema == ApplicationTheme.Dark;
+        ApplicationThemeManager.Apply(temaSistema, WindowBackdropType.Mica, true);
+        if (BtnAlternarTema != null)
+            BtnAlternarTema.Content = _temaOscuroActivo ? "Claro" : "Oscuro";
 
         IcCatalogoVisual.ItemsSource = _catalogoVisible;
         DgPartidasNuevaSolicitud.ItemsSource = _partidasNuevaSolicitud;
@@ -692,11 +698,11 @@ public partial class MainWindow : FluentWindow
     {
         _temaOscuroActivo = !_temaOscuroActivo;
         var nuevoTema = _temaOscuroActivo ? ApplicationTheme.Dark : ApplicationTheme.Light;
-        ApplicationThemeManager.Apply(nuevoTema, WindowBackdropType.Mica, false);
+        ApplicationThemeManager.Apply(nuevoTema, WindowBackdropType.Mica, true);
 
         if (BtnAlternarTema != null)
         {
-            BtnAlternarTema.Content = _temaOscuroActivo ? "☀️ Claro" : "🌙 Oscuro";
+            BtnAlternarTema.Content = _temaOscuroActivo ? "Claro" : "Oscuro";
         }
     }
 

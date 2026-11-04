@@ -45,51 +45,51 @@
 
                 <!-- Izquierda: 5 Menús Desplegables Globales -->
                 <Menu Grid.Column="0" Background="Transparent" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0">
-                    <MenuItem Header="📦 Almacén ▾" Padding="7,4">
-                        <MenuItem Header="🗺️ Mapa Gráfico de Anaqueles (A–F y PISO)" InputGestureText="F4" Click="BtnAbrirMapaAnaqueles_Click" />
-                        <MenuItem Header="🔍 Ir al Catálogo Visual de Productos" InputGestureText="F3" Click="MenuIrCatalogo_Click" />
-                        <MenuItem Header="➕ Dar de Alta Nuevo Producto en Catálogo" Click="MenuNuevoProductoCatalogo_Click" />
+                    <MenuItem Header="Almacén ▾" Padding="7,4">
+                        <MenuItem Header="Mapa Gráfico de Anaqueles (A–F y PISO)" InputGestureText="F4" Click="BtnAbrirMapaAnaqueles_Click" />
+                        <MenuItem Header="Ir al Catálogo Visual de Productos" InputGestureText="F3" Click="MenuIrCatalogo_Click" />
+                        <MenuItem Header="Dar de Alta Nuevo Producto en Catálogo" Click="MenuNuevoProductoCatalogo_Click" />
                         <Separator />
-                        <MenuItem Header="📥 Registrar Entrada a Almacén (Recepción OC)" Click="BtnIrRecepciones_Click" />
-                        <MenuItem Header="📤 Registrar Salida de Material (Vale de Salida)" Click="BtnIrAlmacenPos_Click" />
-                        <MenuItem Header="🔄 Devolver Material Sobrante a Almacén" Click="BtnDevolverMaterialSalida_Click" />
+                        <MenuItem Header="Registrar Entrada a Almacén (Recepción OC)" Click="BtnIrRecepciones_Click" />
+                        <MenuItem Header="Registrar Salida de Material (Vale de Salida)" Click="BtnIrAlmacenPos_Click" />
+                        <MenuItem Header="Devolver Material Sobrante a Almacén" Click="BtnDevolverMaterialSalida_Click" />
                         <Separator />
-                        <MenuItem Header="🏷️ Imprimir Catálogo de Códigos de Barras" Click="BtnImprimirCatalogoCodigos_Click" />
+                        <MenuItem Header="Imprimir Catálogo de Códigos de Barras" Click="BtnImprimirCatalogoCodigos_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="📋 Compras ▾" Padding="7,4">
-                        <MenuItem Header="📝 Nueva Solicitud de Compra" Click="MenuNuevaSolicitud_Click" />
-                        <MenuItem Header="📥 Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
-                        <MenuItem Header="📄 Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
-                        <MenuItem Header="📊 Exportar Existencias Actuales de Almacén (.csv)" Click="BtnExportarExistenciasCatalogo_Click" />
+                    <MenuItem Header="Compras ▾" Padding="7,4">
+                        <MenuItem Header="Nueva Solicitud de Compra" Click="MenuNuevaSolicitud_Click" />
+                        <MenuItem Header="Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
+                        <MenuItem Header="Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
+                        <MenuItem Header="Exportar Existencias Actuales de Almacén (.csv)" Click="BtnExportarExistenciasCatalogo_Click" />
                         <Separator />
-                        <MenuItem Header="⚖️ Ir a Cuadro Comparativo de Cotizaciones" Click="MenuIrComparativa_Click" />
-                        <MenuItem Header="🧾 Consultar y Emitir Órdenes de Compra" Click="BtnIrRecepciones_Click" />
-                        <MenuItem Header="📂 Importar y Consultar Facturas CFDI (XML)" Click="MenuIrFacturasXml_Click" />
+                        <MenuItem Header="Ir a Cuadro Comparativo de Cotizaciones" Click="MenuIrComparativa_Click" />
+                        <MenuItem Header="Consultar y Emitir Órdenes de Compra" Click="BtnIrRecepciones_Click" />
+                        <MenuItem Header="Importar y Consultar Facturas CFDI (XML)" Click="MenuIrFacturasXml_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="🔧 Herramientas ▾" Padding="7,4">
-                        <MenuItem Header="🤝 Vale de Préstamo / Devolución de Herramientas" Click="BtnIrAlmacenPos_Click" />
-                        <MenuItem Header="🔧 Directorio Individual de Herramientas (HER-xxxx)" Click="MenuIrDirectorioHerramientas_Click" />
-                        <MenuItem Header="🗺️ Consultar Herramientas por Cuadrante (Mapa A–F)" Click="BtnAbrirMapaAnaqueles_Click" />
+                    <MenuItem Header="Herramientas ▾" Padding="7,4">
+                        <MenuItem Header="Vale de Préstamo / Devolución de Herramientas" Click="BtnIrAlmacenPos_Click" />
+                        <MenuItem Header="Directorio Individual de Herramientas (HER-xxxx)" Click="MenuIrDirectorioHerramientas_Click" />
+                        <MenuItem Header="Consultar Herramientas por Cuadrante (Mapa A–F)" Click="BtnAbrirMapaAnaqueles_Click" />
                         <Separator />
-                        <MenuItem Header="🦺 Generar e Imprimir Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
+                        <MenuItem Header="Generar e Imprimir Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="📊 Reportes ▾" Padding="7,4">
-                        <MenuItem Header="📈 Ranking de Materiales y Proyección de Compras" Click="MenuIrAnalisisRanking_Click" />
-                        <MenuItem Header="📉 Gráficas e Historial de Precios por Producto" Click="MenuIrAnalisisGraficas_Click" />
-                        <MenuItem Header="🗺️ Exportar Inventario por Cuadrante / Anaquel (CSV)" Click="BtnAbrirMapaAnaqueles_Click" />
+                    <MenuItem Header="Reportes ▾" Padding="7,4">
+                        <MenuItem Header="Ranking de Materiales y Proyección de Compras" Click="MenuIrAnalisisRanking_Click" />
+                        <MenuItem Header="Gráficas e Historial de Precios por Producto" Click="MenuIrAnalisisGraficas_Click" />
+                        <MenuItem Header="Exportar Inventario por Cuadrante / Anaquel (CSV)" Click="BtnAbrirMapaAnaqueles_Click" />
                         <Separator />
-                        <MenuItem Header="🔄 Actualizar / Refrescar Todo el Sistema" InputGestureText="F5" Click="MenuRefrescarSistema_Click" />
+                        <MenuItem Header="Actualizar / Refrescar Todo el Sistema" InputGestureText="F5" Click="MenuRefrescarSistema_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="⚙️ Sistema ▾" Padding="7,4">
-                        <MenuItem Header="🔓 Activar / Cerrar Sesión Perfil Administrador" Click="BtnPerfilAdmin_Click" />
-                        <MenuItem Header="🔑 Cambiar PIN de Administrador" Click="BtnCambiarPinAdmin_Click" />
-                        <MenuItem Header="💾 Crear Respaldo Local de Base de Datos (SQLite)" Click="BtnRespaldarDb_Click" />
+                    <MenuItem Header="Sistema ▾" Padding="7,4">
+                        <MenuItem Header="Activar / Cerrar Sesión Perfil Administrador" Click="BtnPerfilAdmin_Click" />
+                        <MenuItem Header="Cambiar PIN de Administrador" Click="BtnCambiarPinAdmin_Click" />
+                        <MenuItem Header="Crear Respaldo Local de Base de Datos (SQLite)" Click="BtnRespaldarDb_Click" />
                         <Separator />
-                        <MenuItem Header="📚 Directorios Maestros (Proveedores, Proyectos, Personal)" Click="MenuIrDirectorios_Click" />
+                        <MenuItem Header="Directorios Maestros (Proveedores, Proyectos, Personal)" Click="MenuIrDirectorios_Click" />
                     </MenuItem>
                 </Menu>
 
@@ -105,7 +105,7 @@
                                    FontSize="18"
                                    Margin="0,0,8,0"
                                    VerticalAlignment="Center"
-                                   Foreground="#0078D4" />
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                     <ui:TextBox x:Name="TxtOmniScanner"
                                 Grid.Column="1"
                                 PlaceholderText="Escanear código o folio (F2: Escáner | F3: Catálogo | F4: Mapa A–F)..."
@@ -124,14 +124,14 @@
 
                 <!-- Derecha: Botones Ejecutivos (Mapa A–F, Tema Claro/Oscuro y Perfil) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ui:Button Content="🗺️ Mapa A–F"
+                    <ui:Button Content="Mapa A–F"
                                FontSize="11.5"
                                Padding="10,5"
                                Margin="0,0,6,0"
                                ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
                                Click="BtnAbrirMapaAnaqueles_Click" />
                     <ui:Button x:Name="BtnAlternarTema"
-                               Content="🌙 Oscuro"
+                               Content="Oscuro"
                                FontSize="11.5"
                                Padding="10,5"
                                Margin="0,0,6,0"
@@ -159,7 +159,7 @@
             <Border Grid.Column="0"
                     Margin="0,0,12,0"
                     Padding="10,12"
-                    CornerRadius="12"
+                    CornerRadius="8"
                     Background="{DynamicResource ControlFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                     BorderThickness="1"
@@ -181,12 +181,12 @@
                                     Width="32"
                                     Height="32"
                                     CornerRadius="8"
-                                    Background="#2563EB"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
                                     VerticalAlignment="Center">
                                 <ui:SymbolIcon Symbol="BoxMultiple24" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <StackPanel x:Name="PnlMarcaSidebar" Grid.Column="1" Margin="9,0,4,0" VerticalAlignment="Center">
-                                <TextBlock Text="LEBAREF" FontWeight="Bold" FontSize="12.5" Foreground="#2563EB" />
+                                <TextBlock Text="LEBAREF" FontWeight="Bold" FontSize="12.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 <TextBlock Text="Compras &amp; WMS" FontSize="10.5" Opacity="0.72" />
                             </StackPanel>
                             <ui:Button x:Name="BtnToggleSidebar"
@@ -208,7 +208,7 @@
 
                             <Grid>
                                 <ui:Button x:Name="NavCatalogo" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Grid24}" Content="Catálogo" ToolTip="Catálogo Visual, Alertas y Coordenadas 3x3 (Atajo: F3)" Click="NavButton_Click" Tag="1" />
-                                <Border x:Name="BdgSidebarAlertas" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#FEE2E2" BorderBrush="#FCA5A5" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                <Border x:Name="BdgSidebarAlertas" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="#FEE2E2" BorderBrush="#FCA5A5" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarAlertas" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#991B1B" />
                                 </Border>
                             </Grid>
@@ -217,7 +217,7 @@
 
                             <Grid>
                                 <ui:Button x:Name="NavSolicitudes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon ClipboardTaskListLtr24}" Content="Solicitudes" ToolTip="Solicitudes de Compra y Carritos" Click="NavButton_Click" Tag="2" />
-                                <Border x:Name="BdgSidebarSolicitudes" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#DBEAFE" BorderBrush="#93C5FD" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                <Border x:Name="BdgSidebarSolicitudes" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="#DBEAFE" BorderBrush="#93C5FD" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarSolicitudes" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#1E40AF" />
                                 </Border>
                             </Grid>
@@ -226,7 +226,7 @@
 
                             <Grid>
                                 <ui:Button x:Name="NavOrdenes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon DocumentText24}" Content="Órdenes de Compra" ToolTip="Órdenes de Compra y Recepción de Mercancía" Click="NavButton_Click" Tag="4" />
-                                <Border x:Name="BdgSidebarOcs" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#FEF3C7" BorderBrush="#FCD34D" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                <Border x:Name="BdgSidebarOcs" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="#FEF3C7" BorderBrush="#FCD34D" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarOcs" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#92400E" />
                                 </Border>
                             </Grid>
@@ -237,7 +237,7 @@
 
                             <Grid>
                                 <ui:Button x:Name="NavAlmacenPos" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Box24}" Content="Almacén" ToolTip="Salidas de Almacén y Préstamos de Herramientas" Click="NavButton_Click" Tag="5" />
-                                <Border x:Name="BdgSidebarPrestamos" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" Background="#F3E8FF" BorderBrush="#D8B4FE" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
+                                <Border x:Name="BdgSidebarPrestamos" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="#F3E8FF" BorderBrush="#D8B4FE" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarPrestamos" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#6B21A8" />
                                 </Border>
                             </Grid>
@@ -256,7 +256,7 @@
                             <TextBlock x:Name="TxtStatusCarrito"
                                        Text="Solicitud: 0 artículos"
                                        FontWeight="Bold"
-                                       Foreground="#2563EB"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                        FontSize="12" />
                             <TextBlock x:Name="TxtUltimoEscaneo"
                                        Text="Escáner listo"
@@ -292,7 +292,7 @@
                         <StackPanel>
                             <DockPanel Margin="0,0,0,12">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <ui:Button Content="🗺️ Abrir Mapa de Bodega 3×3" Margin="0,0,8,0" Click="BtnAbrirMapaAnaqueles_Click" />
+                                    <ui:Button Content="Abrir Mapa de Bodega 3×3" Margin="0,0,8,0" Click="BtnAbrirMapaAnaqueles_Click" />
                                     <ui:Button Content="+ Nueva Solicitud" Appearance="Primary" Click="MenuNuevaSolicitud_Click" />
                                 </StackPanel>
                                 <StackPanel>
@@ -303,7 +303,7 @@
 
                             <UniformGrid Columns="5" Margin="0,0,0,16">
                                 <!-- KPI 1: Solicitudes Pendientes -->
-                                <Border Margin="0,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                <Border Margin="0,0,8,0" Padding="14,12" CornerRadius="4" Cursor="Hand"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         BorderBrush="#93C5FD" BorderThickness="1,1,1,3"
                                         Effect="{StaticResource CardElevationShadow}"
@@ -316,17 +316,17 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
                                             <TextBlock Text="SOLICITUDES PENDIENTES" FontSize="10.2" FontWeight="Bold" Opacity="0.65" />
-                                            <TextBlock x:Name="KpiSolicitudes" Text="0" FontSize="28" FontWeight="Bold" Foreground="#2563EB" Margin="0,4,0,2" />
-                                            <TextBlock Text="Ir a Solicitudes →" FontSize="10.5" Foreground="#2563EB" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="KpiSolicitudes" Text="0" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Margin="0,4,0,2" />
+                                            <TextBlock Text="Ir a Solicitudes →" FontSize="10.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" />
                                         </StackPanel>
-                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#DBEAFE" VerticalAlignment="Top">
-                                            <ui:SymbolIcon Symbol="ClipboardTaskListLtr24" Foreground="#1D4ED8" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="4" Background="#DBEAFE" VerticalAlignment="Top">
+                                            <ui:SymbolIcon Symbol="ClipboardTaskListLtr24" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Grid>
                                 </Border>
 
                                 <!-- KPI 2: Órdenes Abiertas -->
-                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="4" Cursor="Hand"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         BorderBrush="#FDBA74" BorderThickness="1,1,1,3"
                                         Effect="{StaticResource CardElevationShadow}"
@@ -342,14 +342,14 @@
                                             <TextBlock x:Name="KpiOcsAbiertas" Text="0" FontSize="28" FontWeight="Bold" Foreground="#EA580C" Margin="0,4,0,2" />
                                             <TextBlock Text="Recibir Mercancía →" FontSize="10.5" Foreground="#EA580C" FontWeight="SemiBold" />
                                         </StackPanel>
-                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#FFEDD5" VerticalAlignment="Top">
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="4" Background="#FFEDD5" VerticalAlignment="Top">
                                             <ui:SymbolIcon Symbol="DocumentText24" Foreground="#C2410C" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Grid>
                                 </Border>
 
                                 <!-- KPI 3: Alertas Stock Mínimo -->
-                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="4" Cursor="Hand"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         BorderBrush="#FCA5A5" BorderThickness="1,1,1,3"
                                         Effect="{StaticResource CardElevationShadow}"
@@ -365,14 +365,14 @@
                                             <TextBlock x:Name="KpiStockBajo" Text="0" FontSize="28" FontWeight="Bold" Foreground="#DC2626" Margin="0,4,0,2" />
                                             <TextBlock Text="Reabastecer Stock →" FontSize="10.5" Foreground="#DC2626" FontWeight="SemiBold" />
                                         </StackPanel>
-                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#FEE2E2" VerticalAlignment="Top">
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="4" Background="#FEE2E2" VerticalAlignment="Top">
                                             <ui:SymbolIcon Symbol="Warning24" Foreground="#B91C1C" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Grid>
                                 </Border>
 
                                 <!-- KPI 4: Herramientas Prestadas -->
-                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                <Border Margin="4,0,8,0" Padding="14,12" CornerRadius="4" Cursor="Hand"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         BorderBrush="#D8B4FE" BorderThickness="1,1,1,3"
                                         Effect="{StaticResource CardElevationShadow}"
@@ -388,14 +388,14 @@
                                             <TextBlock x:Name="KpiHerramientasPrestadas" Text="0" FontSize="28" FontWeight="Bold" Foreground="#7C3AED" Margin="0,4,0,2" />
                                             <TextBlock Text="Ver Préstamos →" FontSize="10.5" Foreground="#7C3AED" FontWeight="SemiBold" />
                                         </StackPanel>
-                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#F3E8FF" VerticalAlignment="Top">
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="4" Background="#F3E8FF" VerticalAlignment="Top">
                                             <ui:SymbolIcon Symbol="Wrench24" Foreground="#6D28D9" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Grid>
                                 </Border>
 
                                 <!-- KPI 5: Compras Totales -->
-                                <Border Margin="4,0,0,0" Padding="14,12" CornerRadius="10" Cursor="Hand"
+                                <Border Margin="4,0,0,0" Padding="14,12" CornerRadius="4" Cursor="Hand"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         BorderBrush="#86EFAC" BorderThickness="1,1,1,3"
                                         Effect="{StaticResource CardElevationShadow}"
@@ -411,7 +411,7 @@
                                             <TextBlock x:Name="KpiGastoTotal" Text="$0.00" FontSize="22" FontWeight="Bold" Foreground="#16A34A" Margin="0,6,0,4" />
                                             <TextBlock Text="Ver Analítica →" FontSize="10.5" Foreground="#16A34A" FontWeight="SemiBold" />
                                         </StackPanel>
-                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#DCFCE7" VerticalAlignment="Top">
+                                        <Border Grid.Column="1" Width="38" Height="38" CornerRadius="4" Background="#DCFCE7" VerticalAlignment="Top">
                                             <ui:SymbolIcon Symbol="DataTrending24" Foreground="#15803D" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                     </Grid>
@@ -448,11 +448,11 @@
                                     <DockPanel>
                                         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                                             <DockPanel Margin="0,0,0,8">
-                                                <TextBlock x:Name="TxtFiltroFechaAgenda" DockPanel.Dock="Right" Margin="8,0,0,0" Text="Mostrando: Todos los eventos próximos" FontSize="11.5" Foreground="#0078D4" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                <TextBlock x:Name="TxtFiltroFechaAgenda" DockPanel.Dock="Right" Margin="8,0,0,0" Text="Mostrando: Todos los eventos próximos" FontSize="11.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
                                                 <TextBlock Text="Recordatorios, Seguimiento de Compras y Entregas" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" TextWrapping="Wrap" />
                                             </DockPanel>
 
-                                            <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                            <Border Padding="8" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="125" />
@@ -526,7 +526,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
-                                <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
+                                <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
                                     <StackPanel>
                                         <DockPanel Margin="0,0,0,10">
                                             <ui:Button DockPanel.Dock="Right" Content="Ver Órdenes" Margin="8,0,0,0" Click="BtnIrRecepciones_Click" />
@@ -535,10 +535,10 @@
                                         <DataGrid x:Name="DgDashboardOcs" AutoGenerateColumns="False" IsReadOnly="True" Height="195" HeadersVisibility="Column">
                                             <DataGrid.ContextMenu>
                                                 <ContextMenu>
-                                                    <MenuItem Header="📥 Ir a Recepción de Mercancía de esta OC" Click="CtxDashboardOcRecibir_Click" />
-                                                    <MenuItem Header="🖨️ Imprimir / Ver Orden de Compra" Click="CtxDashboardOcImprimir_Click" />
+                                                    <MenuItem Header="Ir a Recepción de Mercancía de esta OC" Click="CtxDashboardOcRecibir_Click" />
+                                                    <MenuItem Header="Imprimir / Ver Orden de Compra" Click="CtxDashboardOcImprimir_Click" />
                                                     <Separator />
-                                                    <MenuItem Header="📋 Copiar Folio de OC" Click="CtxDashboardOcCopiarFolio_Click" />
+                                                    <MenuItem Header="Copiar Folio de OC" Click="CtxDashboardOcCopiarFolio_Click" />
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
@@ -561,7 +561,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
+                                <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
                                     <StackPanel>
                                         <DockPanel Margin="0,0,0,10">
                                             <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" Margin="8,0,0,0" Click="BtnIrAlmacenPos_Click" />
@@ -570,9 +570,9 @@
                                         <DataGrid x:Name="DgDashboardAlertas" AutoGenerateColumns="False" IsReadOnly="True" Height="195" HeadersVisibility="Column">
                                             <DataGrid.ContextMenu>
                                                 <ContextMenu>
-                                                    <MenuItem Header="🛒 Agregar a Solicitud de Compra (Reabastecer)" Click="CtxAlertaStockAgregarSolicitud_Click" />
-                                                    <MenuItem Header="🗺️ Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxAlertaStockMapa_Click" />
-                                                    <MenuItem Header="✏️ Abrir Ficha del Producto en Catálogo" Click="CtxAlertaStockEditar_Click" />
+                                                    <MenuItem Header="Agregar a Solicitud de Compra (Reabastecer)" Click="CtxAlertaStockAgregarSolicitud_Click" />
+                                                    <MenuItem Header="Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxAlertaStockMapa_Click" />
+                                                    <MenuItem Header="Abrir Ficha del Producto en Catálogo" Click="CtxAlertaStockEditar_Click" />
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
@@ -650,7 +650,7 @@
                                                   SelectionChanged="CboFiltroUbicacion_SelectionChanged" />
                                     </Grid>
 
-                                    <Border Padding="8,6" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                    <Border Padding="8,6" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
@@ -672,13 +672,13 @@
                                             <ui:Button x:Name="BtnIrSolicitudDesdeCatalogo"
                                                        Grid.Column="2"
                                                        Margin="0,0,6,0"
-                                                       Content="📋 Ir a la Solicitud"
+                                                       Content="Ir a la Solicitud"
                                                        ToolTip="Abrir la Solicitud de Compra activa en el Módulo 2"
                                                        Appearance="Primary"
                                                        Click="BtnEnviarCarritoASolicitud_Click" />
                                             <ui:Button x:Name="BtnToggleEditorCatalogo"
                                                        Grid.Column="3"
-                                                       Content="⟪ Ocultar Editor"
+                                                       Content="Ocultar Editor"
                                                        ToolTip="Ocultar o mostrar el panel lateral de edición para ver el catálogo a pantalla completa"
                                                        Click="BtnToggleEditorCatalogo_Click" />
                                         </Grid>
@@ -700,23 +700,23 @@
                                             <Border Width="242"
                                                     Margin="0,0,10,10"
                                                     Padding="12"
-                                                    CornerRadius="10"
+                                                    CornerRadius="4"
                                                     Cursor="Hand"
                                                     Tag="{Binding}"
                                                     ToolTip="Clic izquierdo: Seleccionar / Editar | Clic derecho: Menú de opciones rápidas"
                                                     MouseLeftButtonUp="CardProductoCatalogo_MouseLeftButtonUp">
                                                 <Border.ContextMenu>
                                                     <ContextMenu Tag="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
-                                                        <MenuItem Header="📋 Agregar a la Solicitud (+1)" Tag="{Binding}" Click="CtxCardAgregarCarrito_Click" FontWeight="Bold" />
-                                                        <MenuItem Header="📤 Enviar directo a Salida de Almacén" Tag="{Binding}" Click="CtxCardEnviarSalida_Click" />
+                                                        <MenuItem Header="Agregar a la Solicitud (+1)" Tag="{Binding}" Click="CtxCardAgregarCarrito_Click" FontWeight="Bold" />
+                                                        <MenuItem Header="Enviar directo a Salida de Almacén" Tag="{Binding}" Click="CtxCardEnviarSalida_Click" />
                                                         <Separator />
-                                                        <MenuItem Header="✏️ Editar Ficha del Producto" Tag="{Binding}" Click="CtxCardEditarProducto_Click" />
-                                                        <MenuItem Header="🗺️ Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Tag="{Binding}" Click="CtxCardAbrirMapaUbicacion_Click" />
-                                                        <MenuItem Header="🔧 Abrir Ficha Individual de Herramienta (HER-xxxx)" Tag="{Binding}" Click="CtxCardAbrirFichaHerramienta_Click" />
-                                                        <MenuItem Header="📈 Ver Historial de Precios y Gráficas en Análisis" Tag="{Binding}" Click="CtxCardVerAnalisisPrecio_Click" />
+                                                        <MenuItem Header="Editar Ficha del Producto" Tag="{Binding}" Click="CtxCardEditarProducto_Click" />
+                                                        <MenuItem Header="Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Tag="{Binding}" Click="CtxCardAbrirMapaUbicacion_Click" />
+                                                        <MenuItem Header="Abrir Ficha Individual de Herramienta (HER-xxxx)" Tag="{Binding}" Click="CtxCardAbrirFichaHerramienta_Click" />
+                                                        <MenuItem Header="Ver Historial de Precios y Gráficas en Análisis" Tag="{Binding}" Click="CtxCardVerAnalisisPrecio_Click" />
                                                         <Separator />
-                                                        <MenuItem Header="📋 Copiar Código Interno (PRD-xxxx)" Tag="{Binding}" Click="CtxCardCopiarCodigo_Click" />
-                                                        <MenuItem Header="🗑️ Eliminar Producto del Catálogo" Tag="{Binding}" Click="CtxCardEliminarProducto_Click" />
+                                                        <MenuItem Header="Copiar Código Interno (PRD-xxxx)" Tag="{Binding}" Click="CtxCardCopiarCodigo_Click" />
+                                                        <MenuItem Header="Eliminar Producto del Catálogo" Tag="{Binding}" Click="CtxCardEliminarProducto_Click" />
                                                     </ContextMenu>
                                                 </Border.ContextMenu>
                                                 <Border.Style>
@@ -749,7 +749,7 @@
                                                             Margin="0,0,0,8">
                                                         <Grid>
                                                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                                <ui:SymbolIcon Symbol="Box24" FontSize="38" Foreground="#0078D4" HorizontalAlignment="Center" />
+                                                                <ui:SymbolIcon Symbol="Box24" FontSize="38" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Center" />
                                                                 <TextBlock Text="{Binding CategoriaNombre}" FontSize="10.5" Foreground="#64748B" HorizontalAlignment="Center" Margin="0,4,0,0" />
                                                             </StackPanel>
                                                             <Image Source="{Binding ImagenMiniatura, Mode=OneWay}"
@@ -780,7 +780,7 @@
                                                     </Border>
 
                                                     <TextBlock Text="{Binding Nombre}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" ToolTip="{Binding Nombre}" />
-                                                    <TextBlock Text="{Binding FichaTecnicaResumen}" FontSize="10.5" Foreground="#0284C7" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding FichaTecnicaResumen}" Margin="0,1,0,1" />
+                                                    <TextBlock Text="{Binding FichaTecnicaResumen}" FontSize="10.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding FichaTecnicaResumen}" Margin="0,1,0,1" />
                                                     <TextBlock Text="{Binding ConversionTexto}" FontSize="11" Opacity="0.72" Margin="0,0,0,4" />
 
                                                     <Grid Margin="0,2,0,6">
@@ -790,7 +790,7 @@
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel>
                                                             <TextBlock Text="Existencia" FontSize="10.5" Opacity="0.7" />
-                                                            <TextBlock FontSize="13" FontWeight="Bold" Foreground="#0078D4">
+                                                            <TextBlock FontSize="13" FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
                                                                 <Run Text="{Binding StockActual, Mode=OneWay, StringFormat={}{0:0.##}}" />
                                                                 <Run Text="{Binding UnidadAlmacen, Mode=OneWay}" />
                                                             </TextBlock>
@@ -803,7 +803,7 @@
 
                                                     <ui:Button HorizontalAlignment="Stretch"
                                                                Appearance="Primary"
-                                                               Content="➕ Agregar a Solicitud"
+                                                               Content="Agregar a Solicitud"
                                                                Tag="{Binding}"
                                                                Click="BtnAgregarProductoCarrito_Click" />
                                                 </StackPanel>
@@ -832,9 +832,9 @@
                                     <!-- Banner visual claro de Modo Alta vs Modo Edición -->
                                     <Border x:Name="BdrModoEditorProducto"
                                             Padding="10,7"
-                                            CornerRadius="6"
+                                            CornerRadius="4"
                                             Background="#DBEAFE"
-                                            BorderBrush="#2563EB"
+                                            BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
                                             BorderThickness="1"
                                             Margin="0,0,0,8">
                                         <StackPanel>
@@ -901,7 +901,7 @@
                                               ToolTip="Seleccione una familia existente o escriba una nueva manualmente para agrupar artículos equivalentes en Comparativa" />
 
                                     <!-- Ficha Técnica Inteligente (Universal + Dinámica por Categoría) -->
-                                    <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,2,0,8">
+                                    <Border Padding="8" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,2,0,8">
                                         <StackPanel>
                                             <DockPanel Margin="0,0,0,6">
                                                 <ui:Button DockPanel.Dock="Right"
@@ -940,16 +940,16 @@
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                                    <TextBlock x:Name="LblProdCampo1" Text="Capacidad Eléctrica / Voltaje" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock x:Name="LblProdCampo1" Text="Capacidad Eléctrica / Voltaje" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
                                                     <ui:TextBox x:Name="TxtProdCapacidadElectrica" PlaceholderText="Ej. 220V / 5 Ton / Microfibra" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Margin="4,0,0,0">
-                                                    <TextBlock x:Name="LblProdCampo2" Text="Corriente / Potencia / Material" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock x:Name="LblProdCampo2" Text="Corriente / Potencia / Material" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
                                                     <ui:TextBox x:Name="TxtProdEspecificacion1" PlaceholderText="Ej. 40A, 160W, Cédula 40, 4 L" />
                                                 </StackPanel>
                                             </Grid>
 
-                                            <TextBlock x:Name="LblProdCampo3" Text="Gas / Polos / Color / Especificación" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="LblProdCampo3" Text="Gas / Polos / Color / Especificación" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Margin="0,0,0,2" TextTrimming="CharacterEllipsis" />
                                             <ui:TextBox x:Name="TxtProdEspecificacion2" Margin="0,0,0,6" PlaceholderText="Ej. R-410A, Trifásico, IP65, Color Azul" />
 
                                             <TextBlock Text="Notas Técnicas / Descripción Adicional" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
@@ -957,7 +957,7 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,2,0,8">
+                                    <Border Padding="8" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,2,0,8">
                                         <StackPanel>
                                             <TextBlock Text="Unidades y Conversión (Mayoreo a Menudeo)" FontWeight="SemiBold" FontSize="11.5" Margin="0,0,0,6" />
                                             <Grid>
@@ -1023,18 +1023,18 @@
                                                       ToolTip="Seleccione de la lista desplegable o escriba la ubicación (Ej. A-01, DETRAS-A-01, GABINETE-01, PISO-01)"
                                                       SelectionChanged="CboUbicacionAlmacen_SelectionChanged" />
                                             <ui:Button Grid.Column="1"
-                                                       Content="🗺️ Mapa"
+                                                       Content="Mapa"
                                                        FontSize="11.5"
                                                        Padding="10,5"
                                                        Margin="6,0,0,0"
                                                        ToolTip="Abrir selector gráfico 3x3 de anaqueles (A–F, Detrás de A, Gabinete y Piso)"
                                                        Click="BtnSelectorUbicacionProducto_Click" />
                                         </Grid>
-                                        <Border Padding="8,5" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                        <Border Padding="8,5" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                             <DockPanel>
                                                 <ui:Button x:Name="BtnConfigurarHerramientaCatalogo"
                                                            DockPanel.Dock="Right"
-                                                           Content="🔧 Configurar Ficha HER"
+                                                           Content="Configurar Ficha HER"
                                                            FontSize="11"
                                                            Padding="10,4"
                                                            ToolTip="Abrir modal de información de la herramienta (Número de serie, código individual HER-xxxx, ubicación y estado)"
@@ -1087,11 +1087,11 @@
                                     <DockPanel Margin="0,0,0,10">
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                                             <ui:Button x:Name="BtnNuevaSolicitudVacia" Content="+ Nueva Solicitud" FontSize="11.5" Margin="0,0,6,0" Click="BtnNuevaSolicitudVacia_Click" />
-                                            <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="➕ Escoger del Catálogo Visual" Appearance="Primary" FontSize="11.5" Click="BtnCrearCarritoEIrCatalogo_Click" />
+                                            <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="Escoger del Catálogo Visual" Appearance="Primary" FontSize="11.5" Click="BtnCrearCarritoEIrCatalogo_Click" />
                                         </StackPanel>
                                         <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="TxtTituloEditorSolicitud" Text="Nueva Solicitud de Compra" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="Wrap" />
-                                            <Border x:Name="BdrEstadoEditorSolicitud" Padding="8,2" CornerRadius="4" Background="#1D4ED8" VerticalAlignment="Center">
+                                            <Border x:Name="BdrEstadoEditorSolicitud" Padding="8,2" CornerRadius="4" Background="{DynamicResource AccentFillColorDefaultBrush}" VerticalAlignment="Center">
                                                 <TextBlock x:Name="TxtEstadoEditorSolicitud" Text="EN CAPTURA" FontSize="10.5" FontWeight="Bold" Foreground="White" />
                                             </Border>
                                         </WrapPanel>
@@ -1126,13 +1126,13 @@
                                     </Grid>
 
                                     <!-- Captura Rápida Compacta (Plantilla Excel / Web y WhatsApp Colapsable) -->
-                                    <Border Padding="8,6" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
+                                    <Border Padding="8,6" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
                                         <StackPanel>
                                             <DockPanel>
                                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
-                                                    <ui:Button Content="📄 Formato Excel" FontSize="11" Padding="8,3" Margin="0,0,6,0" ToolTip="Descargar formato estándar de Solicitud en Excel (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
-                                                    <ui:Button Content="📥 Importar Solicitud" FontSize="11" Padding="8,3" Margin="0,0,6,0" ToolTip="Cargar una Solicitud desde archivo Excel/CSV" Click="BtnImportarPlantillaSolicitud_Click" />
-                                                    <ui:Button x:Name="BtnToggleWhatsappSolicitud" Content="💬 Pegar Texto WhatsApp ▾" FontSize="11" Padding="8,3" Click="BtnToggleWhatsappSolicitud_Click" />
+                                                    <ui:Button Content="Formato Excel" FontSize="11" Padding="8,3" Margin="0,0,6,0" ToolTip="Descargar formato estándar de Solicitud en Excel (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
+                                                    <ui:Button Content="Importar Solicitud" FontSize="11" Padding="8,3" Margin="0,0,6,0" ToolTip="Cargar una Solicitud desde archivo Excel/CSV" Click="BtnImportarPlantillaSolicitud_Click" />
+                                                    <ui:Button x:Name="BtnToggleWhatsappSolicitud" Content="Pegar Texto WhatsApp ▾" FontSize="11" Padding="8,3" Click="BtnToggleWhatsappSolicitud_Click" />
                                                 </StackPanel>
                                                 <TextBlock Text="Carga por Plantilla o Lista Rápida" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                             </DockPanel>
@@ -1157,7 +1157,7 @@
                                     </Border>
 
                                     <!-- Barra de Búsqueda + Agregar Partida -->
-                                    <Border Padding="10" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
+                                    <Border Padding="10" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
                                         <StackPanel>
                                             <DockPanel Margin="0,0,0,6">
                                                 <TextBlock x:Name="TxtContadorFiltroProductoSol" DockPanel.Dock="Right" Margin="8,0,0,0" Text="" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
@@ -1247,16 +1247,16 @@
                                                Appearance="Primary"
                                                HorizontalAlignment="Stretch"
                                                Margin="0,0,6,0"
-                                               Content="⚖️ Abrir Solicitud en Comparativa"
+                                               Content="Abrir Solicitud en Comparativa"
                                                Click="BtnEnviarSolicitudAComparativa_Click" />
                                     <Menu Grid.Column="1" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
-                                        <MenuItem Header="📄 Acciones ▾" Padding="10,6" FontWeight="SemiBold">
-                                            <MenuItem Header="🛒 Ir al Catálogo con esta Solicitud" Click="BtnIrCatalogoConSolicitud_Click" />
-                                            <MenuItem Header="🖨️ Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
-                                            <MenuItem Header="📥 Descargar Solicitud (PDF / PNG / CSV)" Click="BtnDescargarSolicitudArchivo_Click" />
-                                            <MenuItem Header="📊 Exportar Existencias de Almacén (CSV)" Click="BtnExportarExistenciasCatalogo_Click" />
+                                        <MenuItem Header="Acciones ▾" Padding="10,6" FontWeight="SemiBold">
+                                            <MenuItem Header="Ir al Catálogo con esta Solicitud" Click="BtnIrCatalogoConSolicitud_Click" />
+                                            <MenuItem Header="Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
+                                            <MenuItem Header="Descargar Solicitud (PDF / PNG / CSV)" Click="BtnDescargarSolicitudArchivo_Click" />
+                                            <MenuItem Header="Exportar Existencias de Almacén (CSV)" Click="BtnExportarExistenciasCatalogo_Click" />
                                             <Separator />
-                                            <MenuItem Header="🗑️ Eliminar Solicitud" Click="BtnEliminarSolicitud_Click" />
+                                            <MenuItem Header="Eliminar Solicitud" Click="BtnEliminarSolicitud_Click" />
                                         </MenuItem>
                                     </Menu>
                                 </Grid>
@@ -1267,13 +1267,13 @@
                                           SelectionChanged="DgHistorialSolicitudes_SelectionChanged">
                                     <DataGrid.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="⚖️ Abrir Solicitud en Cuadro Comparativo" Click="BtnEnviarSolicitudAComparativa_Click" FontWeight="Bold" />
-                                            <MenuItem Header="🛒 Ir al Catálogo Visual con esta Solicitud activa" Click="BtnIrCatalogoConSolicitud_Click" />
+                                            <MenuItem Header="Abrir Solicitud en Cuadro Comparativo" Click="BtnEnviarSolicitudAComparativa_Click" FontWeight="Bold" />
+                                            <MenuItem Header="Ir al Catálogo Visual con esta Solicitud activa" Click="BtnIrCatalogoConSolicitud_Click" />
                                             <Separator />
-                                            <MenuItem Header="🖨️ Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
-                                            <MenuItem Header="📄 Descargar Solicitud (PDF / PNG / CSV)" Click="BtnDescargarSolicitudArchivo_Click" />
+                                            <MenuItem Header="Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
+                                            <MenuItem Header="Descargar Solicitud (PDF / PNG / CSV)" Click="BtnDescargarSolicitudArchivo_Click" />
                                             <Separator />
-                                            <MenuItem Header="🗑️ Eliminar Solicitud" Click="BtnEliminarSolicitud_Click" />
+                                            <MenuItem Header="Eliminar Solicitud" Click="BtnEliminarSolicitud_Click" />
                                         </ContextMenu>
                                     </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
@@ -1318,13 +1318,13 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                     <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,8,0">
-                                        <MenuItem Header="📤 Exportar / Imprimir ▾" Padding="10,6" FontWeight="SemiBold">
-                                            <MenuItem Header="📋 Copiar Lista Limpia para Cotizar" Click="BtnCopiarListaParaCotizar_Click" />
-                                            <MenuItem Header="🖨️ Vista Previa / Imprimir Comparativa" Click="BtnImprimirComparativa_Click" />
-                                            <MenuItem Header="📄 Descargar Comparativa (PDF / PNG / CSV)" Click="BtnDescargarComparativaArchivo_Click" />
+                                        <MenuItem Header="Exportar / Imprimir ▾" Padding="10,6" FontWeight="SemiBold">
+                                            <MenuItem Header="Copiar Lista Limpia para Cotizar" Click="BtnCopiarListaParaCotizar_Click" />
+                                            <MenuItem Header="Vista Previa / Imprimir Comparativa" Click="BtnImprimirComparativa_Click" />
+                                            <MenuItem Header="Descargar Comparativa (PDF / PNG / CSV)" Click="BtnDescargarComparativaArchivo_Click" />
                                         </MenuItem>
                                     </Menu>
-                                    <ui:Button Content="💾 Guardar Borrador"
+                                    <ui:Button Content="Guardar Borrador"
                                                Appearance="Primary"
                                                Click="BtnGuardarBorradorComparativa_Click" />
                                 </StackPanel>
@@ -1425,7 +1425,7 @@
                             <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <DockPanel>
                                     <!-- Encabezado del Producto Seleccionado -->
-                                    <Border DockPanel.Dock="Top" Padding="12" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                    <Border DockPanel.Dock="Top" Padding="12" CornerRadius="4" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                         <StackPanel>
                                             <!-- Fila 1: Título y Subtítulo del Producto (Con ajuste de línea completo para no empujar ningún botón) -->
                                             <TextBlock x:Name="TxtCompProdTitulo"
@@ -1483,11 +1483,11 @@
                                                        Margin="0,6,0,0"
                                                        FontSize="11.5"
                                                        FontWeight="SemiBold"
-                                                       Foreground="#2563EB"
+                                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                                        TextWrapping="Wrap" />
 
                                             <!-- Selector de Compras Históricas de Artículos Similares / Misma Familia -->
-                                            <Border Margin="0,8,0,0" Padding="8,6" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                            <Border Margin="0,8,0,0" Padding="8,6" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto" />
@@ -1529,13 +1529,13 @@
                                         <StackPanel>
                                             <UniformGrid x:Name="UgTarjetasComparativa" Columns="1">
                                                 <!-- OPCIÓN 1 -->
-                                                <Border x:Name="BdrCompCard1" Margin="0,0,5,0" Padding="10" CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="#0078D4" BorderThickness="1.5">
+                                                <Border x:Name="BdrCompCard1" Margin="0,0,5,0" Padding="10" CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}" BorderThickness="1.5">
                                                     <StackPanel>
                                                         <DockPanel Margin="0,0,0,6">
                                                             <Border x:Name="BdrBadgeGanador1" DockPanel.Dock="Right" Padding="6,2" CornerRadius="4" Background="#059669" Margin="6,0,0,0" Visibility="Collapsed">
                                                                 <TextBlock Text="SELECCIONADO" FontSize="9.5" FontWeight="Bold" Foreground="White" />
                                                             </Border>
-                                                            <TextBlock Text="Opción 1 (Principal / Histórico)" FontWeight="Bold" FontSize="13" Foreground="#0078D4" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="Opción 1 (Principal / Histórico)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                                         </DockPanel>
 
                                                         <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
@@ -1561,7 +1561,7 @@
                                                         <TextBlock Text="Notas / Marca ofertada" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                         <ui:TextBox x:Name="TxtCompNotas1" Margin="0,0,0,8" PlaceholderText="Ej. Entrega inmediata..." TextChanged="TxtCompExtras_TextChanged" />
 
-                                                        <Border Padding="8" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
+                                                        <Border Padding="8" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
                                                             <TextBlock x:Name="TxtResumenProv1" Text="Subtotal: $0.00&#x0a;Total c/IVA: $0.00" FontWeight="Bold" FontSize="11.5" TextWrapping="Wrap" />
                                                         </Border>
 
@@ -1608,7 +1608,7 @@
                                                         <TextBlock Text="Notas / Marca ofertada" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                         <ui:TextBox x:Name="TxtCompNotas2" Margin="0,0,0,8" PlaceholderText="Ej. Sobre pedido..." TextChanged="TxtCompExtras_TextChanged" />
 
-                                                        <Border Padding="8" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
+                                                        <Border Padding="8" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
                                                             <TextBlock x:Name="TxtResumenProv2" Text="Subtotal: $0.00&#x0a;Total c/IVA: $0.00" FontWeight="Bold" FontSize="11.5" TextWrapping="Wrap" />
                                                         </Border>
 
@@ -1655,7 +1655,7 @@
                                                         <TextBlock Text="Notas / Marca ofertada" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
                                                         <ui:TextBox x:Name="TxtCompNotas3" Margin="0,0,0,8" PlaceholderText="Ej. Marca original..." TextChanged="TxtCompExtras_TextChanged" />
 
-                                                        <Border Padding="8" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
+                                                        <Border Padding="8" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,0,8">
                                                             <TextBlock x:Name="TxtResumenProv3" Text="Subtotal: $0.00&#x0a;Total c/IVA: $0.00" FontWeight="Bold" FontSize="11.5" TextWrapping="Wrap" />
                                                         </Border>
 
@@ -1674,7 +1674,7 @@
                                                     Padding="10"
                                                     CornerRadius="8"
                                                     Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                                    BorderBrush="#0284C7"
+                                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
                                                     BorderThickness="1">
                                                 <StackPanel>
                                                     <DockPanel Margin="0,0,0,6">
@@ -1682,7 +1682,7 @@
                                                             <ui:Button Content="Elegir Seleccionado como Ganador" FontSize="11" Appearance="Primary" Margin="0,0,6,0" Click="BtnElegirProveedorExtraGanador_Click" />
                                                             <ui:Button Content="Quitar Proveedor Extra" FontSize="11" Click="BtnEliminarProveedorExtra_Click" />
                                                         </StackPanel>
-                                                        <TextBlock Text="Proveedores Concursantes Adicionales (Opción 4+)" FontWeight="Bold" FontSize="12.5" Foreground="#0284C7" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                                        <TextBlock Text="Proveedores Concursantes Adicionales (Opción 4+)" FontWeight="Bold" FontSize="12.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                     </DockPanel>
                                                     <DataGrid x:Name="DgProveedoresExtraComp" AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="150">
                                                         <DataGrid.Columns>
@@ -1726,11 +1726,11 @@
                                         <DockPanel Margin="0,0,0,8">
                                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
                                                 <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0">
-                                                    <MenuItem Header="⚙️ Acciones OC ▾" Padding="10,5" FontWeight="SemiBold" FontSize="11.5">
-                                                        <MenuItem Header="📄 Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
-                                                        <MenuItem Header="🧾 Liquidar sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
+                                                    <MenuItem Header="Acciones OC ▾" Padding="10,5" FontWeight="SemiBold" FontSize="11.5">
+                                                        <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
+                                                        <MenuItem Header="Liquidar sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
                                                         <Separator />
-                                                        <MenuItem Header="🔐 Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
+                                                        <MenuItem Header="Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
                                                     </MenuItem>
                                                 </Menu>
                                                 <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirOcSeleccionada_Click" />
@@ -1739,7 +1739,7 @@
                                         </DockPanel>
 
                                         <!-- Barra de Flujo Operativo: Dirección -> Finanzas -> Almacén -->
-                                        <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                        <Border Padding="8" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="1.25*" />
@@ -1787,15 +1787,15 @@
                                               MouseDoubleClick="DgOrdenesCompra_MouseDoubleClick">
                                         <DataGrid.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="📥 Abrir Recepción Agrupada de esta OC (Modal)" Click="BtnAbrirModalRecepcionOc_Click" FontWeight="Bold" />
-                                                <MenuItem Header="📥 Recibir Todo lo Pendiente de esta OC" Click="BtnRecibirTodoPendienteOc_Click" />
-                                                <MenuItem Header="🖨️ Imprimir Orden de Compra" Click="BtnImprimirOcSeleccionada_Click" />
-                                                <MenuItem Header="📄 Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
+                                                <MenuItem Header="Abrir Recepción Agrupada de esta OC (Modal)" Click="BtnAbrirModalRecepcionOc_Click" FontWeight="Bold" />
+                                                <MenuItem Header="Recibir Todo lo Pendiente de esta OC" Click="BtnRecibirTodoPendienteOc_Click" />
+                                                <MenuItem Header="Imprimir Orden de Compra" Click="BtnImprimirOcSeleccionada_Click" />
+                                                <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
                                                 <Separator />
-                                                <MenuItem Header="🧾 Liquidar OC sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
-                                                <MenuItem Header="🔐 Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
+                                                <MenuItem Header="Liquidar OC sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
+                                                <MenuItem Header="Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
                                                 <Separator />
-                                                <MenuItem Header="📋 Copiar Folio de OC" Click="CtxOrdenCompraCopiarFolio_Click" />
+                                                <MenuItem Header="Copiar Folio de OC" Click="CtxOrdenCompraCopiarFolio_Click" />
                                             </ContextMenu>
                                         </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
@@ -1944,7 +1944,7 @@
                                                FontSize="20"
                                                Margin="4,0,10,0"
                                                VerticalAlignment="Center"
-                                               Foreground="#0078D4" />
+                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
 
                                 <ui:TextBox x:Name="TxtBuscarAlmacen"
                                             Grid.Column="1"
@@ -1981,7 +1981,7 @@
                                     <StackPanel DockPanel.Dock="Top">
                                         <DockPanel Margin="0,0,0,8">
                                             <ui:Button DockPanel.Dock="Right"
-                                                       Content="📥 Cargar de OC Recibida"
+                                                       Content="Cargar de OC Recibida"
                                                        FontSize="11"
                                                        Margin="8,0,0,0"
                                                        ToolTip="Cargar automáticamente los artículos recibidos de una Orden de Compra para darles salida"
@@ -2009,7 +2009,7 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
+                                        <Border Padding="8" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,0,8">
                                             <StackPanel>
                                                 <DockPanel Margin="0,0,0,4">
                                                     <TextBlock x:Name="TxtContadorFiltroProductoSal" DockPanel.Dock="Right" Margin="8,0,0,0" Text="" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
@@ -2138,7 +2138,7 @@
                                         <Border x:Name="BdrListaHerramientasPorPrestar"
                                                 Visibility="Collapsed"
                                                 Padding="8,6"
-                                                CornerRadius="6"
+                                                CornerRadius="4"
                                                 Background="#EFF6FF"
                                                 BorderBrush="#93C5FD"
                                                 BorderThickness="1"
@@ -2169,7 +2169,7 @@
                                                             <Border Background="White"
                                                                     BorderBrush="#60A5FA"
                                                                     BorderThickness="1"
-                                                                    CornerRadius="5"
+                                                                    CornerRadius="4"
                                                                     Padding="7,3"
                                                                     Margin="0,0,6,4">
                                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -2177,7 +2177,7 @@
                                                                                FontFamily="Consolas"
                                                                                FontWeight="Bold"
                                                                                FontSize="11"
-                                                                               Foreground="#1D4ED8"
+                                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                                                                VerticalAlignment="Center"
                                                                                Margin="0,0,5,0" />
                                                                     <TextBlock Text="{Binding ProductoNombre}"
@@ -2207,7 +2207,7 @@
                                     </StackPanel>
 
                                     <!-- Devolución -->
-                                    <Border DockPanel.Dock="Bottom" Padding="10" CornerRadius="6" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                    <Border DockPanel.Dock="Bottom" Padding="10" CornerRadius="4" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                         <StackPanel>
                                             <TextBlock Text="Devolución de Herramienta (Completa, Parcial o con Incidencia)" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                             <Grid>
@@ -2245,7 +2245,7 @@
                                                                         <Border Background="#EFF6FF"
                                                                                 BorderBrush="#93C5FD"
                                                                                 BorderThickness="1"
-                                                                                CornerRadius="5"
+                                                                                CornerRadius="4"
                                                                                 Padding="8,5"
                                                                                 Margin="0,2,0,1"
                                                                                 Cursor="Hand"
@@ -2254,12 +2254,12 @@
                                                                                 MouseLeftButtonUp="HeaderGrupoPrestamo_MouseLeftButtonUp">
                                                                             <DockPanel>
                                                                                 <Button DockPanel.Dock="Right"
-                                                                                        Content="🔄 Devolver / Revisar Vale"
+                                                                                        Content="Devolver / Revisar Vale"
                                                                                         FontSize="10.5"
                                                                                         FontWeight="Bold"
                                                                                         Padding="8,2"
                                                                                         Margin="8,0,0,0"
-                                                                                        Background="#2563EB"
+                                                                                        Background="{DynamicResource AccentFillColorDefaultBrush}"
                                                                                         Foreground="White"
                                                                                         BorderThickness="0"
                                                                                         Cursor="Hand"
@@ -2284,9 +2284,9 @@
                                         </DataGrid.GroupStyle>
                                         <DataGrid.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="✔ Abrir Devolución Agrupada del Vale (PRE-xxxx)" Click="BtnRegistrarDevolucionHerramienta_Click" FontWeight="Bold" />
-                                                <MenuItem Header="🖨️ Imprimir Hoja de Resguardo (PRE-xxxx)" Click="BtnReimprimirValePrestamo_Click" />
-                                                <MenuItem Header="📄 Descargar Hoja de Resguardo (PDF / PNG / CSV)" Click="BtnDescargarValePrestamo_Click" />
+                                                <MenuItem Header="Abrir Devolución Agrupada del Vale (PRE-xxxx)" Click="BtnRegistrarDevolucionHerramienta_Click" FontWeight="Bold" />
+                                                <MenuItem Header="Imprimir Hoja de Resguardo (PRE-xxxx)" Click="BtnReimprimirValePrestamo_Click" />
+                                                <MenuItem Header="Descargar Hoja de Resguardo (PDF / PNG / CSV)" Click="BtnDescargarValePrestamo_Click" />
                                             </ContextMenu>
                                         </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
@@ -2308,16 +2308,16 @@
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
-                                        <ui:Button Content="🔄 Devolver Material Sobrante"
+                                        <ui:Button Content="Devolver Material Sobrante"
                                                    Appearance="Primary"
                                                    Margin="0,0,6,0"
                                                    ToolTip="Abrir ventana de devolución agrupada de material para indicar qué regresó y cuánto"
                                                    Click="BtnDevolverMaterialSalida_Click" />
                                         <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0">
-                                            <MenuItem Header="📄 Opciones del Vale ▾" Padding="10,5" FontWeight="SemiBold">
-                                                <MenuItem Header="📥 Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
-                                                <MenuItem Header="🔄 Devolver Material Sobrante de Salida" Click="BtnDevolverMaterialSalida_Click" />
-                                                <MenuItem Header="🦺 Generar Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
+                                            <MenuItem Header="Opciones del Vale ▾" Padding="10,5" FontWeight="SemiBold">
+                                                <MenuItem Header="Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
+                                                <MenuItem Header="Devolver Material Sobrante de Salida" Click="BtnDevolverMaterialSalida_Click" />
+                                                <MenuItem Header="Generar Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
                                             </MenuItem>
                                         </Menu>
                                         <ui:Button Content="Ver / Imprimir Vale" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirMovimientoAlmacen_Click" />
@@ -2330,11 +2330,11 @@
                                           MouseDoubleClick="DgMovimientosAlmacen_MouseDoubleClick">
                                     <DataGrid.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="🖨️ Ver / Imprimir Vale" Click="BtnImprimirMovimientoAlmacen_Click" FontWeight="Bold" />
-                                            <MenuItem Header="📥 Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
+                                            <MenuItem Header="Ver / Imprimir Vale" Click="BtnImprimirMovimientoAlmacen_Click" FontWeight="Bold" />
+                                            <MenuItem Header="Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
                                             <Separator />
-                                            <MenuItem Header="🔄 Registrar Devolución de Material Sobrante" Click="BtnDevolverMaterialSalida_Click" />
-                                            <MenuItem Header="🦺 Generar Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
+                                            <MenuItem Header="Registrar Devolución de Material Sobrante" Click="BtnDevolverMaterialSalida_Click" />
+                                            <MenuItem Header="Generar Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
                                         </ContextMenu>
                                     </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
@@ -2373,8 +2373,8 @@
                                         <StackPanel>
                                             <DockPanel Margin="0,0,0,8">
                                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
-                                                    <ui:Button Margin="0,0,8,0" Content="📂 Subir XML" Click="BtnSubirArchivoXml_Click" />
-                                                    <ui:Button Appearance="Primary" Content="💾 Guardar Factura" Click="BtnGuardarFacturaXml_Click" />
+                                                    <ui:Button Margin="0,0,8,0" Content="Subir XML" Click="BtnSubirArchivoXml_Click" />
+                                                    <ui:Button Appearance="Primary" Content="Guardar Factura" Click="BtnGuardarFacturaXml_Click" />
                                                 </StackPanel>
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock Text="Facturas XML CFDI" FontSize="15.5" FontWeight="Bold" />
@@ -2480,7 +2480,7 @@
                                                 </StackPanel>
                                             </Grid>
 
-                                            <Border Padding="8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                            <Border Padding="8" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="210" />
@@ -2608,9 +2608,9 @@
                                               SelectionChanged="DgRankingMaterialesAnalisis_SelectionChanged">
                                         <DataGrid.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="🛒 Mandar Artículo a Solicitud / Cotización" Click="BtnEnviarRankingASolicitud_Click" FontWeight="Bold" />
-                                                <MenuItem Header="🗺️ Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxRankingAbrirMapa_Click" />
-                                                <MenuItem Header="✏️ Abrir Ficha del Producto en Catálogo" Click="CtxRankingEditarProducto_Click" />
+                                                <MenuItem Header="Mandar Artículo a Solicitud / Cotización" Click="BtnEnviarRankingASolicitud_Click" FontWeight="Bold" />
+                                                <MenuItem Header="Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxRankingAbrirMapa_Click" />
+                                                <MenuItem Header="Abrir Ficha del Producto en Catálogo" Click="CtxRankingEditarProducto_Click" />
                                             </ContextMenu>
                                         </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
@@ -2664,7 +2664,7 @@
                                     <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="Seleccione un producto para graficar abajo" FontSize="11.5" Foreground="#0078D4" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="Seleccione un producto para graficar abajo" FontSize="11.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
                                                 <TextBlock Text="Frecuencia de Compra por Producto" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
                                             </DockPanel>
                                             <DataGrid x:Name="DgAnalisisProductos"
@@ -2740,7 +2740,7 @@
 
                                             <UniformGrid Columns="2">
                                                 <!-- Gráfica de Dispersión: Precio Unitario vs Fecha -->
-                                                <Border Margin="0,0,5,0" Padding="8" CornerRadius="6" Background="White" BorderBrush="#E2E8F0" BorderThickness="1">
+                                                <Border Margin="0,0,5,0" Padding="8" CornerRadius="4" Background="White" BorderBrush="#E2E8F0" BorderThickness="1">
                                                     <DockPanel>
                                                         <TextBlock DockPanel.Dock="Top" Text="Dispersión: Precio Unitario (s/IVA) vs Fecha" FontWeight="Bold" FontSize="11.5" Foreground="#0F172A" Margin="0,0,0,4" />
                                                         <Canvas x:Name="CanvasDispersionProducto"
@@ -2750,7 +2750,7 @@
                                                 </Border>
 
                                                 <!-- Gráfica de Barras Comparativa -->
-                                                <Border Margin="5,0,0,0" Padding="8" CornerRadius="6" Background="White" BorderBrush="#E2E8F0" BorderThickness="1">
+                                                <Border Margin="5,0,0,0" Padding="8" CornerRadius="4" Background="White" BorderBrush="#E2E8F0" BorderThickness="1">
                                                     <DockPanel>
                                                         <TextBlock x:Name="TxtTituloGraficaBarras" DockPanel.Dock="Top" Text="Barras: Comparativa por Proveedor" FontWeight="Bold" FontSize="11.5" Foreground="#0F172A" Margin="0,0,0,4" />
                                                         <Canvas x:Name="CanvasBarrasProducto"
@@ -3113,7 +3113,7 @@
                                         <DockPanel>
                                             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                                                 <ui:Button DockPanel.Dock="Right"
-                                                           Content="🗺️ Mapa e Inventario por Cuadrante"
+                                                           Content="Mapa e Inventario por Cuadrante"
                                                            FontSize="11.5"
                                                            Padding="10,4"
                                                            ToolTip="Ver mapa gráfico 3x3 de anaqueles A–F y consultar qué herramientas y materiales hay en cada cuadrante"
@@ -3126,13 +3126,13 @@
                                                       SelectionChanged="DgDirHerramientas_SelectionChanged">
                                                 <DataGrid.ContextMenu>
                                                     <ContextMenu>
-                                                        <MenuItem Header="🤝 Prestar esta Herramienta (Ir a Vale de Préstamo)" Click="CtxDirHerPrestar_Click" FontWeight="Bold" />
-                                                        <MenuItem Header="🗺️ Reubicar en Mapa Gráfico 3×3 (A–F)" Click="CtxDirHerReubicarMapa_Click" />
+                                                        <MenuItem Header="Prestar esta Herramienta (Ir a Vale de Préstamo)" Click="CtxDirHerPrestar_Click" FontWeight="Bold" />
+                                                        <MenuItem Header="Reubicar en Mapa Gráfico 3×3 (A–F)" Click="CtxDirHerReubicarMapa_Click" />
                                                         <Separator />
-                                                        <MenuItem Header="✅ Marcar como Disponible" Click="CtxDirHerMarcarDisponible_Click" />
-                                                        <MenuItem Header="🛠️ Marcar como Dañada / Mantenimiento" Click="CtxDirHerMarcarDanada_Click" />
+                                                        <MenuItem Header="Marcar como Disponible" Click="CtxDirHerMarcarDisponible_Click" />
+                                                        <MenuItem Header="Marcar como Dañada / Mantenimiento" Click="CtxDirHerMarcarDanada_Click" />
                                                         <Separator />
-                                                        <MenuItem Header="📋 Copiar Código HER-xxxx y Serie" Click="CtxDirHerCopiarCodigo_Click" />
+                                                        <MenuItem Header="Copiar Código HER-xxxx y Serie" Click="CtxDirHerCopiarCodigo_Click" />
                                                     </ContextMenu>
                                                 </DataGrid.ContextMenu>
                                                 <DataGrid.Columns>
@@ -3220,7 +3220,7 @@
                                                               ToolTip="Seleccione de la lista desplegable o escriba la ubicación (Ej. A-04, DETRAS-A-01, GABINETE-01)"
                                                               SelectionChanged="CboUbicacionAlmacen_SelectionChanged" />
                                                     <ui:Button Grid.Column="1"
-                                                               Content="🗺️ Mapa"
+                                                               Content="Mapa"
                                                                FontSize="11.5"
                                                                Padding="10,5"
                                                                Margin="6,0,0,0"
@@ -3290,7 +3290,7 @@
             <Border HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Padding="28,22"
-                    CornerRadius="12"
+                    CornerRadius="8"
                     Background="{DynamicResource ApplicationBackgroundBrush}"
                     BorderBrush="{DynamicResource ControlElevationBorderBrush}"
                     BorderThickness="1">

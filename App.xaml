@@ -11,10 +11,10 @@
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Colores de selección persistentes incluso al pasar el foco al formulario derecho -->
-            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#DBEAFE" />
-            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#E0F2FE" />
-            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#0F172A" />
-            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#0F172A" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#2E808080" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#24808080" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="{DynamicResource TextFillColorPrimary}" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="{DynamicResource TextFillColorPrimary}" />
 
             <!-- Sombra sutil ejecutiva para tarjetas y superficies principales -->
             <DropShadowEffect x:Key="CardElevationShadow"
@@ -42,11 +42,11 @@
             <Style TargetType="DataGridColumnHeader">
                 <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                <Setter Property="FontWeight" Value="Bold" />
-                <Setter Property="FontSize" Value="11.2" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="11.5" />
                 <Setter Property="Padding" Value="10,8" />
-                <Setter Property="BorderBrush" Value="#3094A3B8" />
-                <Setter Property="BorderThickness" Value="0,0,0,1.5" />
+                <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="0,0,0,1" />
                 <Setter Property="HorizontalContentAlignment" Value="Left" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Cursor" Value="Hand" />
@@ -57,24 +57,20 @@
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 <Setter Property="BorderBrush" Value="Transparent" />
-                <Setter Property="BorderThickness" Value="1.5" />
-                <Setter Property="Margin" Value="0,1" />
-                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="BorderThickness" Value="2,0,0,0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="Cursor" Value="Arrow" />
                 <Style.Triggers>
                     <MultiTrigger>
                         <MultiTrigger.Conditions>
                             <Condition Property="IsMouseOver" Value="True" />
                             <Condition Property="IsSelected" Value="False" />
                         </MultiTrigger.Conditions>
-                        <Setter Property="Background" Value="#EDF5FF" />
-                        <Setter Property="BorderBrush" Value="#93C5FD" />
-                        <Setter Property="Foreground" Value="#0F172A" />
+                        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                     </MultiTrigger>
                     <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="#DBEAFE" />
-                        <Setter Property="BorderBrush" Value="#2563EB" />
-                        <Setter Property="Foreground" Value="#0F172A" />
-                        <Setter Property="FontWeight" Value="SemiBold" />
+                        <Setter Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
                     </Trigger>
                 </Style.Triggers>
             </Style>
@@ -101,33 +97,12 @@
                 </Setter>
                 <Style.Triggers>
                     <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="#DBEAFE" />
-                        <Setter Property="Foreground" Value="#0F172A" />
+                        <Setter Property="Background" Value="Transparent" />
                     </Trigger>
                 </Style.Triggers>
             </Style>
 
-            <!-- Estilo para elementos de listas desplegables (ComboBoxItem) -->
-            <Style TargetType="ComboBoxItem">
-                <Setter Property="Padding" Value="10,7" />
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                <Setter Property="Cursor" Value="Hand" />
-                <Style.Triggers>
-                    <Trigger Property="IsHighlighted" Value="True">
-                        <Setter Property="Background" Value="#EDF5FF" />
-                        <Setter Property="Foreground" Value="#0F172A" />
-                    </Trigger>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="#EDF5FF" />
-                        <Setter Property="Foreground" Value="#0F172A" />
-                    </Trigger>
-                    <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="#DBEAFE" />
-                        <Setter Property="Foreground" Value="#0F172A" />
-                        <Setter Property="FontWeight" Value="SemiBold" />
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
+            <!-- ComboBoxItem: se usa el estilo nativo Fluent de WPF-UI (sin sobrescritura) -->
 
             <!-- Virtualización global para listas desplegables (ComboBox) con cientos de productos -->
             <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
@@ -140,25 +115,25 @@
                 </Setter>
             </Style>
 
-            <!-- Estilo global tipo Segmented Pill para sub-pestañas (TabItem) -->
+            <!-- Pestañas con indicador subrayado (estilo nativo Windows 11) -->
             <Style TargetType="TabItem">
-                <Setter Property="Padding" Value="16,8" />
-                <Setter Property="Margin" Value="0,0,6,6" />
+                <Setter Property="Padding" Value="12,7" />
+                <Setter Property="Margin" Value="0,0,2,6" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="12.5" />
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TabItem">
                             <Border x:Name="TabBorder"
                                     Padding="{TemplateBinding Padding}"
                                     Margin="{TemplateBinding Margin}"
-                                    CornerRadius="8"
-                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                    BorderThickness="1"
-                                    TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                    CornerRadius="4"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0,0,0,2"
+                                    TextElement.Foreground="{TemplateBinding Foreground}">
                                 <ContentPresenter x:Name="ContentSite"
                                                   ContentSource="Header"
                                                   HorizontalAlignment="Center"
@@ -170,14 +145,12 @@
                                         <Condition Property="IsMouseOver" Value="True" />
                                         <Condition Property="IsSelected" Value="False" />
                                     </MultiTrigger.Conditions>
-                                    <Setter TargetName="TabBorder" Property="Background" Value="#EDF5FF" />
-                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#93C5FD" />
-                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="#0F172A" />
+                                    <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                 </MultiTrigger>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="TabBorder" Property="Background" Value="#2563EB" />
-                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="#1D4ED8" />
-                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="White" />
+                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                    <Setter TargetName="TabBorder" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -185,9 +158,9 @@
                 </Setter>
             </Style>
 
-            <!-- Estilo reusable para Píldoras de Estado (Status Pill) en celdas de DataGrid -->
+            <!-- Chips de estado en celdas de DataGrid -->
             <Style x:Key="StatusPillBorderStyle" TargetType="Border">
-                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="CornerRadius" Value="4" />
                 <Setter Property="Padding" Value="9,3" />
                 <Setter Property="HorizontalAlignment" Value="Left" />
                 <Setter Property="VerticalAlignment" Value="Center" />
