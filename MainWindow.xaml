@@ -1507,25 +1507,13 @@
                             </Grid>
                         </Border>
 
-                        <!-- Cuerpo Principal: Izquierda (Lista de Productos + Resumen OCs) | Derecha (Comparativa 3 Opciones del Producto Seleccionado) -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.05*" />
-                                <ColumnDefinition Width="1.15*" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- IZQUIERDA: Tabla de Productos de la Solicitud + Pre-visualización de Órdenes de Compra -->
-                            <Grid Grid.Column="0" Margin="0,0,10,0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="225" />
-                                </Grid.RowDefinitions>
-
-                                <!-- Tabla de Productos de la Solicitud -->
-                                <Border Grid.Row="0" Padding="12" CornerRadius="8" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                        <!-- Pasos de la comparativa: 1 Articulos, 2 Comparar proveedores, 3 Emitir ordenes -->
+                        <TabControl x:Name="TcComparativa" Padding="0,4,0,0">
+                            <TabItem Header="1 &#183; Art&#237;culos">
+                                <Border Padding="12" CornerRadius="8" Margin="0,0,0,0" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                     <DockPanel>
                                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                            <TextBlock Text="1. Artículos de la Solicitud (Seleccione un producto para cotizarlo)" FontWeight="Bold" FontSize="13.5" VerticalAlignment="Center" />
+                                            <TextBlock Text="Artículos de la solicitud: haga clic en uno para comparar proveedores" FontWeight="Bold" FontSize="13.5" VerticalAlignment="Center" />
                                         </DockPanel>
 
                                         <DataGrid x:Name="DgComparativa"
@@ -1533,6 +1521,8 @@
                                                   CanUserAddRows="False"
                                                   SelectionMode="Single"
                                                   SelectionChanged="DgComparativa_SelectionChanged"
+                                                  PreviewMouseLeftButtonUp="DgComparativa_PreviewMouseLeftButtonUp"
+                                                  KeyDown="DgComparativa_KeyDown"
                                                   CellEditEnding="DgComparativa_CellEditEnding">
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
@@ -1545,67 +1535,16 @@
                                         </DataGrid>
                                     </DockPanel>
                                 </Border>
-
-                                <!-- Pre-visualización de Órdenes de Compra por Proveedor Ganador -->
-                                <Border Grid.Row="1" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                    <DockPanel>
-                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                            <TextBlock x:Name="TxtResumenGeneralComparativa" DockPanel.Dock="Right" Margin="8,0,0,0" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" />
-                                            <TextBlock Text="3. Resumen de Órdenes de Compra a Emitir (Por Proveedor Ganador)" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                        </DockPanel>
-
-                                        <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock x:Name="TxtNotaEmisionParcial"
-                                                       Grid.Column="0"
-                                                       FontSize="11"
-                                                       Opacity="0.78"
-                                                       VerticalAlignment="Center"
-                                                       TextWrapping="Wrap"
-                                                       Text="Puede emitir OCs solo de los productos ya decididos hoy o finalizar como cotización de presupuesto." />
-                                            <ui:Button x:Name="BtnConvertirPresupuestoEnCompra"
-                                                       Grid.Column="1"
-                                                       Margin="8,0,0,0"
-                                                       Content="Finalizar Cotización / Convertir"
-                                                       ToolTip="Si es Solo Cotización marca como entregada, o convierte el presupuesto aprobado en Requerimiento de Compra"
-                                                       Click="BtnConvertirPresupuestoEnCompra_Click" />
-                                            <ui:Button x:Name="BtnGenerarOrdenesDesdeComparativa"
-                                                       Grid.Column="2"
-                                                       Margin="8,0,0,0"
-                                                       Appearance="Primary"
-                                                       Content="Emitir Órdenes de Compra"
-                                                       Click="BtnGenerarOrdenesDesdeComparativa_Click" />
-                                        </Grid>
-
-                                        <DataGrid x:Name="DgPrevisualizacionOcs"
-                                                  AutoGenerateColumns="False"
-                                                  IsReadOnly="True"
-                                                  CanUserAddRows="False">
-                                            <DataGrid.Columns>
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor Ganador" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Partidas" Binding="{Binding CantidadPartidas}" Width="90" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasEntregaMax, StringFormat={}{0} días}" Width="80" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="110" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total OC c/IVA" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="125" />
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </DockPanel>
-                                </Border>
-                            </Grid>
-
-                            <!-- DERECHA: Comparador Detallado por Producto (1 Opción por defecto + Botón Añadir Opción de Proveedor) -->
-                            <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            </TabItem>
+                            <TabItem x:Name="TabCompDetalle" Header="2 &#183; Comparar proveedores">
+                            <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <DockPanel>
                                     <!-- Encabezado del Producto Seleccionado -->
                                     <Border DockPanel.Dock="Top" Padding="12" CornerRadius="4" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                         <StackPanel>
                                             <!-- Fila 1: Título y Subtítulo del Producto (Con ajuste de línea completo para no empujar ningún botón) -->
                                             <TextBlock x:Name="TxtCompProdTitulo"
-                                                       Text="2. Seleccione un producto de la lista"
+                                                       Text="Seleccione un artículo en el paso 1"
                                                        FontSize="15"
                                                        FontWeight="Bold"
                                                        TextWrapping="Wrap" />
@@ -1636,6 +1575,16 @@
                                                 </StackPanel>
 
                                                 <WrapPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <ui:Button Content="← Anterior"
+                                                               FontSize="11.5"
+                                                               Margin="0,0,6,0"
+                                                               ToolTip="Pasar al artículo anterior de la lista"
+                                                               Click="BtnCompAnterior_Click" />
+                                                    <ui:Button Content="Siguiente →"
+                                                               FontSize="11.5"
+                                                               Margin="0,0,6,0"
+                                                               ToolTip="Pasar al siguiente artículo de la lista"
+                                                               Click="BtnCompSiguiente_Click" />
                                                     <ui:Button x:Name="BtnAgregarOpcionProveedorComp"
                                                                Content="+ Añadir Proveedor Concursante"
                                                                Appearance="Primary"
@@ -1877,7 +1826,58 @@
                                     </ScrollViewer>
                                 </DockPanel>
                             </Border>
-                        </Grid>
+                            </TabItem>
+                            <TabItem Header="3 &#183; Emitir &#243;rdenes">
+                                <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                            <TextBlock x:Name="TxtResumenGeneralComparativa" DockPanel.Dock="Right" Margin="8,0,0,0" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" />
+                                            <TextBlock Text="Órdenes de compra a emitir (por proveedor ganador)" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+
+                                        <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="TxtNotaEmisionParcial"
+                                                       Grid.Column="0"
+                                                       FontSize="11"
+                                                       Opacity="0.78"
+                                                       VerticalAlignment="Center"
+                                                       TextWrapping="Wrap"
+                                                       Text="Puede emitir OCs solo de los productos ya decididos hoy o finalizar como cotización de presupuesto." />
+                                            <ui:Button x:Name="BtnConvertirPresupuestoEnCompra"
+                                                       Grid.Column="1"
+                                                       Margin="8,0,0,0"
+                                                       Content="Finalizar Cotización / Convertir"
+                                                       ToolTip="Si es Solo Cotización marca como entregada, o convierte el presupuesto aprobado en Requerimiento de Compra"
+                                                       Click="BtnConvertirPresupuestoEnCompra_Click" />
+                                            <ui:Button x:Name="BtnGenerarOrdenesDesdeComparativa"
+                                                       Grid.Column="2"
+                                                       Margin="8,0,0,0"
+                                                       Appearance="Primary"
+                                                       Content="Emitir Órdenes de Compra"
+                                                       Click="BtnGenerarOrdenesDesdeComparativa_Click" />
+                                        </Grid>
+
+                                        <DataGrid x:Name="DgPrevisualizacionOcs"
+                                                  AutoGenerateColumns="False"
+                                                  IsReadOnly="True"
+                                                  CanUserAddRows="False">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor Ganador" Binding="{Binding ProveedorNombre}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Partidas" Binding="{Binding CantidadPartidas}" Width="90" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasEntregaMax, StringFormat={}{0} días}" Width="80" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="110" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total OC c/IVA" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="125" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
+                            </TabItem>
+                        </TabControl>
                     </DockPanel>
                 </TabItem>
 
