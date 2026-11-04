@@ -735,7 +735,7 @@ public partial class MainWindow : FluentWindow
 
     private void BtnToggleSidebar_Click(object sender, RoutedEventArgs e)
     {
-        _sidebarColapsado = !_sidebarColapsado;
+        if (!_toggleSidebarAutomatico) _sidebarAutoColapsado = false; _sidebarColapsado = !_sidebarColapsado;
         if (ColSidebarNavegacion != null)
         {
             ColSidebarNavegacion.Width = new GridLength(_sidebarColapsado ? 68 : 232);

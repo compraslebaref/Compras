@@ -5,14 +5,15 @@
                  Title="Lebaref | Departamento de Compras"
                  Width="1440"
                  Height="900"
-                 MinWidth="1180"
-                 MinHeight="740"
+                 MinWidth="700"
+                 MinHeight="560"
                  WindowStartupLocation="CenterScreen"
                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                  Background="{DynamicResource ApplicationBackgroundBrush}"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
-                 WindowCornerPreference="Round">
+                 WindowCornerPreference="Round"
+                 SizeChanged="Window_SizeChanged">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -124,7 +125,7 @@
 
                 <!-- Derecha: Botones Ejecutivos (Mapa A–F, Tema Claro/Oscuro y Perfil) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ui:Button Content="Mapa A–F"
+                    <ui:Button x:Name="BtnMapaTopbar" Content="Mapa A-F" 
                                FontSize="11.5"
                                Padding="10,5"
                                Margin="0,0,6,0"
@@ -275,8 +276,8 @@
             </Border>
 
             <!-- Contenedor de Vistas -->
+            <ScrollViewer x:Name="SvContenidoPrincipal" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" SizeChanged="SvContenidoPrincipal_SizeChanged">
             <TabControl x:Name="MainTabControl"
-                        Grid.Column="1"
                         BorderThickness="0"
                         Background="Transparent"
                         Padding="0">
@@ -305,7 +306,7 @@
                                 </StackPanel>
                             </DockPanel>
 
-                            <UniformGrid Grid.Row="1" Columns="5" Margin="0,0,0,12">
+                            <UniformGrid x:Name="UgKpisInicio" Grid.Row="1" Columns="5" Margin="0,0,0,12">
                                 <!-- KPI 1: Solicitudes Pendientes -->
                                 <Border Margin="0,0,8,0" Padding="14,12" CornerRadius="4" Cursor="Hand"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
@@ -625,10 +626,11 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" MinWidth="150" />
                                             <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="155" />
-                                            <ColumnDefinition Width="150" />
-                                            <ColumnDefinition Width="180" />
                                         </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
                                         <ui:TextBox x:Name="TxtBuscarCatalogo"
                                                     Grid.Column="0"
                                                     Margin="0,0,8,0"
@@ -643,20 +645,20 @@
                                                    Opacity="0.7"
                                                    Margin="0,0,8,0"
                                                    Text="0 productos" />
-                                        <ComboBox x:Name="CboFiltroCategoria"
-                                                  Grid.Column="2"
-                                                  Margin="0,0,6,0"
+                                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,0">
+                                         <ComboBox x:Name="CboFiltroCategoria"
+                                                  Width="170" Margin="0,0,6,4"
                                                   ToolTip="Filtrar por Categoría"
                                                   SelectionChanged="CboFiltroCategoria_SelectionChanged" />
                                         <ComboBox x:Name="CboFiltroFamilia"
-                                                  Grid.Column="3"
-                                                  Margin="0,0,6,0"
+                                                  Width="170" Margin="0,0,6,4"
                                                   ToolTip="Filtrar por Familia / Agrupador Genérico"
                                                   SelectionChanged="CboFiltroFamilia_SelectionChanged" />
                                         <ComboBox x:Name="CboFiltroUbicacion"
-                                                  Grid.Column="4"
+                                                  Width="190" Margin="0,0,0,4"
                                                   ToolTip="Filtrar por Ubicación en Almacén (Zona, Anaquel o Nivel)"
                                                   SelectionChanged="CboFiltroUbicacion_SelectionChanged" />
+                                         </WrapPanel>
                                     </Grid>
 
                                     <Border Padding="8,6" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
@@ -1367,19 +1369,20 @@
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="90" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
                                                         <ComboBox x:Name="CboSolProductoAgregar" Grid.Column="0" Margin="0,0,6,0" />
                                                         <ui:TextBox x:Name="TxtSolCantidadAgregar" Grid.Column="1" PlaceholderText="Cant. (1)" Margin="0,0,6,0" VerticalContentAlignment="Center" />
-                                                        <ui:Button Grid.Column="2" Content="Agregar del catálogo" Appearance="Primary" Margin="0,0,6,0" Click="BtnAgregarPartidaSolicitud_Click" />
-                                                        <ui:Button Grid.Column="3"
+                                                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,0"><ui:Button Content="Agregar del catálogo" Appearance="Primary" Margin="0,0,6,4" Click="BtnAgregarPartidaSolicitud_Click" />
+                                                        <ui:Button
                                                                    Content="Concepto abierto"
-                                                                   Margin="0,0,6,0"
+                                                                   Margin="0,0,6,4"
                                                                    ToolTip="Agrega el texto escrito en el buscador como necesidad genérica sin crear un producto vacío en el catálogo todavía"
                                                                    Click="BtnAgregarConceptoLibreSolicitud_Click" />
-                                                        <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Grid.Column="4" Content="Elegir en catálogo visual" Click="BtnCrearCarritoEIrCatalogo_Click" />
+                                                        <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="Elegir en catálogo visual" Click="BtnCrearCarritoEIrCatalogo_Click" /></WrapPanel>
                                                     </Grid>
                                                 </StackPanel>
                                             </Border>
@@ -3431,6 +3434,7 @@
                     </TabControl>
                 </TabItem>
             </TabControl>
+            </ScrollViewer>
         </Grid>
 
         <!-- Indicador global de carga / procesamiento -->
