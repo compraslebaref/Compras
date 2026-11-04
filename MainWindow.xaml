@@ -2525,12 +2525,39 @@
                 <!-- ==================== TAB 6: FACTURAS Y COMPRAS SIN FACTURA ==================== -->
                 <TabItem>
                     <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="215" />
-                        </Grid.RowDefinitions>
+                        <TabControl Padding="0,6,0,0">
+                            <!-- SUB-TAB 0: COMPROBANTES REGISTRADOS (vista inicial) -->
+                            <TabItem Header="Comprobantes registrados">
+                        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <DockPanel>
+                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                    <ui:Button DockPanel.Dock="Right"
+                                               Content="Eliminar Comprobante (Admin)"
+                                               Icon="{ui:SymbolIcon Delete24}"
+                                               Margin="8,0,0,0"
+                                               ToolTip="Eliminar la factura o nota seleccionada del sistema (Requiere PIN Administrador)"
+                                               Click="BtnEliminarFacturaXml_Click" />
+                                    <TextBlock Text="Comprobantes Registrados (Facturas XML y Notas sin Factura)" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </DockPanel>
+                                <DataGrid x:Name="DgFacturasRegistradas" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="DgFacturasRegistradas_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoComprobante}" Width="120" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="UUID / Referencia" Binding="{Binding Uuid}" Width="185" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding SerieFolio}" Width="95" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding FechaTimbrado}" Width="125" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="RFC" Binding="{Binding EmisorRfc}" Width="110" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding EmisorNombre}" Width="*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="135" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="145" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Subtotal" Binding="{Binding Subtotal, StringFormat={}{0:C2}}" Width="90" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="IVA" Binding="{Binding Iva, StringFormat={}{0:C2}}" Width="80" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding Total, StringFormat={}{0:C2}}" Width="95" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </Border>
+                            </TabItem>
 
-                        <TabControl Grid.Row="0" Margin="0,0,0,10" Padding="0,6,0,0">
                             <!-- SUB-TAB 1: FACTURA XML CFDI 4.0 -->
                             <TabItem Header="Cargar Factura XML (CFDI 4.0)">
                                 <Grid>
@@ -2721,36 +2748,6 @@
                                 </Border>
                             </TabItem>
                         </TabControl>
-
-                        <!-- Facturas y Notas Registradas -->
-                        <Border Grid.Row="1" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                            <DockPanel>
-                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                    <ui:Button DockPanel.Dock="Right"
-                                               Content="Eliminar Comprobante (Admin)"
-                                               Icon="{ui:SymbolIcon Delete24}"
-                                               Margin="8,0,0,0"
-                                               ToolTip="Eliminar la factura o nota seleccionada del sistema (Requiere PIN Administrador)"
-                                               Click="BtnEliminarFacturaXml_Click" />
-                                    <TextBlock Text="Comprobantes Registrados (Facturas XML y Notas sin Factura)" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" />
-                                </DockPanel>
-                                <DataGrid x:Name="DgFacturasRegistradas" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="DgFacturasRegistradas_SelectionChanged">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoComprobante}" Width="120" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="UUID / Referencia" Binding="{Binding Uuid}" Width="185" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding SerieFolio}" Width="95" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding FechaTimbrado}" Width="125" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="RFC" Binding="{Binding EmisorRfc}" Width="110" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding EmisorNombre}" Width="*" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="135" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="145" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Subtotal" Binding="{Binding Subtotal, StringFormat={}{0:C2}}" Width="90" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="IVA" Binding="{Binding Iva, StringFormat={}{0:C2}}" Width="80" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding Total, StringFormat={}{0:C2}}" Width="95" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </DockPanel>
-                        </Border>
                     </Grid>
                 </TabItem>
 
@@ -2804,20 +2801,8 @@
                         </TabItem>
 
                         <!-- SUB-TAB 2: PROVEEDORES, PROYECTOS Y GRÁFICAS DE PRECIOS -->
-                        <TabItem Header="Proveedores, Proyectos e Historial de Precios">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="0.92*" />
-                                    <RowDefinition Height="1.08*" />
-                                </Grid.RowDefinitions>
-
-                                <Grid Grid.Row="0" Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                        <TabItem Header="Proveedores">
+                                    <Border Margin="0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Top" Text="Compras por Proveedor" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
                                             <DataGrid x:Name="DgAnalisisProveedores" AutoGenerateColumns="False" IsReadOnly="True">
@@ -2831,11 +2816,32 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-
-                                    <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                        </TabItem>
+                        <TabItem Header="Proyectos y departamentos">
+                                    <Border Margin="0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Top" Text="Gasto por Proyecto y Departamento" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
+                                            <DataGrid x:Name="DgAnalisisProyectos" AutoGenerateColumns="False" IsReadOnly="True">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding Proyecto}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Departamento / Área" Binding="{Binding Departamento}" Width="160" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Compras (OCs)" Binding="{Binding TotalCompras, StringFormat={}{0:C2}}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Salidas Almacén" Binding="{Binding TotalSalidas, StringFormat={}{0:C2}}" Width="135" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </DockPanel>
+                                    </Border>
+                        </TabItem>
+                        <TabItem Header="Productos y precios">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="0.85*" />
+                                    <ColumnDefinition Width="1.15*" />
+                                </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="Seleccione un producto para graficar abajo" FontSize="11.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="Seleccione un producto para graficarlo" FontSize="11.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
                                                 <TextBlock Text="Frecuencia de Compra por Producto" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
                                             </DockPanel>
                                             <DataGrid x:Name="DgAnalisisProductos"
@@ -2852,29 +2858,6 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-                                </Grid>
-
-                                <Grid Grid.Row="1">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="0.78*" />
-                                        <ColumnDefinition Width="1.22*" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                        <DockPanel>
-                                            <TextBlock DockPanel.Dock="Top" Text="Gasto por Proyecto y Departamento" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
-                                            <DataGrid x:Name="DgAnalisisProyectos" AutoGenerateColumns="False" IsReadOnly="True">
-                                                <DataGrid.Columns>
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding Proyecto}" Width="*" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Departamento / Área" Binding="{Binding Departamento}" Width="160" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Compras (OCs)" Binding="{Binding TotalCompras, StringFormat={}{0:C2}}" Width="120" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Salidas Almacén" Binding="{Binding TotalSalidas, StringFormat={}{0:C2}}" Width="135" />
-                                                </DataGrid.Columns>
-                                            </DataGrid>
-                                        </DockPanel>
-                                    </Border>
-
-                                    <!-- Gráficas de Dispersión y Barras al seleccionar un Producto -->
                                     <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
@@ -2909,7 +2892,7 @@
                                                            Foreground="#1E40AF" />
                                             </StackPanel>
 
-                                            <UniformGrid Columns="2">
+                                            <UniformGrid Columns="1">
                                                 <!-- Gráfica de Dispersión: Precio Unitario vs Fecha -->
                                                 <Border Margin="0,0,5,0" Padding="8" CornerRadius="4" Background="White" BorderBrush="#E2E8F0" BorderThickness="1">
                                                     <DockPanel>
@@ -2932,7 +2915,6 @@
                                             </UniformGrid>
                                         </DockPanel>
                                     </Border>
-                                </Grid>
                             </Grid>
                         </TabItem>
                     </TabControl>
@@ -2949,13 +2931,9 @@
                                     <ColumnDefinition Width="360" />
                                 </Grid.ColumnDefinitions>
 
-                                <Grid Grid.Column="0" Margin="0,0,10,0">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="1.1*" />
-                                        <RowDefinition Height="0.9*" />
-                                    </Grid.RowDefinitions>
-
-                                    <Border Grid.Row="0" Margin="0,0,0,8" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <TabControl Grid.Column="0" Margin="0,0,10,0" Padding="0,4,0,0">
+                                    <TabItem Header="Proveedores">
+                                    <Border Margin="0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Top" Text="Proveedores Registrados" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
                                             <DataGrid x:Name="DgDirProveedores"
@@ -2973,8 +2951,9 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-
-                                    <Border Grid.Row="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                    </TabItem>
+                                    <TabItem Header="Historial del proveedor">
+                                    <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock x:Name="TxtDesgloseProveedorTitulo" DockPanel.Dock="Top" Text="Desglose del Proveedor" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             <DataGrid x:Name="DgDesgloseProveedor" AutoGenerateColumns="False" IsReadOnly="True">
@@ -2989,7 +2968,8 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-                                </Grid>
+                                    </TabItem>
+                                </TabControl>
 
                                 <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                     <StackPanel>
@@ -3061,13 +3041,9 @@
                                     <ColumnDefinition Width="360" />
                                 </Grid.ColumnDefinitions>
 
-                                <Grid Grid.Column="0" Margin="0,0,10,0">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="1.1*" />
-                                        <RowDefinition Height="0.9*" />
-                                    </Grid.RowDefinitions>
-
-                                    <Border Grid.Row="0" Margin="0,0,0,8" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <TabControl Grid.Column="0" Margin="0,0,10,0" Padding="0,4,0,0">
+                                    <TabItem Header="Proyectos">
+                                    <Border Margin="0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Top" Text="Proyectos y Clientes / Áreas" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
                                             <DataGrid x:Name="DgDirProyectos"
@@ -3083,8 +3059,9 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-
-                                    <Border Grid.Row="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                    </TabItem>
+                                    <TabItem Header="Desglose del proyecto">
+                                    <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock x:Name="TxtDesgloseProyectoTitulo" DockPanel.Dock="Top" Text="Desglose del Proyecto" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             <DataGrid x:Name="DgDesgloseProyecto" AutoGenerateColumns="False" IsReadOnly="True">
@@ -3099,7 +3076,8 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-                                </Grid>
+                                    </TabItem>
+                                </TabControl>
 
                                 <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                     <StackPanel>
@@ -3145,13 +3123,9 @@
                                     <ColumnDefinition Width="360" />
                                 </Grid.ColumnDefinitions>
 
-                                <Grid Grid.Column="0" Margin="0,0,10,0">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="1.1*" />
-                                        <RowDefinition Height="0.9*" />
-                                    </Grid.RowDefinitions>
-
-                                    <Border Grid.Row="0" Margin="0,0,0,8" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <TabControl Grid.Column="0" Margin="0,0,10,0" Padding="0,4,0,0">
+                                    <TabItem Header="Personal y departamentos">
+                                    <Border Margin="0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Top" Text="Personal / Gerentes / Solicitantes" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
                                             <DataGrid x:Name="DgDirPersonal"
@@ -3167,8 +3141,9 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-
-                                    <Border Grid.Row="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                    </TabItem>
+                                    <TabItem Header="Solicitudes, salidas y pr&#233;stamos">
+                                    <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock x:Name="TxtDesglosePersonalTitulo" DockPanel.Dock="Top" Text="Desglose de Solicitudes, Salidas y Préstamos" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             <DataGrid x:Name="DgDesglosePersonal" AutoGenerateColumns="False" IsReadOnly="True">
@@ -3182,7 +3157,8 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-                                </Grid>
+                                    </TabItem>
+                                </TabControl>
 
                                 <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                     <StackPanel>
@@ -3274,13 +3250,9 @@
                                     <ColumnDefinition Width="360" />
                                 </Grid.ColumnDefinitions>
 
-                                <Grid Grid.Column="0" Margin="0,0,10,0">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="1.25*" />
-                                        <RowDefinition Height="0.75*" />
-                                    </Grid.RowDefinitions>
-
-                                    <Border Grid.Row="0" Margin="0,0,0,8" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                <TabControl Grid.Column="0" Margin="0,0,10,0" Padding="0,4,0,0">
+                                    <TabItem Header="Herramientas">
+                                    <Border Margin="0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                                                 <ui:Button DockPanel.Dock="Right"
@@ -3326,8 +3298,9 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-
-                                    <Border Grid.Row="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                    </TabItem>
+                                    <TabItem Header="Categor&#237;as">
+                                    <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <TextBlock DockPanel.Dock="Top" Text="Categorías del Catálogo Visual" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" />
                                             <DataGrid x:Name="DgDirCategorias"
@@ -3342,7 +3315,8 @@
                                             </DataGrid>
                                         </DockPanel>
                                     </Border>
-                                </Grid>
+                                    </TabItem>
+                                </TabControl>
 
                                 <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                     <StackPanel>
