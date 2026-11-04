@@ -94,6 +94,8 @@ public partial class MainWindow : FluentWindow
         public SalidaAlmacen? SalidaOriginal { get; set; }
     }
 
+    private static Brush Tk(string key) => Application.Current.TryFindResource(key) as Brush ?? Brushes.Gray;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -300,7 +302,7 @@ public partial class MainWindow : FluentWindow
             tb = new TextBlock
             {
                 Text = _placeholdersCombos.GetValueOrDefault(combo, string.Empty),
-                Foreground = new SolidColorBrush(Color.FromRgb(125, 135, 150)),
+                Foreground = Tk("TextFillColorSecondaryBrush"),
                 FontStyle = FontStyles.Italic,
                 FontSize = combo.FontSize > 0 ? Math.Min(12, combo.FontSize) : 11.5,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -749,7 +751,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_sesionAdminActiva)
         {
-            var resp = System.Windows.MessageBox.Show(this,
+            var resp = DialogoFluent.Show(this,
                 "La sesión de Perfil Administrador se encuentra ACTIVA (desbloqueada).\n\n¿Desea bloquear nuevamente la sesión de Administrador para que vuelva a solicitar el PIN en acciones críticas?",
                 "Perfil Administrador Activo",
                 MessageBoxButton.YesNo,
@@ -784,14 +786,14 @@ public partial class MainWindow : FluentWindow
             return;
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Cambiar PIN de Administrador",
             Width = 390,
             Height = 250,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
@@ -806,7 +808,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = "Ingrese la nueva clave o PIN (mínimo 4 caracteres):",
             FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 0, 0, 8)
         });
 
@@ -837,7 +839,7 @@ public partial class MainWindow : FluentWindow
         {
             if (string.IsNullOrWhiteSpace(pwdBox.Password) || pwdBox.Password.Trim().Length < 4)
             {
-                System.Windows.MessageBox.Show(win, "El PIN debe tener al menos 4 caracteres.", "PIN inválido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "El PIN debe tener al menos 4 caracteres.", "PIN inválido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             DatabaseService.CambiarPinAdministrador(pwdBox.Password.Trim());
@@ -853,7 +855,7 @@ public partial class MainWindow : FluentWindow
 
         if (win.ShowDialog() == true)
         {
-            System.Windows.MessageBox.Show(this, "El PIN de Administrador se actualizó correctamente.", "PIN Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "El PIN de Administrador se actualizó correctamente.", "PIN Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -866,14 +868,14 @@ public partial class MainWindow : FluentWindow
         }
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Autorización de Administrador Requerida",
             Width = 420,
             Height = 275,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
@@ -882,7 +884,7 @@ public partial class MainWindow : FluentWindow
             Text = "Clave de Administrador",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(30, 58, 138)),
+            Foreground = Tk("AccentTextFillColorPrimaryBrush"),
             Margin = new Thickness(0, 0, 0, 6)
         });
         root.Children.Add(new TextBlock
@@ -897,7 +899,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = "Ingrese el PIN de Administrador para continuar (PIN inicial por defecto: 1234):",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
@@ -939,7 +941,7 @@ public partial class MainWindow : FluentWindow
         {
             if (!DatabaseService.ValidarPinAdministrador(pwdBox.Password))
             {
-                System.Windows.MessageBox.Show(win, "PIN de Administrador incorrecto.", "Acceso denegado", MessageBoxButton.OK, MessageBoxImage.Error);
+                DialogoFluent.Show(win, "PIN de Administrador incorrecto.", "Acceso denegado", MessageBoxButton.OK, MessageBoxImage.Error);
                 pwdBox.Clear();
                 pwdBox.Focus();
                 return;
@@ -1272,7 +1274,7 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             $"No se encontró ningún documento o producto con el código '{code}'.\n\nFormatos soportados:\n• Entrada de Almacén: ENT-2026-0001\n• Salida de Almacén: SAL-2026-0001\n• Orden de Compra: OC-2026-0001\n• Préstamo / Herramienta: PRE-2026-0001 / HER-0001\n• Producto: Código de barras o PRD-0001",
             "Código no registrado", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
@@ -1373,7 +1375,7 @@ public partial class MainWindow : FluentWindow
         string titulo = TxtEventoTitulo?.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(titulo))
         {
-            System.Windows.MessageBox.Show(this, "Escriba el título o descripción del recordatorio o evento.", "Falta descripción", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Escriba el título o descripción del recordatorio o evento.", "Falta descripción", MessageBoxButton.OK, MessageBoxImage.Information);
             TxtEventoTitulo?.Focus();
             return;
         }
@@ -1421,7 +1423,7 @@ public partial class MainWindow : FluentWindow
 
         if (!ev.EsManual)
         {
-            System.Windows.MessageBox.Show(this, "Los eventos automáticos de Órdenes de Compra o Préstamos se actualizan automáticamente al recibir la OC o devolver la herramienta.", "Evento automático", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Los eventos automáticos de Órdenes de Compra o Préstamos se actualizan automáticamente al recibir la OC o devolver la herramienta.", "Evento automático", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -1759,14 +1761,14 @@ public partial class MainWindow : FluentWindow
     {
         var familias = DatabaseService.ObtenerFamiliasProductos();
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Gestión Manual de Familias / Agrupadores de Productos",
             Width = 540,
             Height = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
@@ -1781,7 +1783,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = "Las Familias agrupan productos equivalentes de distintas marcas o presentaciones (ej. 'JABON', 'MICROFIBRA', 'GAS REFRIGERANTE') para comparar sus precios históricos juntos.",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 14)
         });
@@ -1791,8 +1793,8 @@ public partial class MainWindow : FluentWindow
         {
             Padding = new Thickness(12),
             CornerRadius = new CornerRadius(6),
-            Background = new SolidColorBrush(Color.FromRgb(239, 246, 255)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
+            Background = Tk("SubtleFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 12)
         };
@@ -1833,8 +1835,8 @@ public partial class MainWindow : FluentWindow
         {
             Padding = new Thickness(12),
             CornerRadius = new CornerRadius(6),
-            Background = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            Background = Tk("ControlFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 14)
         };
@@ -1909,7 +1911,7 @@ public partial class MainWindow : FluentWindow
             string fam = txtNuevaFam.Text.Trim().ToUpperInvariant();
             if (string.IsNullOrWhiteSpace(fam))
             {
-                System.Windows.MessageBox.Show(win, "Escriba el nombre de la familia.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(win, "Escriba el nombre de la familia.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             DatabaseService.GuardarFamiliaPersonalizada(fam);
@@ -1923,11 +1925,11 @@ public partial class MainWindow : FluentWindow
                 _productoEnEdicion.Familia = fam;
                 DatabaseService.GuardarProducto(_productoEnEdicion);
                 CargarTodoElSistema(conservarPosicionCatalogo: true);
-                System.Windows.MessageBox.Show(win, $"Se guardó la familia '{fam}' y se asignó al producto {_productoEnEdicion.CodigoInterno}.", "Familia Guardada", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(win, $"Se guardó la familia '{fam}' y se asignó al producto {_productoEnEdicion.CodigoInterno}.", "Familia Guardada", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
             {
-                System.Windows.MessageBox.Show(win, $"Se creó y guardó la familia '{fam}' en el catálogo de familias.", "Familia Creada", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(win, $"Se creó y guardó la familia '{fam}' en el catálogo de familias.", "Familia Creada", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             win.Close();
         };
@@ -1938,7 +1940,7 @@ public partial class MainWindow : FluentWindow
             string destino = txtFamDestino.Text.Trim().ToUpperInvariant();
             if (string.IsNullOrWhiteSpace(origen) || string.IsNullOrWhiteSpace(destino))
             {
-                System.Windows.MessageBox.Show(win, "Seleccione la familia actual y escriba el nuevo nombre.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "Seleccione la familia actual y escriba el nuevo nombre.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             int afectados = DatabaseService.RenombrarFamiliaMasivo(origen, destino);
@@ -1947,7 +1949,7 @@ public partial class MainWindow : FluentWindow
                 CboProdFamilia.Text = destino;
             }
             CargarTodoElSistema(conservarPosicionCatalogo: true);
-            System.Windows.MessageBox.Show(win, $"Se actualizaron {afectados} productos de la familia '{origen}' a '{destino}'.", "Familia Actualizada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(win, $"Se actualizaron {afectados} productos de la familia '{origen}' a '{destino}'.", "Familia Actualizada", MessageBoxButton.OK, MessageBoxImage.Information);
             win.Close();
         };
 
@@ -1984,7 +1986,7 @@ public partial class MainWindow : FluentWindow
         string nombre = TxtProdNombre.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(nombre))
         {
-            System.Windows.MessageBox.Show(this, "Escriba primero el nombre del producto para detectar su categoría y especificaciones técnicas.", "Nombre vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Escriba primero el nombre del producto para detectar su categoría y especificaciones técnicas.", "Nombre vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -2077,7 +2079,7 @@ public partial class MainWindow : FluentWindow
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show(this, ex.Message, "Aviso", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(this, ex.Message, "Aviso", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
         }
@@ -2290,10 +2292,10 @@ public partial class MainWindow : FluentWindow
 
         if ((prodEditando == null || prodEditando.Id == 0) && !_modoAltaNuevoProducto)
         {
-            BdrModoEditorProducto.Background = new SolidColorBrush(Color.FromRgb(243, 244, 246));
-            BdrModoEditorProducto.BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219));
-            TxtModoEditorProductoTitulo.Foreground = new SolidColorBrush(Color.FromRgb(55, 65, 81));
-            TxtModoEditorProductoSubtitulo.Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99));
+            BdrModoEditorProducto.Background = Tk("ControlFillColorSecondaryBrush");
+            BdrModoEditorProducto.BorderBrush = Tk("ControlStrokeColorDefaultBrush");
+            TxtModoEditorProductoTitulo.Foreground = Tk("TextFillColorPrimaryBrush");
+            TxtModoEditorProductoSubtitulo.Foreground = Tk("TextFillColorSecondaryBrush");
             TxtModoEditorProductoTitulo.Text = "ℹ️ SIN PRODUCTO SELECCIONADO";
             TxtModoEditorProductoSubtitulo.Text = "Seleccione una tarjeta del catálogo a la izquierda para editarla, o presione '+ Nuevo Producto' para iniciar un alta nueva.";
             BtnGuardarProductoCatalogo.Content = "➕ Crear Producto Nuevo en Catálogo";
@@ -2301,10 +2303,10 @@ public partial class MainWindow : FluentWindow
         else if (prodEditando == null || prodEditando.Id == 0)
         {
             string codigoNuevo = TxtProdCodigoInterno?.Text ?? "PRD-NUEVO";
-            BdrModoEditorProducto.Background = new SolidColorBrush(Color.FromRgb(239, 246, 255));
-            BdrModoEditorProducto.BorderBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246));
-            TxtModoEditorProductoTitulo.Foreground = new SolidColorBrush(Color.FromRgb(29, 78, 216));
-            TxtModoEditorProductoSubtitulo.Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175));
+            BdrModoEditorProducto.Background = Tk("SubtleFillColorSecondaryBrush");
+            BdrModoEditorProducto.BorderBrush = Tk("AccentFillColorDefaultBrush");
+            TxtModoEditorProductoTitulo.Foreground = Tk("AccentFillColorDefaultBrush");
+            TxtModoEditorProductoSubtitulo.Foreground = Tk("AccentTextFillColorPrimaryBrush");
             TxtModoEditorProductoTitulo.Text = $"✨ MODO: ALTA DE NUEVO PRODUCTO ({codigoNuevo})";
             TxtModoEditorProductoSubtitulo.Text = "1. Escriba el Nombre  •  2. Elija Categoría y Familia (o Autocompletar)  •  3. Presione 'Crear Producto Nuevo'";
             BtnGuardarProductoCatalogo.Content = "➕ Crear Producto Nuevo en Catálogo";
@@ -2334,7 +2336,7 @@ public partial class MainWindow : FluentWindow
         string? ruta = ImageStandardizerService.GuardarDesdePortapapeles(codigo);
         if (ruta == null)
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "El portapapeles no contiene una imagen en este momento.\nCopie cualquier imagen desde su navegador (Clic derecho -> Copiar imagen) y presione este botón o Ctrl+V.",
                 "Portapapeles sin imagen", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -2368,7 +2370,7 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrWhiteSpace(TxtProdNombre.Text))
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un producto del catálogo para editarlo o escriba el nombre del producto nuevo.", "Falta nombre", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione un producto del catálogo para editarlo o escriba el nombre del producto nuevo.", "Falta nombre", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -2491,18 +2493,18 @@ public partial class MainWindow : FluentWindow
 
         if (todosProductos.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "No hay productos en el catálogo.", "Catálogo vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "No hay productos en el catálogo.", "Catálogo vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Registro de Información de Herramienta en Almacén (Directorio HER-xxxx)",
             Width = 860,
             Height = 620,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+            Background = Tk("ApplicationBackgroundBrush")
         };
 
         var root = new Grid { Margin = new Thickness(18) };
@@ -2519,13 +2521,13 @@ public partial class MainWindow : FluentWindow
             Text = "🔧 Ficha de Herramienta para Resguardo y Préstamo en Almacén",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         });
         headerStack.Children.Add(new TextBlock
         {
             Text = "Capture o actualice el Código Individual (HER-xxxx), Número de Serie, Marca/Modelo, Ubicación en Gabinete y Estado. Esta información se sincroniza automáticamente con el Directorio de Herramientas y con el módulo de Préstamos.",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 0)
         });
@@ -2535,8 +2537,8 @@ public partial class MainWindow : FluentWindow
         // 2. Selector de Producto del Catálogo
         var prodBorder = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(12, 8, 12, 8),
@@ -2610,7 +2612,7 @@ public partial class MainWindow : FluentWindow
             CanUserDeleteRows = false,
             IsReadOnly = true,
             SelectionMode = DataGridSelectionMode.Single,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
         dgHer.Columns.Add(new DataGridTextColumn { Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 100 });
         dgHer.Columns.Add(new DataGridTextColumn { Header = "N° de Serie", Binding = new System.Windows.Data.Binding("NumeroSerie"), Width = 130 });
@@ -2626,8 +2628,8 @@ public partial class MainWindow : FluentWindow
         // 4. Formulario de captura / edición de la herramienta
         var formBorder = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("AccentFillColorDefaultBrush"),
             BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(14, 10, 14, 12),
@@ -2640,7 +2642,7 @@ public partial class MainWindow : FluentWindow
             Text = "✨ Capturar Datos de la Herramienta",
             FontWeight = FontWeights.Bold,
             FontSize = 12.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(29, 78, 216)),
+            Foreground = Tk("AccentFillColorDefaultBrush"),
             Margin = new Thickness(0, 0, 0, 8)
         };
         formStack.Children.Add(lblModoForm);
@@ -2762,7 +2764,7 @@ public partial class MainWindow : FluentWindow
             Content = "💾 Guardar Información en Directorio de Herramientas",
             Padding = new Thickness(16, 7, 16, 7),
             FontWeight = FontWeights.Bold,
-            Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+            Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
             Cursor = Cursors.Hand
         };
@@ -2885,7 +2887,7 @@ public partial class MainWindow : FluentWindow
         {
             if (cboProd.SelectedItem is not Producto pSel)
             {
-                System.Windows.MessageBox.Show(win, "Seleccione el producto del catálogo.", "Falta producto", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "Seleccione el producto del catálogo.", "Falta producto", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -2951,7 +2953,7 @@ public partial class MainWindow : FluentWindow
 
             CargarTodoElSistema(conservarPosicionCatalogo: true);
             RefrescarTablaHerramientasProducto();
-            System.Windows.MessageBox.Show(win,
+            DialogoFluent.Show(win,
                 "La información de la herramienta quedó guardada sin alterar la existencia de almacén.",
                 "Herramienta Guardada", MessageBoxButton.OK, MessageBoxImage.Information);
         };
@@ -2995,7 +2997,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_productoEnEdicion.Id == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un producto guardado para eliminarlo.", "Producto no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un producto guardado para eliminarlo.", "Producto no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3007,7 +3009,7 @@ public partial class MainWindow : FluentWindow
         if (!SolicitarAutorizacionAdmin($"Eliminar producto [{prod.CodigoInterno}] {prod.Nombre}"))
             return;
 
-        if (System.Windows.MessageBox.Show(this, $"¿Desea eliminar el producto '[{prod.CodigoInterno}] {prod.Nombre}' del catálogo?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        if (DialogoFluent.Show(this, $"¿Desea eliminar el producto '[{prod.CodigoInterno}] {prod.Nombre}' del catálogo?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
@@ -3026,7 +3028,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"Error al eliminar el producto:\n{ex.Message}", "Error al eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"Error al eliminar el producto:\n{ex.Message}", "Error al eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -3068,7 +3070,7 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            System.Windows.MessageBox.Show(this, "Primero agregue productos al carrito haciendo clic en 'Agregar'.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Primero agregue productos al carrito haciendo clic en 'Agregar'.", "Carrito vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3499,7 +3501,7 @@ public partial class MainWindow : FluentWindow
             var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
             if (solActual != null && !solActual.EsEditable)
             {
-                System.Windows.MessageBox.Show(this, $"La solicitud {solActual.Folio} ya tiene Orden de Compra generada y no puede modificarse.\n\nHaga clic en '+ Nueva Solicitud' para crear una nueva solicitud.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(this, $"La solicitud {solActual.Folio} ya tiene Orden de Compra generada y no puede modificarse.\n\nHaga clic en '+ Nueva Solicitud' para crear una nueva solicitud.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
         }
@@ -3590,7 +3592,7 @@ public partial class MainWindow : FluentWindow
         string texto = TxtBuscarProductoSolicitud?.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(texto))
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Escriba primero en el buscador el concepto genérico o artículo nuevo que desea solicitar (por ejemplo: 'Jabón', 'Gas R-32', 'Toalla microfibra') y luego presione '➕ Concepto Abierto'.\n\nAsí se agregará a la solicitud para cotizarlo con proveedores sin ensuciar el catálogo hasta concretar la compra.",
                 "Escriba el Concepto Abierto",
                 MessageBoxButton.OK,
@@ -3612,7 +3614,7 @@ public partial class MainWindow : FluentWindow
         if (!VerificarPermisoEdicionSolicitudActual()) return;
         if (partida.TieneOcGenerada)
         {
-            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede modificarse.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede modificarse.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3637,7 +3639,7 @@ public partial class MainWindow : FluentWindow
         if (!VerificarPermisoEdicionSolicitudActual()) return;
         if (partida.TieneOcGenerada)
         {
-            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede modificarse.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede modificarse.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3654,7 +3656,7 @@ public partial class MainWindow : FluentWindow
         if (!VerificarPermisoEdicionSolicitudActual()) return;
         if (partida.TieneOcGenerada)
         {
-            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede quitarse de la solicitud.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede quitarse de la solicitud.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3689,7 +3691,7 @@ public partial class MainWindow : FluentWindow
         var sol = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
         if (sol != null && !sol.EsEditable)
         {
-            System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no puede modificarse.", "Solo lectura", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no puede modificarse.", "Solo lectura", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         return true;
@@ -3771,7 +3773,7 @@ public partial class MainWindow : FluentWindow
 
         if (!sol.EsEditable)
         {
-            System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no admite más artículos.\n\nUse '+ Nueva Solicitud' para abrir una solicitud nueva.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no admite más artículos.\n\nUse '+ Nueva Solicitud' para abrir una solicitud nueva.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3787,7 +3789,7 @@ public partial class MainWindow : FluentWindow
 
         if (sol == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione o guarde primero una Solicitud para abrir su vista previa de impresión.", "Solicitud no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione o guarde primero una Solicitud para abrir su vista previa de impresión.", "Solicitud no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3801,7 +3803,7 @@ public partial class MainWindow : FluentWindow
 
         if (sol == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione o guarde primero una Solicitud para descargar su archivo (PDF, PNG o Excel CSV).", "Solicitud no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione o guarde primero una Solicitud para descargar su archivo (PDF, PNG o Excel CSV).", "Solicitud no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -3815,20 +3817,20 @@ public partial class MainWindow : FluentWindow
 
         if (sol == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una solicitud de la lista para eliminarla.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una solicitud de la lista para eliminarla.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (!sol.EsEditable)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar la solicitud {sol.Folio} porque ya tiene una Orden de Compra generada.", "Operación no permitida", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"No se puede eliminar la solicitud {sol.Folio} porque ya tiene una Orden de Compra generada.", "Operación no permitida", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (!SolicitarAutorizacionAdmin($"Eliminar solicitud {sol.Folio}"))
             return;
 
-        var resp = System.Windows.MessageBox.Show(this,
+        var resp = DialogoFluent.Show(this,
             $"¿Está seguro de eliminar la solicitud {sol.Folio} ({sol.ProyectoNombre}) con {sol.TotalSkus} partidas?",
             "Confirmar eliminación",
             MessageBoxButton.YesNo,
@@ -3929,7 +3931,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this, "No se encontraron coincidencias automáticas en el catálogo para ese texto. Puede buscarlos en la barra superior o darlos de alta en el Catálogo Visual.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "No se encontraron coincidencias automáticas en el catálogo para ese texto. Puede buscarlos en la barra superior o darlos de alta en el Catálogo Visual.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -3961,7 +3963,7 @@ public partial class MainWindow : FluentWindow
             sb.AppendLine("\"Guante de nitrilo anticorte\",\"Talla Grande (L) Nivel 5\",\"Pretul o Truper\",6,Par,85.00,\"EPP para cuadrilla de montaje\"");
 
             File.WriteAllText(dlg.FileName, sb.ToString(), new UTF8Encoding(true));
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 $"Plantilla estándar guardada en:\n{dlg.FileName}\n\n" +
                 "• Incluye el Encabezado obligatorio (Folio Web, Departamento, Solicitante, Quién recibe, Proyecto, Fecha requerida, Urgencia y Lugar de entrega).\n" +
                 "• Incluye las 7 columnas por artículo (Descripción, Especificación/Medida, Marca/Modelo Ref, Cantidad, Unidad, Precio Ref. sin IVA y Notas de uso).\n" +
@@ -4030,7 +4032,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se pudo leer el archivo:\n{ex.Message}", "Error de lectura", MessageBoxButton.OK, MessageBoxImage.Error);
+            DialogoFluent.Show(this, $"No se pudo leer el archivo:\n{ex.Message}", "Error de lectura", MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
 
@@ -4158,7 +4160,7 @@ public partial class MainWindow : FluentWindow
         DgPartidasNuevaSolicitud.Items.Refresh();
         PersistirCambioSiSolicitudEnEdicion();
 
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             $"Se importaron {partidasImportadas} partida(s) como Conceptos Libres listos para cotizar o vincular al catálogo.\n\n" +
             $"• Folio Web: {(string.IsNullOrWhiteSpace(folioWeb) ? "(Sin folio web)" : folioWeb)}\n" +
             $"• Departamento: {(string.IsNullOrWhiteSpace(deptoTxt) ? "(Seleccione en pantalla)" : deptoTxt)}\n" +
@@ -4352,7 +4354,7 @@ public partial class MainWindow : FluentWindow
 
         if (_solicitudEditandoId > 0)
         {
-            var resp = System.Windows.MessageBox.Show(this,
+            var resp = DialogoFluent.Show(this,
                 "¿Desea vaciar todos los artículos de esta solicitud de compra?",
                 "Vaciar solicitud",
                 MessageBoxButton.YesNo,
@@ -4385,7 +4387,7 @@ public partial class MainWindow : FluentWindow
                 sb.AppendLine($"{p.CodigoInterno},{p.CodigoBarras},{fam},{cat},{nom},{p.Marca},{p.Modelo},{p.UnidadAlmacen},{p.StockActual:0.##},{p.StockMinimo:0.##},{p.Ubicacion}");
             }
             File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8);
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 $"Reporte de existencias exportado en:\n{dlg.FileName}\n\nPuede compartirlo con las Gerencias de Área para consulta de stock disponible.",
                 "Existencias Exportadas", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -4395,7 +4397,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_partidasNuevaSolicitud.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Agregue artículos a la solicitud para verificar cuáles cuentan con existencia disponible en almacén.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Agregue artículos a la solicitud para verificar cuáles cuentan con existencia disponible en almacén.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -4414,7 +4416,7 @@ public partial class MainWindow : FluentWindow
 
         if (conStock.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Ninguno de los artículos de esta solicitud tiene existencia disponible actualmente en Almacén.", "Sin stock disponible", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Ninguno de los artículos de esta solicitud tiene existencia disponible actualmente en Almacén.", "Sin stock disponible", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -4437,7 +4439,7 @@ public partial class MainWindow : FluentWindow
             CboSalProyecto.SelectedItem = CboSalProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == proy.Id);
         }
 
-        var preguntarDesmarcar = System.Windows.MessageBox.Show(this,
+        var preguntarDesmarcar = DialogoFluent.Show(this,
             $"Se cargaron {conStock.Count} artículo(s) con existencia disponible en la pestaña '5. Almacén -> Salida de Material'.\n\n¿Desea desmarcar la casilla 'Cotizar' en los artículos que ya quedan cubiertos al 100% con el stock de almacén? (Si elige 'No', permanecerán marcados por si desea cotizarlos de todas formas para actualizar precios).",
             "Artículos Cargados en Salida de Almacén",
             MessageBoxButton.YesNo,
@@ -4462,7 +4464,7 @@ public partial class MainWindow : FluentWindow
         if (CboSolDepartamento.SelectedItem is not Departamento dep ||
             CboSolEncargado.SelectedItem is not Encargado enc)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione Departamento y Solicitante (el Proyecto Destino es opcional).", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione Departamento y Solicitante (el Proyecto Destino es opcional).", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -4502,7 +4504,7 @@ public partial class MainWindow : FluentWindow
 
         if (guardada.Partidas.Count == 0)
         {
-            var irCat = System.Windows.MessageBox.Show(this,
+            var irCat = DialogoFluent.Show(this,
                 $"Se creó el carrito de solicitud abierto {guardada.Folio} ({guardada.ProyectoMostrar}).\n\n¿Desea ir ahora al Catálogo Visual para escoger y agregar artículos a este carrito?",
                 "Carrito de Solicitud Creado",
                 MessageBoxButton.YesNo,
@@ -4525,13 +4527,13 @@ public partial class MainWindow : FluentWindow
                   ?? DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
         if (sol == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una solicitud de la lista.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una solicitud de la lista.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (sol.Partidas.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, $"El carrito {sol.Folio} aún no tiene artículos agregados.\n\nAgregue artículos desde el buscador o desde el Catálogo Visual antes de abrir la Comparativa.", "Carrito sin artículos", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"El carrito {sol.Folio} aún no tiene artículos agregados.\n\nAgregue artículos desde el buscador o desde el Catálogo Visual antes de abrir la Comparativa.", "Carrito sin artículos", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -4845,13 +4847,13 @@ public partial class MainWindow : FluentWindow
 
         if (r == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione primero una Solicitud arriba y un artículo de la lista izquierda para añadir proveedores concursantes.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione primero una Solicitud arriba y un artículo de la lista izquierda para añadir proveedores concursantes.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (r.TieneOcGenerada)
         {
-            System.Windows.MessageBox.Show(this, $"Este artículo ya tiene emitida la Orden de Compra {r.OrdenCompraFolio}.", "Artículo cerrado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"Este artículo ya tiene emitida la Orden de Compra {r.OrdenCompraFolio}.", "Artículo cerrado", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -4901,20 +4903,20 @@ public partial class MainWindow : FluentWindow
     {
         if (r.SolicitudPartidaId <= 0)
         {
-            System.Windows.MessageBox.Show(this, "Guarde primero la solicitud para habilitar proveedores adicionales (Opción 4+).", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Guarde primero la solicitud para habilitar proveedores adicionales (Opción 4+).", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         int numOpcion = 4 + r.ProveedoresExtra.Count;
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = $"Añadir Opción {numOpcion} de Proveedor — {r.ProductoNombre}",
             Width = 460,
             Height = 365,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
@@ -4974,13 +4976,13 @@ public partial class MainWindow : FluentWindow
         {
             if (cboProv.SelectedItem is not Proveedor provSel)
             {
-                System.Windows.MessageBox.Show(win, "Seleccione un proveedor de la lista.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "Seleccione un proveedor de la lista.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             decimal precio = ParseDecimal(txtPrecio.Text, 0m);
             if (precio <= 0)
             {
-                System.Windows.MessageBox.Show(win, "Capture un precio unitario sin IVA mayor a 0.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "Capture un precio unitario sin IVA mayor a 0.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -5045,7 +5047,7 @@ public partial class MainWindow : FluentWindow
             return;
         if (CboCompReferenciasSimilares?.SelectedItem is not ReferenciaSimilarHistorica refSim)
         {
-            System.Windows.MessageBox.Show(this, "No hay referencias históricas de compras similares para este artículo.", "Sin referencias similares", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "No hay referencias históricas de compras similares para este artículo.", "Sin referencias similares", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5068,7 +5070,7 @@ public partial class MainWindow : FluentWindow
             return;
         if (CboCompReferenciasSimilares?.SelectedItem is not ReferenciaSimilarHistorica refSim)
         {
-            System.Windows.MessageBox.Show(this, "No hay referencias históricas de compras similares para este artículo.", "Sin referencias similares", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "No hay referencias históricas de compras similares para este artículo.", "Sin referencias similares", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5370,7 +5372,7 @@ public partial class MainWindow : FluentWindow
 
         if (r.TieneOcGenerada)
         {
-            System.Windows.MessageBox.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {r.OrdenCompraFolio}.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {r.OrdenCompraFolio}.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5383,12 +5385,12 @@ public partial class MainWindow : FluentWindow
 
             if (provId <= 0)
             {
-                System.Windows.MessageBox.Show(this, $"Seleccione primero un Proveedor en la Opción {indiceOpcion}.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(this, $"Seleccione primero un Proveedor en la Opción {indiceOpcion}.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             if (precio <= 0)
             {
-                System.Windows.MessageBox.Show(this, $"Capture primero un precio unitario mayor a $0.00 en la Opción {indiceOpcion}.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(this, $"Capture primero un precio unitario mayor a $0.00 en la Opción {indiceOpcion}.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
         }
@@ -5413,7 +5415,7 @@ public partial class MainWindow : FluentWindow
         int mejorIdx = DeterminarIndiceMejorPrecio(r);
         if (mejorIdx == 0)
         {
-            System.Windows.MessageBox.Show(this, "Capture al menos un proveedor con precio mayor a $0.00 en las opciones de este artículo.", "Sin precios capturados", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Capture al menos un proveedor con precio mayor a $0.00 en las opciones de este artículo.", "Sin precios capturados", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5541,7 +5543,7 @@ public partial class MainWindow : FluentWindow
 
         if (asignados == 0)
         {
-            System.Windows.MessageBox.Show(this, "Capture precios mayores a $0.00 en los productos pendientes para elegir automáticamente el mejor precio.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Capture precios mayores a $0.00 en los productos pendientes para elegir automáticamente el mejor precio.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -5553,14 +5555,14 @@ public partial class MainWindow : FluentWindow
         SincronizarRenglonActualDesdeTarjetas();
         DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
         RecalcularTotalesComparativa();
-        System.Windows.MessageBox.Show(this, $"Se guardó el borrador de la comparativa para la solicitud {sol.Folio}.\n\nPuede continuar cotizando más tarde o emitir Órdenes de Compra parciales cuando lo desee.", "Borrador Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
+        DialogoFluent.Show(this, $"Se guardó el borrador de la comparativa para la solicitud {sol.Folio}.\n\nPuede continuar cotizando más tarde o emitir Órdenes de Compra parciales cuando lo desee.", "Borrador Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void BtnCopiarListaParaCotizar_Click(object sender, RoutedEventArgs e)
     {
         if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione primero una solicitud con artículos para copiar la lista de cotización.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione primero una solicitud con artículos para copiar la lista de cotización.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5579,7 +5581,7 @@ public partial class MainWindow : FluentWindow
         sb.AppendLine("Atentamente: Gerencia de Compras");
 
         Clipboard.SetText(sb.ToString());
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             "Se copió al portapapeles la lista limpia de materiales (sin precios internos) lista para pegar y enviar por WhatsApp o correo a los proveedores concursantes.",
             "Lista Copiada para Proveedores", MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -5588,7 +5590,7 @@ public partial class MainWindow : FluentWindow
     {
         if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione primero una solicitud con artículos para imprimir su Cuadro Comparativo.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione primero una solicitud con artículos para imprimir su Cuadro Comparativo.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5601,7 +5603,7 @@ public partial class MainWindow : FluentWindow
     {
         if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione primero una solicitud con artículos para descargar su Cuadro Comparativo (PDF, PNG o Excel CSV).", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione primero una solicitud con artículos para descargar su Cuadro Comparativo (PDF, PNG o Excel CSV).", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5620,7 +5622,7 @@ public partial class MainWindow : FluentWindow
 
         if (sol.EsSoloCotizacion)
         {
-            var resp = System.Windows.MessageBox.Show(this,
+            var resp = DialogoFluent.Show(this,
                 $"La solicitud {sol.Folio} está registrada como 'Solo Cotización / Presupuesto'.\n\n• Si presiona 'Sí': Se convertirá en 'Requerimiento de Compra' para que pueda emitir Órdenes de Compra.\n• Si presiona 'No': Se marcará como 'Cotizada (Presupuesto)' conservando todos los precios en el Banco Histórico sin generar compra.",
                 "Finalizar Cotización o Convertir a Compra",
                 MessageBoxButton.YesNoCancel,
@@ -5630,18 +5632,18 @@ public partial class MainWindow : FluentWindow
             {
                 DatabaseService.ActualizarTipoYEstatusSolicitud(sol.Id, "Requerimiento de Compra", "En Comparativa");
                 RefrescarSolicitudes(sol.Id);
-                System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} se convirtió a 'Requerimiento de Compra'. Ya puede emitir las Órdenes de Compra correspondientes.", "Convertida a Compra", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(this, $"La solicitud {sol.Folio} se convirtió a 'Requerimiento de Compra'. Ya puede emitir las Órdenes de Compra correspondientes.", "Convertida a Compra", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else if (resp == System.Windows.MessageBoxResult.No)
             {
                 DatabaseService.ActualizarTipoYEstatusSolicitud(sol.Id, "Solo Cotización / Presupuesto", "Cotizada (Presupuesto)");
                 RefrescarSolicitudes(sol.Id);
-                System.Windows.MessageBox.Show(this, $"La solicitud {sol.Folio} quedó registrada como 'Cotizada (Presupuesto)' y sus precios se guardaron en el Banco Histórico con su vigencia.", "Presupuesto Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(this, $"La solicitud {sol.Folio} quedó registrada como 'Cotizada (Presupuesto)' y sus precios se guardaron en el Banco Histórico con su vigencia.", "Presupuesto Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
         else
         {
-            var resp = System.Windows.MessageBox.Show(this,
+            var resp = DialogoFluent.Show(this,
                 $"¿Desea cambiar la solicitud {sol.Folio} a modalidad 'Solo Cotización / Presupuesto' (investigación de precios sin emisión de compra)?",
                 "Cambiar Tipo de Solicitud",
                 MessageBoxButton.YesNo,
@@ -5664,7 +5666,7 @@ public partial class MainWindow : FluentWindow
 
         if (sol.EsSoloCotizacion)
         {
-            var confirmarConversion = System.Windows.MessageBox.Show(this,
+            var confirmarConversion = DialogoFluent.Show(this,
                 $"Esta solicitud ({sol.Folio}) fue creada como 'Solo Cotización / Presupuesto'.\n\n¿Desea convertirla en 'Requerimiento de Compra' y emitir las Órdenes de Compra ahora?",
                 "Solicitud de Solo Cotización",
                 MessageBoxButton.YesNo,
@@ -5681,7 +5683,7 @@ public partial class MainWindow : FluentWindow
 
         if (decididosSinOc.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Elija primero el proveedor ganador (con precio mayor a $0.00) en al menos un producto pendiente.", "Sin productos decididos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Elija primero el proveedor ganador (con precio mayor a $0.00) en al menos un producto pendiente.", "Sin productos decididos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -5690,7 +5692,7 @@ public partial class MainWindow : FluentWindow
 
         if (pendientesRestantes > 0)
         {
-            var resp = System.Windows.MessageBox.Show(this,
+            var resp = DialogoFluent.Show(this,
                 $"Se emitirán {numOcs} Orden(es) de Compra para los {decididosSinOc.Count} productos ya decididos.\n\nLos {pendientesRestantes} productos restantes quedarán pendientes en esta misma solicitud ({sol.Folio}) para que pueda cotizarlos y emitir su OC después.\n\n¿Desea emitir las Órdenes de Compra ahora?",
                 "Emisión Parcial de Órdenes de Compra",
                 MessageBoxButton.YesNo,
@@ -5802,7 +5804,7 @@ public partial class MainWindow : FluentWindow
     {
         if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione primero una Orden de Compra de la tabla.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione primero una Orden de Compra de la tabla.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5812,7 +5814,7 @@ public partial class MainWindow : FluentWindow
 
         DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, nuevoEstatus, condicionPago, fechaProg);
         CargarTodoElSistema();
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             $"Se actualizó el flujo de la Orden de Compra {oc.Folio}:\n• Estatus: {nuevoEstatus}\n• Condición: {condicionPago}\n• Fecha programada/vencimiento: {(string.IsNullOrWhiteSpace(fechaProg) ? "No especificada" : fechaProg)}\n\nLos recordatorios de seguimiento se actualizaron en el Calendario del Dashboard.",
             "Flujo de OC Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -5845,7 +5847,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una Orden de Compra de la lista para imprimirla.", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una Orden de Compra de la lista para imprimirla.", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -5857,7 +5859,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una Orden de Compra de la lista para descargar su archivo (PDF, PNG o Excel CSV).", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una Orden de Compra de la lista para descargar su archivo (PDF, PNG o Excel CSV).", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -5868,7 +5870,7 @@ public partial class MainWindow : FluentWindow
 
         if (oc.Estatus == "Cancelada")
         {
-            System.Windows.MessageBox.Show(this, "Esta Orden de Compra se encuentra Cancelada y no admite recepciones.", "OC Cancelada", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Esta Orden de Compra se encuentra Cancelada y no admite recepciones.", "OC Cancelada", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -5879,7 +5881,7 @@ public partial class MainWindow : FluentWindow
 
         if (aRecibir.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Indique en la columna 'Recibir Hoy' al menos una cantidad mayor a 0 (puede recibir entregas parciales o usar el botón 'Recibir Todo lo Pendiente').", "Sin cantidades por recibir", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Indique en la columna 'Recibir Hoy' al menos una cantidad mayor a 0 (puede recibir entregas parciales o usar el botón 'Recibir Todo lo Pendiente').", "Sin cantidades por recibir", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -5924,7 +5926,7 @@ public partial class MainWindow : FluentWindow
         // Si el material no se reservó en stock y la OC tiene departamento/proyecto, ofrecer pre-cargarlo en Salida de Material
         if (!reservarProyecto && entrada.Partidas.Count > 0)
         {
-            var respSal = System.Windows.MessageBox.Show(this,
+            var respSal = DialogoFluent.Show(this,
                 $"¿Desea cargar los artículos recién recibidos de {oc.Folio} en la pestaña '5. Almacén -> Salida de Material' para emitir su Vale de Salida (SAL-xxxx) hacia el área solicitante ({oc.DepartamentoNombre})?",
                 "Emitir Salida de Material Recibido",
                 MessageBoxButton.YesNo,
@@ -5972,14 +5974,14 @@ public partial class MainWindow : FluentWindow
     private bool ConfirmarNombresConceptosAbiertosEnRecepcion(OrdenCompra oc, List<OrdenCompraPartida> conceptosAbiertos)
     {
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = $"Confirmar Alta en Catálogo de Conceptos Abiertos — {oc.Folio}",
             Width = 560,
             Height = Math.Min(540, 230 + conceptosAbiertos.Count * 86),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new DockPanel { Margin = new Thickness(18) };
@@ -5994,7 +5996,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = $"Esta Orden de Compra ({oc.ProveedorNombre}) incluye {conceptosAbiertos.Count} concepto(s) abierto(s). Puede confirmar o detallar el nombre/marca real comprado para que se registre correctamente en el Catálogo:",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0)
         });
@@ -6025,8 +6027,8 @@ public partial class MainWindow : FluentWindow
                 Padding = new Thickness(10),
                 Margin = new Thickness(0, 0, 0, 8),
                 CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+                Background = Tk("ControlFillColorSecondaryBrush"),
+                BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1)
             };
             var sp = new StackPanel();
@@ -6095,7 +6097,7 @@ public partial class MainWindow : FluentWindow
     {
         if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione primero una Orden de Compra de la lista.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione primero una Orden de Compra de la lista.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -6103,14 +6105,14 @@ public partial class MainWindow : FluentWindow
             return;
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = $"Forzar Estatus de Orden de Compra — {oc.Folio}",
             Width = 500,
             Height = 365,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
@@ -6126,7 +6128,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = $"Proveedor: {oc.ProveedorNombre}  |  Estatus actual: {oc.Estatus}  |  Avance: {oc.AvanceRecepcionTexto}",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 0, 0, 12)
         });
 
@@ -6159,7 +6161,7 @@ public partial class MainWindow : FluentWindow
         {
             if (string.IsNullOrWhiteSpace(txtMotivo.Text))
             {
-                System.Windows.MessageBox.Show(win, "Escriba el motivo del cambio administrativo.", "Motivo requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "Escriba el motivo del cambio administrativo.", "Motivo requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -6185,7 +6187,7 @@ public partial class MainWindow : FluentWindow
         if (win.ShowDialog() == true)
         {
             CargarTodoElSistema();
-            System.Windows.MessageBox.Show(this, $"Se actualizó el estatus de la Orden de Compra {oc.Folio} y se registró en la Bitácora de Administrador.", "Estatus Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"Se actualizó el estatus de la Orden de Compra {oc.Folio} y se registró en la Bitácora de Administrador.", "Estatus Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -6193,7 +6195,7 @@ public partial class MainWindow : FluentWindow
     {
         if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione primero una Orden de Compra de la lista.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione primero una Orden de Compra de la lista.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -6201,14 +6203,14 @@ public partial class MainWindow : FluentWindow
             return;
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = $"Liquidar OC sin Factura XML — {oc.Folio}",
             Width = 460,
             Height = 310,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
@@ -6223,7 +6225,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = $"Proveedor: {oc.ProveedorNombre}\nTotal de la OC: {oc.TotalConIva:C2}\nSe generará un comprobante interno vinculado a esta OC para el historial de compras y análisis.",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12)
         });
@@ -6270,7 +6272,7 @@ public partial class MainWindow : FluentWindow
         if (win.ShowDialog() == true && comprobanteCreado != null)
         {
             CargarTodoElSistema();
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 $"Se registró la nota/comprobante '{comprobanteCreado.SerieFolio}' para la Orden de Compra {oc.Folio}.\n\nPuede consultarla en la pestaña '6. Facturas y Notas' y en las gráficas de '7. Análisis'.",
                 "OC Liquidada sin Factura", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -6284,7 +6286,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una recepción (ENT-xxxx) del historial para imprimirla.", "Sin recepción seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una recepción (ENT-xxxx) del historial para imprimirla.", "Sin recepción seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -6296,7 +6298,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una recepción (ENT-xxxx) del historial para descargar su archivo (PDF, PNG o Excel CSV).", "Sin recepción seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una recepción (ENT-xxxx) del historial para descargar su archivo (PDF, PNG o Excel CSV).", "Sin recepción seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -6731,7 +6733,7 @@ public partial class MainWindow : FluentWindow
             return true;
         }
 
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             $"No se encontró ningún material en almacén que coincida con '{raw}'.\n\nVerifique el código de barras o escriba parte del nombre del artículo.",
             "Artículo no encontrado", MessageBoxButton.OK, MessageBoxImage.Warning);
         return false;
@@ -6872,7 +6874,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Seleccione un movimiento (Entrada ENT-xxxx o Salida SAL-xxxx) de la tabla inferior o escanee su código de barras en el buscador.",
                 "Seleccione un vale", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -6886,7 +6888,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Seleccione un movimiento (Entrada ENT-xxxx o Salida SAL-xxxx) de la tabla inferior para descargar su archivo (PDF, PNG o Excel CSV).",
                 "Seleccione un vale", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -7010,19 +7012,19 @@ public partial class MainWindow : FluentWindow
         var entradas = DatabaseService.ObtenerEntradasAlmacen();
         if (entradas.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Aún no existen recepciones de Orden de Compra (ENT-xxxx) registradas en almacén.", "Sin recepciones", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Aún no existen recepciones de Orden de Compra (ENT-xxxx) registradas en almacén.", "Sin recepciones", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Cargar Material de OC Recibida en Vale de Salida",
             Width = 520,
             Height = 250,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Brushes.White
+            Background = Tk("ControlFillColorDefaultBrush")
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
@@ -7037,7 +7039,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = "Seleccione el Vale de Entrada cuyos materiales desea entregar al área solicitante o cuerpo técnico:",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10)
         });
@@ -7088,7 +7090,7 @@ public partial class MainWindow : FluentWindow
 
         if (sal == null)
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Registre primero un Vale de Salida de Material (SAL-xxxx) o selecciónelo en la tabla 'Vales de Entrada y Salida' para generar e imprimir su Carta de Aceptación de Responsabilidad de EPP / Equipo.",
                 "Seleccione una Salida de Material", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -7111,7 +7113,7 @@ public partial class MainWindow : FluentWindow
     {
         if (CboSalDepartamento.SelectedItem is not Departamento dep)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba la Salida (el Proyecto Destino es opcional).", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba la Salida (el Proyecto Destino es opcional).", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -7123,14 +7125,14 @@ public partial class MainWindow : FluentWindow
 
         if (string.IsNullOrWhiteSpace(personaRecibe))
         {
-            System.Windows.MessageBox.Show(this, "Escriba o seleccione el nombre de la Persona que Recibe el material.", "Falta persona que recibe", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Escriba o seleccione el nombre de la Persona que Recibe el material.", "Falta persona que recibe", MessageBoxButton.OK, MessageBoxImage.Warning);
             CboSalEncargado.Focus();
             return;
         }
 
         if (_partidasSalidaPos.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Agregue o escanee al menos un material para el vale de salida.", "Vale vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Agregue o escanee al menos un material para el vale de salida.", "Vale vacío", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -7146,7 +7148,7 @@ public partial class MainWindow : FluentWindow
 
         if (sinStockSuficiente.Count > 0)
         {
-            var confirmarStock = System.Windows.MessageBox.Show(this,
+            var confirmarStock = DialogoFluent.Show(this,
                 $"Los siguientes artículos superan la existencia registrada en almacén:\n\n{string.Join("\n", sinStockSuficiente)}\n\n¿Desea registrar la salida de todas formas (el stock quedará en 0)?",
                 "Advertencia de Stock Insuficiente",
                 MessageBoxButton.YesNo,
@@ -7174,7 +7176,7 @@ public partial class MainWindow : FluentWindow
 
         if (incluyeEpp)
         {
-            var respEpp = System.Windows.MessageBox.Show(this,
+            var respEpp = DialogoFluent.Show(this,
                 $"Se detectó Equipo de Protección Personal (EPP) o equipo de asignación en el vale {salida.Folio} entregado a '{salida.PersonaRecibeEfectiva}'.\n\n¿Desea abrir e imprimir la Carta de Aceptación de Responsabilidad de EPP con firmas del Técnico y de la Gerencia correspondiente ({salida.DepartamentoNombre})?",
                 "Imprimir Carta Responsiva de EPP",
                 MessageBoxButton.YesNo,
@@ -7220,7 +7222,7 @@ public partial class MainWindow : FluentWindow
             }
         }
 
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             "Seleccione una herramienta disponible del listado para agregarla al vale de préstamo.",
             "Seleccione herramienta", MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -7286,7 +7288,7 @@ public partial class MainWindow : FluentWindow
 
         if (dep == null)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba el Préstamo (el Proyecto Destino es opcional).", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione obligatoriamente el Departamento que Aprueba el Préstamo (el Proyecto Destino es opcional).", "Faltan datos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -7300,7 +7302,7 @@ public partial class MainWindow : FluentWindow
 
         if (string.IsNullOrWhiteSpace(personaRecibe))
         {
-            System.Windows.MessageBox.Show(this, "Escriba o seleccione el nombre de la Persona que Recibe la herramienta.", "Falta persona que recibe", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Escriba o seleccione el nombre de la Persona que Recibe la herramienta.", "Falta persona que recibe", MessageBoxButton.OK, MessageBoxImage.Warning);
             CboPrePersonaRecibe?.Focus();
             return;
         }
@@ -7314,7 +7316,7 @@ public partial class MainWindow : FluentWindow
 
         if (listaParaPrestar.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una o más herramientas disponibles (usando '+ Agregar a Lista' o el selector) para registrar el préstamo.", "Sin herramientas seleccionadas", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una o más herramientas disponibles (usando '+ Agregar a Lista' o el selector) para registrar el préstamo.", "Sin herramientas seleccionadas", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -7433,7 +7435,7 @@ public partial class MainWindow : FluentWindow
         var todasOcs = DatabaseService.ObtenerOrdenesCompra();
         if (todasOcs.Count == 0)
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Aún no existen Órdenes de Compra (OC-xxxx) emitidas en el sistema.",
                 "Sin órdenes de compra", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -7443,13 +7445,13 @@ public partial class MainWindow : FluentWindow
         var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Recepción Agrupada de Orden de Compra en Almacén (OC-xxxx → ENT-xxxx)",
             Width = 1040,
             Height = 640,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+            Background = Tk("ApplicationBackgroundBrush")
         };
 
         var root = new Grid { Margin = new Thickness(16) };
@@ -7465,13 +7467,13 @@ public partial class MainWindow : FluentWindow
             Text = "📥 Recepción de Mercancía por Orden de Compra (OC-xxxx → Vale de Entrada ENT-xxxx)",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         });
         topPanel.Children.Add(new TextBlock
         {
             Text = "Marque con ☑ los artículos que SÍ llegaron del proveedor hoy, ajuste la cantidad recibida si fue entrega parcial y asigne su ubicación en anaquel:",
             FontSize = 11.5,
-            Foreground = Brushes.DimGray,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8)
         });
@@ -7546,8 +7548,8 @@ public partial class MainWindow : FluentWindow
 
         var infoBorder = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 8, 10, 8),
@@ -7557,7 +7559,7 @@ public partial class MainWindow : FluentWindow
         {
             FontSize = 11.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            Foreground = Tk("TextFillColorPrimaryBrush"),
             TextWrapping = TextWrapping.Wrap
         };
         infoBorder.Child = txtInfoOc;
@@ -7569,7 +7571,7 @@ public partial class MainWindow : FluentWindow
             AutoGenerateColumns = false,
             CanUserAddRows = false,
             CanUserDeleteRows = false,
-            Background = Brushes.White,
+            Background = Tk("ControlFillColorDefaultBrush"),
             Margin = new Thickness(0, 0, 0, 10)
         };
 
@@ -7706,8 +7708,8 @@ public partial class MainWindow : FluentWindow
             }
             else
             {
-                infoBorder.Background = Brushes.White;
-                infoBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240));
+                infoBorder.Background = Tk("ControlFillColorDefaultBrush");
+                infoBorder.BorderBrush = Tk("ControlStrokeColorDefaultBrush");
                 txtInfoOc.Text = $"Folio: {oc.Folio}  |  Proveedor: {oc.ProveedorNombre}  |  Destino: {oc.ProyectoNombre} ({oc.DepartamentoNombre})  |  Estatus: {oc.Estatus} ({oc.AvanceRecepcionTexto})";
             }
 
@@ -7791,7 +7793,7 @@ public partial class MainWindow : FluentWindow
 
             if (aRecibir.Count == 0)
             {
-                System.Windows.MessageBox.Show(win,
+                DialogoFluent.Show(win,
                     "Marque con ☑ al menos un artículo y verifique que su cantidad en '✏️ Recibir Hoy' sea mayor a 0.",
                     "Sin cantidades por recibir", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -7844,7 +7846,7 @@ public partial class MainWindow : FluentWindow
 
             if (!reservarProy && entrada.Partidas.Count > 0)
             {
-                var respSal = System.Windows.MessageBox.Show(this,
+                var respSal = DialogoFluent.Show(this,
                     $"¿Desea cargar los artículos recién recibidos de {ocSel.Folio} ({entrada.Folio}) en 'Salida de Material' para entregarlos de una vez al área solicitante ({ocSel.DepartamentoNombre})?",
                     "Pasar a Salida de Material (SAL-xxxx)",
                     MessageBoxButton.YesNo,
@@ -7873,7 +7875,7 @@ public partial class MainWindow : FluentWindow
         var todasEntradas = DatabaseService.ObtenerEntradasAlmacen();
         if (todasEntradas.Count == 0)
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Aún no existen Vales de Entrada (ENT-xxxx) registrados en el sistema.",
                 "Sin entradas registradas", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -7883,13 +7885,13 @@ public partial class MainWindow : FluentWindow
         var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Siguiente Acción del Vale de Entrada (ENT-xxxx): Acomodo en Anaquel o Salida de Material",
             Width = 960,
             Height = 580,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+            Background = Tk("ApplicationBackgroundBrush")
         };
 
         var root = new Grid { Margin = new Thickness(16) };
@@ -7904,13 +7906,13 @@ public partial class MainWindow : FluentWindow
             Text = "📦 Siguiente Acción para Vale de Entrada (ENT-xxxx): Acomodar Ubicación o Surtir en Salida (SAL-xxxx)",
             FontSize = 15.5,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         });
         topPanel.Children.Add(new TextBlock
         {
             Text = "Seleccione qué artículos de esta entrada desea surtir en un Vale de Salida (SAL-xxxx) o actualice su coordenada de anaquel en almacén:",
             FontSize = 11.5,
-            Foreground = Brushes.DimGray,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 2, 0, 8)
         });
 
@@ -7933,8 +7935,8 @@ public partial class MainWindow : FluentWindow
 
         var infoBorder = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 8, 10, 8),
@@ -7944,7 +7946,7 @@ public partial class MainWindow : FluentWindow
         {
             FontSize = 11.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            Foreground = Tk("TextFillColorPrimaryBrush"),
             TextWrapping = TextWrapping.Wrap
         };
         infoBorder.Child = txtInfoEnt;
@@ -7956,7 +7958,7 @@ public partial class MainWindow : FluentWindow
             AutoGenerateColumns = false,
             CanUserAddRows = false,
             CanUserDeleteRows = false,
-            Background = Brushes.White,
+            Background = Tk("ControlFillColorDefaultBrush"),
             Margin = new Thickness(0, 0, 0, 12)
         };
 
@@ -8024,7 +8026,7 @@ public partial class MainWindow : FluentWindow
         {
             Content = "📤 Cargar Seleccionados (☑) en Salida de Material (SAL-xxxx)",
             Padding = new Thickness(16, 7, 16, 7),
-            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
             FontWeight = FontWeights.Bold,
             Cursor = Cursors.Hand
@@ -8096,7 +8098,7 @@ public partial class MainWindow : FluentWindow
             if (cboEntradas.SelectedItem is not EntradaAlmacen ent) return;
             GuardarUbicacionesDePartidas(ent);
             CargarTodoElSistema();
-            System.Windows.MessageBox.Show(win, "Las coordenadas de almacén de los artículos de esta entrada se actualizaron correctamente.", "Ubicaciones Guardadas", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(win, "Las coordenadas de almacén de los artículos de esta entrada se actualizaron correctamente.", "Ubicaciones Guardadas", MessageBoxButton.OK, MessageBoxImage.Information);
         };
 
         btnPasarASalida.Click += (_, _) =>
@@ -8107,7 +8109,7 @@ public partial class MainWindow : FluentWindow
             var seleccionadas = ent.Partidas.Where(x => x.SeleccionadoAccion && x.CantidadParaSalida > 0).ToList();
             if (seleccionadas.Count == 0)
             {
-                System.Windows.MessageBox.Show(win, "Marque con ☑ al menos un artículo para cargarlo en el Vale de Salida.", "Sin artículos seleccionados", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(win, "Marque con ☑ al menos un artículo para cargarlo en el Vale de Salida.", "Sin artículos seleccionados", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -8164,7 +8166,7 @@ public partial class MainWindow : FluentWindow
         var todosPrestamos = DatabaseService.ObtenerPrestamosHerramienta();
         if (todosPrestamos.Count == 0)
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Aún no existen Vales de Préstamo de Herramienta (PRE-xxxx) registrados en el sistema.",
                 "Sin préstamos registrados", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -8174,13 +8176,13 @@ public partial class MainWindow : FluentWindow
         string obsGlobalUI = TxtObsRetornoHerramienta?.Text?.Trim() ?? string.Empty;
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Devolución Agrupada de Préstamo de Herramientas (PRE-xxxx)",
             Width = 940,
             Height = 580,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+            Background = Tk("ApplicationBackgroundBrush")
         };
 
         var root = new Grid { Margin = new Thickness(16) };
@@ -8196,13 +8198,13 @@ public partial class MainWindow : FluentWindow
             Text = "🔧 Devolución Agrupada de Herramientas por Vale de Resguardo (PRE-xxxx)",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         });
         topPanel.Children.Add(new TextBlock
         {
             Text = "Marque con ☑ las herramientas que SÍ regresaron hoy y desmarque (☐) las que NO llegaron (seguirán pendientes en resguardo). Puede indicar el estado individual de cada pieza:",
             FontSize = 11.5,
-            Foreground = Brushes.DimGray,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8)
         });
@@ -8255,8 +8257,8 @@ public partial class MainWindow : FluentWindow
 
         var infoBorder = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 8, 10, 8),
@@ -8267,7 +8269,7 @@ public partial class MainWindow : FluentWindow
         {
             FontSize = 11.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            Foreground = Tk("TextFillColorPrimaryBrush"),
             Text = "Seleccione un vale de préstamo..."
         };
         infoStack.Children.Add(txtInfoPrestamo);
@@ -8278,7 +8280,7 @@ public partial class MainWindow : FluentWindow
             Text = "🔫 Escanear Código Individual (HER-xxxx) para marcar ☑:",
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Foreground = Tk("AccentFillColorDefaultBrush"),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0)
         });
@@ -8301,7 +8303,7 @@ public partial class MainWindow : FluentWindow
             AutoGenerateColumns = false,
             CanUserAddRows = false,
             CanUserDeleteRows = false,
-            Background = Brushes.White,
+            Background = Tk("ControlFillColorDefaultBrush"),
             Margin = new Thickness(0, 0, 0, 10)
         };
 
@@ -8354,7 +8356,7 @@ public partial class MainWindow : FluentWindow
             Text = "Nota general de recepción (se aplicará a las herramientas que no tengan observación individual):",
             FontSize = 11.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = Brushes.DarkSlateGray,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 0, 0, 4)
         });
         var txtObsGeneral = new System.Windows.Controls.TextBox
@@ -8388,7 +8390,7 @@ public partial class MainWindow : FluentWindow
         {
             Content = "✅ Registrar Devolución de Seleccionadas (☑) e Imprimir",
             Padding = new Thickness(16, 7, 16, 7),
-            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
             FontWeight = FontWeights.Bold,
             Cursor = Cursors.Hand
@@ -8505,7 +8507,7 @@ public partial class MainWindow : FluentWindow
 
             if (cboPrestamos.SelectedItem is not PrestamoHerramienta preSel)
             {
-                System.Windows.MessageBox.Show(win, "Seleccione un Vale de Préstamo (PRE-xxxx).", "Falta vale", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "Seleccione un Vale de Préstamo (PRE-xxxx).", "Falta vale", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -8515,7 +8517,7 @@ public partial class MainWindow : FluentWindow
 
             if (seleccionadas.Count == 0)
             {
-                System.Windows.MessageBox.Show(win,
+                DialogoFluent.Show(win,
                     "Marque con ☑ al menos una herramienta pendiente que haya regresado hoy (o use '🖨️ Solo Ver / Reimprimir Vale' si solo desea consultar el documento).",
                     "Sin herramientas marcadas", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -8559,7 +8561,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Seleccione primero una herramienta o préstamo de la tabla para abrir e imprimir su Hoja de Préstamo / Devolución.",
                 "Seleccione un préstamo", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -8574,7 +8576,7 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Seleccione primero una herramienta o préstamo de la tabla para descargar su Hoja de Préstamo / Devolución (PDF, PNG o Excel CSV).",
                 "Seleccione un préstamo", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -8606,20 +8608,20 @@ public partial class MainWindow : FluentWindow
         var todasSalidas = DatabaseService.ObtenerSalidasAlmacen();
         if (todasSalidas.Count == 0)
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 "Aún no existen Vales de Salida de Material (SAL-xxxx) registrados en el sistema.",
                 "Sin salidas registradas", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = "Devolución / Reingreso de Material a Almacén (Completa o Parcial)",
             Width = 860,
             Height = 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252))
+            Background = Tk("ApplicationBackgroundBrush")
         };
 
         var root = new Grid { Margin = new Thickness(16) };
@@ -8636,13 +8638,13 @@ public partial class MainWindow : FluentWindow
             Text = "Registrar Devolución de Material Sobrante a Almacén",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         });
         topPanel.Children.Add(new TextBlock
         {
             Text = "Seleccione el Vale de Salida (SAL-xxxx), indique la cantidad devuelta por partida (parcial o completa) y genere el Comprobante Imprimible de Devolución sin precios.",
             FontSize = 11.5,
-            Foreground = Brushes.DimGray,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 2, 0, 8)
         });
 
@@ -8694,8 +8696,8 @@ public partial class MainWindow : FluentWindow
         // Resumen del vale seleccionado
         var infoBorder = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 8, 10, 8),
@@ -8706,7 +8708,7 @@ public partial class MainWindow : FluentWindow
         {
             FontSize = 11.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+            Foreground = Tk("TextFillColorPrimaryBrush"),
             Text = "Seleccione un vale de salida..."
         };
         infoStackSal.Children.Add(txtInfoSalida);
@@ -8717,7 +8719,7 @@ public partial class MainWindow : FluentWindow
             Text = "🔫 Escanear Código de Producto (PRD-xxxx / EAN) para marcar ☑:",
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Foreground = Tk("AccentFillColorDefaultBrush"),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0)
         });
@@ -8741,7 +8743,7 @@ public partial class MainWindow : FluentWindow
             AutoGenerateColumns = false,
             CanUserAddRows = false,
             CanUserDeleteRows = false,
-            Background = Brushes.White,
+            Background = Tk("ControlFillColorDefaultBrush"),
             Margin = new Thickness(0, 0, 0, 10)
         };
 
@@ -8776,7 +8778,7 @@ public partial class MainWindow : FluentWindow
             Text = "Motivo / Observaciones de la Devolución:",
             FontSize = 11.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = Brushes.DarkSlateGray,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 0, 0, 4)
         });
         var txtObs = new System.Windows.Controls.TextBox
@@ -8811,7 +8813,7 @@ public partial class MainWindow : FluentWindow
         {
             Content = "✅ Registrar Devolución e Imprimir Comprobante",
             Padding = new Thickness(16, 7, 16, 7),
-            Background = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+            Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
             FontWeight = FontWeights.Bold,
             Cursor = Cursors.Hand
@@ -8915,7 +8917,7 @@ public partial class MainWindow : FluentWindow
 
             if (cboSalidas.SelectedItem is not SalidaAlmacen salSel)
             {
-                System.Windows.MessageBox.Show(win, "Seleccione un Vale de Salida (SAL-xxxx).", "Falta vale", MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogoFluent.Show(win, "Seleccione un Vale de Salida (SAL-xxxx).", "Falta vale", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -8927,7 +8929,7 @@ public partial class MainWindow : FluentWindow
 
             if (devoluciones.Count == 0)
             {
-                System.Windows.MessageBox.Show(win,
+                DialogoFluent.Show(win,
                     "Indique una cantidad a devolver mayor a 0 en al menos una partida (o verifique que el vale aún tenga unidades pendientes por devolver).",
                     "Sin unidades a devolver", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -8942,7 +8944,7 @@ public partial class MainWindow : FluentWindow
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show(win, ex.Message, "Error al registrar devolución", MessageBoxButton.OK, MessageBoxImage.Error);
+                DialogoFluent.Show(win, ex.Message, "Error al registrar devolución", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         };
 
@@ -9081,7 +9083,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"Error al leer el archivo XML:\n{ex.Message}", "Error XML", MessageBoxButton.OK, MessageBoxImage.Error);
+            DialogoFluent.Show(this, $"Error al leer el archivo XML:\n{ex.Message}", "Error XML", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -9123,7 +9125,7 @@ public partial class MainWindow : FluentWindow
         if (DgXmlConceptosActual.SelectedItem is not FacturaConcepto concepto ||
             CboXmlVincularProducto.SelectedItem is not Producto prod)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un concepto en la tabla y el producto de su catálogo con el que desea relacionarlo.", "Vincular concepto", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un concepto en la tabla y el producto de su catálogo con el que desea relacionarlo.", "Vincular concepto", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -9145,14 +9147,14 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        System.Windows.MessageBox.Show(this, "Cargue un archivo XML o seleccione una factura registrada en la tabla inferior.", "Vincular concepto", MessageBoxButton.OK, MessageBoxImage.Information);
+        DialogoFluent.Show(this, "Cargue un archivo XML o seleccione una factura registrada en la tabla inferior.", "Vincular concepto", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void BtnMarcarConceptoComoNuevo_Click(object sender, RoutedEventArgs e)
     {
         if (DgXmlConceptosActual.SelectedItem is not FacturaConcepto concepto)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un concepto en la tabla para marcarlo como producto nuevo.", "Seleccione concepto", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un concepto en la tabla para marcarlo como producto nuevo.", "Seleccione concepto", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -9179,7 +9181,7 @@ public partial class MainWindow : FluentWindow
         var facturaActiva = _facturaXmlEnPantalla ?? (DgFacturasRegistradas.SelectedItem as FacturaXml);
         if (facturaActiva == null)
         {
-            System.Windows.MessageBox.Show(this, "Primero cargue una factura XML o seleccione una factura registrada.", "Sin factura", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Primero cargue una factura XML o seleccione una factura registrada.", "Sin factura", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -9195,7 +9197,7 @@ public partial class MainWindow : FluentWindow
 
         if (conceptosACrear.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Todos los conceptos ya están vinculados a productos registrados en el catálogo.\nSi desea crear uno nuevo a partir de un concepto ya vinculado, selecciónelo y haga clic en 'Marcar como Nuevo'.", "Productos ya registrados", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Todos los conceptos ya están vinculados a productos registrados en el catálogo.\nSi desea crear uno nuevo a partir de un concepto ya vinculado, selecciónelo y haga clic en 'Marcar como Nuevo'.", "Productos ya registrados", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -9226,7 +9228,7 @@ public partial class MainWindow : FluentWindow
         });
 
         string listaNombres = string.Join("\n", creados.Select(p => $"• [{p.CodigoInterno}] {p.Nombre} ({p.UltimoCostoCompra:C2})"));
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             $"Se dieron de alta {creados.Count} producto(s) nuevos en el Catálogo:\n\n{listaNombres}",
             "Productos Creados en Catálogo", MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -9271,7 +9273,7 @@ public partial class MainWindow : FluentWindow
             if (!SolicitarAutorizacionAdmin($"Eliminar comprobante/factura {fac.SerieFolio} ({fac.EmisorNombre})"))
                 return;
 
-            var resp = System.Windows.MessageBox.Show(this,
+            var resp = DialogoFluent.Show(this,
                 $"¿Desea eliminar el comprobante {fac.SerieFolio} (UUID/Folio: {fac.Uuid}) del proveedor '{fac.EmisorNombre}' por {fac.Total:C2}?",
                 "Confirmar eliminación de factura",
                 MessageBoxButton.YesNo,
@@ -9295,7 +9297,7 @@ public partial class MainWindow : FluentWindow
 
         if (_facturaXmlEnPantalla != null)
         {
-            var resp = System.Windows.MessageBox.Show(this,
+            var resp = DialogoFluent.Show(this,
                 "¿Desea descartar y limpiar la factura XML que está cargada actualmente en pantalla?",
                 "Limpiar factura en pantalla",
                 MessageBoxButton.YesNo,
@@ -9310,7 +9312,7 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             "Seleccione una factura en la tabla 'Facturas y Notas Registradas' para eliminarla.",
             "Factura no seleccionada",
             MessageBoxButton.OK,
@@ -9321,13 +9323,13 @@ public partial class MainWindow : FluentWindow
     {
         if (_facturaXmlEnPantalla == null)
         {
-            System.Windows.MessageBox.Show(this, "Primero seleccione un archivo .xml o cargue el XML Demo.", "Sin factura cargada", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Primero seleccione un archivo .xml o cargue el XML Demo.", "Sin factura cargada", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (DatabaseService.ObtenerFacturasXml().Any(f => f.Uuid.Equals(_facturaXmlEnPantalla.Uuid, StringComparison.OrdinalIgnoreCase)))
         {
-            System.Windows.MessageBox.Show(this, $"La factura con UUID {_facturaXmlEnPantalla.Uuid} ya se encuentra registrada en el sistema.", "Factura duplicada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, $"La factura con UUID {_facturaXmlEnPantalla.Uuid} ya se encuentra registrada en el sistema.", "Factura duplicada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -9368,7 +9370,7 @@ public partial class MainWindow : FluentWindow
 
         if (nuevosCreados > 0)
         {
-            System.Windows.MessageBox.Show(this,
+            DialogoFluent.Show(this,
                 $"Factura {facturaGuardada.SerieFolio} registrada y asociada a la Orden de Compra {facturaGuardada.OrdenCompraFolio}.\n\nSe detectaron {nuevosCreados} concepto(s) nuevos y se crearon automáticamente en el Catálogo.",
                 "Factura, OC y Nuevos Productos Registrados", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -9429,7 +9431,7 @@ public partial class MainWindow : FluentWindow
     {
         if (CboSinFacProducto.SelectedItem is not Producto prod)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un producto del catálogo para agregarlo a la nota.", "Producto requerido", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un producto del catálogo para agregarlo a la nota.", "Producto requerido", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -9437,7 +9439,7 @@ public partial class MainWindow : FluentWindow
         decimal precio = ParseDecimal(TxtSinFacPrecioUnitario.Text, 0m);
         if (cant <= 0 || precio <= 0)
         {
-            System.Windows.MessageBox.Show(this, "Capture una cantidad y un precio unitario mayores a 0.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Capture una cantidad y un precio unitario mayores a 0.", "Datos requeridos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -9517,19 +9519,19 @@ public partial class MainWindow : FluentWindow
         string provTexto = CboSinFacProveedor.Text?.Trim() ?? string.Empty;
         if (provSel == null && string.IsNullOrWhiteSpace(provTexto))
         {
-            System.Windows.MessageBox.Show(this, "Seleccione o escriba el nombre del Proveedor.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione o escriba el nombre del Proveedor.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (CboSinFacProyecto.SelectedItem is not Proyecto proy)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione el Proyecto destino.", "Proyecto requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione el Proyecto destino.", "Proyecto requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (_partidasCompraSinFactura.Count == 0)
         {
-            System.Windows.MessageBox.Show(this, "Agregue al menos un artículo a la nota de compra.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Agregue al menos un artículo a la nota de compra.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -9781,7 +9783,7 @@ public partial class MainWindow : FluentWindow
     {
         if (DgRankingMaterialesAnalisis?.SelectedItem is not MaterialRankingAnalisis item)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un artículo en la tabla de Ranking de Materiales para enviarlo a una Solicitud / Cotización.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un artículo en la tabla de Ranking de Materiales para enviarlo a una Solicitud / Cotización.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -9800,7 +9802,7 @@ public partial class MainWindow : FluentWindow
         }
 
         CambiarSeccion(2);
-        System.Windows.MessageBox.Show(this,
+        DialogoFluent.Show(this,
             $"Se agregó '{item.ProductoNombre}' (Cantidad sugerida: {cantSugerida:0.##} {item.UnidadAlmacen}) al editor de Solicitudes para cotizar o abastecer.",
             "Agregado a Solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -9859,7 +9861,7 @@ public partial class MainWindow : FluentWindow
         {
             Text = mensaje,
             FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175))
+            Foreground = Tk("TextFillColorSecondaryBrush")
         };
         Canvas.SetLeft(tb, Math.Max(16, (w - 260) / 2));
         Canvas.SetTop(tb, Math.Max(16, (h - 20) / 2));
@@ -9876,8 +9878,8 @@ public partial class MainWindow : FluentWindow
         double plotH = Math.Max(40, h - padTop - padBottom);
 
         // Ejes
-        var ejeY = new Line { X1 = padLeft, Y1 = padTop, X2 = padLeft, Y2 = padTop + plotH, Stroke = new SolidColorBrush(Color.FromRgb(209, 213, 219)), StrokeThickness = 1.2 };
-        var ejeX = new Line { X1 = padLeft, Y1 = padTop + plotH, X2 = padLeft + plotW, Y2 = padTop + plotH, Stroke = new SolidColorBrush(Color.FromRgb(209, 213, 219)), StrokeThickness = 1.2 };
+        var ejeY = new Line { X1 = padLeft, Y1 = padTop, X2 = padLeft, Y2 = padTop + plotH, Stroke = Tk("ControlStrokeColorDefaultBrush"), StrokeThickness = 1.2 };
+        var ejeX = new Line { X1 = padLeft, Y1 = padTop + plotH, X2 = padLeft + plotW, Y2 = padTop + plotH, Stroke = Tk("ControlStrokeColorDefaultBrush"), StrokeThickness = 1.2 };
         canvas.Children.Add(ejeY);
         canvas.Children.Add(ejeX);
 
@@ -9909,7 +9911,7 @@ public partial class MainWindow : FluentWindow
                 Y1 = y,
                 X2 = padLeft + plotW,
                 Y2 = y,
-                Stroke = new SolidColorBrush(Color.FromRgb(243, 244, 246)),
+                Stroke = Tk("ControlFillColorSecondaryBrush"),
                 StrokeThickness = 1
             };
             canvas.Children.Add(gridLine);
@@ -9918,7 +9920,7 @@ public partial class MainWindow : FluentWindow
             {
                 Text = $"${val:N0}",
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                Foreground = Tk("TextFillColorSecondaryBrush")
             };
             Canvas.SetLeft(lblY, 4);
             Canvas.SetTop(lblY, y - 7);
@@ -10006,7 +10008,7 @@ public partial class MainWindow : FluentWindow
                 {
                     Text = pt.Fecha.ToString("dd/MMM", CultureInfo.GetCultureInfo("es-MX")),
                     FontSize = 9.5,
-                    Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                    Foreground = Tk("TextFillColorSecondaryBrush")
                 };
                 Canvas.SetLeft(lblX, Math.Clamp(x - 18, padLeft - 8, padLeft + plotW - 32));
                 Canvas.SetTop(lblX, padTop + plotH + 6);
@@ -10073,7 +10075,7 @@ public partial class MainWindow : FluentWindow
             Y1 = padTop + plotH,
             X2 = padLeft + plotW,
             Y2 = padTop + plotH,
-            Stroke = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            Stroke = Tk("ControlStrokeColorDefaultBrush"),
             StrokeThickness = 1.2
         };
         canvas.Children.Add(ejeX);
@@ -10121,7 +10123,7 @@ public partial class MainWindow : FluentWindow
                 Text = b.textoValor,
                 FontSize = 10,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(31, 41, 55))
+                Foreground = Tk("TextFillColorPrimaryBrush")
             };
             Canvas.SetLeft(lblVal, x + Math.Max(-8, (barW - 44) / 2.0));
             Canvas.SetTop(lblVal, Math.Max(2, y - 16));
@@ -10132,7 +10134,7 @@ public partial class MainWindow : FluentWindow
             {
                 Text = etqCorta,
                 FontSize = 9.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+                Foreground = Tk("TextFillColorSecondaryBrush"),
                 ToolTip = b.etiqueta
             };
             Canvas.SetLeft(lblEtq, x + Math.Max(-12, (barW - 56) / 2.0));
@@ -10234,7 +10236,7 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrWhiteSpace(TxtProvRfc.Text) || string.IsNullOrWhiteSpace(TxtProvRazon.Text))
         {
-            System.Windows.MessageBox.Show(this, "Complete al menos el RFC y la Razón Social del proveedor.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Complete al menos el RFC y la Razón Social del proveedor.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -10260,14 +10262,14 @@ public partial class MainWindow : FluentWindow
     {
         if (_proveedorEditandoId == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un proveedor de la tabla para eliminarlo.", "Proveedor no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un proveedor de la tabla para eliminarlo.", "Proveedor no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (!SolicitarAutorizacionAdmin($"Eliminar proveedor '{TxtProvComercial.Text}'"))
             return;
 
-        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este proveedor del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        if (DialogoFluent.Show(this, "¿Desea eliminar este proveedor del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
@@ -10278,7 +10280,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar este proveedor porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"No se puede eliminar este proveedor porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -10362,7 +10364,7 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrWhiteSpace(TxtProyCodigo.Text) || string.IsNullOrWhiteSpace(TxtProyNombre.Text))
         {
-            System.Windows.MessageBox.Show(this, "Escriba el código y nombre del proyecto.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Escriba el código y nombre del proyecto.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -10376,14 +10378,14 @@ public partial class MainWindow : FluentWindow
     {
         if (_proyectoEditandoId == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un proyecto de la tabla para eliminarlo.", "Proyecto no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un proyecto de la tabla para eliminarlo.", "Proyecto no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (!SolicitarAutorizacionAdmin($"Eliminar proyecto '{TxtProyCodigo.Text}'"))
             return;
 
-        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este proyecto?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        if (DialogoFluent.Show(this, "¿Desea eliminar este proyecto?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
@@ -10394,7 +10396,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar este proyecto porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"No se puede eliminar este proyecto porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -10469,7 +10471,7 @@ public partial class MainWindow : FluentWindow
     {
         if (CboAltaEncargadoDepto.SelectedItem is not Departamento dep || string.IsNullOrWhiteSpace(TxtAltaEncargadoNombre.Text))
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un departamento y escriba el nombre completo.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione un departamento y escriba el nombre completo.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -10482,14 +10484,14 @@ public partial class MainWindow : FluentWindow
     {
         if (_encargadoEditandoId == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un registro de personal para eliminarlo.", "Personal no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un registro de personal para eliminarlo.", "Personal no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (!SolicitarAutorizacionAdmin($"Eliminar personal '{TxtAltaEncargadoNombre.Text}'"))
             return;
 
-        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar a esta persona del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        if (DialogoFluent.Show(this, "¿Desea eliminar a esta persona del directorio?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
@@ -10500,7 +10502,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar este registro de personal porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"No se puede eliminar este registro de personal porque tiene documentos asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -10524,7 +10526,7 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrWhiteSpace(TxtDeptoCodigo.Text) || string.IsNullOrWhiteSpace(TxtDeptoNombre.Text))
         {
-            System.Windows.MessageBox.Show(this, "Escriba el código y nombre del departamento.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Escriba el código y nombre del departamento.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -10537,14 +10539,14 @@ public partial class MainWindow : FluentWindow
     {
         if (_departamentoEditandoId == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione un departamento para eliminarlo.", "Departamento no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione un departamento para eliminarlo.", "Departamento no seleccionado", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (!SolicitarAutorizacionAdmin($"Eliminar departamento '{TxtDeptoNombre.Text}'"))
             return;
 
-        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar este departamento?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        if (DialogoFluent.Show(this, "¿Desea eliminar este departamento?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
@@ -10555,7 +10557,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar este departamento porque tiene registros asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"No se puede eliminar este departamento porque tiene registros asociados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -10604,7 +10606,7 @@ public partial class MainWindow : FluentWindow
     {
         if (CboDirHerProducto.SelectedItem is not Producto prod)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione el producto base para la herramienta.", "Falta producto", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Seleccione el producto base para la herramienta.", "Falta producto", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -10634,14 +10636,14 @@ public partial class MainWindow : FluentWindow
     {
         if (_herramientaEditandoId == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una herramienta de la tabla para eliminarla.", "Herramienta no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una herramienta de la tabla para eliminarla.", "Herramienta no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (!SolicitarAutorizacionAdmin($"Eliminar herramienta individual '{TxtDirHerCodigo.Text}'"))
             return;
 
-        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar esta herramienta individual?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        if (DialogoFluent.Show(this, "¿Desea eliminar esta herramienta individual?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
@@ -10652,7 +10654,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar esta herramienta porque tiene préstamos registrados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"No se puede eliminar esta herramienta porque tiene préstamos registrados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -10680,7 +10682,7 @@ public partial class MainWindow : FluentWindow
     {
         if (string.IsNullOrWhiteSpace(TxtDirCatNombre.Text))
         {
-            System.Windows.MessageBox.Show(this, "Escriba el nombre de la categoría.", "Falta nombre", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Escriba el nombre de la categoría.", "Falta nombre", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -10702,14 +10704,14 @@ public partial class MainWindow : FluentWindow
     {
         if (_categoriaEditandoId == 0)
         {
-            System.Windows.MessageBox.Show(this, "Seleccione una categoría para eliminarla.", "Categoría no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Seleccione una categoría para eliminarla.", "Categoría no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (!SolicitarAutorizacionAdmin($"Eliminar categoría '{TxtDirCatNombre.Text}'"))
             return;
 
-        if (System.Windows.MessageBox.Show(this, "¿Desea eliminar esta categoría?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
+        if (DialogoFluent.Show(this, "¿Desea eliminar esta categoría?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
             return;
 
         try
@@ -10720,14 +10722,14 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, $"No se puede eliminar esta categoría porque tiene productos vinculados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"No se puede eliminar esta categoría porque tiene productos vinculados.\n{ex.Message}", "No se puede eliminar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     private void BtnRespaldarDb_Click(object sender, RoutedEventArgs e)
     {
         string ruta = DatabaseService.CrearRespaldoBaseDatos();
-        System.Windows.MessageBox.Show(this, $"Respaldo local creado exitosamente en:\n{ruta}", "Respaldo SQLite", MessageBoxButton.OK, MessageBoxImage.Information);
+        DialogoFluent.Show(this, $"Respaldo local creado exitosamente en:\n{ruta}", "Respaldo SQLite", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     // =====================================================================
@@ -10951,7 +10953,7 @@ public partial class MainWindow : FluentWindow
         string subContenedorActual = parsedInicial.SubContenedor;
 
         var win = new Window
-        {
+        { Foreground = Tk("TextFillColorPrimaryBrush"),
             Title = modoSelector
                 ? "🗺️ Selector Gráfico de Coordenadas e Inventario por Cuadrante (Anaqueles A–F y PISO)"
                 : "🗺️ Mapa Logístico de Almacén — Consulta e Inventario por Cuadrante (Anaqueles A–F y PISO)",
@@ -10961,7 +10963,7 @@ public partial class MainWindow : FluentWindow
             MinHeight = 660,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = owner ?? this,
-            Background = new SolidColorBrush(Color.FromRgb(243, 244, 246))
+            Background = Tk("ControlFillColorSecondaryBrush")
         };
 
         var root = new Grid { Margin = new Thickness(16) };
@@ -10972,8 +10974,8 @@ public partial class MainWindow : FluentWindow
         // --- ROW 0: ENCABEZADO Y PESTAÑAS DE ESTANTES (A..F + PISO) ---
         var topCard = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(14, 10, 14, 10),
@@ -11018,13 +11020,13 @@ public partial class MainWindow : FluentWindow
             Text = "🗺️ Sistema de Coordenadas por Estante y Cuadrante (Estándar Bottom-Up 3×3)",
             FontSize = 15.5,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(17, 24, 39))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         });
         titleStack.Children.Add(new TextBlock
         {
             Text = "Seleccione un Anaquel (A a F), Detrás de A (Entre Anaquel y Pared), Gabinete o Zona PISO y haga clic en cualquiera de sus 9 posiciones.",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99))
+            Foreground = Tk("TextFillColorSecondaryBrush")
         });
         headerDock.Children.Add(titleStack);
         topStack.Children.Add(headerDock);
@@ -11044,8 +11046,8 @@ public partial class MainWindow : FluentWindow
         // Panel Izquierdo: Frente del Anaquel 3x3
         var leftCard = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(14)
@@ -11070,7 +11072,7 @@ public partial class MainWindow : FluentWindow
             FontSize = 14,
             FontWeight = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = new SolidColorBrush(Color.FromRgb(30, 58, 138))
+            Foreground = Tk("AccentTextFillColorPrimaryBrush")
         };
         leftHeader.Children.Add(txtTituloAnaquel);
         DockPanel.SetDock(leftHeader, Dock.Top);
@@ -11099,8 +11101,8 @@ public partial class MainWindow : FluentWindow
         // Panel Derecho: Consulta e Inventario por Cuadrante + Reasignación Rápida
         var rightCard = new Border
         {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(209, 213, 219)),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(14)
@@ -11114,8 +11116,8 @@ public partial class MainWindow : FluentWindow
         // Right Row 0: Header & KPIs
         var rightHeaderBorder = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            Background = Tk("ApplicationBackgroundBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(12, 8, 12, 8),
@@ -11140,13 +11142,13 @@ public partial class MainWindow : FluentWindow
             Text = "📍 Inventario en Cuadrante A-05",
             FontSize = 14.5,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         };
         var txtInventarioSubtitulo = new TextBlock
         {
             Text = "Nivel Medio (Altura de cabeza / Media rotación / Herramientas)",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
+            Foreground = Tk("TextFillColorSecondaryBrush"),
             Margin = new Thickness(0, 2, 0, 0)
         };
         rightHeaderStack.Children.Add(txtInventarioTitulo);
@@ -11159,8 +11161,8 @@ public partial class MainWindow : FluentWindow
         // Right Row 1: Asignación rápida de artículo/herramienta al cuadrante actual (para el cuerpo técnico / almacén)
         var assignBorder = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(239, 246, 255)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(191, 219, 254)),
+            Background = Tk("SubtleFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 7, 10, 7),
@@ -11172,7 +11174,7 @@ public partial class MainWindow : FluentWindow
             Text = "📌Ubicar / Mover artículo o herramienta a este cuadrante (según acomodo físico):",
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(30, 58, 138)),
+            Foreground = Tk("AccentTextFillColorPrimaryBrush"),
             Margin = new Thickness(0, 0, 0, 4)
         });
         var assignRow = new Grid();
@@ -11196,7 +11198,7 @@ public partial class MainWindow : FluentWindow
             Content = "Ubicar Aquí",
             Padding = new Thickness(12, 4, 12, 4),
             FontWeight = FontWeights.SemiBold,
-            Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+            Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
             Cursor = Cursors.Hand
         };
@@ -11215,7 +11217,7 @@ public partial class MainWindow : FluentWindow
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 4),
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 41, 55))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         };
         DockPanel.SetDock(txtHeaderProd, Dock.Top);
         prodDock.Children.Add(txtHeaderProd);
@@ -11227,8 +11229,8 @@ public partial class MainWindow : FluentWindow
             CanUserAddRows = false,
             HeadersVisibility = DataGridHeadersVisibility.Column,
             GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-            RowBackground = Brushes.White,
-            AlternatingRowBackground = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
+            RowBackground = Tk("ControlFillColorDefaultBrush"),
+            AlternatingRowBackground = Tk("ControlFillColorSecondaryBrush"),
             FontSize = 11.5
         };
         dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 80 });
@@ -11248,7 +11250,7 @@ public partial class MainWindow : FluentWindow
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 4),
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 41, 55))
+            Foreground = Tk("TextFillColorPrimaryBrush")
         };
         DockPanel.SetDock(txtHeaderHer, Dock.Top);
         herDock.Children.Add(txtHeaderHer);
@@ -11260,8 +11262,8 @@ public partial class MainWindow : FluentWindow
             CanUserAddRows = false,
             HeadersVisibility = DataGridHeadersVisibility.Column,
             GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-            RowBackground = Brushes.White,
-            AlternatingRowBackground = new SolidColorBrush(Color.FromRgb(249, 250, 251)),
+            RowBackground = Tk("ControlFillColorDefaultBrush"),
+            AlternatingRowBackground = Tk("ControlFillColorSecondaryBrush"),
             FontSize = 11.5
         };
         dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 80 });
@@ -11314,7 +11316,7 @@ public partial class MainWindow : FluentWindow
             Text = "",
             FontSize = 11.5,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99))
+            Foreground = Tk("TextFillColorSecondaryBrush")
         };
         footerDock.Children.Add(txtResumenGlobal);
         Grid.SetRow(footerDock, 2);
@@ -11455,12 +11457,12 @@ public partial class MainWindow : FluentWindow
                     FontSize = 12,
                     Cursor = Cursors.Hand,
                     Background = activo
-                        ? new SolidColorBrush(Color.FromRgb(30, 64, 175))
-                        : new SolidColorBrush(Color.FromRgb(243, 244, 246)),
-                    Foreground = activo ? Brushes.White : new SolidColorBrush(Color.FromRgb(31, 41, 55)),
+                        ? Tk("AccentTextFillColorPrimaryBrush")
+                        : Tk("ControlFillColorSecondaryBrush"),
+                    Foreground = activo ? Brushes.White : Tk("TextFillColorPrimaryBrush"),
                     BorderBrush = activo
-                        ? new SolidColorBrush(Color.FromRgb(30, 58, 138))
-                        : new SolidColorBrush(Color.FromRgb(209, 213, 219))
+                        ? Tk("AccentTextFillColorPrimaryBrush")
+                        : Tk("ControlStrokeColorDefaultBrush")
                 };
                 string estCopy = est;
                 btnEst.Click += (_, _) =>
@@ -11580,10 +11582,10 @@ public partial class MainWindow : FluentWindow
                     CornerRadius = new CornerRadius(8),
                     BorderThickness = new Thickness(seleccionado ? 2.5 : 1),
                     BorderBrush = seleccionado
-                        ? new SolidColorBrush(Color.FromRgb(37, 99, 235))
-                        : new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+                        ? Tk("AccentFillColorDefaultBrush")
+                        : Tk("ControlStrokeColorDefaultBrush"),
                     Background = seleccionado
-                        ? new SolidColorBrush(Color.FromRgb(239, 246, 255))
+                        ? Tk("SubtleFillColorSecondaryBrush")
                         : Brushes.White,
                     Cursor = Cursors.Hand
                 };
@@ -11629,7 +11631,7 @@ public partial class MainWindow : FluentWindow
                     Text = $"📦 {prodsCuad.Count} art.",
                     FontSize = 11.5,
                     FontWeight = prodsCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
-                    Foreground = prodsCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(17, 24, 39)) : new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                    Foreground = prodsCuad.Count > 0 ? Tk("TextFillColorPrimaryBrush") : Tk("TextFillColorSecondaryBrush"),
                     Margin = new Thickness(0, 0, 10, 0)
                 });
                 badgesPanel.Children.Add(new TextBlock
@@ -11637,7 +11639,7 @@ public partial class MainWindow : FluentWindow
                     Text = $"🔧 {hersCuad.Count} herr.",
                     FontSize = 11.5,
                     FontWeight = hersCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
-                    Foreground = hersCuad.Count > 0 ? new SolidColorBrush(Color.FromRgb(30, 64, 175)) : new SolidColorBrush(Color.FromRgb(156, 163, 175))
+                    Foreground = hersCuad.Count > 0 ? Tk("AccentTextFillColorPrimaryBrush") : Tk("TextFillColorSecondaryBrush")
                 });
                 cellBody.Children.Add(badgesPanel);
 
@@ -11669,7 +11671,7 @@ public partial class MainWindow : FluentWindow
                         {
                             Text = "• " + prev,
                             FontSize = 10.5,
-                            Foreground = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+                            Foreground = Tk("TextFillColorSecondaryBrush"),
                             TextTrimming = TextTrimming.CharacterEllipsis
                         });
                     }
@@ -11681,7 +11683,7 @@ public partial class MainWindow : FluentWindow
                         Text = "(Espacio vacío / disponible)",
                         FontSize = 10.5,
                         FontStyle = FontStyles.Italic,
-                        Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                        Foreground = Tk("TextFillColorSecondaryBrush"),
                         Margin = new Thickness(0, 4, 0, 0)
                     });
                 }
@@ -11826,7 +11828,7 @@ public partial class MainWindow : FluentWindow
         {
             if (cboAsignarItem.SelectedItem is not ComboOpcionAsignacionUbicacion sel)
             {
-                System.Windows.MessageBox.Show(win, "Seleccione un artículo del catálogo o una herramienta individual en el desplegable para asignarle esta ubicación.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogoFluent.Show(win, "Seleccione un artículo del catálogo o una herramienta individual en el desplegable para asignarle esta ubicación.", "Seleccione un artículo", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -11875,7 +11877,7 @@ public partial class MainWindow : FluentWindow
                 sb.AppendLine($"{EscaparCsv(h.Ubicacion)},HERRAMIENTA_INDIVIDUAL,{EscaparCsv(h.CodigoIndividual)},{EscaparCsv(h.ProductoNombre)},{EscaparCsv($"{h.MarcaModelo} / SN:{h.NumeroSerie}")},1,Pieza,{EscaparCsv(h.Estado)},{EscaparCsv(h.EncargadoActual)}");
             }
             File.WriteAllText(sfd.FileName, sb.ToString(), new UTF8Encoding(true));
-            System.Windows.MessageBox.Show(win, $"Inventario de la posición {sufijo} exportado correctamente en:\n{sfd.FileName}", "Inventario Exportado", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(win, $"Inventario de la posición {sufijo} exportado correctamente en:\n{sfd.FileName}", "Inventario Exportado", MessageBoxButton.OK, MessageBoxImage.Information);
         };
 
         btnSeleccionar.Click += (_, _) =>

@@ -1511,7 +1511,7 @@ public static class BarcodePrintService
                 ExportarDocumentoComoPdf(dlg.FileName, contenidoHojaCarta);
             }
 
-            var abrir = MessageBox.Show(owner,
+            var abrir = DialogoFluent.Show(owner,
                 $"Archivo guardado correctamente en:\n{dlg.FileName}\n\n¿Desea abrir el archivo descargado ahora?",
                 "Archivo Descargado",
                 MessageBoxButton.YesNo,
@@ -1528,7 +1528,7 @@ public static class BarcodePrintService
         }
         catch (Exception ex)
         {
-            MessageBox.Show(owner,
+            DialogoFluent.Show(owner,
                 $"No se pudo guardar el archivo:\n{ex.Message}",
                 "Error al descargar archivo",
                 MessageBoxButton.OK,
