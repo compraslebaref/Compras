@@ -127,6 +127,24 @@ public partial class MainWindow
             ("Código de barras", x.CodigoEfectivo),
             ("Tipo", x.EsHerramienta ? "Herramienta de resguardo" : null)
         });
+
+        if (!EsModoAlmacen && x.Id > 0)
+        {
+            var cotizaciones = DatabaseService.ObtenerCotizacionesBancoHistorico(productoId: x.Id);
+            if (cotizaciones.Count > 0)
+            {
+                var filasCot = cotizaciones
+                    .GroupBy(c => c.ProveedorId)
+                    .Select(g =>
+                    {
+                        var ult = g.First();
+                        return (ult.ProveedorNombre, (string?)$"{ult.PrecioSinIva:C2} s/IVA ({ult.PrecioConIva:C2} c/IVA) · {ult.EstadoVigenciaCorto}");
+                    })
+                    .Take(5)
+                    .ToList();
+                AgregarSeccionFicha("Cotizaciones y vigencias", filasCot);
+            }
+        }
     }
 
     private void AgregarSeccionFicha(string titulo, IEnumerable<(string Etiqueta, string? Valor)> filas)
@@ -245,6 +263,13 @@ public partial class MainWindow
         }
         TabHistPrecios.Header = $"Precios de compra ({precios.Count})";
 
+        // --- Cotizaciones y vigencias (incluye borradores y opciones no adjudicadas) ---
+        var cotizaciones = DatabaseService.ObtenerCotizacionesBancoHistorico(productoId: p.Id);
+        if (DgHistCotizacionesProducto != null)
+            DgHistCotizacionesProducto.ItemsSource = cotizaciones;
+        if (TabHistCotizaciones != null)
+            TabHistCotizaciones.Header = $"Cotizaciones y Vigencias ({cotizaciones.Count})";
+
         // --- Entradas ---
         var entradas = DatabaseService.ObtenerEntradasAlmacen()
             .SelectMany(en => en.Partidas
@@ -305,8 +330,8 @@ public partial class MainWindow
         TabHistPrestamos.Header = $"Préstamos ({prestamos.Count})";
         TabHistPrestamos.Visibility = p.EsHerramienta || prestamos.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        if (EsModoAlmacen && TabHistEntradas?.Parent is TabControl tcHist && tcHist.SelectedIndex == 0)
-            tcHist.SelectedIndex = 1;
+        if (EsModoAlmacen && TabHistEntradas?.Parent is TabControl tcHist && (tcHist.SelectedIndex == 0 || tcHist.SelectedIndex == 1))
+            tcHist.SelectedItem = TabHistEntradas;
 
         PnlCatalogoPrincipal.Visibility = Visibility.Collapsed;
         PnlHistorialProducto.Visibility = Visibility.Visible;

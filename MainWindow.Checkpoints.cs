@@ -1160,4 +1160,319 @@ public partial class MainWindow
             }
         }
     }
+
+    private void BtnVincularLineaAbiertaComp_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgComparativa?.SelectedItem is not CotizacionRenglonComparativo r)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una partida en la tabla de comparativa.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (r.ProductoId > 0)
+        {
+            DialogoFluent.Show(this, $"Esta partida ya está vinculada al producto [{r.ProductoCodigo}] {r.ProductoNombre}.", "Ya vinculado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        SincronizarRenglonActualDesdeTarjetas();
+        string desc = !string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.DescripcionLibre : r.ProductoNombre;
+        decimal mejorPrecio = new[] { r.PrecioSinIva1, r.PrecioSinIva2, r.PrecioSinIva3 }
+            .Where(x => x > 0)
+            .DefaultIfEmpty(0m)
+            .Min();
+
+        var prodVinculado = MostrarModalAsociarLineaAbiertaAProducto(
+            descripcionConcepto: desc,
+            familiaSugerida: r.Familia,
+            unidadSugerida: r.UnidadCompra,
+            costoSugeridoSinIva: mejorPrecio,
+            solicitudPartidaId: r.SolicitudPartidaId,
+            bancoPrecioId: null);
+
+        if (prodVinculado != null)
+        {
+            r.ProductoId = prodVinculado.Id;
+            r.ProductoCodigo = prodVinculado.CodigoInterno;
+            r.ProductoNombre = prodVinculado.Nombre;
+            r.Familia = prodVinculado.Familia;
+            r.StockActualAlmacen = prodVinculado.StockActual;
+            r.UltimoCostoCompraConIva = Math.Round(prodVinculado.UltimoCostoCompra * 1.16m, 2);
+
+            string folSol = (CboCompSolicitud?.SelectedItem as Solicitud)?.Folio ?? "COT";
+            DatabaseService.GuardarCotizacionPartida(r, folSol);
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            CargarProductoEnTarjetasComparativa(r);
+            RecalcularTotalesComparativa();
+        }
+    }
+
+    private void BtnAsociarLineaAbiertaDirProv_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDesgloseProveedor?.SelectedItem == null)
+        {
+            DialogoFluent.Show(this, "Seleccione en la tabla una fila de 'Cotización (Línea Abierta)' para asociarla o convertirla en un SKU del Catálogo.", "Seleccione una cotización", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var itemSel = DgDesgloseProveedor.SelectedItem;
+        var propCot = itemSel.GetType().GetProperty("CotizacionObj");
+        var cot = propCot?.GetValue(itemSel) as RegistroCotizacionVigencia;
+        if (cot == null)
+        {
+            DialogoFluent.Show(this, "Seleccione una fila que corresponda a una Cotización registrada para poder asociarla a un SKU del Catálogo.", "Fila no es cotización", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (cot.ProductoId > 0)
+        {
+            DialogoFluent.Show(this, $"Esta cotización ya está asociada al SKU [{cot.ProductoCodigo}] {cot.DescripcionConcepto}.", "Ya asociada a SKU", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var prodVinculado = MostrarModalAsociarLineaAbiertaAProducto(
+            descripcionConcepto: cot.DescripcionConcepto,
+            familiaSugerida: cot.Familia,
+            unidadSugerida: "Pieza",
+            costoSugeridoSinIva: cot.PrecioSinIva,
+            solicitudPartidaId: cot.SolicitudPartidaId > 0 ? cot.SolicitudPartidaId : null,
+            bancoPrecioId: cot.Id > 0 ? cot.Id : null);
+
+        if (prodVinculado != null)
+        {
+            var provSel = DgDirProveedores?.SelectedItem as Proveedor;
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            if (provSel != null && DgDirProveedores != null)
+            {
+                var reSel = (DgDirProveedores.ItemsSource as IEnumerable<Proveedor>)?.FirstOrDefault(x => x.Id == provSel.Id);
+                if (reSel != null)
+                    DgDirProveedores.SelectedItem = reSel;
+            }
+        }
+    }
+
+    private Producto? MostrarModalAsociarLineaAbiertaAProducto(
+        string descripcionConcepto,
+        string familiaSugerida,
+        string unidadSugerida,
+        decimal costoSugeridoSinIva,
+        int? solicitudPartidaId,
+        int? bancoPrecioId)
+    {
+        var todosProductos = DatabaseService.ObtenerProductos();
+        Producto? resultado = null;
+
+        var win = new Window
+        {
+            Foreground = Tk("TextFillColorPrimaryBrush"),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Title = "Asociar o Convertir Línea Abierta a Producto (SKU) del Catálogo",
+            Width = 620,
+            Height = 520,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "🔗 Asociar Línea Abierta al Catálogo de Productos",
+            FontSize = 15.5,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = $"Concepto cotizado: \"{descripcionConcepto}\"\nTodas las cotizaciones, precios y vigencias de este concepto quedarán vinculadas al SKU elegido.",
+            FontSize = 11.5,
+            Opacity = 0.85,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        // Sección 1: Asociar a SKU existente
+        var bdrExistente = new Border
+        {
+            Padding = new Thickness(12),
+            CornerRadius = new CornerRadius(6),
+            BorderBrush = Tk("ControlElevationBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        var spExistente = new StackPanel();
+        spExistente.Children.Add(new TextBlock
+        {
+            Text = "Opción A · Asociar a un Producto (SKU) ya existente en el Catálogo",
+            FontWeight = FontWeights.Bold,
+            FontSize = 12.5,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+
+        var txtFiltro = new System.Windows.Controls.TextBox
+        {
+            Padding = new Thickness(6, 4, 6, 4),
+            Margin = new Thickness(0, 0, 0, 6),
+            ToolTip = "Escriba para filtrar por código, nombre o familia..."
+        };
+        spExistente.Children.Add(txtFiltro);
+
+        var cboExistente = new ComboBox
+        {
+            ItemsSource = todosProductos,
+            DisplayMemberPath = "EtiquetaCompleta",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        spExistente.Children.Add(cboExistente);
+
+        txtFiltro.TextChanged += (_, _) =>
+        {
+            string f = (txtFiltro.Text ?? string.Empty).Trim();
+            var filtrados = string.IsNullOrWhiteSpace(f)
+                ? todosProductos
+                : todosProductos.Where(p =>
+                    p.Nombre.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                    p.CodigoInterno.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                    p.Familia.Contains(f, StringComparison.OrdinalIgnoreCase)).ToList();
+            cboExistente.ItemsSource = filtrados;
+            if (filtrados.Count > 0) cboExistente.SelectedIndex = 0;
+        };
+
+        var btnVincularExistente = new Wpf.Ui.Controls.Button
+        {
+            Content = "Vincular a este SKU Existente",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(14, 6, 14, 6)
+        };
+        spExistente.Children.Add(btnVincularExistente);
+        bdrExistente.Child = spExistente;
+        root.Children.Add(bdrExistente);
+
+        // Sección 2: Crear nuevo SKU y vincular
+        var bdrNuevo = new Border
+        {
+            Padding = new Thickness(12),
+            CornerRadius = new CornerRadius(6),
+            BorderBrush = Tk("AccentFillColorDefaultBrush"),
+            BorderThickness = new Thickness(1.2),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        var spNuevo = new StackPanel();
+        spNuevo.Children.Add(new TextBlock
+        {
+            Text = "Opción B · Dar de alta como Nuevo Producto (SKU) en el Catálogo y vincular",
+            FontWeight = FontWeights.Bold,
+            FontSize = 12.5,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        string sigSku = DatabaseService.GenerarSiguienteCodigoProducto("PRD", "Productos", "CodigoInterno");
+        var gridNuevo = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        gridNuevo.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        gridNuevo.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridNuevo.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+
+        var spSku = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spSku.Children.Add(new TextBlock { Text = "Nuevo SKU:", FontSize = 11 });
+        var txtNuevoSku = new System.Windows.Controls.TextBox { Text = sigSku, Padding = new Thickness(6, 4, 6, 4) };
+        spSku.Children.Add(txtNuevoSku);
+        Grid.SetColumn(spSku, 0);
+        gridNuevo.Children.Add(spSku);
+
+        var spNom = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spNom.Children.Add(new TextBlock { Text = "Nombre en Catálogo:", FontSize = 11 });
+        var txtNuevoNom = new System.Windows.Controls.TextBox { Text = descripcionConcepto, Padding = new Thickness(6, 4, 6, 4) };
+        spNom.Children.Add(txtNuevoNom);
+        Grid.SetColumn(spNom, 1);
+        gridNuevo.Children.Add(spNom);
+
+        var spFam = new StackPanel();
+        spFam.Children.Add(new TextBlock { Text = "Familia:", FontSize = 11 });
+        var txtNuevaFam = new System.Windows.Controls.TextBox
+        {
+            Text = !string.IsNullOrWhiteSpace(familiaSugerida) ? familiaSugerida : DatabaseService.ExtraerFamiliaSugerida(descripcionConcepto),
+            Padding = new Thickness(6, 4, 6, 4)
+        };
+        spFam.Children.Add(txtNuevaFam);
+        Grid.SetColumn(spFam, 2);
+        gridNuevo.Children.Add(spFam);
+        spNuevo.Children.Add(gridNuevo);
+
+        var btnCrearYVincular = new Wpf.Ui.Controls.Button
+        {
+            Content = $"+ Crear SKU {sigSku} y Vincular Cotizaciones",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Success,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(14, 6, 14, 6)
+        };
+        spNuevo.Children.Add(btnCrearYVincular);
+        bdrNuevo.Child = spNuevo;
+        root.Children.Add(bdrNuevo);
+
+        var btnCerrar = new System.Windows.Controls.Button
+        {
+            Content = "Cancelar",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(16, 6, 16, 6)
+        };
+        btnCerrar.Click += (_, _) => win.DialogResult = false;
+        root.Children.Add(btnCerrar);
+
+        btnVincularExistente.Click += (_, _) =>
+        {
+            if (cboExistente.SelectedItem is not Producto prodSel)
+            {
+                DialogoFluent.Show(win, "Seleccione un producto existente de la lista desplegable.", "Producto requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            DatabaseService.VincularLineaAbiertaAProductoCatalogo(prodSel.Id, solicitudPartidaId, bancoPrecioId, descripcionConcepto);
+            resultado = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.Id == prodSel.Id) ?? prodSel;
+            DialogoFluent.Show(win,
+                $"Se vinculó el concepto '{descripcionConcepto}' y todas sus cotizaciones históricas al producto [{resultado.CodigoInterno}] {resultado.Nombre}.",
+                "Línea Abierta Vinculada", MessageBoxButton.OK, MessageBoxImage.Information);
+            win.DialogResult = true;
+        };
+
+        btnCrearYVincular.Click += (_, _) =>
+        {
+            string nomProd = (txtNuevoNom.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(nomProd))
+            {
+                DialogoFluent.Show(win, "Escriba el nombre para el nuevo producto.", "Nombre requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            string codProd = string.IsNullOrWhiteSpace(txtNuevoSku.Text) ? sigSku : txtNuevoSku.Text.Trim().ToUpperInvariant();
+            string famProd = string.IsNullOrWhiteSpace(txtNuevaFam.Text) ? "General" : txtNuevaFam.Text.Trim();
+            string uni = string.IsNullOrWhiteSpace(unidadSugerida) ? "Pieza" : unidadSugerida.Trim();
+
+            DatabaseService.GuardarProducto(new Producto
+            {
+                CodigoInterno = codProd,
+                CodigoBarras = codProd,
+                Nombre = nomProd,
+                Familia = famProd,
+                UnidadCompra = uni,
+                UnidadAlmacen = uni,
+                FactorConversion = 1m,
+                StockMinimo = 1m,
+                UltimoCostoCompra = costoSugeridoSinIva,
+                Ubicacion = "POR ASIGNAR"
+            });
+
+            var recienCreado = DatabaseService.ObtenerProductos().FirstOrDefault(p => string.Equals(p.CodigoInterno, codProd, StringComparison.OrdinalIgnoreCase))
+                               ?? DatabaseService.ObtenerProductos().LastOrDefault();
+            if (recienCreado != null)
+            {
+                DatabaseService.VincularLineaAbiertaAProductoCatalogo(recienCreado.Id, solicitudPartidaId, bancoPrecioId, descripcionConcepto);
+                resultado = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.Id == recienCreado.Id) ?? recienCreado;
+                DialogoFluent.Show(win,
+                    $"Se creó el nuevo producto [{resultado.CodigoInterno}] {resultado.Nombre} y se le asociaron todas las cotizaciones y vigencias del concepto '{descripcionConcepto}'.",
+                    "Nuevo SKU Creado y Vinculado", MessageBoxButton.OK, MessageBoxImage.Information);
+                win.DialogResult = true;
+            }
+        };
+
+        win.Content = root;
+        win.ShowDialog();
+        return resultado;
+    }
 }

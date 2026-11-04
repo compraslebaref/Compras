@@ -284,18 +284,24 @@ public class SolicitudPartida
     public int DiasEntrega1 { get; set; } = 2;
     public decimal FleteConIva1 { get; set; }
     public string NotasCotizacion1 { get; set; } = string.Empty;
+    public int DiasVigencia1 { get; set; } = 15;
+    public string FechaCotizacion1 { get; set; } = string.Empty;
 
     public int Proveedor2Id { get; set; }
     public decimal PrecioSinIva2 { get; set; }
     public int DiasEntrega2 { get; set; } = 3;
     public decimal FleteConIva2 { get; set; }
     public string NotasCotizacion2 { get; set; } = string.Empty;
+    public int DiasVigencia2 { get; set; } = 15;
+    public string FechaCotizacion2 { get; set; } = string.Empty;
 
     public int Proveedor3Id { get; set; }
     public decimal PrecioSinIva3 { get; set; }
     public int DiasEntrega3 { get; set; } = 1;
     public decimal FleteConIva3 { get; set; }
     public string NotasCotizacion3 { get; set; } = string.Empty;
+    public int DiasVigencia3 { get; set; } = 15;
+    public string FechaCotizacion3 { get; set; } = string.Empty;
 
     public int ProveedorGanadorIndice { get; set; } // 0 = Sin decidir, 1 = Opción 1, 2 = Opción 2, 3 = Opción 3
     public int OrdenCompraId { get; set; }
@@ -352,21 +358,45 @@ public class CotizacionRenglonComparativo
     public string ReferenciaHistorica { get; set; } = string.Empty;
     public List<CotizacionProveedorExtra> ProveedoresExtra { get; set; } = new();
 
+    public bool EsConceptoLibre => ProductoId <= 0;
+
+    public static string FormatearVigencia(string? fechaCotizacion, int diasVigencia, bool detallado = false)
+    {
+        int dv = diasVigencia > 0 ? diasVigencia : 15;
+        if (string.IsNullOrWhiteSpace(fechaCotizacion))
+            return $"Vigencia: {dv} días";
+        if (DateTime.TryParse(fechaCotizacion, out DateTime dtCot))
+        {
+            DateTime vence = dtCot.Date.AddDays(dv);
+            int diasRestantes = (vence - DateTime.Today).Days;
+            if (diasRestantes >= 0)
+                return detallado
+                    ? $"🟢 Vigente hasta {vence:dd/MM/yyyy} ({diasRestantes}d rest.)"
+                    : $"🟢 Vigente ({diasRestantes}d rest.)";
+            return detallado
+                ? $"🔴 Vencida hace {Math.Abs(diasRestantes)}d (Venció {vence:dd/MM/yyyy} — Preguntar a proveedor)"
+                : $"🔴 Vencida (hace {Math.Abs(diasRestantes)}d - Recotizar)";
+        }
+        return $"Vigencia: {dv} días";
+    }
+
     public string VigenciaEstadoTexto
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(FechaCotizacion))
-                return $"Vigencia: {DiasVigenciaCotizacion} días";
-            if (DateTime.TryParse(FechaCotizacion, out DateTime dtCot))
+            if (ProveedorGanadorIndice == 1)
+                return FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion1) ? FechaCotizacion1 : FechaCotizacion, DiasVigencia1 > 0 ? DiasVigencia1 : DiasVigenciaCotizacion);
+            if (ProveedorGanadorIndice == 2)
+                return FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion2) ? FechaCotizacion2 : FechaCotizacion, DiasVigencia2 > 0 ? DiasVigencia2 : DiasVigenciaCotizacion);
+            if (ProveedorGanadorIndice == 3)
+                return FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion3) ? FechaCotizacion3 : FechaCotizacion, DiasVigencia3 > 0 ? DiasVigencia3 : DiasVigenciaCotizacion);
+            if (ProveedorGanadorIndice >= 4)
             {
-                DateTime vence = dtCot.Date.AddDays(DiasVigenciaCotizacion > 0 ? DiasVigenciaCotizacion : 15);
-                int diasRestantes = (vence - DateTime.Today).Days;
-                if (diasRestantes >= 0)
-                    return $"Vigente ({diasRestantes}d rest.)";
-                return $"Vencida (hace {Math.Abs(diasRestantes)}d - Recotizar)";
+                var ex = ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == ProveedorGanadorIndice);
+                if (ex != null)
+                    return FormatearVigencia(!string.IsNullOrWhiteSpace(ex.FechaCotizacion) ? ex.FechaCotizacion : FechaCotizacion, ex.DiasVigencia > 0 ? ex.DiasVigencia : DiasVigenciaCotizacion);
             }
-            return $"Vigencia: {DiasVigenciaCotizacion} días";
+            return FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion1) ? FechaCotizacion1 : FechaCotizacion, DiasVigencia1 > 0 ? DiasVigencia1 : DiasVigenciaCotizacion);
         }
     }
 
@@ -376,12 +406,15 @@ public class CotizacionRenglonComparativo
     public decimal PrecioSinIva1 { get; set; }
     public decimal PrecioConIva1 => Math.Round(PrecioSinIva1 * 1.16m, 2);
     public int DiasEntrega1 { get; set; } = 2;
+    public int DiasVigencia1 { get; set; } = 15;
+    public string FechaCotizacion1 { get; set; } = string.Empty;
     public decimal FleteConIva1 { get; set; }
     public string NotasCotizacion1 { get; set; } = string.Empty;
     public decimal TotalPartidaConIva1 => Math.Round(Cantidad * PrecioSinIva1 * 1.16m, 2);
     public decimal TotalConFlete1 => Math.Round(TotalPartidaConIva1 + FleteConIva1, 2);
+    public string EstadoVigencia1 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion1) ? FechaCotizacion1 : FechaCotizacion, DiasVigencia1, true);
     public string ResumenOpcion1 => Proveedor1Id > 0 && PrecioSinIva1 > 0
-        ? $"{Proveedor1Nombre}: ${PrecioConIva1:N2} c/u ({DiasEntrega1}d)"
+        ? $"{Proveedor1Nombre}: ${PrecioConIva1:N2} c/u ({DiasEntrega1}d · Vig.{DiasVigencia1}d)"
         : "Sin cotizar";
 
     // Opción 2
@@ -390,12 +423,15 @@ public class CotizacionRenglonComparativo
     public decimal PrecioSinIva2 { get; set; }
     public decimal PrecioConIva2 => Math.Round(PrecioSinIva2 * 1.16m, 2);
     public int DiasEntrega2 { get; set; } = 3;
+    public int DiasVigencia2 { get; set; } = 15;
+    public string FechaCotizacion2 { get; set; } = string.Empty;
     public decimal FleteConIva2 { get; set; }
     public string NotasCotizacion2 { get; set; } = string.Empty;
     public decimal TotalPartidaConIva2 => Math.Round(Cantidad * PrecioSinIva2 * 1.16m, 2);
     public decimal TotalConFlete2 => Math.Round(TotalPartidaConIva2 + FleteConIva2, 2);
+    public string EstadoVigencia2 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion2) ? FechaCotizacion2 : FechaCotizacion, DiasVigencia2, true);
     public string ResumenOpcion2 => Proveedor2Id > 0 && PrecioSinIva2 > 0
-        ? $"{Proveedor2Nombre}: ${PrecioConIva2:N2} c/u ({DiasEntrega2}d)"
+        ? $"{Proveedor2Nombre}: ${PrecioConIva2:N2} c/u ({DiasEntrega2}d · Vig.{DiasVigencia2}d)"
         : "Sin cotizar";
 
     // Opción 3
@@ -404,20 +440,23 @@ public class CotizacionRenglonComparativo
     public decimal PrecioSinIva3 { get; set; }
     public decimal PrecioConIva3 => Math.Round(PrecioSinIva3 * 1.16m, 2);
     public int DiasEntrega3 { get; set; } = 1;
+    public int DiasVigencia3 { get; set; } = 15;
+    public string FechaCotizacion3 { get; set; } = string.Empty;
     public decimal FleteConIva3 { get; set; }
     public string NotasCotizacion3 { get; set; } = string.Empty;
     public decimal TotalPartidaConIva3 => Math.Round(Cantidad * PrecioSinIva3 * 1.16m, 2);
     public decimal TotalConFlete3 => Math.Round(TotalPartidaConIva3 + FleteConIva3, 2);
+    public string EstadoVigencia3 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion3) ? FechaCotizacion3 : FechaCotizacion, DiasVigencia3, true);
     public string ResumenOpcion3
     {
         get
         {
             string baseOp3 = Proveedor3Id > 0 && PrecioSinIva3 > 0
-                ? $"{Proveedor3Nombre}: ${PrecioConIva3:N2} c/u ({DiasEntrega3}d)"
+                ? $"{Proveedor3Nombre}: ${PrecioConIva3:N2} c/u ({DiasEntrega3}d · Vig.{DiasVigencia3}d)"
                 : "Sin cotizar";
             if (ProveedoresExtra.Count == 0)
                 return baseOp3;
-            string extras = string.Join(" | ", ProveedoresExtra.Select(x => $"Op.{x.NumeroOpcion} {x.ProveedorNombre}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d)"));
+            string extras = string.Join(" | ", ProveedoresExtra.Select(x => $"Op.{x.NumeroOpcion} {x.ProveedorNombre}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d · Vig.{x.DiasVigencia}d)"));
             return baseOp3 == "Sin cotizar" ? extras : $"{baseOp3} | {extras}";
         }
     }
@@ -1052,6 +1091,7 @@ public class PartidaCompraSinFactura
 
 public class ReferenciaSimilarHistorica
 {
+    public int IdBancoPrecio { get; set; }
     public int ProductoId { get; set; }
     public string ProductoCodigo { get; set; } = string.Empty;
     public string ProductoNombre { get; set; } = string.Empty;
@@ -1061,9 +1101,48 @@ public class ReferenciaSimilarHistorica
     public decimal PrecioSinIva { get; set; }
     public decimal PrecioConIva => Math.Round(PrecioSinIva * 1.16m, 2);
     public int DiasEntrega { get; set; } = 2;
+    public int DiasVigencia { get; set; } = 15;
+    public string FechaCotizacion { get; set; } = string.Empty;
+    public string NotasCotizacion { get; set; } = string.Empty;
     public string ReferenciaOrigen { get; set; } = string.Empty;
-    public string EtiquetaCombo => $"{ProveedorNombre} | ${PrecioSinIva:N2} s/IVA (${PrecioConIva:N2} c/IVA) — [{ProductoCodigo}] {ProductoNombre}";
+    public string EstadoVigenciaCorto => !string.IsNullOrWhiteSpace(FechaCotizacion)
+        ? CotizacionRenglonComparativo.FormatearVigencia(FechaCotizacion, DiasVigencia)
+        : "Compra previa";
+    public string EtiquetaCombo => $"[{EstadoVigenciaCorto}] {ProveedorNombre} | ${PrecioSinIva:N2} s/IVA (${PrecioConIva:N2} c/IVA) — [{ProductoCodigo}] {ProductoNombre} ({ReferenciaOrigen})";
     public override string ToString() => EtiquetaCombo;
+}
+
+public class RegistroCotizacionVigencia
+{
+    public int Id { get; set; }
+    public int ProductoId { get; set; }
+    public string ProductoCodigo { get; set; } = string.Empty;
+    public string DescripcionConcepto { get; set; } = string.Empty;
+    public string Familia { get; set; } = string.Empty;
+    public int ProveedorId { get; set; }
+    public string ProveedorNombre { get; set; } = string.Empty;
+    public decimal PrecioSinIva { get; set; }
+    public decimal PrecioConIva => Math.Round(PrecioSinIva * 1.16m, 2);
+    public int DiasEntrega { get; set; } = 2;
+    public int DiasVigencia { get; set; } = 15;
+    public string FechaCotizacion { get; set; } = string.Empty;
+    public string OrigenFolio { get; set; } = string.Empty;
+    public string NotasCotizacion { get; set; } = string.Empty;
+    public bool FueGanador { get; set; }
+    public int SolicitudPartidaId { get; set; }
+    public bool EsLineaAbierta => ProductoId <= 0;
+    public string TipoPartidaTexto => EsLineaAbierta ? "Línea Abierta (Sin SKU)" : $"SKU [{ProductoCodigo}]";
+    public string EstadoVigenciaTexto => CotizacionRenglonComparativo.FormatearVigencia(FechaCotizacion, DiasVigencia, true);
+    public string EstadoVigenciaCorto => CotizacionRenglonComparativo.FormatearVigencia(FechaCotizacion, DiasVigencia, false);
+    public bool EstaVigente
+    {
+        get
+        {
+            if (DateTime.TryParse(FechaCotizacion, out DateTime dt))
+                return (dt.Date.AddDays(DiasVigencia > 0 ? DiasVigencia : 15) - DateTime.Today).Days >= 0;
+            return true;
+        }
+    }
 }
 
 public class MaterialRankingAnalisis

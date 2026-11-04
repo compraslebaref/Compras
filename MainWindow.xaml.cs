@@ -4728,6 +4728,8 @@ public partial class MainWindow : FluentWindow
                 DiasEntrega1 = d1,
                 FleteConIva1 = part.FleteConIva1,
                 NotasCotizacion1 = nc1,
+                DiasVigencia1 = part.DiasVigencia1 > 0 ? part.DiasVigencia1 : (part.DiasVigenciaCotizacion > 0 ? part.DiasVigenciaCotizacion : 15),
+                FechaCotizacion1 = !string.IsNullOrWhiteSpace(part.FechaCotizacion1) ? part.FechaCotizacion1 : part.FechaCotizacion,
 
                 Proveedor2Id = pv2,
                 Proveedor2Nombre = provDict.TryGetValue(pv2, out var p2Obj) ? p2Obj.NombreMostrar : "Sin asignar",
@@ -4735,6 +4737,8 @@ public partial class MainWindow : FluentWindow
                 DiasEntrega2 = d2,
                 FleteConIva2 = part.FleteConIva2,
                 NotasCotizacion2 = nc2,
+                DiasVigencia2 = part.DiasVigencia2 > 0 ? part.DiasVigencia2 : (part.DiasVigenciaCotizacion > 0 ? part.DiasVigenciaCotizacion : 15),
+                FechaCotizacion2 = !string.IsNullOrWhiteSpace(part.FechaCotizacion2) ? part.FechaCotizacion2 : part.FechaCotizacion,
 
                 Proveedor3Id = pv3,
                 Proveedor3Nombre = provDict.TryGetValue(pv3, out var p3Obj) ? p3Obj.NombreMostrar : "Sin asignar",
@@ -4742,6 +4746,8 @@ public partial class MainWindow : FluentWindow
                 DiasEntrega3 = d3,
                 FleteConIva3 = part.FleteConIva3,
                 NotasCotizacion3 = nc3,
+                DiasVigencia3 = part.DiasVigencia3 > 0 ? part.DiasVigencia3 : (part.DiasVigenciaCotizacion > 0 ? part.DiasVigenciaCotizacion : 15),
+                FechaCotizacion3 = !string.IsNullOrWhiteSpace(part.FechaCotizacion3) ? part.FechaCotizacion3 : part.FechaCotizacion,
 
                 ProveedorGanadorIndice = part.ProveedorGanadorIndice,
                 OrdenCompraId = part.OrdenCompraId,
@@ -4806,6 +4812,7 @@ public partial class MainWindow : FluentWindow
                     EstablecerPlaceholderCombo(CboCompReferenciasSimilares, "Seleccione un artículo para consultar compras similares...");
                 }
                 if (CboCompProv1 != null) CboCompProv1.SelectedIndex = -1;
+                if (BtnVincularLineaAbiertaComp != null) BtnVincularLineaAbiertaComp.Visibility = Visibility.Collapsed;
                 if (TxtTituloCardComp1 != null) TxtTituloCardComp1.Text = "Proveedor 1 (Principal / Histórico)";
                 if (TxtTituloCardComp2 != null) TxtTituloCardComp2.Text = "Proveedor 2";
                 if (TxtTituloCardComp3 != null) TxtTituloCardComp3.Text = "Proveedor 3";
@@ -4819,6 +4826,8 @@ public partial class MainWindow : FluentWindow
             TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")} | Vigencia: {r.VigenciaEstadoTexto}";
             TxtCompProdHistorial.Text = r.ReferenciaHistorica;
             TxtCompProdCantidad.Text = r.Cantidad.ToString("0.##", CultureInfo.InvariantCulture);
+            if (BtnVincularLineaAbiertaComp != null)
+                BtnVincularLineaAbiertaComp.Visibility = r.ProductoId <= 0 ? Visibility.Visible : Visibility.Collapsed;
             if (TxtCompDiasVigencia != null)
                 TxtCompDiasVigencia.Text = (r.DiasVigenciaCotizacion > 0 ? r.DiasVigenciaCotizacion : 15).ToString();
 
@@ -4843,18 +4852,21 @@ public partial class MainWindow : FluentWindow
             TxtCompPrecioConIva1.Text = r.PrecioSinIva1 > 0 ? r.PrecioConIva1.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
             TxtCompFlete1.Text = r.FleteConIva1.ToString("0.00", CultureInfo.InvariantCulture);
             TxtCompDias1.Text = r.DiasEntrega1.ToString();
+            if (TxtCompVigencia1 != null) TxtCompVigencia1.Text = (r.DiasVigencia1 > 0 ? r.DiasVigencia1 : 15).ToString();
             TxtCompNotas1.Text = r.NotasCotizacion1;
 
             TxtCompPrecioSinIva2.Text = r.PrecioSinIva2 > 0 ? r.PrecioSinIva2.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
             TxtCompPrecioConIva2.Text = r.PrecioSinIva2 > 0 ? r.PrecioConIva2.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
             TxtCompFlete2.Text = r.FleteConIva2.ToString("0.00", CultureInfo.InvariantCulture);
             TxtCompDias2.Text = r.DiasEntrega2.ToString();
+            if (TxtCompVigencia2 != null) TxtCompVigencia2.Text = (r.DiasVigencia2 > 0 ? r.DiasVigencia2 : 15).ToString();
             TxtCompNotas2.Text = r.NotasCotizacion2;
 
             TxtCompPrecioSinIva3.Text = r.PrecioSinIva3 > 0 ? r.PrecioSinIva3.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
             TxtCompPrecioConIva3.Text = r.PrecioSinIva3 > 0 ? r.PrecioConIva3.ToString("0.00", CultureInfo.InvariantCulture) : "0.00";
             TxtCompFlete3.Text = r.FleteConIva3.ToString("0.00", CultureInfo.InvariantCulture);
             TxtCompDias3.Text = r.DiasEntrega3.ToString();
+            if (TxtCompVigencia3 != null) TxtCompVigencia3.Text = (r.DiasVigencia3 > 0 ? r.DiasVigencia3 : 15).ToString();
             TxtCompNotas3.Text = r.NotasCotizacion3;
 
             bool editable = !r.TieneOcGenerada;
@@ -4877,6 +4889,9 @@ public partial class MainWindow : FluentWindow
             TxtCompNotas1.IsEnabled = editable;
             TxtCompNotas2.IsEnabled = editable;
             TxtCompNotas3.IsEnabled = editable;
+            if (TxtCompVigencia1 != null) TxtCompVigencia1.IsEnabled = editable;
+            if (TxtCompVigencia2 != null) TxtCompVigencia2.IsEnabled = editable;
+            if (TxtCompVigencia3 != null) TxtCompVigencia3.IsEnabled = editable;
             BtnElegirGanador1.IsEnabled = editable;
             BtnElegirGanador2.IsEnabled = editable;
             BtnElegirGanador3.IsEnabled = editable;
@@ -5136,6 +5151,8 @@ public partial class MainWindow : FluentWindow
         r.PrecioSinIva1 = refSim.PrecioSinIva;
         r.DiasEntrega1 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 2;
         r.NotasCotizacion1 = refSim.ReferenciaOrigen;
+        r.DiasVigencia1 = refSim.DiasVigencia > 0 ? refSim.DiasVigencia : 15;
+        r.FechaCotizacion1 = !string.IsNullOrWhiteSpace(refSim.FechaCotizacion) ? refSim.FechaCotizacion : DateTime.Today.ToString("yyyy-MM-dd");
 
         DatabaseService.GuardarCotizacionPartida(r);
         CargarProductoEnTarjetasComparativa(r);
@@ -5164,6 +5181,10 @@ public partial class MainWindow : FluentWindow
             r.PrecioSinIva1 = refSim.PrecioSinIva;
             r.DiasEntrega1 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 2;
             r.NotasCotizacion1 = refSim.ReferenciaOrigen;
+            r.DiasVigencia1 = refSim.DiasVigencia > 0 ? refSim.DiasVigencia : 15;
+            r.FechaCotizacion1 = !string.IsNullOrWhiteSpace(refSim.FechaCotizacion) ? refSim.FechaCotizacion : DateTime.Today.ToString("yyyy-MM-dd");
+        r.DiasVigencia1 = refSim.DiasVigencia > 0 ? refSim.DiasVigencia : 15;
+        r.FechaCotizacion1 = !string.IsNullOrWhiteSpace(refSim.FechaCotizacion) ? refSim.FechaCotizacion : DateTime.Today.ToString("yyyy-MM-dd");
         }
         else if (r.NumeroOpcionesVisibles < 2 || (r.Proveedor2Id == 0 && r.PrecioSinIva2 <= 0))
         {
@@ -5173,6 +5194,8 @@ public partial class MainWindow : FluentWindow
             r.PrecioSinIva2 = refSim.PrecioSinIva;
             r.DiasEntrega2 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 3;
             r.NotasCotizacion2 = refSim.ReferenciaOrigen;
+            r.DiasVigencia2 = refSim.DiasVigencia > 0 ? refSim.DiasVigencia : 15;
+            r.FechaCotizacion2 = !string.IsNullOrWhiteSpace(refSim.FechaCotizacion) ? refSim.FechaCotizacion : DateTime.Today.ToString("yyyy-MM-dd");
         }
         else
         {
@@ -5182,6 +5205,8 @@ public partial class MainWindow : FluentWindow
             r.PrecioSinIva3 = refSim.PrecioSinIva;
             r.DiasEntrega3 = refSim.DiasEntrega > 0 ? refSim.DiasEntrega : 1;
             r.NotasCotizacion3 = refSim.ReferenciaOrigen;
+            r.DiasVigencia3 = refSim.DiasVigencia > 0 ? refSim.DiasVigencia : 15;
+            r.FechaCotizacion3 = !string.IsNullOrWhiteSpace(refSim.FechaCotizacion) ? refSim.FechaCotizacion : DateTime.Today.ToString("yyyy-MM-dd");
         }
 
         DatabaseService.GuardarCotizacionPartida(r);
@@ -5298,6 +5323,17 @@ public partial class MainWindow : FluentWindow
         BtnElegirGanador1.Content = r.ProveedorGanadorIndice == 1 ? $"★ {nom1} (Elegido)" : $"✓ Elegir {nom1}";
         BtnElegirGanador2.Content = r.ProveedorGanadorIndice == 2 ? $"★ {nom2} (Elegido)" : $"✓ Elegir {nom2}";
         BtnElegirGanador3.Content = r.ProveedorGanadorIndice == 3 ? $"★ {nom3} (Elegido)" : $"✓ Elegir {nom3}";
+        if (TxtEstadoVigenciaCard1 != null)
+            TxtEstadoVigenciaCard1.Text = r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0 ? r.EstadoVigencia1 : "Sin cotizar";
+        if (TxtEstadoVigenciaCard2 != null)
+            TxtEstadoVigenciaCard2.Text = r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0 ? r.EstadoVigencia2 : "Sin cotizar";
+        if (TxtEstadoVigenciaCard3 != null)
+            TxtEstadoVigenciaCard3.Text = r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0 ? r.EstadoVigencia3 : "Sin cotizar";
+        if (TxtCompProdSubtitulo != null)
+        {
+            string famBadge = !string.IsNullOrWhiteSpace(r.Familia) ? $" | Familia: {r.Familia}" : string.Empty;
+            TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")} | Vigencia: {r.VigenciaEstadoTexto}";
+        }
         ActualizarEncabezadosColumnasTablaComparativa();
     }
 
@@ -5353,6 +5389,13 @@ public partial class MainWindow : FluentWindow
         r.DiasEntrega1 = Math.Max(1, (int)ParseDecimal(TxtCompDias1.Text, 2m));
         r.DiasEntrega2 = Math.Max(1, (int)ParseDecimal(TxtCompDias2.Text, 3m));
         r.DiasEntrega3 = Math.Max(1, (int)ParseDecimal(TxtCompDias3.Text, 1m));
+        if (TxtCompVigencia1 != null) r.DiasVigencia1 = Math.Max(1, (int)ParseDecimal(TxtCompVigencia1.Text, 15m));
+        if (TxtCompVigencia2 != null) r.DiasVigencia2 = Math.Max(1, (int)ParseDecimal(TxtCompVigencia2.Text, 15m));
+        if (TxtCompVigencia3 != null) r.DiasVigencia3 = Math.Max(1, (int)ParseDecimal(TxtCompVigencia3.Text, 15m));
+        string hoyStr = DateTime.Today.ToString("yyyy-MM-dd");
+        if (r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0 && string.IsNullOrWhiteSpace(r.FechaCotizacion1)) r.FechaCotizacion1 = hoyStr;
+        if (r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0 && string.IsNullOrWhiteSpace(r.FechaCotizacion2)) r.FechaCotizacion2 = hoyStr;
+        if (r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0 && string.IsNullOrWhiteSpace(r.FechaCotizacion3)) r.FechaCotizacion3 = hoyStr;
 
         r.NotasCotizacion1 = TxtCompNotas1.Text ?? string.Empty;
         r.NotasCotizacion2 = r.NumeroOpcionesVisibles >= 2 ? (TxtCompNotas2.Text ?? string.Empty) : string.Empty;
@@ -5654,7 +5697,7 @@ public partial class MainWindow : FluentWindow
 
         SincronizarRenglonActualDesdeTarjetas();
         string estAntSol = sol.Estatus;
-        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio);
         if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
             RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
         RecalcularTotalesComparativa();
@@ -5699,7 +5742,7 @@ public partial class MainWindow : FluentWindow
 
         SincronizarRenglonActualDesdeTarjetas();
         string estAntSol = sol.Estatus;
-        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio);
         if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
             RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
         BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, _renglonesComparativa.ToList());
@@ -5715,7 +5758,7 @@ public partial class MainWindow : FluentWindow
 
         SincronizarRenglonActualDesdeTarjetas();
         string estAntSol = sol.Estatus;
-        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio);
         if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
             RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
         BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, _renglonesComparativa.ToList(), soloDescargar: true);
@@ -5728,7 +5771,7 @@ public partial class MainWindow : FluentWindow
 
         SincronizarRenglonActualDesdeTarjetas();
         string estAntSol = sol.Estatus;
-        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio);
         if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
             RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
 
@@ -10384,7 +10427,24 @@ public partial class MainWindow : FluentWindow
             });
         }
 
-        TxtDesgloseProveedorTitulo.Text = $"Desglose de {p.NombreComercial} — {ocs.Count} OC ({ocs.Sum(x => x.TotalConIva):C2}) | {cfdis.Count} Facturas CFDI";
+        var cots = DatabaseService.ObtenerCotizacionesBancoHistorico(proveedorId: p.Id);
+        foreach (var c in cots)
+        {
+            string tipoCot = c.EsLineaAbierta ? "Cotización (Línea Abierta)" : $"Cotización [{c.ProductoCodigo}]";
+            string notaExtra = !string.IsNullOrWhiteSpace(c.NotasCotizacion) ? $" · {c.NotasCotizacion}" : "";
+            desglose.Add(new
+            {
+                Tipo = tipoCot,
+                Folio = c.OrigenFolio,
+                Fecha = c.FechaCotizacion,
+                Detalle = $"{c.DescripcionConcepto} ({c.DiasEntrega}d ent.){notaExtra}",
+                Estatus = c.EstadoVigenciaCorto,
+                Monto = c.PrecioSinIva,
+                CotizacionObj = c
+            });
+        }
+        int vigCount = cots.Count(x => x.EstaVigente);
+        TxtDesgloseProveedorTitulo.Text = $"Historial de {p.NombreMostrar} — {cots.Count} Cotizaciones ({vigCount} vigentes) | {ocs.Count} OC ({ocs.Sum(x => x.TotalConIva):C2}) | {cfdis.Count} Facturas CFDI";
         DgDesgloseProveedor.ItemsSource = desglose;
     }
 
