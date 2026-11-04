@@ -421,8 +421,40 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         AutoAsignarFamiliasInicialesSiVacio(conn);
         EstandarizarUnidadesMedidaEnBaseDatos(conn);
         SincronizarHerramientasCatalogoConDirectorio(conn);
+        NormalizarNombresComercialesProveedores(conn);
         conn.Close();
         SincronizarFacturasYOrdenesExistentes();
+    }
+
+    private static void NormalizarNombresComercialesProveedores(SqliteConnection conn)
+    {
+        var porActualizar = new List<(int id, string nuevoComercial)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT Id, RazonSocial, NombreComercial FROM Proveedores";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                int id = r.GetInt32(0);
+                string rs = (r.IsDBNull(1) ? "" : r.GetString(1)).Trim();
+                string nc = (r.IsDBNull(2) ? "" : r.GetString(2)).Trim();
+                if (string.IsNullOrWhiteSpace(nc) || string.Equals(nc, rs, StringComparison.OrdinalIgnoreCase))
+                {
+                    string limpio = Proveedor.ExtraerNombreComercialCorto(!string.IsNullOrWhiteSpace(nc) ? nc : rs);
+                    if (!string.IsNullOrWhiteSpace(limpio) && !string.Equals(limpio, nc, StringComparison.Ordinal))
+                        porActualizar.Add((id, limpio));
+                }
+            }
+        }
+
+        foreach (var (id, nuevoComercial) in porActualizar)
+        {
+            using var up = conn.CreateCommand();
+            up.CommandText = "UPDATE Proveedores SET NombreComercial = $nc WHERE Id = $id";
+            up.Parameters.AddWithValue("$nc", nuevoComercial);
+            up.Parameters.AddWithValue("$id", id);
+            up.ExecuteNonQuery();
+        }
     }
 
     public static readonly IReadOnlyList<string> UnidadesMedidaEstandar = new[]
@@ -4337,11 +4369,12 @@ WHERE pp.PrestamoHerramientaId = $pid";
         if (provExistente != null)
             return provExistente.Id;
 
+        string razonLimpia = string.IsNullOrWhiteSpace(emisorNombre) ? rfcNorm : emisorNombre.Trim();
         GuardarProveedor(new Proveedor
         {
             Rfc = rfcNorm,
-            RazonSocial = string.IsNullOrWhiteSpace(emisorNombre) ? rfcNorm : emisorNombre.Trim(),
-            NombreComercial = string.IsNullOrWhiteSpace(emisorNombre) ? rfcNorm : emisorNombre.Trim(),
+            RazonSocial = razonLimpia,
+            NombreComercial = Proveedor.ExtraerNombreComercialCorto(razonLimpia),
             Notas = "Registrado automáticamente desde Factura XML CFDI"
         });
 

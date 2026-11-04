@@ -1544,7 +1544,10 @@
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="70" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="70" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Decisión / Ganador" Binding="{Binding EstadoDecisionTexto}" IsReadOnly="True" Width="175" />
+                                                <DataGridTextColumn x:Name="ColCompTablaProv1" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor 1" Binding="{Binding ResumenOpcion1}" IsReadOnly="True" Width="155" />
+                                                <DataGridTextColumn x:Name="ColCompTablaProv2" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor 2" Binding="{Binding ResumenOpcion2}" IsReadOnly="True" Width="155" Visibility="Collapsed" />
+                                                <DataGridTextColumn x:Name="ColCompTablaProv3" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor 3" Binding="{Binding ResumenOpcion3}" IsReadOnly="True" Width="155" Visibility="Collapsed" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Decisión / Ganador" Binding="{Binding EstadoDecisionTexto}" IsReadOnly="True" Width="165" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA" Binding="{Binding TotalGanadorConIva, StringFormat={}{0:C2}}" IsReadOnly="True" Width="110" />
                                             </DataGrid.Columns>
                                         </DataGrid>
@@ -1607,6 +1610,7 @@
                                                                Margin="0,0,6,0"
                                                                ToolTip="Añade otra tarjeta u opción de proveedor concursante para comparar precios en este artículo"
                                                                Click="BtnAgregarOpcionProveedorComp_Click" />
+                                                    <ui:Button x:Name="BtnNuevoProveedorRapidoComp" Content="+ Nuevo Proveedor" FontSize="11.5" Margin="0,0,6,0" ToolTip="Registrar un nuevo proveedor con su Nombre Comercial para usar en la comparativa" Click="BtnNuevoProveedorRapidoComp_Click" />
                                                     <ui:Button Content="Mejor Precio"
                                                                FontSize="11.5"
                                                                Margin="0,0,6,0"
@@ -1675,7 +1679,7 @@
                                                             <Border x:Name="BdrBadgeGanador1" DockPanel.Dock="Right" Padding="6,2" CornerRadius="4" Background="#059669" Margin="6,0,0,0" Visibility="Collapsed">
                                                                 <TextBlock Text="SELECCIONADO" FontSize="9.5" FontWeight="Bold" Foreground="White" />
                                                             </Border>
-                                                            <TextBlock Text="Opción 1 (Principal / Histórico)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock x:Name="TxtTituloCardComp1" Text="Proveedor 1 (Principal / Histórico)" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                                         </DockPanel>
 
                                                         <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
@@ -1722,7 +1726,7 @@
                                                                 </Border>
                                                                 <Button Content="X" Padding="5,1" FontSize="10" ToolTip="Ocultar y limpiar Opción 2" Click="BtnQuitarOpcion2Comp_Click" />
                                                             </StackPanel>
-                                                            <TextBlock Text="Opción 2" FontWeight="Bold" FontSize="13" Foreground="#498205" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock x:Name="TxtTituloCardComp2" Text="Proveedor 2" FontWeight="Bold" FontSize="13.5" Foreground="#498205" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                                         </DockPanel>
 
                                                         <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
@@ -1769,7 +1773,7 @@
                                                                 </Border>
                                                                 <Button Content="X" Padding="5,1" FontSize="10" ToolTip="Ocultar y limpiar Opción 3" Click="BtnQuitarOpcion3Comp_Click" />
                                                             </StackPanel>
-                                                            <TextBlock Text="Opción 3" FontWeight="Bold" FontSize="13" Foreground="#881798" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock x:Name="TxtTituloCardComp3" Text="Proveedor 3" FontWeight="Bold" FontSize="13.5" Foreground="#881798" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                                         </DockPanel>
 
                                                         <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
@@ -2964,7 +2968,7 @@
                                                       SelectionChanged="DgDirProveedores_SelectionChanged">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="RFC" Binding="{Binding Rfc}" Width="115" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Nombre Comercial" Binding="{Binding NombreComercial}" Width="155" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Nombre Comercial" Binding="{Binding NombreMostrar}" Width="180" FontWeight="SemiBold" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Razón Social" Binding="{Binding RazonSocial}" Width="*" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Contacto" Binding="{Binding Contacto}" Width="125" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Teléfono" Binding="{Binding Telefono}" Width="105" />
@@ -3006,7 +3010,7 @@
                                                 <ui:TextBox x:Name="TxtProvRfc" PlaceholderText="Ej. FIE920315AB1" />
                                             </StackPanel>
                                             <StackPanel Margin="4,0,0,0">
-                                                <TextBlock Text="Nombre Comercial" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
+                                                <TextBlock Text="Nombre Comercial * (En Comparativa)" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Margin="0,0,0,2" />
                                                 <ui:TextBox x:Name="TxtProvComercial" PlaceholderText="Ej. FerreIndustrial" />
                                             </StackPanel>
                                         </UniformGrid>

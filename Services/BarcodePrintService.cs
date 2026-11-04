@@ -132,17 +132,55 @@ public static class BarcodePrintService
 
     public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones, bool soloDescargar = false)
     {
-        var filas = renglones.Select((r, idx) => new[]
+        var provsCol1 = renglones
+            .Where(r => r.Proveedor1Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor1Nombre) && r.Proveedor1Nombre != "Sin asignar")
+            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var provsCol2 = renglones
+            .Where(r => r.Proveedor2Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar")
+            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var provsCol3 = renglones
+            .Where(r => r.Proveedor3Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar")
+            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        string encCol1 = provsCol1.Count == 1 ? provsCol1[0] : (provsCol1.Count > 1 ? string.Join(" / ", provsCol1.Take(2)) : "Proveedor 1");
+        string encCol2 = provsCol2.Count == 1 ? provsCol2[0] : (provsCol2.Count > 1 ? string.Join(" / ", provsCol2.Take(2)) : "Proveedor 2");
+        string encCol3 = provsCol3.Count == 1 ? provsCol3[0] : (provsCol3.Count > 1 ? string.Join(" / ", provsCol3.Take(2)) : "Proveedor 3");
+
+        var filas = renglones.Select((r, idx) =>
         {
-            (idx + 1).ToString(),
-            string.IsNullOrWhiteSpace(r.ProductoCodigo) ? "CONCEPTO" : r.ProductoCodigo,
-            !string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.DescripcionLibre : r.ProductoNombre,
-            $"{r.Cantidad:0.##} {r.UnidadCompra}",
-            r.ResumenOpcion1,
-            r.ResumenOpcion2,
-            r.ResumenOpcion3,
-            r.ProveedorGanadorId > 0 ? $"{r.ProveedorGanadorNombre} (${r.PrecioUnitarioGanadorConIva:N2})" : "Sin adjudicar",
-            r.VigenciaEstadoTexto
+            string c1 = r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0
+                ? (provsCol1.Count == 1 ? $"${r.PrecioConIva1:N2} c/u ({r.DiasEntrega1}d)" : $"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre)}: ${r.PrecioConIva1:N2} c/u ({r.DiasEntrega1}d)")
+                : "Sin cotizar";
+            string c2 = r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0
+                ? (provsCol2.Count == 1 ? $"${r.PrecioConIva2:N2} c/u ({r.DiasEntrega2}d)" : $"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre)}: ${r.PrecioConIva2:N2} c/u ({r.DiasEntrega2}d)")
+                : "Sin cotizar";
+            string c3Base = r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0
+                ? (provsCol3.Count == 1 && r.ProveedoresExtra.Count == 0 ? $"${r.PrecioConIva3:N2} c/u ({r.DiasEntrega3}d)" : $"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre)}: ${r.PrecioConIva3:N2} c/u ({r.DiasEntrega3}d)")
+                : "Sin cotizar";
+            string c3 = r.ProveedoresExtra.Count > 0
+                ? (c3Base == "Sin cotizar"
+                    ? string.Join(" | ", r.ProveedoresExtra.Select(x => $"{Proveedor.ExtraerNombreComercialCorto(x.ProveedorNombre)}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d)"))
+                    : $"{c3Base} | {string.Join(" | ", r.ProveedoresExtra.Select(x => $"{Proveedor.ExtraerNombreComercialCorto(x.ProveedorNombre)}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d)"))}")
+                : c3Base;
+
+            return new[]
+            {
+                (idx + 1).ToString(),
+                string.IsNullOrWhiteSpace(r.ProductoCodigo) ? "CONCEPTO" : r.ProductoCodigo,
+                !string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.DescripcionLibre : r.ProductoNombre,
+                $"{r.Cantidad:0.##} {r.UnidadCompra}",
+                c1,
+                c2,
+                c3,
+                r.ProveedorGanadorId > 0 ? $"{Proveedor.ExtraerNombreComercialCorto(r.ProveedorGanadorNombre)} (${r.PrecioUnitarioGanadorConIva:N2})" : "Sin adjudicar",
+                r.VigenciaEstadoTexto
+            };
         }).ToList();
 
         decimal totalEstimadoConIva = renglones
@@ -163,7 +201,7 @@ public static class BarcodePrintService
             folioCodigoBarras: $"COT-{sol.Id:D4}",
             fecha: DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Artículo / Concepto", "Cant.", "Opción 1", "Opción 2", "Opción 3 / Extras", "Selección", "Vigencia" },
+            encabezadosTabla: new[] { "#", "Código", "Artículo / Concepto", "Cant.", encCol1, encCol2, encCol3, "Selección", "Vigencia" },
             filasTabla: filas,
             totales: new List<(string, string)>
             {

@@ -914,4 +914,204 @@ public partial class MainWindow
             CargarSolicitudEnSalidaPos(solElegida);
         }
     }
+
+    // =========================================================================
+    // ENCABEZADOS CON NOMBRE COMERCIAL EN CUADRO COMPARATIVO Y ALTA RÁPIDA DE PROVEEDOR
+    // =========================================================================
+
+    private void ActualizarEncabezadosColumnasTablaComparativa()
+    {
+        if (ColCompTablaProv1 == null || ColCompTablaProv2 == null || ColCompTablaProv3 == null)
+            return;
+
+        var provs1 = _renglonesComparativa
+            .Where(r => r.Proveedor1Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor1Nombre) && r.Proveedor1Nombre != "Sin asignar")
+            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var provs2 = _renglonesComparativa
+            .Where(r => r.Proveedor2Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar")
+            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var provs3 = _renglonesComparativa
+            .Where(r => r.Proveedor3Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar")
+            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        ColCompTablaProv1.Header = provs1.Count == 1
+            ? provs1[0]
+            : (provs1.Count > 1 ? string.Join(" / ", provs1.Take(2)) : "Proveedor 1");
+
+        ColCompTablaProv2.Header = provs2.Count == 1
+            ? provs2[0]
+            : (provs2.Count > 1 ? string.Join(" / ", provs2.Take(2)) : "Proveedor 2");
+
+        ColCompTablaProv3.Header = provs3.Count == 1
+            ? provs3[0]
+            : (provs3.Count > 1 ? string.Join(" / ", provs3.Take(2)) : "Proveedor 3");
+
+        bool mostrarCol2 = _renglonesComparativa.Any(r => r.NumeroOpcionesVisibles >= 2 || r.Proveedor2Id > 0 || r.PrecioSinIva2 > 0);
+        bool mostrarCol3 = _renglonesComparativa.Any(r => r.NumeroOpcionesVisibles >= 3 || r.Proveedor3Id > 0 || r.PrecioSinIva3 > 0 || r.ProveedoresExtra.Count > 0);
+
+        ColCompTablaProv2.Visibility = mostrarCol2 ? Visibility.Visible : Visibility.Collapsed;
+        ColCompTablaProv3.Visibility = mostrarCol3 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void BtnNuevoProveedorRapidoComp_Click(object sender, RoutedEventArgs e)
+    {
+        var win = new Window
+        {
+            Title = "Registrar Nuevo Proveedor (Nombre Comercial)",
+            Width = 480,
+            Height = 410,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Alta Rápida de Proveedor para Cuadro Comparativo",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "El Nombre Comercial aparecerá como encabezado en las tarjetas y en el Cuadro Comparativo impreso.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Nombre Comercial * (Ej. Home Depot, FerreIndustrial, Grainger):",
+            FontSize = 11.5,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 3)
+        });
+        var txtComercial = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "Nombre comercial corto con el que se identifica al proveedor",
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(txtComercial);
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Razón Social (Opcional al cotizar — para Facturación):",
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 3)
+        });
+        var txtRazon = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "Ej. Ferretería Industrial S.A. de C.V. (si se omite usa el Nombre Comercial)",
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(txtRazon);
+
+        var gridFila = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        gridFila.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridFila.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridFila.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
+
+        var spRfc = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spRfc.Children.Add(new TextBlock { Text = "RFC (Opcional):", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtRfc = new Wpf.Ui.Controls.TextBox { PlaceholderText = "XAXX010101000" };
+        spRfc.Children.Add(txtRfc);
+
+        var spTel = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spTel.Children.Add(new TextBlock { Text = "Teléfono / Contacto:", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtTel = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Ej. 999-123-4567" };
+        spTel.Children.Add(txtTel);
+
+        var spDias = new StackPanel();
+        spDias.Children.Add(new TextBlock { Text = "Entrega (días):", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtDias = new Wpf.Ui.Controls.TextBox { Text = "2" };
+        spDias.Children.Add(txtDias);
+
+        Grid.SetColumn(spRfc, 0);
+        Grid.SetColumn(spTel, 1);
+        Grid.SetColumn(spDias, 2);
+        gridFila.Children.Add(spRfc);
+        gridFila.Children.Add(spTel);
+        gridFila.Children.Add(spDias);
+        root.Children.Add(gridFila);
+
+        var btnPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnSave = new Wpf.Ui.Controls.Button { Content = "Guardar Proveedor", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnSave);
+        root.Children.Add(btnPanel);
+
+        int nuevoProvId = 0;
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnSave.Click += (_, _) =>
+        {
+            string nomCom = (txtComercial.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(nomCom))
+            {
+                DialogoFluent.Show(win, "Escriba el Nombre Comercial del proveedor.", "Nombre Comercial requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string razon = string.IsNullOrWhiteSpace(txtRazon.Text) ? nomCom : txtRazon.Text.Trim();
+            string rfc = string.IsNullOrWhiteSpace(txtRfc.Text) ? "XAXX010101000" : txtRfc.Text.Trim().ToUpperInvariant();
+            int dias = Math.Max(1, (int)ParseDecimal(txtDias.Text, 2m));
+
+            nuevoProvId = DatabaseService.GuardarProveedor(new Proveedor
+            {
+                NombreComercial = nomCom,
+                RazonSocial = razon,
+                Rfc = rfc,
+                Telefono = (txtTel.Text ?? string.Empty).Trim(),
+                DiasEntregaPromedio = dias,
+                CondicionesPago = "Contado"
+            });
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() == true && nuevoProvId > 0)
+        {
+            var provs = DatabaseService.ObtenerProveedores();
+            if (CboCompProv1 != null) CboCompProv1.ItemsSource = provs;
+            if (CboCompProv2 != null) CboCompProv2.ItemsSource = provs;
+            if (CboCompProv3 != null) CboCompProv3.ItemsSource = provs;
+            if (DgDirProveedores != null) DgDirProveedores.ItemsSource = provs;
+
+            var nuevoProv = provs.FirstOrDefault(p => p.Id == nuevoProvId);
+            if (nuevoProv != null && DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
+            {
+                if (r.Proveedor1Id <= 0 && CboCompProv1 != null)
+                {
+                    CboCompProv1.SelectedItem = nuevoProv;
+                }
+                else if (r.NumeroOpcionesVisibles >= 2 && r.Proveedor2Id <= 0 && CboCompProv2 != null)
+                {
+                    CboCompProv2.SelectedItem = nuevoProv;
+                }
+                else if (r.NumeroOpcionesVisibles >= 3 && r.Proveedor3Id <= 0 && CboCompProv3 != null)
+                {
+                    CboCompProv3.SelectedItem = nuevoProv;
+                }
+            }
+        }
+    }
 }

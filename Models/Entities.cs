@@ -183,8 +183,54 @@ public class Proveedor
     public int DiasEntregaPromedio { get; set; } = 3;
     public string CondicionesPago { get; set; } = "Contado";
     public string Notas { get; set; } = string.Empty;
-    public string NombreMostrar => string.IsNullOrWhiteSpace(NombreComercial) ? RazonSocial : NombreComercial;
-    public override string ToString() => $"{NombreMostrar} ({Rfc})";
+
+    public string NombreMostrar
+    {
+        get
+        {
+            string com = (NombreComercial ?? string.Empty).Trim();
+            string raz = (RazonSocial ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(com) && !string.Equals(com, raz, StringComparison.OrdinalIgnoreCase))
+                return com;
+            string baseNom = !string.IsNullOrWhiteSpace(com) ? com : raz;
+            return ExtraerNombreComercialCorto(baseNom);
+        }
+    }
+
+    public static string ExtraerNombreComercialCorto(string? nombreLegal)
+    {
+        if (string.IsNullOrWhiteSpace(nombreLegal))
+            return string.Empty;
+
+        string s = nombreLegal.Trim();
+        string[] sufijosRegimen =
+        {
+            ", S.A.P.I. DE C.V.", " S.A.P.I. DE C.V.", ", SAPI DE CV", " SAPI DE CV",
+            ", S. DE R.L. DE C.V.", " S. DE R.L. DE C.V.", ", S DE RL DE CV", " S DE RL DE CV",
+            ", S. DE R.L.", " S. DE R.L.", ", S DE RL", " S DE RL",
+            ", S.A.B. DE C.V.", " S.A.B. DE C.V.", ", SAB DE CV", " SAB DE CV",
+            ", S.A. DE C.V.", " S.A. DE C.V.", ", SA DE CV", " SA DE CV",
+            ", S.A.S. DE C.V.", " S.A.S. DE C.V.", ", SAS DE CV", " SAS DE CV",
+            ", S.C. DE R.L. DE C.V.", " S.C. DE R.L. DE C.V.",
+            ", S.C.", " S.C.", ", S.A.", " S.A.", ", A.C.", " A.C."
+        };
+
+        foreach (var suf in sufijosRegimen)
+        {
+            if (s.EndsWith(suf, StringComparison.OrdinalIgnoreCase))
+            {
+                s = s[..^suf.Length].Trim(' ', ',', '.', '-');
+                break;
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(s) ? nombreLegal.Trim() : s;
+    }
+
+    public override string ToString() =>
+        !string.IsNullOrWhiteSpace(Rfc) && !string.Equals(Rfc.Trim(), "XAXX010101000", StringComparison.OrdinalIgnoreCase)
+            ? $"{NombreMostrar} ({Rfc})"
+            : NombreMostrar;
 }
 
 public class Solicitud
@@ -459,7 +505,7 @@ public class CotizacionRenglonComparativo
             if (TieneOcGenerada)
                 return $"OC: {OrdenCompraFolio} ({ProveedorGanadorNombre})";
             if (ProveedorGanadorIndice >= 1 && ProveedorGanadorId > 0)
-                return $"Op.{ProveedorGanadorIndice}: {ProveedorGanadorNombre}";
+                return $"★ {ProveedorGanadorNombre}";
             return "Pendiente de elegir";
         }
     }

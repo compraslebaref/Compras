@@ -4806,6 +4806,9 @@ public partial class MainWindow : FluentWindow
                     EstablecerPlaceholderCombo(CboCompReferenciasSimilares, "Seleccione un artículo para consultar compras similares...");
                 }
                 if (CboCompProv1 != null) CboCompProv1.SelectedIndex = -1;
+                if (TxtTituloCardComp1 != null) TxtTituloCardComp1.Text = "Proveedor 1 (Principal / Histórico)";
+                if (TxtTituloCardComp2 != null) TxtTituloCardComp2.Text = "Proveedor 2";
+                if (TxtTituloCardComp3 != null) TxtTituloCardComp3.Text = "Proveedor 3";
                 if (CboCompProv2 != null) CboCompProv2.SelectedIndex = -1;
                 if (CboCompProv3 != null) CboCompProv3.SelectedIndex = -1;
                 return;
@@ -5137,6 +5140,7 @@ public partial class MainWindow : FluentWindow
         DatabaseService.GuardarCotizacionPartida(r);
         CargarProductoEnTarjetasComparativa(r);
         RecalcularTotalesComparativa();
+        ActualizarEncabezadosColumnasTablaComparativa();
         DgComparativa.Items.Refresh();
     }
 
@@ -5183,6 +5187,7 @@ public partial class MainWindow : FluentWindow
         DatabaseService.GuardarCotizacionPartida(r);
         CargarProductoEnTarjetasComparativa(r);
         RecalcularTotalesComparativa();
+        ActualizarEncabezadosColumnasTablaComparativa();
         DgComparativa.Items.Refresh();
     }
 
@@ -5273,9 +5278,27 @@ public partial class MainWindow : FluentWindow
         BtnElegirGanador2.Appearance = r.ProveedorGanadorIndice == 2 ? ControlAppearance.Primary : ControlAppearance.Secondary;
         BtnElegirGanador3.Appearance = r.ProveedorGanadorIndice == 3 ? ControlAppearance.Primary : ControlAppearance.Secondary;
 
-        BtnElegirGanador1.Content = r.ProveedorGanadorIndice == 1 ? "★ Opción 1 Elegida" : "✓ Elegir Opción 1";
-        BtnElegirGanador2.Content = r.ProveedorGanadorIndice == 2 ? "★ Opción 2 Elegida" : "✓ Elegir Opción 2";
-        BtnElegirGanador3.Content = r.ProveedorGanadorIndice == 3 ? "★ Opción 3 Elegida" : "✓ Elegir Opción 3";
+        string nom1 = r.Proveedor1Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor1Nombre) && r.Proveedor1Nombre != "Sin asignar"
+            ? Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre)
+            : "Proveedor 1";
+        string nom2 = r.Proveedor2Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar"
+            ? Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre)
+            : "Proveedor 2";
+        string nom3 = r.Proveedor3Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar"
+            ? Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre)
+            : "Proveedor 3";
+
+        if (TxtTituloCardComp1 != null)
+            TxtTituloCardComp1.Text = r.Proveedor1Id > 0 ? $"🏢 {nom1}" : "Proveedor 1 (Sin asignar)";
+        if (TxtTituloCardComp2 != null)
+            TxtTituloCardComp2.Text = r.Proveedor2Id > 0 ? $"🏢 {nom2}" : "Proveedor 2 (Sin asignar)";
+        if (TxtTituloCardComp3 != null)
+            TxtTituloCardComp3.Text = r.Proveedor3Id > 0 ? $"🏢 {nom3}" : "Proveedor 3 (Sin asignar)";
+
+        BtnElegirGanador1.Content = r.ProveedorGanadorIndice == 1 ? $"★ {nom1} (Elegido)" : $"✓ Elegir {nom1}";
+        BtnElegirGanador2.Content = r.ProveedorGanadorIndice == 2 ? $"★ {nom2} (Elegido)" : $"✓ Elegir {nom2}";
+        BtnElegirGanador3.Content = r.ProveedorGanadorIndice == 3 ? $"★ {nom3} (Elegido)" : $"✓ Elegir {nom3}";
+        ActualizarEncabezadosColumnasTablaComparativa();
     }
 
     private void SincronizarRenglonActualDesdeTarjetas()
@@ -5534,6 +5557,7 @@ public partial class MainWindow : FluentWindow
         if (DgPrevisualizacionOcs == null)
             return;
 
+        ActualizarEncabezadosColumnasTablaComparativa();
         DgComparativa.Items.Refresh();
 
         var decididosSinOc = _renglonesComparativa
@@ -10383,18 +10407,23 @@ public partial class MainWindow : FluentWindow
 
     private void BtnGuardarProveedor_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(TxtProvRfc.Text) || string.IsNullOrWhiteSpace(TxtProvRazon.Text))
+        if (string.IsNullOrWhiteSpace(TxtProvComercial.Text) && string.IsNullOrWhiteSpace(TxtProvRazon.Text))
         {
-            DialogoFluent.Show(this, "Complete al menos el RFC y la Razón Social del proveedor.", "Datos incompletos", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, "Escriba al menos el Nombre Comercial del proveedor (ej. 'Home Depot', 'FerreIndustrial', 'Grainger').", "Nombre Comercial requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
+        string nomComercial = !string.IsNullOrWhiteSpace(TxtProvComercial.Text) ? TxtProvComercial.Text.Trim() : Proveedor.ExtraerNombreComercialCorto(TxtProvRazon.Text.Trim());
+        string razonSocial = !string.IsNullOrWhiteSpace(TxtProvRazon.Text) ? TxtProvRazon.Text.Trim() : nomComercial;
+        string rfcProv = !string.IsNullOrWhiteSpace(TxtProvRfc.Text) ? TxtProvRfc.Text.Trim().ToUpperInvariant() : "XAXX010101000";
         DatabaseService.GuardarProveedor(new Proveedor
         {
             Id = _proveedorEditandoId,
-            Rfc = TxtProvRfc.Text.Trim(),
-            RazonSocial = TxtProvRazon.Text.Trim(),
-            NombreComercial = string.IsNullOrWhiteSpace(TxtProvComercial.Text) ? TxtProvRazon.Text.Trim() : TxtProvComercial.Text.Trim(),
+
+
+            NombreComercial = nomComercial,
+            RazonSocial = razonSocial,
+            Rfc = rfcProv,
             Contacto = TxtProvContacto.Text.Trim(),
             Telefono = TxtProvTelefono.Text.Trim(),
             Correo = TxtProvCorreo.Text.Trim(),
