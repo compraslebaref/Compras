@@ -3482,11 +3482,8 @@ public partial class MainWindow : FluentWindow
 
     private void DgHistorialSolicitudes_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!IsLoaded || _sincronizandoSolicitudes) return;
-        if (DgHistorialSolicitudes.SelectedItem is Solicitud sol)
-        {
-            CargarSolicitudEnEditor(sol);
-        }
+        // La apertura del detalle se hace explícitamente (clic en fila, Enter o menú "Abrir solicitud"),
+        // para que cambios de selección automáticos no alternen la pantalla.
     }
 
     private void PersistirCambioSiSolicitudEnEdicion()
@@ -3725,6 +3722,51 @@ public partial class MainWindow : FluentWindow
     private void BtnNuevaSolicitudVacia_Click(object sender, RoutedEventArgs e)
     {
         IniciarNuevaSolicitudVacia();
+        MostrarDetalleSolicitud(true);
+    }
+
+    /// <summary>Alterna entre la lista de solicitudes y el detalle de la solicitud abierta.</summary>
+    private void MostrarDetalleSolicitud(bool detalle)
+    {
+        if (PnlSolicitudesLista == null || PnlSolicitudDetalle == null) return;
+        PnlSolicitudesLista.Visibility = detalle ? Visibility.Collapsed : Visibility.Visible;
+        PnlSolicitudDetalle.Visibility = detalle ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void AbrirSolicitudDeLista(Solicitud? sol)
+    {
+        if (sol == null) return;
+        CargarSolicitudEnEditor(sol);
+        MostrarDetalleSolicitud(true);
+    }
+
+    private void DgHistorialSolicitudes_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // Solo se abre al hacer clic sobre una fila (no en encabezados ni espacios vacíos)
+        var origen = e.OriginalSource as DependencyObject;
+        while (origen != null && origen is not DataGridRow && origen is not System.Windows.Controls.Primitives.DataGridColumnHeader)
+            origen = System.Windows.Media.VisualTreeHelper.GetParent(origen);
+
+        if (origen is DataGridRow fila && fila.Item is Solicitud sol)
+            AbrirSolicitudDeLista(sol);
+    }
+
+    private void DgHistorialSolicitudes_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DgHistorialSolicitudes.SelectedItem is Solicitud sol)
+        {
+            AbrirSolicitudDeLista(sol);
+            e.Handled = true;
+        }
+    }
+
+    private void BtnAbrirSolicitudSeleccionada_Click(object sender, RoutedEventArgs e) =>
+        AbrirSolicitudDeLista(DgHistorialSolicitudes.SelectedItem as Solicitud);
+
+    private void BtnVolverListaSolicitudes_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarDetalleSolicitud(false);
+        RefrescarSolicitudes();
     }
 
     private void BtnCrearCarritoEIrCatalogo_Click(object sender, RoutedEventArgs e)
@@ -3866,6 +3908,7 @@ public partial class MainWindow : FluentWindow
 
         DatabaseService.EliminarSolicitud(sol.Id);
         IniciarNuevaSolicitudVacia();
+        MostrarDetalleSolicitud(false);
         RefrescarSolicitudes();
         RefrescarDashboard();
     }
@@ -12101,6 +12144,7 @@ public partial class MainWindow : FluentWindow
     {
         AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Solicitudes));
         IniciarNuevaSolicitudVacia();
+        MostrarDetalleSolicitud(true);
     }
 
     private void MenuIrComparativa_Click(object sender, RoutedEventArgs e)
