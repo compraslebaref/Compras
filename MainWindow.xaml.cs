@@ -1799,7 +1799,7 @@ public partial class MainWindow : FluentWindow
         var root = new StackPanel { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock
         {
-            Text = "🗂️ Crear, Renombrar o Unificar Familias de Productos",
+            Text = "Crear, Renombrar o Unificar Familias de Productos",
             FontSize = 15,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 6)
@@ -2075,7 +2075,7 @@ public partial class MainWindow : FluentWindow
         {
             TxtStatusCarrito.Text = $"{sol.Folio}: {sol.TotalArticulos:0.##} art. ({sol.TotalSkus} SKUs)";
             if (BtnIrSolicitudDesdeCatalogo != null)
-                BtnIrSolicitudDesdeCatalogo.Content = $"📋 Ir a {sol.Folio} ({sol.TotalSkus} art.)";
+                BtnIrSolicitudDesdeCatalogo.Content = $"Ir a {sol.Folio} ({sol.TotalSkus} art.)";
         }
         else
         {
@@ -2308,11 +2308,11 @@ public partial class MainWindow : FluentWindow
         if (factor > 1m || !string.Equals(uCompra, uEntrega, StringComparison.OrdinalIgnoreCase))
         {
             string costoTxt = costoCompra > 0m ? $" | Costo x {uEntrega}: {costoEntrega:C2}" : string.Empty;
-            TxtResumenConversionProducto.Text = $"💡 1 {uCompra} (Compra) = {factor:0.##} {uEntrega} (Entrega en almacén). Existencia expresada en {uEntrega}{costoTxt}";
+            TxtResumenConversionProducto.Text = $"1 {uCompra} (Compra) = {factor:0.##} {uEntrega} (Entrega en almacén). Existencia expresada en {uEntrega}{costoTxt}";
         }
         else
         {
-            TxtResumenConversionProducto.Text = $"💡 Relación 1 a 1: Compras por {uCompra} y la Existencia se controla en {uEntrega}.";
+            TxtResumenConversionProducto.Text = $"Relación 1 a 1: Compras por {uCompra} y la Existencia se controla en {uEntrega}.";
         }
     }
 
@@ -2329,7 +2329,7 @@ public partial class MainWindow : FluentWindow
             TxtModoEditorProductoSubtitulo.Foreground = Tk("TextFillColorSecondaryBrush");
             TxtModoEditorProductoTitulo.Text = "ℹ️ SIN PRODUCTO SELECCIONADO";
             TxtModoEditorProductoSubtitulo.Text = "Seleccione una tarjeta del catálogo a la izquierda para editarla, o presione '+ Nuevo Producto' para iniciar un alta nueva.";
-            BtnGuardarProductoCatalogo.Content = "➕ Crear Producto Nuevo en Catálogo";
+            BtnGuardarProductoCatalogo.Content = "Crear Producto Nuevo en Catálogo";
         }
         else if (prodEditando == null || prodEditando.Id == 0)
         {
@@ -2338,9 +2338,9 @@ public partial class MainWindow : FluentWindow
             BdrModoEditorProducto.BorderBrush = Tk("AccentFillColorDefaultBrush");
             TxtModoEditorProductoTitulo.Foreground = Tk("AccentFillColorDefaultBrush");
             TxtModoEditorProductoSubtitulo.Foreground = Tk("AccentTextFillColorPrimaryBrush");
-            TxtModoEditorProductoTitulo.Text = $"✨ MODO: ALTA DE NUEVO PRODUCTO ({codigoNuevo})";
+            TxtModoEditorProductoTitulo.Text = $"MODO: ALTA DE NUEVO PRODUCTO ({codigoNuevo})";
             TxtModoEditorProductoSubtitulo.Text = "1. Escriba el Nombre  •  2. Elija Categoría y Familia (o Autocompletar)  •  3. Presione 'Crear Producto Nuevo'";
-            BtnGuardarProductoCatalogo.Content = "➕ Crear Producto Nuevo en Catálogo";
+            BtnGuardarProductoCatalogo.Content = "Crear Producto Nuevo en Catálogo";
         }
         else
         {
@@ -2348,9 +2348,9 @@ public partial class MainWindow : FluentWindow
             BdrModoEditorProducto.BorderBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11));
             TxtModoEditorProductoTitulo.Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9));
             TxtModoEditorProductoSubtitulo.Foreground = new SolidColorBrush(Color.FromRgb(146, 64, 14));
-            TxtModoEditorProductoTitulo.Text = $"✏️ EDITANDO PRODUCTO EXISTENTE: {prodEditando.CodigoInterno}";
+            TxtModoEditorProductoTitulo.Text = $"EDITANDO PRODUCTO EXISTENTE: {prodEditando.CodigoInterno}";
             TxtModoEditorProductoSubtitulo.Text = $"Modificando '{prodEditando.Nombre}'. Para registrar un artículo distinto presione '+ Nuevo Producto'.";
-            BtnGuardarProductoCatalogo.Content = $"💾 Guardar Cambios en {prodEditando.CodigoInterno}";
+            BtnGuardarProductoCatalogo.Content = $"Guardar Cambios en {prodEditando.CodigoInterno}";
         }
     }
 
@@ -2549,7 +2549,7 @@ public partial class MainWindow : FluentWindow
         var headerStack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         headerStack.Children.Add(new TextBlock
         {
-            Text = "🔧 Ficha de Herramienta para Resguardo y Préstamo en Almacén",
+            Text = "Ficha de Herramienta para Resguardo y Préstamo en Almacén",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
             Foreground = Tk("TextFillColorPrimaryBrush")
@@ -2670,7 +2670,7 @@ public partial class MainWindow : FluentWindow
         var formStack = new StackPanel();
         var lblModoForm = new TextBlock
         {
-            Text = "✨ Capturar Datos de la Herramienta",
+            Text = "Capturar Datos de la Herramienta",
             FontWeight = FontWeights.Bold,
             FontSize = 12.5,
             Foreground = Tk("AccentFillColorDefaultBrush"),
@@ -2736,7 +2736,7 @@ public partial class MainWindow : FluentWindow
         gridUbi.Children.Add(txtUbi);
         var btnMapaUbi = new System.Windows.Controls.Button
         {
-            Content = "🗺️ Mapa",
+            Content = "Mapa",
             Padding = new Thickness(8, 4, 8, 4),
             Margin = new Thickness(4, 0, 0, 0),
             Cursor = Cursors.Hand,
@@ -2775,7 +2775,7 @@ public partial class MainWindow : FluentWindow
         var bottomBar = new DockPanel();
         var btnIrDirectorio = new System.Windows.Controls.Button
         {
-            Content = "📂 Ver en Directorio de Herramientas",
+            Content = "Ver en Directorio de Herramientas",
             Padding = new Thickness(12, 7, 12, 7),
             Cursor = Cursors.Hand
         };
@@ -2792,7 +2792,7 @@ public partial class MainWindow : FluentWindow
         };
         var btnGuardarHer = new System.Windows.Controls.Button
         {
-            Content = "💾 Guardar Información en Directorio de Herramientas",
+            Content = "Guardar Información en Directorio de Herramientas",
             Padding = new Thickness(16, 7, 16, 7),
             FontWeight = FontWeights.Bold,
             Background = Tk("AccentFillColorDefaultBrush"),
@@ -2815,7 +2815,7 @@ public partial class MainWindow : FluentWindow
             if (herEditar != null)
             {
                 idHerEditandoModal = herEditar.Id;
-                lblModoForm.Text = $"✏️ Editando Ficha Existente: {herEditar.CodigoIndividual}";
+                lblModoForm.Text = $"Editando Ficha Existente: {herEditar.CodigoIndividual}";
                 txtCodigo.Text = herEditar.CodigoIndividual;
                 txtCodigo.IsEnabled = true;
                 txtSerie.Text = herEditar.NumeroSerie;
@@ -2826,7 +2826,7 @@ public partial class MainWindow : FluentWindow
                 txtNotas.Text = herEditar.NotasEstado;
                 txtCantNuevas.Text = "1";
                 txtCantNuevas.IsEnabled = false;
-                btnGuardarHer.Content = $"💾 Guardar Cambios en {herEditar.CodigoIndividual}";
+                btnGuardarHer.Content = $"Guardar Cambios en {herEditar.CodigoIndividual}";
             }
             else
             {
@@ -2853,17 +2853,17 @@ public partial class MainWindow : FluentWindow
                 if (cantDefault > 0)
                 {
                     string sigHer = DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
-                    lblModoForm.Text = $"✨ Registrar Nueva Ficha Individual ({sigHer})";
+                    lblModoForm.Text = $"Registrar Nueva Ficha Individual ({sigHer})";
                     txtCodigo.Text = sigHer;
                     txtCodigo.IsEnabled = true;
-                    btnGuardarHer.Content = "➕ Guardar y Registrar en Directorio de Herramientas";
+                    btnGuardarHer.Content = "Guardar y Registrar en Directorio de Herramientas";
                 }
                 else
                 {
-                    lblModoForm.Text = "⚙️ Configurar Herramienta en Catálogo (Existencia actual: 0 — Las fichas HER se crearán al recibir compra)";
+                    lblModoForm.Text = "Configurar Herramienta en Catálogo (Existencia actual: 0 — Las fichas HER se crearán al recibir compra)";
                     txtCodigo.Text = "(Al recibir stock)";
                     txtCodigo.IsEnabled = false;
-                    btnGuardarHer.Content = "💾 Guardar Configuración de Herramienta (Sin crear existencia)";
+                    btnGuardarHer.Content = "Guardar Configuración de Herramienta (Sin crear existencia)";
                 }
             }
         }
@@ -6062,7 +6062,7 @@ public partial class MainWindow : FluentWindow
         var topStack = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
         topStack.Children.Add(new TextBlock
         {
-            Text = "✨ Definir Nombre Específico para el Catálogo (PRD-xxxx)",
+            Text = "Definir Nombre Específico para el Catálogo (PRD-xxxx)",
             FontSize = 15,
             FontWeight = FontWeights.Bold
         });
@@ -6192,7 +6192,7 @@ public partial class MainWindow : FluentWindow
         var root = new StackPanel { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock
         {
-            Text = $"⚡ Cambiar / Forzar Estatus de {oc.Folio}",
+            Text = $"Cambiar / Forzar Estatus de {oc.Folio}",
             FontSize = 15,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9)),
@@ -6290,7 +6290,7 @@ public partial class MainWindow : FluentWindow
         var root = new StackPanel { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock
         {
-            Text = $"🧾 Registrar Nota / Ticket de Compra para {oc.Folio}",
+            Text = $"Registrar Nota / Ticket de Compra para {oc.Folio}",
             FontSize = 15,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 6)
@@ -7582,7 +7582,7 @@ public partial class MainWindow : FluentWindow
         var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         topPanel.Children.Add(new TextBlock
         {
-            Text = "📥 Recepción de Mercancía por Orden de Compra (OC-xxxx → Vale de Entrada ENT-xxxx)",
+            Text = "Recepción de Mercancía por Orden de Compra (OC-xxxx → Vale de Entrada ENT-xxxx)",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
             Foreground = Tk("TextFillColorPrimaryBrush")
@@ -7645,7 +7645,7 @@ public partial class MainWindow : FluentWindow
         scanGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         scanGrid.Children.Add(new TextBlock
         {
-            Text = "🔫 Escanear artículo dentro de la OC:",
+            Text = "Escanear artículo dentro de la OC:",
             FontSize = 11.5,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(3, 105, 161)),
@@ -7712,9 +7712,9 @@ public partial class MainWindow : FluentWindow
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pedida", Binding = new System.Windows.Data.Binding("CantidadPedida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 75 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Recibida", Binding = new System.Windows.Data.Binding("CantidadRecibida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 90 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pendiente", Binding = new System.Windows.Data.Binding("CantidadPendiente") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 95 });
-        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Recibir Hoy", Binding = new System.Windows.Data.Binding("CantidadRecibirAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 125 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Recibir Hoy", Binding = new System.Windows.Data.Binding("CantidadRecibirAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 125 });
 
-        var colUbiOc = new DataGridTemplateColumn { Header = "📍 Ubicación en Almacén", Width = 185 };
+        var colUbiOc = new DataGridTemplateColumn { Header = "Ubicación en Almacén", Width = 185 };
         var cboUbiFactory = new FrameworkElementFactory(typeof(ComboBox));
         cboUbiFactory.SetValue(ComboBox.IsEditableProperty, true);
         cboUbiFactory.SetValue(ItemsControl.ItemsSourceProperty, ubicacionesCatalogo);
@@ -7766,7 +7766,7 @@ public partial class MainWindow : FluentWindow
         var bottomDock = new DockPanel();
         var btnSoloImprimirOc = new System.Windows.Controls.Button
         {
-            Content = "🖨️ Solo Ver / Reimprimir OC",
+            Content = "Solo Ver / Reimprimir OC",
             Padding = new Thickness(12, 7, 12, 7),
             Cursor = Cursors.Hand
         };
@@ -7783,7 +7783,7 @@ public partial class MainWindow : FluentWindow
         };
         var btnConfirmar = new System.Windows.Controls.Button
         {
-            Content = "✅ Registrar Entrada de Seleccionados (☑) e Imprimir Vale ENT-xxxx",
+            Content = "Registrar Entrada de Seleccionados (☑) e Imprimir Vale ENT-xxxx",
             Padding = new Thickness(16, 7, 16, 7),
             Background = new SolidColorBrush(Color.FromRgb(22, 163, 74)),
             Foreground = Brushes.White,
@@ -7822,7 +7822,7 @@ public partial class MainWindow : FluentWindow
             {
                 infoBorder.Background = new SolidColorBrush(Color.FromRgb(220, 252, 231));
                 infoBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(134, 239, 172));
-                txtInfoOc.Text = $"✔ {oc.Folio} ({oc.ProveedorNombre}) — Estatus: {oc.Estatus} ({oc.AvanceRecepcionTexto}). Esta Orden de Compra ya no tiene artículos pendientes por recibir. Puede consultar o reimprimir el documento con el botón inferior izquierdo.";
+                txtInfoOc.Text = $"{oc.Folio} ({oc.ProveedorNombre}) — Estatus: {oc.Estatus} ({oc.AvanceRecepcionTexto}). Esta Orden de Compra ya no tiene artículos pendientes por recibir. Puede consultar o reimprimir el documento con el botón inferior izquierdo.";
             }
             else
             {
@@ -8021,7 +8021,7 @@ public partial class MainWindow : FluentWindow
         var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         topPanel.Children.Add(new TextBlock
         {
-            Text = "📦 Siguiente Acción para Vale de Entrada (ENT-xxxx): Acomodar Ubicación o Surtir en Salida (SAL-xxxx)",
+            Text = "Siguiente Acción para Vale de Entrada (ENT-xxxx): Acomodar Ubicación o Surtir en Salida (SAL-xxxx)",
             FontSize = 15.5,
             FontWeight = FontWeights.Bold,
             Foreground = Tk("TextFillColorPrimaryBrush")
@@ -8096,7 +8096,7 @@ public partial class MainWindow : FluentWindow
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Artículo Ingresado", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Ingresó a Stock", Binding = new System.Windows.Data.Binding("CantidadIngresadaAlmacen") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 135 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 75 });
-        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Cant. a Surtir", Binding = new System.Windows.Data.Binding("CantidadParaSalida") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 145 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Cant. a Surtir", Binding = new System.Windows.Data.Binding("CantidadParaSalida") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 145 });
 
         var colUbi = new DataGridTemplateColumn { Header = "📍 Ubicación en Almacén (Anaquel)", Width = 250 };
         var cboUbiFactory = new FrameworkElementFactory(typeof(ComboBox));
@@ -8117,7 +8117,7 @@ public partial class MainWindow : FluentWindow
         var bottomDock = new DockPanel();
         var btnSoloImprimirEnt = new System.Windows.Controls.Button
         {
-            Content = "🖨️ Solo Ver / Reimprimir Vale ENT-xxxx",
+            Content = "Solo Ver / Reimprimir Vale ENT-xxxx",
             Padding = new Thickness(12, 7, 12, 7),
             Cursor = Cursors.Hand
         };
@@ -8142,7 +8142,7 @@ public partial class MainWindow : FluentWindow
         };
         var btnPasarASalida = new System.Windows.Controls.Button
         {
-            Content = "📤 Cargar Seleccionados (☑) en Salida de Material (SAL-xxxx)",
+            Content = "Cargar Seleccionados (☑) en Salida de Material (SAL-xxxx)",
             Padding = new Thickness(16, 7, 16, 7),
             Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
@@ -8313,7 +8313,7 @@ public partial class MainWindow : FluentWindow
         var topPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         topPanel.Children.Add(new TextBlock
         {
-            Text = "🔧 Devolución Agrupada de Herramientas por Vale de Resguardo (PRE-xxxx)",
+            Text = "Devolución Agrupada de Herramientas por Vale de Resguardo (PRE-xxxx)",
             FontSize = 16,
             FontWeight = FontWeights.Bold,
             Foreground = Tk("TextFillColorPrimaryBrush")
@@ -8395,7 +8395,7 @@ public partial class MainWindow : FluentWindow
         var scanRowPre = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
         scanRowPre.Children.Add(new TextBlock
         {
-            Text = "🔫 Escanear Código Individual (HER-xxxx) para marcar ☑:",
+            Text = "Escanear Código Individual (HER-xxxx) para marcar ☑:",
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             Foreground = Tk("AccentFillColorDefaultBrush"),
@@ -8459,7 +8459,7 @@ public partial class MainWindow : FluentWindow
 
         dg.Columns.Add(new DataGridTextColumn
         {
-            Header = "✏️ Observaciones / Incidencia",
+            Header = "Observaciones / Incidencia",
             Binding = new System.Windows.Data.Binding("ObservacionesRetorno") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged },
             IsReadOnly = false,
             Width = new DataGridLength(1, DataGridLengthUnitType.Star)
@@ -8489,7 +8489,7 @@ public partial class MainWindow : FluentWindow
         var bottomDock = new DockPanel();
         var btnSoloImprimir = new System.Windows.Controls.Button
         {
-            Content = "🖨️ Solo Ver / Reimprimir Vale",
+            Content = "Solo Ver / Reimprimir Vale",
             Padding = new Thickness(12, 7, 12, 7),
             Cursor = Cursors.Hand
         };
@@ -8506,7 +8506,7 @@ public partial class MainWindow : FluentWindow
         };
         var btnConfirmar = new System.Windows.Controls.Button
         {
-            Content = "✅ Registrar Devolución de Seleccionadas (☑) e Imprimir",
+            Content = "Registrar Devolución de Seleccionadas (☑) e Imprimir",
             Padding = new Thickness(16, 7, 16, 7),
             Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
@@ -8790,7 +8790,7 @@ public partial class MainWindow : FluentWindow
 
         var btnDevolverTodo = new System.Windows.Controls.Button
         {
-            Content = "🔄 Devolver Todo (Completo)",
+            Content = "Devolver Todo (Completo)",
             Padding = new Thickness(10, 5, 10, 5),
             Margin = new Thickness(0, 0, 6, 0),
             Cursor = Cursors.Hand
@@ -8800,7 +8800,7 @@ public partial class MainWindow : FluentWindow
 
         var btnLimpiarCant = new System.Windows.Controls.Button
         {
-            Content = "🧹 Poner en 0",
+            Content = "Poner en 0",
             Padding = new Thickness(10, 5, 10, 5),
             Cursor = Cursors.Hand
         };
@@ -8834,7 +8834,7 @@ public partial class MainWindow : FluentWindow
         var scanRowSal = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
         scanRowSal.Children.Add(new TextBlock
         {
-            Text = "🔫 Escanear Código de Producto (PRD-xxxx / EAN) para marcar ☑:",
+            Text = "Escanear Código de Producto (PRD-xxxx / EAN) para marcar ☑:",
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             Foreground = Tk("AccentFillColorDefaultBrush"),
@@ -8884,7 +8884,7 @@ public partial class MainWindow : FluentWindow
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Entregado", Binding = new System.Windows.Data.Binding("CantidadEntregada") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 95 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Ya Devuelto", Binding = new System.Windows.Data.Binding("CantidadDevuelta") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 110 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pendiente Máx.", Binding = new System.Windows.Data.Binding("CantidadPendienteDevolver") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 125 });
-        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Cuánto Regresó Hoy", Binding = new System.Windows.Data.Binding("CantidadDevolverAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 175 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Cuánto Regresó Hoy", Binding = new System.Windows.Data.Binding("CantidadDevolverAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 175 });
 
         Grid.SetRow(dg, 2);
         root.Children.Add(dg);
@@ -8912,7 +8912,7 @@ public partial class MainWindow : FluentWindow
         var bottomDock = new DockPanel();
         var btnSoloReimprimir = new System.Windows.Controls.Button
         {
-            Content = "🖨️ Solo Ver / Reimprimir Vale Original",
+            Content = "Solo Ver / Reimprimir Vale Original",
             Padding = new Thickness(12, 7, 12, 7),
             Cursor = Cursors.Hand
         };
@@ -8929,7 +8929,7 @@ public partial class MainWindow : FluentWindow
         };
         var btnConfirmar = new System.Windows.Controls.Button
         {
-            Content = "✅ Registrar Devolución e Imprimir Comprobante",
+            Content = "Registrar Devolución e Imprimir Comprobante",
             Padding = new Thickness(16, 7, 16, 7),
             Background = Tk("AccentFillColorDefaultBrush"),
             Foreground = Brushes.White,
@@ -11135,7 +11135,7 @@ public partial class MainWindow : FluentWindow
         var titleStack = new StackPanel();
         titleStack.Children.Add(new TextBlock
         {
-            Text = "🗺️ Sistema de Coordenadas por Estante y Cuadrante (Estándar Bottom-Up 3×3)",
+            Text = "Sistema de Coordenadas por Estante y Cuadrante (Estándar Bottom-Up 3×3)",
             FontSize = 15.5,
             FontWeight = FontWeights.Bold,
             Foreground = Tk("TextFillColorPrimaryBrush")
@@ -11244,7 +11244,7 @@ public partial class MainWindow : FluentWindow
         var rightHeaderDock = new DockPanel();
         var btnExportarCuadranteCsv = new System.Windows.Controls.Button
         {
-            Content = "📄 Exportar CSV",
+            Content = "Exportar CSV",
             Padding = new Thickness(10, 4, 10, 4),
             FontSize = 11.5,
             Cursor = Cursors.Hand,
@@ -11257,7 +11257,7 @@ public partial class MainWindow : FluentWindow
         var rightHeaderStack = new StackPanel();
         var txtInventarioTitulo = new TextBlock
         {
-            Text = "📍 Inventario en Cuadrante A-05",
+            Text = "Inventario en Cuadrante A-05",
             FontSize = 14.5,
             FontWeight = FontWeights.Bold,
             Foreground = Tk("TextFillColorPrimaryBrush")
@@ -11331,7 +11331,7 @@ public partial class MainWindow : FluentWindow
         var prodDock = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
         var txtHeaderProd = new TextBlock
         {
-            Text = "📦 Materiales, Consumibles y Artículos de Catálogo (0)",
+            Text = "Materiales, Consumibles y Artículos de Catálogo (0)",
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 4),
@@ -11364,7 +11364,7 @@ public partial class MainWindow : FluentWindow
         var herDock = new DockPanel();
         var txtHeaderHer = new TextBlock
         {
-            Text = "🔧 Herramientas Individuales HER-xxxx Asignadas a esta Posición (0)",
+            Text = "Herramientas Individuales HER-xxxx Asignadas a esta Posición (0)",
             FontSize = 12.5,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 4),
@@ -11408,7 +11408,7 @@ public partial class MainWindow : FluentWindow
 
         var btnSeleccionar = new System.Windows.Controls.Button
         {
-            Content = $"✔ Usar Coordenada {estanteActual}-{cuadranteActual}",
+            Content = $"Usar Coordenada {estanteActual}-{cuadranteActual}",
             Padding = new Thickness(16, 7, 16, 7),
             Margin = new Thickness(0, 0, 8, 0),
             FontWeight = FontWeights.Bold,
@@ -11746,7 +11746,7 @@ public partial class MainWindow : FluentWindow
                 var badgesPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
                 badgesPanel.Children.Add(new TextBlock
                 {
-                    Text = $"📦 {prodsCuad.Count} art.",
+                    Text = $"{prodsCuad.Count} art.",
                     FontSize = 11.5,
                     FontWeight = prodsCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
                     Foreground = prodsCuad.Count > 0 ? Tk("TextFillColorPrimaryBrush") : Tk("TextFillColorSecondaryBrush"),
@@ -11754,7 +11754,7 @@ public partial class MainWindow : FluentWindow
                 });
                 badgesPanel.Children.Add(new TextBlock
                 {
-                    Text = $"🔧 {hersCuad.Count} herr.",
+                    Text = $"{hersCuad.Count} herr.",
                     FontSize = 11.5,
                     FontWeight = hersCuad.Count > 0 ? FontWeights.Bold : FontWeights.Normal,
                     Foreground = hersCuad.Count > 0 ? Tk("AccentTextFillColorPrimaryBrush") : Tk("TextFillColorSecondaryBrush")
@@ -11765,7 +11765,7 @@ public partial class MainWindow : FluentWindow
                 {
                     cellBody.Children.Add(new TextBlock
                     {
-                        Text = $"⚠️ {hersPrestadas} en préstamo fuera",
+                        Text = $"{hersPrestadas} en préstamo fuera",
                         FontSize = 10.5,
                         FontWeight = FontWeights.SemiBold,
                         Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9)),
@@ -11824,7 +11824,7 @@ public partial class MainWindow : FluentWindow
 
                 // Menú contextual de clic derecho sobre la posición
                 var ctxCell = new ContextMenu();
-                var miVerCuad = new System.Windows.Controls.MenuItem { Header = $"👁️ Consultar inventario de {coordLabel}", FontWeight = FontWeights.Bold };
+                var miVerCuad = new System.Windows.Controls.MenuItem { Header = $"Consultar inventario de {coordLabel}", FontWeight = FontWeights.Bold };
                 miVerCuad.Click += (_, _) =>
                 {
                     cuadranteActual = cuadCopy;
@@ -11832,7 +11832,7 @@ public partial class MainWindow : FluentWindow
                 };
                 ctxCell.Items.Add(miVerCuad);
 
-                var miAsignarACuad = new System.Windows.Controls.MenuItem { Header = $"📌 Ubicar un artículo o herramienta en {coordLabel}" };
+                var miAsignarACuad = new System.Windows.Controls.MenuItem { Header = $"Ubicar un artículo o herramienta en {coordLabel}" };
                 miAsignarACuad.Click += (_, _) =>
                 {
                     cuadranteActual = cuadCopy;
@@ -11842,7 +11842,7 @@ public partial class MainWindow : FluentWindow
                 };
                 ctxCell.Items.Add(miAsignarACuad);
 
-                var miExportarCuad = new System.Windows.Controls.MenuItem { Header = $"📄 Exportar inventario de {coordLabel} (CSV)" };
+                var miExportarCuad = new System.Windows.Controls.MenuItem { Header = $"Exportar inventario de {coordLabel} (CSV)" };
                 miExportarCuad.Click += (_, _) =>
                 {
                     cuadranteActual = cuadCopy;
@@ -11854,7 +11854,7 @@ public partial class MainWindow : FluentWindow
                 if (modoSelector)
                 {
                     ctxCell.Items.Add(new Separator());
-                    var miElegirCoord = new System.Windows.Controls.MenuItem { Header = $"✔ Usar coordenada {coordLabel}", FontWeight = FontWeights.Bold };
+                    var miElegirCoord = new System.Windows.Controls.MenuItem { Header = $"Usar coordenada {coordLabel}", FontWeight = FontWeights.Bold };
                     miElegirCoord.Click += (_, _) =>
                     {
                         cuadranteActual = cuadCopy;
@@ -11914,15 +11914,15 @@ public partial class MainWindow : FluentWindow
             int dispHer = hersFiltradas.Count(h => string.Equals(h.Estado, "Disponible", StringComparison.OrdinalIgnoreCase));
             int prestHer = hersFiltradas.Count(h => string.Equals(h.Estado, "En Préstamo", StringComparison.OrdinalIgnoreCase));
 
-            txtHeaderProd.Text = $"📦 Materiales, Consumibles y Artículos de Catálogo ({prodsFiltrados.Count} SKUs | {prodsFiltrados.Sum(x => x.StockActual):0.##} u. en stock)";
-            txtHeaderHer.Text = $"🔧 Herramientas Individuales HER-xxxx ({hersFiltradas.Count} registradas: {dispHer} en sitio, {prestHer} en préstamo)";
+            txtHeaderProd.Text = $"Materiales, Consumibles y Artículos de Catálogo ({prodsFiltrados.Count} SKUs | {prodsFiltrados.Sum(x => x.StockActual):0.##} u. en stock)";
+            txtHeaderHer.Text = $"Herramientas Individuales HER-xxxx ({hersFiltradas.Count} registradas: {dispHer} en sitio, {prestHer} en préstamo)";
 
             dgProdCuadrante.ItemsSource = prodsFiltrados;
             dgHerCuadrante.ItemsSource = hersFiltradas;
 
             string coordFinal = ConstruirCoordenadaFinal();
-            btnSeleccionar.Content = $"✔ Usar Coordenada {coordFinal}";
-            btnAsignarAqui.Content = $"📌 Ubicar en {coordFinal}";
+            btnSeleccionar.Content = $"Usar Coordenada {coordFinal}";
+            btnAsignarAqui.Content = $"Ubicar en {coordFinal}";
 
             int totalUbicadosProd = todosProductos.Count(p => !string.IsNullOrEmpty(ParsearCoordenadaAlmacen(p.Ubicacion).Estante));
             int totalUbicadosHer = todasHerramientas.Count(h => !string.IsNullOrEmpty(ParsearCoordenadaAlmacen(h.Ubicacion).Estante));
@@ -11932,8 +11932,8 @@ public partial class MainWindow : FluentWindow
         cboSubContenedor.SelectionChanged += (_, _) =>
         {
             string coordFinal = ConstruirCoordenadaFinal();
-            btnSeleccionar.Content = $"✔ Usar Coordenada {coordFinal}";
-            btnAsignarAqui.Content = $"📌 Ubicar en {coordFinal}";
+            btnSeleccionar.Content = $"Usar Coordenada {coordFinal}";
+            btnAsignarAqui.Content = $"Ubicar en {coordFinal}";
         };
 
         btnVerTodoEstante.Click += (_, _) =>
@@ -12007,7 +12007,7 @@ public partial class MainWindow : FluentWindow
 
         // Menús de clic derecho en las tablas derechas del Mapa de Anaqueles
         var ctxDgProd = new ContextMenu();
-        var miProdCarrito = new System.Windows.Controls.MenuItem { Header = "📋 Agregar a la Solicitud (+1)", FontWeight = FontWeights.Bold };
+        var miProdCarrito = new System.Windows.Controls.MenuItem { Header = "Agregar a la Solicitud (+1)", FontWeight = FontWeights.Bold };
         miProdCarrito.Click += (_, _) =>
         {
             if (dgProdCuadrante.SelectedItem is Producto p)
@@ -12015,7 +12015,7 @@ public partial class MainWindow : FluentWindow
         };
         ctxDgProd.Items.Add(miProdCarrito);
 
-        var miProdEditar = new System.Windows.Controls.MenuItem { Header = "✏️ Editar Ficha del Producto en Catálogo" };
+        var miProdEditar = new System.Windows.Controls.MenuItem { Header = "Editar Ficha del Producto en Catálogo" };
         miProdEditar.Click += (_, _) =>
         {
             if (dgProdCuadrante.SelectedItem is Producto p)
@@ -12027,7 +12027,7 @@ public partial class MainWindow : FluentWindow
         };
         ctxDgProd.Items.Add(miProdEditar);
 
-        var miProdCopiar = new System.Windows.Controls.MenuItem { Header = "📋 Copiar Código Interno (PRD-xxxx)" };
+        var miProdCopiar = new System.Windows.Controls.MenuItem { Header = "Copiar Código Interno (PRD-xxxx)" };
         miProdCopiar.Click += (_, _) =>
         {
             if (dgProdCuadrante.SelectedItem is Producto p && !string.IsNullOrWhiteSpace(p.CodigoInterno))
@@ -12037,7 +12037,7 @@ public partial class MainWindow : FluentWindow
         dgProdCuadrante.ContextMenu = ctxDgProd;
 
         var ctxDgHer = new ContextMenu();
-        var miHerPrestar = new System.Windows.Controls.MenuItem { Header = "🤝 Prestar Herramienta (Ir a Vale de Préstamo)", FontWeight = FontWeights.Bold };
+        var miHerPrestar = new System.Windows.Controls.MenuItem { Header = "Prestar Herramienta (Ir a Vale de Préstamo)", FontWeight = FontWeights.Bold };
         miHerPrestar.Click += (_, _) =>
         {
             if (dgHerCuadrante.SelectedItem is HerramientaActivo h)
@@ -12054,7 +12054,7 @@ public partial class MainWindow : FluentWindow
         };
         ctxDgHer.Items.Add(miHerPrestar);
 
-        var miHerDir = new System.Windows.Controls.MenuItem { Header = "🔧 Ver en Directorio de Herramientas" };
+        var miHerDir = new System.Windows.Controls.MenuItem { Header = "Ver en Directorio de Herramientas" };
         miHerDir.Click += (_, _) =>
         {
             if (dgHerCuadrante.SelectedItem is HerramientaActivo h)
@@ -12067,7 +12067,7 @@ public partial class MainWindow : FluentWindow
         };
         ctxDgHer.Items.Add(miHerDir);
 
-        var miHerCopiar = new System.Windows.Controls.MenuItem { Header = "📋 Copiar Código HER-xxxx y Serie" };
+        var miHerCopiar = new System.Windows.Controls.MenuItem { Header = "Copiar Código HER-xxxx y Serie" };
         miHerCopiar.Click += (_, _) =>
         {
             if (dgHerCuadrante.SelectedItem is HerramientaActivo h)
