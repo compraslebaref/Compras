@@ -10,6 +10,9 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Visibilidad dinámica de precios e importes según el rol operativo (Compras vs Almacén) -->
+            <Visibility x:Key="VisibilidadPreciosPerfil">Visible</Visibility>
+
             <!-- Colores de selección persistentes incluso al pasar el foco al formulario derecho -->
             <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#2E808080" />
             <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#24808080" />

@@ -58,7 +58,7 @@
                         <MenuItem Header="Imprimir Catálogo de Códigos de Barras" Click="BtnImprimirCatalogoCodigos_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="Compras" Padding="7,4">
+                    <MenuItem x:Name="MenuComprasTop" Header="Compras" Padding="7,4">
                         <MenuItem Header="Nueva Solicitud de Compra" Click="MenuNuevaSolicitud_Click" />
                         <MenuItem Header="Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
                         <MenuItem Header="Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
@@ -77,7 +77,7 @@
                         <MenuItem Header="Generar e Imprimir Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="Reportes" Padding="7,4">
+                    <MenuItem x:Name="MenuReportesTop" Header="Reportes" Padding="7,4">
                         <MenuItem Header="Ranking de Materiales y Proyección de Compras" Click="MenuIrAnalisisRanking_Click" />
                         <MenuItem Header="Gráficas e Historial de Precios por Producto" Click="MenuIrAnalisisGraficas_Click" />
                         <MenuItem Header="Exportar Inventario por Cuadrante / Anaquel (CSV)" Click="BtnAbrirMapaAnaqueles_Click" />
@@ -138,6 +138,8 @@
                                Margin="0,0,6,0"
                                ToolTip="Alternar entre Modo Claro de Alto Contraste (Bodega) y Modo Oscuro Slate (Oficina)"
                                Click="BtnAlternarTema_Click" />
+                    <ui:Button x:Name="BtnNotificacionesCheckpoints" Content="Avisos (0)" FontSize="11.5" Padding="10,5" Margin="0,0,6,0" ToolTip="Ver bandeja de checkpoints, cambios de etapa y notificaciones por perfil" Click="BtnNotificacionesCheckpoints_Click" />
+                    <ui:Button x:Name="BtnRolOperativo" Content="Rol: Compras" Appearance="Primary" FontSize="11.5" Padding="10,5" Margin="0,0,6,0" ToolTip="Cambiar vista operativa activa entre Compras y Almacén (en Almacén se ocultan precios e importes)" Click="BtnRolOperativo_Click" />
                 </StackPanel>
                 <ui:Button x:Name="BtnPerfilAdmin"
                            Grid.Column="3"
@@ -405,7 +407,7 @@
                                         BorderBrush="#86EFAC" BorderThickness="1,1,1,3"
                                         Effect="{StaticResource CardElevationShadow}"
                                         ToolTip="Clic para abrir Analítica e Historial de Compras"
-                                        MouseLeftButtonUp="KpiCardAnalisis_Click">
+                                        MouseLeftButtonUp="KpiCardAnalisis_Click" Visibility="{DynamicResource VisibilidadPreciosPerfil}" x:Name="BdrKpiComprasTotales">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -460,7 +462,7 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
+                                                <DataGridTextColumn x:Name="ColDashboardOcTotal" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DockPanel>
@@ -724,7 +726,7 @@
                                                         <MenuItem Header="Editar Ficha del Producto" Tag="{Binding}" Click="CtxCardEditarProducto_Click" />
                                                         <MenuItem Header="Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Tag="{Binding}" Click="CtxCardAbrirMapaUbicacion_Click" />
                                                         <MenuItem Header="Abrir Ficha Individual de Herramienta (HER-xxxx)" Tag="{Binding}" Click="CtxCardAbrirFichaHerramienta_Click" />
-                                                        <MenuItem Header="Ver Historial de Precios y Gráficas en Análisis" Tag="{Binding}" Click="CtxCardVerAnalisisPrecio_Click" />
+                                                        <MenuItem Header="Ver Historial de Precios y Gráficas en Análisis" Tag="{Binding}" Click="CtxCardVerAnalisisPrecio_Click" Visibility="{DynamicResource VisibilidadPreciosPerfil}" />
                                                         <Separator />
                                                         <MenuItem Header="Copiar Código Interno (PRD-xxxx)" Tag="{Binding}" Click="CtxCardCopiarCodigo_Click" />
                                                         <MenuItem Header="Eliminar Producto del Catálogo" Tag="{Binding}" Click="CtxCardEliminarProducto_Click" />
@@ -806,7 +808,7 @@
                                                                 <Run Text="{Binding UnidadAlmacen, Mode=OneWay}" />
                                                             </TextBlock>
                                                         </StackPanel>
-                                                        <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                                        <StackPanel Grid.Column="1" HorizontalAlignment="Right" Visibility="{DynamicResource VisibilidadPreciosPerfil}">
                                                             <TextBlock Text="Costo" FontSize="10.5" Opacity="0.7" />
                                                             <TextBlock Text="{Binding UltimoCostoCompra, StringFormat={}{0:C2}}" FontSize="13" FontWeight="Bold" Foreground="#107C10" HorizontalAlignment="Right" />
                                                         </StackPanel>
@@ -1082,7 +1084,7 @@
                                             <TextBlock x:Name="LblProdStockMinUnidad" Text="Stock Mín. (Entrega)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" ToolTip="Nivel mínimo de alerta expresado en Unidades de Entrega" />
                                             <ui:TextBox x:Name="TxtProdStockMin" PlaceholderText="Ej. 5" />
                                         </StackPanel>
-                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
+                                        <StackPanel x:Name="PnlProdCostoEditor" Grid.Column="2" Margin="4,0,0,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}">
                                             <TextBlock x:Name="LblProdCostoUnidad" Text="Costo Compra ($ c/IVA)" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" ToolTip="Costo con IVA por cada Unidad de Compra" />
                                             <ui:TextBox x:Name="TxtProdCosto" PlaceholderText="Ej. 0.00" TextChanged="TxtProdFactorOCosto_TextChanged" />
                                         </StackPanel>
@@ -1177,7 +1179,7 @@
 
                             <TabControl Padding="0,8,0,0">
 
-                                <TabItem x:Name="TabHistPrecios" Header="Precios de compra">
+                                <TabItem x:Name="TabHistPrecios" Header="Precios de compra" Visibility="{DynamicResource VisibilidadPreciosPerfil}">
                                     <DockPanel Margin="0,4,0,0">
                                         <TextBlock x:Name="TxtHistPreciosResumen" DockPanel.Dock="Top" FontSize="12.5" FontWeight="SemiBold" Margin="0,0,0,8" TextWrapping="Wrap" />
                                         <DataGrid x:Name="DgHistPrecios" AutoGenerateColumns="False" IsReadOnly="True">
@@ -1308,7 +1310,9 @@
                                 <!-- Barra superior: volver, título, estado y acciones -->
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                                        <ui:Button Content="Abrir en Comparativa" Appearance="Primary" FontSize="11.5" Margin="0,0,6,0" Click="BtnEnviarSolicitudAComparativa_Click" />
+                                        <ui:Button x:Name="BtnAprobarSurtirStockSol" Content="Aprobar surtido de stock" FontSize="11.5" Margin="0,0,6,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Compras aprueba que esta solicitud se surta con stock existente en Almacén (Checkpoint CP-1A)" Click="BtnAprobarSurtirStockSolicitud_Click" />
+                                        <ui:Button x:Name="BtnCrearAnexoSolicitud" Content="+ Crear Anexo" FontSize="11.5" Margin="0,0,6,0" ToolTip="Generar anexo vinculado (ej. SOL-xxxx-A1) para agregar artículos adicionales cuando esta solicitud ya está bloqueada" Click="BtnCrearAnexoSolicitud_Click" />
+                                        <ui:Button x:Name="BtnAbrirEnComparativaSol" Content="Abrir en Comparativa" Appearance="Primary" FontSize="11.5" Margin="0,0,6,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" Click="BtnEnviarSolicitudAComparativa_Click" />
                                         <Menu Background="Transparent" VerticalAlignment="Center">
                                             <MenuItem Header="Más acciones" Padding="10,6" FontWeight="SemiBold">
                                                 <MenuItem Header="Ir al Catálogo con esta Solicitud" Click="BtnIrCatalogoConSolicitud_Click" />
@@ -1900,7 +1904,10 @@
                         <Border x:Name="PnlOrdenesLista" Padding="16" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                             <DockPanel>
                                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                                    <TextBlock Text="Órdenes de compra" FontSize="18" FontWeight="SemiBold" />
+                                    <DockPanel>
+                                        <ui:Button x:Name="BtnEntradaSinOcAlmacen" DockPanel.Dock="Right" Content="+ Entrada directa sin OC" FontSize="11.5" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="Registrar llegada física de material a Almacén cuando aún no existe Orden de Compra emitida (CP-5C)" Click="BtnEntradaSinOcAlmacen_Click" />
+                                        <TextBlock Text="Órdenes de compra y recepción" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </DockPanel>
                                     <TextBlock Text="Haga clic en una orden para ver su recepción, estatus y entradas. También puede escanear su folio OC-xxxx." FontSize="12" Opacity="0.72" Margin="0,2,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
 
@@ -1931,7 +1938,7 @@
                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Destino" Binding="{Binding ProyectoNombre}" Width="1*" />
                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="110" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="120" />
+                                        <DataGridTextColumn x:Name="ColOrdenesTotal" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="120" />
                                         <DataGridTemplateColumn Header="Estatus" Width="200">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
@@ -1952,7 +1959,8 @@
 
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                                        <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" FontSize="11.5" Margin="0,0,6,0" Click="BtnImprimirOcSeleccionada_Click" />
+                                        <ui:Button x:Name="BtnDespacharSalidaDesdeOcDetalle" Content="Despachar a Salida (SAL)" FontSize="11.5" Margin="0,0,6,0" ToolTip="Cargar artículos de esta Orden de Compra directamente en un Vale de Salida de Almacén" Click="BtnCargarMaterialOcActualEnSalida_Click" />
+                                        <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" FontSize="11.5" Margin="0,0,6,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" Click="BtnImprimirOcSeleccionada_Click" />
                                         <Menu Background="Transparent" VerticalAlignment="Center">
                                             <MenuItem Header="Más acciones" Padding="10,6" FontWeight="SemiBold">
                                                 <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
@@ -1987,7 +1995,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="Folio remisión / nota:" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
                                                 <ui:TextBox x:Name="TxtFolioRemisionRecepcionOc" Grid.Column="1" Margin="0,0,10,0" PlaceholderText="Ej. REM-4502 / Entrega parcial 1 (opcional)" />
-                                                <CheckBox x:Name="ChkReservarStockProyectoRecepcion" Grid.Column="2" Content="Reservar para proyecto" IsChecked="True" VerticalAlignment="Center" ToolTip="Si la OC pertenece a un Proyecto, aparta este stock o permite generar su salida inmediata" />
+                                                <CheckBox x:Name="ChkReservarStockProyectoRecepcion" Grid.Column="2" Content="Reservar para proyecto" IsChecked="False" Visibility="Collapsed" VerticalAlignment="Center" ToolTip="Todo el stock entra a bolsa libre de almacén" />
                                             </Grid>
 
                                             <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -2019,7 +2027,7 @@
                                     </TabItem>
 
                                     <!-- Menú 2: Estatus operativo y pago -->
-                                    <TabItem Header="Estatus y pago">
+                                    <TabItem x:Name="TabOcEstatusPago" Header="Estatus y pago" Visibility="{DynamicResource VisibilidadPreciosPerfil}">
                                         <StackPanel Margin="0,8,0,0" MaxWidth="760" HorizontalAlignment="Left">
                                             <TextBlock Text="Flujo operativo: Dirección → Finanzas → Almacén" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,10" />
                                             <Grid Margin="0,0,0,12">
@@ -2040,6 +2048,7 @@
                                                         <ComboBoxItem Content="Emitida" />
                                                         <ComboBoxItem Content="Recibida Parcialmente" />
                                                         <ComboBoxItem Content="Recibida Completa" />
+                                                        <ComboBoxItem Content="Cerrada Parcial (Admin)" />
                                                     </ComboBox>
                                                 </StackPanel>
                                                 <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,12">
@@ -2060,6 +2069,7 @@
                                                        Content="Guardar flujo"
                                                        ToolTip="Actualiza el estatus operativo, condición de pago y recordatorio en el Calendario Operativo"
                                                        Click="BtnActualizarFlujoOc_Click" />
+                                            <ui:Button x:Name="BtnFiniquitarOcParcial" HorizontalAlignment="Left" Margin="0,8,0,0" Content="Finiquitar / Cerrar Parcialmente (Ya no entregarán resto)" ToolTip="Cierra la OC con lo recibido hasta hoy para que deje de aparecer pendiente en Almacén (Checkpoint CP-6)" Click="BtnFiniquitarOcParcial_Click" />
                                         </StackPanel>
                                     </TabItem>
 
@@ -2135,7 +2145,7 @@
 
                                 <ui:TextBox x:Name="TxtBuscarAlmacen"
                                             Grid.Column="1"
-                                            PlaceholderText="Buscar o escanear: producto, ENT-, SAL-, HER- o PRE-"
+                                            PlaceholderText="Buscar o escanear: producto, SOL-, OC-, ENT-, SAL-, HER- o PRE-"
                                             VerticalContentAlignment="Center"
                                             FontSize="13"
                                             PreviewKeyDown="TxtBuscarAlmacen_KeyDown"
@@ -2167,6 +2177,7 @@
                                                        Margin="8,0,0,0"
                                                        ToolTip="Cargar automáticamente los artículos recibidos de una Orden de Compra para darles salida"
                                                        Click="BtnCargarMaterialOcRecibidaEnSalida_Click" />
+                                            <ui:Button DockPanel.Dock="Right" Content="Cargar desde Solicitud (SOL)" FontSize="11" Margin="8,0,0,0" ToolTip="Seleccionar una Solicitud (SOL-xxxx) para precargar sus artículos en este Vale de Salida" Click="BtnCargarMaterialSolicitudEnSalida_Click" />
                                             <TextBlock Text="Salida de Material" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
                                         </DockPanel>
 

@@ -202,14 +202,13 @@ public class Solicitud
     public string TipoSolicitud { get; set; } = "Requerimiento de Compra"; // Requerimiento de Compra, Solo Cotización / Presupuesto
     public bool EsSoloCotizacion => string.Equals(TipoSolicitud, "Solo Cotización / Presupuesto", StringComparison.OrdinalIgnoreCase);
     public string Origen { get; set; } = "Catálogo"; // Catálogo, WhatsApp, Plantilla Excel
-    public string Estatus { get; set; } = "Pendiente"; // Pendiente, En Comparativa, Cotización Entregada, OC Generada, Atendida
+    public string Estatus { get; set; } = "Pendiente"; // Pendiente, Autorizada para Surtir Stock, En Comparativa, Cotización Entregada, OC Generada, Atendida
     public string Notas { get; set; } = string.Empty;
     public List<SolicitudPartida> Partidas { get; set; } = new();
     public int TotalSkus => Partidas.Count;
     public decimal TotalArticulos => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadSolicitada) : 0m;
     public string ResumenArticulos => $"{TotalSkus} SKUs ({TotalArticulos:0.##} pzas)";
-    public bool EsEditable => !string.Equals(Estatus, "OC Generada", StringComparison.OrdinalIgnoreCase) &&
-                              !string.Equals(Estatus, "Atendida", StringComparison.OrdinalIgnoreCase);
+    public bool EsEditable => Id == 0 || string.Equals(Estatus, "Pendiente", StringComparison.OrdinalIgnoreCase);
     public override string ToString() => Id == 0
         ? "📋 [Nueva Solicitud en Captura]"
         : $"{Folio} | {ProyectoMostrar} [{TipoSolicitud}] ({TotalSkus} art. - {EncargadoNombre})";
@@ -1054,4 +1053,22 @@ public class MaterialRankingAnalisis
             return "Normal";
         }
     }
+}
+
+public class NotificacionCheckpoint
+{
+    public int Id { get; set; }
+    public string FechaHora { get; set; } = string.Empty;
+    public string Etapa { get; set; } = string.Empty;            // Ej. Etapa 1: Solicitud, Etapa 4: Recepción
+    public string CheckpointCodigo { get; set; } = string.Empty; // Ej. CP-1A, CP-1B, CP-2B, CP-5B
+    public string FolioReferencia { get; set; } = string.Empty;  // Ej. SOL-2026-0001, OC-2026-0001
+    public string EstatusAnterior { get; set; } = string.Empty;
+    public string EstatusNuevo { get; set; } = string.Empty;
+    public string RolOrigen { get; set; } = "Compras";           // Compras, Almacén
+    public string RolesDestino { get; set; } = "Almacén";        // Compras, Almacén, Solicitante, Dirección, Finanzas
+    public string Mensaje { get; set; } = string.Empty;
+    public bool Leida { get; set; }
+    public string TransicionTexto => string.IsNullOrWhiteSpace(EstatusAnterior)
+        ? EstatusNuevo
+        : $"{EstatusAnterior} → {EstatusNuevo}";
 }

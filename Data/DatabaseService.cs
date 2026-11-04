@@ -327,6 +327,20 @@ CREATE TABLE IF NOT EXISTS BancoPreciosHistorico (
     OrigenFolio TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS NotificacionesCheckpoint (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    FechaHora TEXT NOT NULL,
+    Etapa TEXT NOT NULL,
+    CheckpointCodigo TEXT NOT NULL,
+    FolioReferencia TEXT NOT NULL,
+    EstatusAnterior TEXT NOT NULL DEFAULT '',
+    EstatusNuevo TEXT NOT NULL DEFAULT '',
+    RolOrigen TEXT NOT NULL DEFAULT 'Compras',
+    RolesDestino TEXT NOT NULL DEFAULT 'Almacén',
+    Mensaje TEXT NOT NULL,
+    Leida INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS IDX_Productos_CodigoInterno ON Productos(CodigoInterno);
 CREATE INDEX IF NOT EXISTS IDX_Productos_Nombre ON Productos(Nombre);
 CREATE INDEX IF NOT EXISTS IDX_Productos_CategoriaId ON Productos(CategoriaId);
@@ -2433,9 +2447,11 @@ WHERE sp.SolicitudId = $sid";
         return list;
     }
 
-    public static Solicitud CrearSolicitud(int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas, string tipoSolicitud = "Requerimiento de Compra")
+    public static Solicitud CrearSolicitud(int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas, string tipoSolicitud = "Requerimiento de Compra", string? folioPersonalizado = null)
     {
-        string folio = GenerarSiguienteFolio("SOL", "Solicitudes");
+        string folio = string.IsNullOrWhiteSpace(folioPersonalizado)
+            ? GenerarSiguienteFolio("SOL", "Solicitudes")
+            : folioPersonalizado.Trim();
         string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
         string tipoLim = string.IsNullOrWhiteSpace(tipoSolicitud) ? "Requerimiento de Compra" : tipoSolicitud.Trim();
 
@@ -2605,6 +2621,83 @@ VALUES (
         cmd.Parameters.AddWithValue("$est", estatus);
         cmd.Parameters.AddWithValue("$id", solicitudId);
         cmd.ExecuteNonQuery();
+    }
+
+    public static void ActualizarEstatusSolicitud(int solicitudId, string estatus)
+    {
+        if (solicitudId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE Solicitudes SET Estatus = $est WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$est", estatus);
+        cmd.Parameters.AddWithValue("$id", solicitudId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static EntradaAlmacen RegistrarEntradaDirectaSinOc(
+        string proveedorNombre,
+        string proyectoNombre,
+        string folioDocumento,
+        string notas,
+        List<EntradaPartida> partidas)
+    {
+        string folioEnt = GenerarSiguienteFolio("ENT", "EntradasAlmacen");
+        string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+INSERT INTO EntradasAlmacen (Folio, Fecha, OrdenCompraId, OrdenCompraFolio, ProveedorNombre, ProyectoNombre, TipoEntrada, FacturaUuid, Notas)
+VALUES ($fol, $fec, NULL, 'SIN-OC', $prov, $proy, 'Entrada sin OC (Por Regularizar)', $fdoc, $not);
+SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("$fol", folioEnt);
+        cmd.Parameters.AddWithValue("$fec", fecha);
+        cmd.Parameters.AddWithValue("$prov", proveedorNombre.Trim());
+        cmd.Parameters.AddWithValue("$proy", proyectoNombre.Trim());
+        cmd.Parameters.AddWithValue("$fdoc", folioDocumento.Trim());
+        cmd.Parameters.AddWithValue("$not", notas.Trim());
+        int entId = Convert.ToInt32(cmd.ExecuteScalar());
+
+        foreach (var p in partidas)
+        {
+            decimal factor = Math.Max(1m, p.FactorConversion);
+            decimal cantAlmacen = p.CantidadIngresadaAlmacen > 0 ? p.CantidadIngresadaAlmacen : Math.Round(p.CantidadCompraRecibida * factor, 2);
+
+            using (var epCmd = conn.CreateCommand())
+            {
+                epCmd.Transaction = tx;
+                epCmd.CommandText = @"
+INSERT INTO EntradaPartidas (EntradaAlmacenId, ProductoId, CantidadCompraRecibida, UnidadCompra, FactorConversion, CantidadIngresadaAlmacen, UnidadAlmacen, CostoUnitarioCompraConIva)
+VALUES ($eid, $pid, $cc, $uc, $fc, $ca, $ua, $costo)";
+                epCmd.Parameters.AddWithValue("$eid", entId);
+                epCmd.Parameters.AddWithValue("$pid", p.ProductoId);
+                epCmd.Parameters.AddWithValue("$cc", (double)p.CantidadCompraRecibida);
+                epCmd.Parameters.AddWithValue("$uc", string.IsNullOrWhiteSpace(p.UnidadCompra) ? "Pieza" : p.UnidadCompra);
+                epCmd.Parameters.AddWithValue("$fc", (double)factor);
+                epCmd.Parameters.AddWithValue("$ca", (double)cantAlmacen);
+                epCmd.Parameters.AddWithValue("$ua", string.IsNullOrWhiteSpace(p.UnidadAlmacen) ? "Pieza" : p.UnidadAlmacen);
+                epCmd.Parameters.AddWithValue("$costo", (double)p.CostoUnitarioCompraConIva);
+                epCmd.ExecuteNonQuery();
+            }
+
+            using (var upStock = conn.CreateCommand())
+            {
+                upStock.Transaction = tx;
+                upStock.CommandText = "UPDATE Productos SET StockActual = StockActual + $ca, Ubicacion = CASE WHEN $ub <> '' THEN $ub ELSE Ubicacion END WHERE Id = $pid";
+                upStock.Parameters.AddWithValue("$ca", (double)cantAlmacen);
+                upStock.Parameters.AddWithValue("$ub", (p.UbicacionAlmacen ?? string.Empty).Trim());
+                upStock.Parameters.AddWithValue("$pid", p.ProductoId);
+                upStock.ExecuteNonQuery();
+            }
+        }
+
+        tx.Commit();
+        return ObtenerEntradasAlmacen().First(e => e.Id == entId);
     }
 
     public static Solicitud AgregarOIncrementarPartidaEnSolicitud(int solicitudId, int productoId, decimal cantidadAgregar, string notasPartida = "")
@@ -6034,6 +6127,148 @@ ORDER BY Id ASC";
         cmd.CommandText = "UPDATE HerramientasActivos SET Ubicacion=$u WHERE Id=$id";
         cmd.Parameters.AddWithValue("$u", ubi);
         cmd.Parameters.AddWithValue("$id", herramientaId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static string ObtenerRolOperativoActivo()
+    {
+        try
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave='RolOperativoActivo' LIMIT 1";
+            var val = cmd.ExecuteScalar()?.ToString();
+            if (string.Equals(val, "Almacén", StringComparison.OrdinalIgnoreCase))
+                return "Almacén";
+        }
+        catch
+        {
+            // Ignorar si aún no existe
+        }
+        return "Compras";
+    }
+
+    public static void GuardarRolOperativoActivo(string rol)
+    {
+        string r = string.Equals(rol, "Almacén", StringComparison.OrdinalIgnoreCase) ? "Almacén" : "Compras";
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO ConfiguracionSistema (Clave, Valor) VALUES ('RolOperativoActivo', $v)
+ON CONFLICT(Clave) DO UPDATE SET Valor=$v;";
+        cmd.Parameters.AddWithValue("$v", r);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void RegistrarCheckpoint(
+        string etapa,
+        string checkpointCodigo,
+        string folioReferencia,
+        string estatusAnterior,
+        string estatusNuevo,
+        string rolOrigen,
+        string rolesDestino,
+        string mensaje)
+    {
+        try
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+INSERT INTO NotificacionesCheckpoint
+(FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida)
+VALUES ($fh, $et, $cp, $fol, $ea, $en, $ro, $rd, $msg, 0);";
+            cmd.Parameters.AddWithValue("$fh", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+            cmd.Parameters.AddWithValue("$et", etapa ?? string.Empty);
+            cmd.Parameters.AddWithValue("$cp", checkpointCodigo ?? string.Empty);
+            cmd.Parameters.AddWithValue("$fol", folioReferencia ?? string.Empty);
+            cmd.Parameters.AddWithValue("$ea", estatusAnterior ?? string.Empty);
+            cmd.Parameters.AddWithValue("$en", estatusNuevo ?? string.Empty);
+            cmd.Parameters.AddWithValue("$ro", string.IsNullOrWhiteSpace(rolOrigen) ? "Compras" : rolOrigen);
+            cmd.Parameters.AddWithValue("$rd", string.IsNullOrWhiteSpace(rolesDestino) ? "Almacén" : rolesDestino);
+            cmd.Parameters.AddWithValue("$msg", mensaje ?? string.Empty);
+            cmd.ExecuteNonQuery();
+        }
+        catch
+        {
+            // No interrumpir flujo operativo por registro de notificación
+        }
+    }
+
+    public static List<NotificacionCheckpoint> ObtenerNotificacionesCheckpoint(string? rolFiltro = null, int limite = 80)
+    {
+        var lista = new List<NotificacionCheckpoint>();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        if (string.IsNullOrWhiteSpace(rolFiltro) || string.Equals(rolFiltro, "Todos", StringComparison.OrdinalIgnoreCase))
+        {
+            cmd.CommandText = @"
+SELECT Id, FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida
+FROM NotificacionesCheckpoint
+ORDER BY Id DESC
+LIMIT $lim;";
+        }
+        else
+        {
+            cmd.CommandText = @"
+SELECT Id, FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida
+FROM NotificacionesCheckpoint
+WHERE RolesDestino LIKE $rol OR RolOrigen LIKE $rol
+ORDER BY Id DESC
+LIMIT $lim;";
+            cmd.Parameters.AddWithValue("$rol", $"%{rolFiltro.Trim()}%");
+        }
+        cmd.Parameters.AddWithValue("$lim", limite);
+
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            lista.Add(new NotificacionCheckpoint
+            {
+                Id = r.GetInt32(0),
+                FechaHora = r.GetString(1),
+                Etapa = r.GetString(2),
+                CheckpointCodigo = r.GetString(3),
+                FolioReferencia = r.GetString(4),
+                EstatusAnterior = r.GetString(5),
+                EstatusNuevo = r.GetString(6),
+                RolOrigen = r.GetString(7),
+                RolesDestino = r.GetString(8),
+                Mensaje = r.GetString(9),
+                Leida = r.GetInt32(10) != 0
+            });
+        }
+        return lista;
+    }
+
+    public static int ContarNotificacionesNoLeidas(string rolDestino)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(1) FROM NotificacionesCheckpoint WHERE Leida=0 AND RolesDestino LIKE $rol";
+        cmd.Parameters.AddWithValue("$rol", $"%{rolDestino.Trim()}%");
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
+
+    public static void MarcarNotificacionesLeidas(string? rolDestino = null)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        if (string.IsNullOrWhiteSpace(rolDestino))
+        {
+            cmd.CommandText = "UPDATE NotificacionesCheckpoint SET Leida=1 WHERE Leida=0";
+        }
+        else
+        {
+            cmd.CommandText = "UPDATE NotificacionesCheckpoint SET Leida=1 WHERE Leida=0 AND RolesDestino LIKE $rol";
+            cmd.Parameters.AddWithValue("$rol", $"%{rolDestino.Trim()}%");
+        }
         cmd.ExecuteNonQuery();
     }
 }

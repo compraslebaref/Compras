@@ -117,13 +117,13 @@ public partial class MainWindow
             ("Notas", x.Descripcion)
         });
 
-        AgregarSeccionFicha("Compra y conversión", new (string, string?)[]
+        AgregarSeccionFicha(EsModoAlmacen ? "Unidades y conversión" : "Compra y conversión", new (string, string?)[]
         {
             ("Unidad de compra", x.UnidadCompra),
             ("Unidad de entrega", x.UnidadAlmacen),
             ("Conversión", x.ConversionTexto),
-            ("Último costo (c/IVA)", x.UltimoCostoCompra > 0 ? x.UltimoCostoCompra.ToString("C2") : null),
-            ("Costo por unidad de entrega", x.UltimoCostoCompra > 0 ? x.CostoUnitarioAlmacen.ToString("C2") : null),
+            ("Último costo (c/IVA)", !EsModoAlmacen && x.UltimoCostoCompra > 0 ? x.UltimoCostoCompra.ToString("C2") : null),
+            ("Costo por unidad de entrega", !EsModoAlmacen && x.UltimoCostoCompra > 0 ? x.CostoUnitarioAlmacen.ToString("C2") : null),
             ("Código de barras", x.CodigoEfectivo),
             ("Tipo", x.EsHerramienta ? "Herramienta de resguardo" : null)
         });
@@ -304,6 +304,9 @@ public partial class MainWindow
         DgHistPrestamos.ItemsSource = prestamos;
         TabHistPrestamos.Header = $"Préstamos ({prestamos.Count})";
         TabHistPrestamos.Visibility = p.EsHerramienta || prestamos.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (EsModoAlmacen && TabHistEntradas?.Parent is TabControl tcHist && tcHist.SelectedIndex == 0)
+            tcHist.SelectedIndex = 1;
 
         PnlCatalogoPrincipal.Visibility = Visibility.Collapsed;
         PnlHistorialProducto.Visibility = Visibility.Visible;

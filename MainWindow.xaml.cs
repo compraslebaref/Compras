@@ -175,6 +175,7 @@ public partial class MainWindow : FluentWindow
                 PonerEditorProductoEnReposo();
                 IniciarNuevaSolicitudVacia();
                 PonerFormulariosDirectoriosEnBlanco();
+                InicializarRolYCheckpoints();
             });
             TxtOmniScanner.Focus();
         };
@@ -1205,6 +1206,7 @@ public partial class MainWindow : FluentWindow
             var sol = sols.FirstOrDefault(s => CoincideFolioFlexible(s.Folio, code));
             if (sol != null)
             {
+                if (EsModoAlmacen || MainTabControl.SelectedIndex == 5 || string.Equals(sol.Estatus, "Autorizada para Surtir Stock", StringComparison.OrdinalIgnoreCase)) { CargarSolicitudEnSalidaPos(sol); CambiarSeccion(5); return; }
                 CambiarSeccion(3);
                 CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(x => x.Id == sol.Id);
                 return;
@@ -3396,10 +3398,10 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            TxtTituloEditorSolicitud.Text = $"Solicitud Cerrada: {sol.Folio}";
-            TxtEstadoEditorSolicitud.Text = "OC GENERADA (SOLO LECTURA)";
+            TxtTituloEditorSolicitud.Text = $"Solicitud Bloqueada: {sol.Folio}";
+            TxtEstadoEditorSolicitud.Text = $"{sol.Estatus.ToUpperInvariant()} (SOLO LECTURA)";
             BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(107, 114, 128));
-            BtnGuardarSolicitud.Content = "Solicitud con Orden de Compra Generada";
+            BtnGuardarSolicitud.Content = $"Bloqueada ({sol.Estatus}) — Use '+ Crear Anexo'";
             BtnGuardarSolicitud.IsEnabled = false;
             BtnLimpiarPartidasSolicitud.IsEnabled = false;
         }
@@ -3719,7 +3721,7 @@ public partial class MainWindow : FluentWindow
         var sol = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
         if (sol != null && !sol.EsEditable)
         {
-            DialogoFluent.Show(this, $"La solicitud {sol.Folio} ya tiene Orden de Compra generada y no puede modificarse.", "Solo lectura", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogoFluent.Show(this, $"La solicitud {sol.Folio} se encuentra en etapa '{sol.Estatus}' y está bloqueada contra edición.\n\nUse el botón '+ Crear Anexo' arriba a la derecha para agregar artículos adicionales como un anexo vinculado ({sol.Folio}-A1).", "Solicitud bloqueada por etapa", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         return true;
@@ -5627,7 +5629,10 @@ public partial class MainWindow : FluentWindow
             return;
 
         SincronizarRenglonActualDesdeTarjetas();
+        string estAntSol = sol.Estatus;
         DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
+            RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
         RecalcularTotalesComparativa();
         DialogoFluent.Show(this, $"Se guardó el borrador de la comparativa para la solicitud {sol.Folio}.\n\nPuede continuar cotizando más tarde o emitir Órdenes de Compra parciales cuando lo desee.", "Borrador Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
     }
@@ -5669,7 +5674,10 @@ public partial class MainWindow : FluentWindow
         }
 
         SincronizarRenglonActualDesdeTarjetas();
+        string estAntSol = sol.Estatus;
         DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
+            RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
         BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, _renglonesComparativa.ToList());
     }
 
@@ -5682,7 +5690,10 @@ public partial class MainWindow : FluentWindow
         }
 
         SincronizarRenglonActualDesdeTarjetas();
+        string estAntSol = sol.Estatus;
         DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
+            RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
         BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, _renglonesComparativa.ToList(), soloDescargar: true);
     }
 
@@ -5692,7 +5703,10 @@ public partial class MainWindow : FluentWindow
             return;
 
         SincronizarRenglonActualDesdeTarjetas();
+        string estAntSol = sol.Estatus;
         DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList());
+        if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
+            RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
 
         if (sol.EsSoloCotizacion)
         {
@@ -5778,6 +5792,8 @@ public partial class MainWindow : FluentWindow
 
         string folioComp = $"COT-{DateTime.Now:yyyy}-{sol.Id:D4}";
         var ordenesCreadas = DatabaseService.GenerarOrdenesDesdeComparativa(sol, folioComp, _renglonesComparativa.ToList());
+        foreach (var ocGen in ordenesCreadas)
+            RegistrarTransicionCheckpoint("Etapa 3: Emisión OC", "CP-2B", ocGen.Folio, "En Comparativa", ocGen.Estatus, "Dirección, Solicitante, Compras", $"Compras adjudicó proveedor ({ocGen.ProveedorNombre}) y emitió {ocGen.Folio} desde {sol.Folio}. Pendiente Vo.Bo. Dirección.");
 
         CargarTodoElSistema();
         CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
@@ -5886,7 +5902,9 @@ public partial class MainWindow : FluentWindow
         string condicionPago = (CboOcCondicionPago?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? oc.CondicionPago;
         string fechaProg = DpOcFechaProgramadaPago?.SelectedDate?.ToString("yyyy-MM-dd") ?? string.Empty;
 
+        string estatusPrevOc = oc.Estatus;
         DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, nuevoEstatus, condicionPago, fechaProg);
+        RegistrarTransicionCheckpoint("Etapa 3: Orden de Compra", nuevoEstatus.Contains("Lista para Almacén") || nuevoEstatus == "Emitida" ? "CP-4" : "CP-3", oc.Folio, estatusPrevOc, nuevoEstatus, "Almacén, Finanzas", $"Cambio de estatus operativo de {oc.Folio} ({oc.ProveedorNombre}) a '{nuevoEstatus}' ({condicionPago}).");
         CargarTodoElSistema();
         DialogoFluent.Show(this,
             $"Se actualizó el flujo de la Orden de Compra {oc.Folio}:\n• Estatus: {nuevoEstatus}\n• Condición: {condicionPago}\n• Fecha programada/vencimiento: {(string.IsNullOrWhiteSpace(fechaProg) ? "No especificada" : fechaProg)}\n\nLos recordatorios de seguimiento se actualizaron en el Calendario del Dashboard.",
@@ -5973,7 +5991,15 @@ public partial class MainWindow : FluentWindow
             : notas;
 
         bool reservarProyecto = ChkReservarStockProyectoRecepcion?.IsChecked == true;
+        string estatusPrevRecep = oc.Estatus;
+        bool sinAutorizacionOPagoPrevio = estatusPrevRecep.Contains("Pendiente Vo.Bo.", StringComparison.OrdinalIgnoreCase) || estatusPrevRecep.Contains("Pendiente Pago", StringComparison.OrdinalIgnoreCase);
         var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(oc, aRecibir, notasCompletas, reservarProyecto);
+        var ocPost = DatabaseService.ObtenerOrdenesCompra().FirstOrDefault(x => x.Id == oc.Id);
+        string nuevoEstRecep = ocPost?.Estatus ?? "Recibida";
+        if (sinAutorizacionOPagoPrevio)
+            RegistrarTransicionCheckpoint("Etapa 4: Recepción Anticipada", "CP-5B", $"{entrada.Folio} ({oc.Folio})", estatusPrevRecep, nuevoEstRecep, "Compras, Finanzas", $"ALERTA: Almacén recibió mercancía ({entrada.Folio}) de {oc.Folio} que aún figuraba como '{estatusPrevRecep}'. Regularizar Vo.Bo./Pago y subir XML.");
+        else
+            RegistrarTransicionCheckpoint("Etapa 4: Recepción Almacén", "CP-5A", $"{entrada.Folio} ({oc.Folio})", estatusPrevRecep, nuevoEstRecep, "Compras, Solicitante", $"Almacén registró entrada {entrada.Folio} de {oc.Folio} ({oc.ProveedorNombre}). Material disponible en bolsa libre para entrega.");
         TxtNotasRecepcionOc.Clear();
         TxtFolioRemisionRecepcionOc?.Clear();
 
@@ -7236,7 +7262,12 @@ public partial class MainWindow : FluentWindow
                     ?? DatabaseService.ObtenerEncargados(dep.Id).FirstOrDefault()?.Id
                     ?? 1;
 
-        var salida = DatabaseService.RegistrarSalidaAlmacen(dep.Id, encId, proyId, TxtSalNotas.Text, _partidasSalidaPos.ToList(), personaRecibe);
+        string notasSalPrev = TxtSalNotas.Text ?? string.Empty;
+        var salida = DatabaseService.RegistrarSalidaAlmacen(dep.Id, encId, proyId, notasSalPrev, _partidasSalidaPos.ToList(), personaRecibe);
+        RegistrarTransicionCheckpoint("Etapa 5: Salida de Material", "CP-8", salida.Folio, "Disponible en Almacén", "Entregado", "Compras, Solicitante", $"Almacén entregó {salida.Partidas.Count} artículo(s) en el vale {salida.Folio} a '{salida.PersonaRecibeEfectiva}' ({salida.ProyectoNombre}).");
+        var solVinculada = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.Folio) && notasSalPrev.Contains(s.Folio, StringComparison.OrdinalIgnoreCase));
+        if (solVinculada != null && string.Equals(solVinculada.Estatus, "Autorizada para Surtir Stock", StringComparison.OrdinalIgnoreCase))
+            DatabaseService.ActualizarEstatusSolicitud(solVinculada.Id, "Atendida");
         bool incluyeEpp = salida.Partidas.Any(sp =>
         {
             prodsDict.TryGetValue(sp.ProductoId, out var prodObj);
