@@ -45,7 +45,7 @@
 
                 <!-- Izquierda: 5 Menús Desplegables Globales -->
                 <Menu Grid.Column="0" Background="Transparent" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0">
-                    <MenuItem Header="Almacén ▾" Padding="7,4">
+                    <MenuItem Header="Almacén" Padding="7,4">
                         <MenuItem Header="Mapa Gráfico de Anaqueles (A–F y PISO)" InputGestureText="F4" Click="BtnAbrirMapaAnaqueles_Click" />
                         <MenuItem Header="Ir al Catálogo Visual de Productos" InputGestureText="F3" Click="MenuIrCatalogo_Click" />
                         <MenuItem Header="Dar de Alta Nuevo Producto en Catálogo" Click="MenuNuevoProductoCatalogo_Click" />
@@ -57,7 +57,7 @@
                         <MenuItem Header="Imprimir Catálogo de Códigos de Barras" Click="BtnImprimirCatalogoCodigos_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="Compras ▾" Padding="7,4">
+                    <MenuItem Header="Compras" Padding="7,4">
                         <MenuItem Header="Nueva Solicitud de Compra" Click="MenuNuevaSolicitud_Click" />
                         <MenuItem Header="Importar Solicitud desde Plantilla Excel / Web (.csv)" Click="BtnImportarPlantillaSolicitud_Click" />
                         <MenuItem Header="Descargar Formato Estándar de Solicitud (.csv)" Click="BtnExportarPlantillaSolicitud_Click" />
@@ -68,7 +68,7 @@
                         <MenuItem Header="Importar y Consultar Facturas CFDI (XML)" Click="MenuIrFacturasXml_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="Herramientas ▾" Padding="7,4">
+                    <MenuItem Header="Herramientas" Padding="7,4">
                         <MenuItem Header="Vale de Préstamo / Devolución de Herramientas" Click="BtnIrAlmacenPos_Click" />
                         <MenuItem Header="Directorio Individual de Herramientas (HER-xxxx)" Click="MenuIrDirectorioHerramientas_Click" />
                         <MenuItem Header="Consultar Herramientas por Cuadrante (Mapa A–F)" Click="BtnAbrirMapaAnaqueles_Click" />
@@ -76,7 +76,7 @@
                         <MenuItem Header="Generar e Imprimir Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="Reportes ▾" Padding="7,4">
+                    <MenuItem Header="Reportes" Padding="7,4">
                         <MenuItem Header="Ranking de Materiales y Proyección de Compras" Click="MenuIrAnalisisRanking_Click" />
                         <MenuItem Header="Gráficas e Historial de Precios por Producto" Click="MenuIrAnalisisGraficas_Click" />
                         <MenuItem Header="Exportar Inventario por Cuadrante / Anaquel (CSV)" Click="BtnAbrirMapaAnaqueles_Click" />
@@ -84,7 +84,7 @@
                         <MenuItem Header="Actualizar / Refrescar Todo el Sistema" InputGestureText="F5" Click="MenuRefrescarSistema_Click" />
                     </MenuItem>
 
-                    <MenuItem Header="Sistema ▾" Padding="7,4">
+                    <MenuItem Header="Sistema" Padding="7,4">
                         <MenuItem Header="Activar / Cerrar Sesión Perfil Administrador" Click="BtnPerfilAdmin_Click" />
                         <MenuItem Header="Cambiar PIN de Administrador" Click="BtnCambiarPinAdmin_Click" />
                         <MenuItem Header="Crear Respaldo Local de Base de Datos (SQLite)" Click="BtnRespaldarDb_Click" />
@@ -108,7 +108,7 @@
                                    Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                     <ui:TextBox x:Name="TxtOmniScanner"
                                 Grid.Column="1"
-                                PlaceholderText="Escanear código o folio (F2: Escáner | F3: Catálogo | F4: Mapa A–F)..."
+                                PlaceholderText="Escanear folio o código (F2)"
                                 VerticalContentAlignment="Center"
                                 FontSize="12.5"
                                 FontFamily="Consolas"
@@ -1334,7 +1334,7 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                     <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,8,0">
-                                        <MenuItem Header="Exportar / Imprimir ▾" Padding="10,6" FontWeight="SemiBold">
+                                        <MenuItem Header="Exportar / Imprimir" Padding="10,6" FontWeight="SemiBold">
                                             <MenuItem Header="Copiar Lista Limpia para Cotizar" Click="BtnCopiarListaParaCotizar_Click" />
                                             <MenuItem Header="Vista Previa / Imprimir Comparativa" Click="BtnImprimirComparativa_Click" />
                                             <MenuItem Header="Descargar Comparativa (PDF / PNG / CSV)" Click="BtnDescargarComparativaArchivo_Click" />
@@ -1721,51 +1721,148 @@
                     </DockPanel>
                 </TabItem>
 
-                <!-- ==================== TAB 4: ÓRDENES DE COMPRA ==================== -->
+                <!-- ==================== TAB 4: ÓRDENES DE COMPRA (Lista → Detalle) ==================== -->
                 <TabItem>
                     <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="220" />
-                        </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.05*" />
-                                <ColumnDefinition Width="1.15*" />
-                            </Grid.ColumnDefinitions>
+                        <!-- ===== VISTA 1: LISTA DE ÓRDENES DE COMPRA ===== -->
+                        <Border x:Name="PnlOrdenesLista" Padding="16" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                                    <TextBlock Text="Órdenes de compra" FontSize="18" FontWeight="SemiBold" />
+                                    <TextBlock Text="Haga clic en una orden para ver su recepción, estatus y entradas. También puede escanear su folio OC-xxxx." FontSize="12" Opacity="0.72" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
 
-                            <!-- Órdenes de Compra -->
-                            <Border Grid.Column="0" Margin="0,0,10,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                <DockPanel>
-                                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                        <DockPanel Margin="0,0,0,8">
-                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
-                                                <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0">
-                                                    <MenuItem Header="Acciones OC ▾" Padding="10,5" FontWeight="SemiBold" FontSize="11.5">
-                                                        <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
-                                                        <MenuItem Header="Liquidar sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
-                                                        <Separator />
-                                                        <MenuItem Header="Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
-                                                    </MenuItem>
-                                                </Menu>
-                                                <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirOcSeleccionada_Click" />
-                                            </StackPanel>
-                                            <TextBlock Text="Órdenes de Compra" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
-                                        </DockPanel>
+                                <DataGrid x:Name="DgOrdenesCompra"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          SelectionMode="Single"
+                                          SelectionChanged="DgOrdenesCompra_SelectionChanged"
+                                          PreviewMouseLeftButtonUp="DgOrdenesCompra_PreviewMouseLeftButtonUp"
+                                          KeyDown="DgOrdenesCompra_KeyDown">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Abrir orden" Click="BtnAbrirOrdenSeleccionada_Click" FontWeight="Bold" />
+                                            <MenuItem Header="Abrir Recepción Agrupada de esta OC" Click="BtnAbrirModalRecepcionOc_Click" />
+                                            <MenuItem Header="Recibir Todo lo Pendiente de esta OC" Click="BtnRecibirTodoPendienteOc_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Imprimir Orden de Compra" Click="BtnImprimirOcSeleccionada_Click" />
+                                            <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Liquidar OC sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
+                                            <MenuItem Header="Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Copiar Folio de OC" Click="CtxOrdenCompraCopiarFolio_Click" />
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="130" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Destino" Binding="{Binding ProyectoNombre}" Width="1*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="110" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="120" />
+                                        <DataGridTemplateColumn Header="Estatus" Width="200">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
+                                                        <TextBlock Text="{Binding}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </Border>
 
-                                        <!-- Barra de Flujo Operativo: Dirección -> Finanzas -> Almacén -->
-                                        <Border Padding="8" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                            <Grid>
+                        <!-- ===== VISTA 2: DETALLE DE LA ORDEN (con menús internos) ===== -->
+                        <Border x:Name="PnlOrdenDetalle" Visibility="Collapsed" Padding="16" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <DockPanel>
+
+                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                        <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" FontSize="11.5" Margin="0,0,6,0" Click="BtnImprimirOcSeleccionada_Click" />
+                                        <Menu Background="Transparent" VerticalAlignment="Center">
+                                            <MenuItem Header="Más acciones" Padding="10,6" FontWeight="SemiBold">
+                                                <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
+                                                <MenuItem Header="Liquidar sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
+                                                <Separator />
+                                                <MenuItem Header="Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
+                                            </MenuItem>
+                                        </Menu>
+                                    </StackPanel>
+                                    <ui:Button x:Name="BtnVolverListaOrdenes"
+                                               DockPanel.Dock="Left"
+                                               Icon="{ui:SymbolIcon ArrowLeft24}"
+                                               Content="Órdenes"
+                                               FontSize="11.5"
+                                               Margin="0,0,12,0"
+                                               VerticalAlignment="Center"
+                                               ToolTip="Volver a la lista de órdenes de compra"
+                                               Click="BtnVolverListaOrdenes_Click" />
+                                    <TextBlock x:Name="TxtTituloRecepcionOc" Text="Orden de compra" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+
+                                <TabControl Padding="0,8,0,0">
+
+                                    <!-- Menú 1: Recepción de mercancía -->
+                                    <TabItem Header="Recepción">
+                                        <DockPanel Margin="0,4,0,0">
+                                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="1.25*" />
-                                                    <ColumnDefinition Width="1.05*" />
-                                                    <ColumnDefinition Width="125" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Margin="0,0,5,0">
-                                                    <TextBlock Text="Estatus Operativo (Flujo)" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ComboBox x:Name="CboOcEstatusOperativo" FontSize="11.5">
+                                                <TextBlock Grid.Column="0" Text="Folio remisión / nota:" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <ui:TextBox x:Name="TxtFolioRemisionRecepcionOc" Grid.Column="1" Margin="0,0,10,0" PlaceholderText="Ej. REM-4502 / Entrega parcial 1 (opcional)" />
+                                                <CheckBox x:Name="ChkReservarStockProyectoRecepcion" Grid.Column="2" Content="Reservar para proyecto" IsChecked="True" VerticalAlignment="Center" ToolTip="Si la OC pertenece a un Proyecto, aparta este stock o permite generar su salida inmediata" />
+                                            </Grid>
+
+                                            <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                                <TextBlock Text="Observaciones de esta entrega" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                <ui:TextBox x:Name="TxtNotasRecepcionOc" Margin="0,0,0,8" PlaceholderText="Ej. Se recibieron 4 piezas hoy sin daños, quedan pendientes para la próxima semana..." />
+                                                <DockPanel>
+                                                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                                        <ui:Button Content="Recibir todo lo pendiente" Margin="0,0,6,0" Click="BtnRecibirTodoPendienteOc_Click" />
+                                                        <ui:Button Content="Limpiar a 0" Margin="0,0,6,0" Click="BtnLimpiarCantidadesRecepcionOc_Click" />
+                                                        <ui:Button Content="Recepción agrupada" ToolTip="Abre la ventana para marcar qué artículos llegaron y asignar su ubicación en almacén" Click="BtnAbrirModalRecepcionOc_Click" />
+                                                    </StackPanel>
+                                                    <ui:Button DockPanel.Dock="Right" HorizontalAlignment="Right" Content="Registrar entrada a almacén" Appearance="Primary" Click="BtnRegistrarRecepcionOc_Click" />
+                                                </DockPanel>
+                                            </StackPanel>
+
+                                            <DataGrid x:Name="DgPartidasRecepcionOc" AutoGenerateColumns="False" CanUserAddRows="False">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="100" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="U. Compra" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="100" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Factor" Binding="{Binding FactorConversion}" Width="80" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pedida" Binding="{Binding CantidadPedida}" IsReadOnly="True" Width="80" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibida" Binding="{Binding CantidadRecibida}" IsReadOnly="True" Width="95" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pendiente" Binding="{Binding CantidadPendiente}" IsReadOnly="True" Width="100" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibir Hoy" Binding="{Binding CantidadRecibirAhora}" Width="115" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </DockPanel>
+                                    </TabItem>
+
+                                    <!-- Menú 2: Estatus operativo y pago -->
+                                    <TabItem Header="Estatus y pago">
+                                        <StackPanel Margin="0,8,0,0" MaxWidth="760" HorizontalAlignment="Left">
+                                            <TextBlock Text="Flujo operativo: Dirección → Finanzas → Almacén" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,10" />
+                                            <Grid Margin="0,0,0,12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,12">
+                                                    <TextBlock Text="Estatus operativo" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                    <ComboBox x:Name="CboOcEstatusOperativo">
                                                         <ComboBoxItem Content="Pendiente Vo.Bo. Dirección" />
                                                         <ComboBoxItem Content="Autorizada / Pendiente Pago Finanzas" />
                                                         <ComboBoxItem Content="Pagada / Lista para Almacén" />
@@ -1774,169 +1871,72 @@
                                                         <ComboBoxItem Content="Recibida Completa" />
                                                     </ComboBox>
                                                 </StackPanel>
-                                                <StackPanel Grid.Column="1" Margin="3,0,5,0">
-                                                    <TextBlock Text="Condición de Pago" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <ComboBox x:Name="CboOcCondicionPago" FontSize="11.5">
+                                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,12">
+                                                    <TextBlock Text="Condición de pago" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                    <ComboBox x:Name="CboOcCondicionPago">
                                                         <ComboBoxItem Content="Contado (Transferencia previa)" />
                                                         <ComboBoxItem Content="Crédito 15 días" />
                                                         <ComboBoxItem Content="Crédito 30 días" />
                                                     </ComboBox>
                                                 </StackPanel>
-                                                <StackPanel Grid.Column="2" Margin="3,0,5,0">
-                                                    <TextBlock Text="Fecha Prog. / Vo.Bo." FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                                    <DatePicker x:Name="DpOcFechaProgramadaPago" FontSize="11.5" />
+                                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,0">
+                                                    <TextBlock Text="Fecha programada / Vo.Bo." FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                                    <DatePicker x:Name="DpOcFechaProgramadaPago" />
                                                 </StackPanel>
-                                                <ui:Button Grid.Column="3"
-                                                           VerticalAlignment="Bottom"
-                                                           Appearance="Primary"
-                                                           Content="Guardar Flujo"
-                                                           ToolTip="Actualiza el estatus operativo, condición de pago y recordatorio en el Calendario Operativo"
-                                                           Click="BtnActualizarFlujoOc_Click" />
                                             </Grid>
-                                        </Border>
-                                    </StackPanel>
+                                            <ui:Button HorizontalAlignment="Left"
+                                                       Appearance="Primary"
+                                                       Content="Guardar flujo"
+                                                       ToolTip="Actualiza el estatus operativo, condición de pago y recordatorio en el Calendario Operativo"
+                                                       Click="BtnActualizarFlujoOc_Click" />
+                                        </StackPanel>
+                                    </TabItem>
 
-                                    <DataGrid x:Name="DgOrdenesCompra"
-                                              AutoGenerateColumns="False"
-                                              IsReadOnly="True"
-                                              SelectionChanged="DgOrdenesCompra_SelectionChanged"
-                                              MouseDoubleClick="DgOrdenesCompra_MouseDoubleClick">
-                                        <DataGrid.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="Abrir Recepción Agrupada de esta OC (Modal)" Click="BtnAbrirModalRecepcionOc_Click" FontWeight="Bold" />
-                                                <MenuItem Header="Recibir Todo lo Pendiente de esta OC" Click="BtnRecibirTodoPendienteOc_Click" />
-                                                <MenuItem Header="Imprimir Orden de Compra" Click="BtnImprimirOcSeleccionada_Click" />
-                                                <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
-                                                <Separator />
-                                                <MenuItem Header="Liquidar OC sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
-                                                <MenuItem Header="Forzar Estatus de OC (Administrador)" Click="BtnForzarEstatusOcAdmin_Click" />
-                                                <Separator />
-                                                <MenuItem Header="Copiar Folio de OC" Click="CtxOrdenCompraCopiarFolio_Click" />
-                                            </ContextMenu>
-                                        </DataGrid.ContextMenu>
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="105" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Destino" Binding="{Binding ProyectoNombre}" Width="120" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Condición" Binding="{Binding CondicionPago}" Width="105" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="82" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="88" />
-                                            <DataGridTemplateColumn Header="Estatus" Width="145">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
-                                                            <TextBlock Text="{Binding}" />
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </DockPanel>
-                            </Border>
-
-                            <!-- Recepción de Mercancía (Parcial o Completa) -->
-                            <Border Grid.Column="1" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                <DockPanel>
-                                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                        <DockPanel Margin="0,0,0,6">
-                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
-                                                <ui:Button Content="Recibir Todo lo Pendiente"
-                                                           FontSize="11"
-                                                           Margin="0,0,6,0"
-                                                           Click="BtnRecibirTodoPendienteOc_Click" />
-                                                <ui:Button Content="Limpiar a 0"
-                                                           FontSize="11"
-                                                           Click="BtnLimpiarCantidadesRecepcionOc_Click" />
-                                            </StackPanel>
-                                            <TextBlock x:Name="TxtTituloRecepcionOc" Text="Recepción de Mercancía (Parcial / Completa)" FontSize="15.5" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <!-- Menú 3: Entradas registradas -->
+                                    <TabItem Header="Entradas registradas">
+                                        <DockPanel Margin="0,4,0,0">
+                                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
+                                                    <ui:Button Content="Descargar entrada" Margin="0,0,6,0" ToolTip="Descargar Vale de Entrada como archivo PDF, Imagen PNG o Excel CSV" Click="BtnDescargarEntradaSeleccionada_Click" />
+                                                    <ui:Button Content="Imprimir entrada" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirEntradaSeleccionada_Click" />
+                                                </StackPanel>
+                                                <CheckBox x:Name="ChkFiltrarEntradasPorOc"
+                                                          Content="Mostrar solo entregas de esta orden"
+                                                          FontSize="12"
+                                                          VerticalAlignment="Center"
+                                                          Checked="ChkFiltrarEntradasPorOc_Changed"
+                                                          Unchecked="ChkFiltrarEntradasPorOc_Changed" />
+                                            </DockPanel>
+                                            <DataGrid x:Name="DgEntradasHistorial"
+                                                      AutoGenerateColumns="False"
+                                                      IsReadOnly="True"
+                                                      MouseDoubleClick="DgEntradasHistorial_MouseDoubleClick">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="130" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="135" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Remisión / Factura" Binding="{Binding FacturaReferencia}" Width="155" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="180" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoEntrada}" Width="145" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Notas" Binding="{Binding Notas}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
                                         </DockPanel>
+                                    </TabItem>
 
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Folio Remisión / Nota:" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <ui:TextBox x:Name="TxtFolioRemisionRecepcionOc" Grid.Column="1" Margin="0,0,10,0" PlaceholderText="Ej. REM-4502 / Entrega Parcial 1 (Opcional)..." />
-                                            <CheckBox x:Name="ChkReservarStockProyectoRecepcion" Grid.Column="2" Content="Reservar p/ Proyecto" IsChecked="True" VerticalAlignment="Center" ToolTip="Si la OC pertenece a un Proyecto, aparta este stock o permite generar su salida inmediata" />
-                                        </Grid>
-                                    </StackPanel>
-
-                                    <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                                        <TextBlock Text="Observaciones de esta Entrega Parcial o Total" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                        <ui:TextBox x:Name="TxtNotasRecepcionOc" Margin="0,0,0,8" PlaceholderText="Ej. Se recibieron 4 piezas hoy sin daños, quedan pendientes para la próxima semana..." />
-                                        <ui:Button Content="Registrar Entrada a Almacén (Parcial o Completa)"
-                                                   Appearance="Primary"
-                                                   HorizontalAlignment="Stretch"
-                                                   Click="BtnRegistrarRecepcionOc_Click" />
-                                    </StackPanel>
-
-                                    <DataGrid x:Name="DgPartidasRecepcionOc" AutoGenerateColumns="False" CanUserAddRows="False">
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="78" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="U. Compra" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="95" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Factor" Binding="{Binding FactorConversion}" Width="75" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pedida" Binding="{Binding CantidadPedida}" IsReadOnly="True" Width="75" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibida" Binding="{Binding CantidadRecibida}" IsReadOnly="True" Width="90" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pendiente" Binding="{Binding CantidadPendiente}" IsReadOnly="True" Width="95" />
-                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibir Hoy" Binding="{Binding CantidadRecibirAhora}" Width="110" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
-                                </DockPanel>
-                            </Border>
-                        </Grid>
-
-                        <!-- Historial de Entradas -->
-                        <Border Grid.Row="1" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                            <DockPanel>
-                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
-                                        <ui:Button Content="Descargar Entrada"
-                                                   Margin="0,0,6,0"
-                                                   ToolTip="Descargar Vale de Entrada como archivo PDF, Imagen PNG o Excel CSV"
-                                                   Click="BtnDescargarEntradaSeleccionada_Click" />
-                                        <ui:Button Content="Imprimir Entrada" Icon="{ui:SymbolIcon Print24}" Click="BtnImprimirEntradaSeleccionada_Click" />
-                                    </StackPanel>
-                                    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="Historial de Entradas y Recepciones Parciales" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" Margin="0,0,16,0" />
-                                        <CheckBox x:Name="ChkFiltrarEntradasPorOc"
-                                                  Content="Mostrar solo entregas de la OC seleccionada"
-                                                  FontSize="12"
-                                                  VerticalAlignment="Center"
-                                                  Checked="ChkFiltrarEntradasPorOc_Changed"
-                                                  Unchecked="ChkFiltrarEntradasPorOc_Changed" />
-                                    </WrapPanel>
-                                </DockPanel>
-                                <DataGrid x:Name="DgEntradasHistorial"
-                                          AutoGenerateColumns="False"
-                                          IsReadOnly="True"
-                                          MouseDoubleClick="DgEntradasHistorial_MouseDoubleClick">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="120" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="130" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="135" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Remisión / Factura" Binding="{Binding FacturaReferencia}" Width="155" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="180" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="190" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoEntrada}" Width="145" />
-                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Notas" Binding="{Binding Notas}" Width="*" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                </TabControl>
                             </DockPanel>
                         </Border>
+
                     </Grid>
                 </TabItem>
 
-                <!-- ==================== TAB 5: ALMACÉN ==================== -->
+                <!-- ==================== TAB 5: ALMACÉN (con menús internos) ==================== -->
                 <TabItem>
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
-                            <RowDefinition Height="200" />
                         </Grid.RowDefinitions>
 
                         <!-- Barra de Búsqueda y Escaneo de Almacén -->
@@ -1964,7 +1964,7 @@
 
                                 <ui:TextBox x:Name="TxtBuscarAlmacen"
                                             Grid.Column="1"
-                                            PlaceholderText="Buscar en Almacén o escanear código de barras (Producto, Entrada ENT-..., Salida SAL-..., Herramienta HER-... o Préstamo PRE-...)..."
+                                            PlaceholderText="Buscar o escanear: producto, ENT-, SAL-, HER- o PRE-"
                                             VerticalContentAlignment="Center"
                                             FontSize="13"
                                             PreviewKeyDown="TxtBuscarAlmacen_KeyDown"
@@ -1984,15 +1984,9 @@
                             </Grid>
                         </Border>
 
-                        <!-- Cuerpo Central: Salida de Material y Préstamo de Herramienta -->
-                        <Grid Grid.Row="1" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- Izquierda: Salida de Material -->
-                            <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                        <TabControl Grid.Row="1" Padding="0,8,0,0">
+                            <TabItem Header="Salida de material">
+                            <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Top">
                                         <DockPanel Margin="0,0,0,8">
@@ -2089,9 +2083,9 @@
                                     </DataGrid>
                                 </DockPanel>
                             </Border>
-
-                            <!-- Derecha: Préstamo de Herramienta -->
-                            <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            </TabItem>
+                            <TabItem Header="Préstamo de herramientas">
+                            <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Top">
                                         <DockPanel Margin="0,0,0,8">
@@ -2317,10 +2311,9 @@
                                     </DataGrid>
                                 </DockPanel>
                             </Border>
-                        </Grid>
-
-                        <!-- Historial de Vales de Entrada y Salida en Almacén -->
-                        <Border Grid.Row="2" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            </TabItem>
+                            <TabItem Header="Historial de movimientos">
+                        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
@@ -2330,7 +2323,7 @@
                                                    ToolTip="Abrir ventana de devolución agrupada de material para indicar qué regresó y cuánto"
                                                    Click="BtnDevolverMaterialSalida_Click" />
                                         <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0">
-                                            <MenuItem Header="Opciones del Vale ▾" Padding="10,5" FontWeight="SemiBold">
+                                            <MenuItem Header="Opciones del Vale" Padding="10,5" FontWeight="SemiBold">
                                                 <MenuItem Header="Descargar Vale (PDF / PNG / CSV)" Click="BtnDescargarMovimientoAlmacen_Click" />
                                                 <MenuItem Header="Devolver Material Sobrante de Salida" Click="BtnDevolverMaterialSalida_Click" />
                                                 <MenuItem Header="Generar Carta Responsiva de EPP" Click="BtnImprimirCartaResponsivaEpp_Click" />
@@ -2364,6 +2357,8 @@
                                 </DataGrid>
                             </DockPanel>
                         </Border>
+                            </TabItem>
+                        </TabControl>
                     </Grid>
                 </TabItem>
 

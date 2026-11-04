@@ -7461,6 +7461,50 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    /// <summary>Devuelve el elemento de la fila sobre la que se hizo clic (ignora encabezados y espacios vacíos).</summary>
+    private static T? FilaClicada<T>(MouseButtonEventArgs e) where T : class
+    {
+        var origen = e.OriginalSource as DependencyObject;
+        while (origen != null && origen is not DataGridRow && origen is not System.Windows.Controls.Primitives.DataGridColumnHeader)
+            origen = System.Windows.Media.VisualTreeHelper.GetParent(origen);
+
+        return (origen as DataGridRow)?.Item as T;
+    }
+
+    /// <summary>Alterna entre la lista de órdenes de compra y el detalle de la orden seleccionada.</summary>
+    private void MostrarDetalleOrdenCompra(bool detalle)
+    {
+        if (PnlOrdenesLista == null || PnlOrdenDetalle == null) return;
+        PnlOrdenesLista.Visibility = detalle ? Visibility.Collapsed : Visibility.Visible;
+        PnlOrdenDetalle.Visibility = detalle ? Visibility.Visible : Visibility.Collapsed;
+        if (detalle && ChkFiltrarEntradasPorOc != null && ChkFiltrarEntradasPorOc.IsChecked != true)
+            ChkFiltrarEntradasPorOc.IsChecked = true;
+    }
+
+    private void DgOrdenesCompra_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (FilaClicada<OrdenCompra>(e) is OrdenCompra)
+            MostrarDetalleOrdenCompra(true);
+    }
+
+    private void DgOrdenesCompra_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DgOrdenesCompra.SelectedItem is OrdenCompra)
+        {
+            MostrarDetalleOrdenCompra(true);
+            e.Handled = true;
+        }
+    }
+
+    private void BtnAbrirOrdenSeleccionada_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is OrdenCompra)
+            MostrarDetalleOrdenCompra(true);
+    }
+
+    private void BtnVolverListaOrdenes_Click(object sender, RoutedEventArgs e) =>
+        MostrarDetalleOrdenCompra(false);
+
     private void BtnAbrirModalRecepcionOc_Click(object sender, RoutedEventArgs e)
     {
         if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
