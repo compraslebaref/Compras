@@ -482,11 +482,11 @@
 
                                         <DataGrid x:Name="DgDashboardAgenda" AutoGenerateColumns="False" IsReadOnly="True" Height="215" HeadersVisibility="Column">
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="95" />
-                                                <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria}" Width="140" />
-                                                <DataGridTextColumn Header="Evento / Recordatorio" Binding="{Binding Titulo}" Width="*" />
-                                                <DataGridTextColumn Header="Detalle / Referencia" Binding="{Binding Descripcion}" Width="210" />
-                                                <DataGridTemplateColumn Header="Prioridad" Width="85">
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="95" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Categoría" Binding="{Binding Categoria}" Width="140" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Evento / Recordatorio" Binding="{Binding Titulo}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Detalle / Referencia" Binding="{Binding Descripcion}" Width="210" />
+                                                <DataGridTemplateColumn Header="Prioridad" Width="95">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Prioridad}">
@@ -542,10 +542,10 @@
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="110" />
-                                                <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="130" />
-                                                <DataGridTextColumn Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="88" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="110" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="130" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="88" />
                                                 <DataGridTemplateColumn Header="Estatus" Width="138">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
@@ -555,7 +555,7 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </StackPanel>
@@ -585,12 +585,12 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="Código" Binding="{Binding CodigoInterno}" Width="82" />
-                                                <DataGridTextColumn Header="Producto" Binding="{Binding Nombre}" Width="*" />
-                                                <DataGridTextColumn Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="62" />
-                                                <DataGridTextColumn Header="Mínimo" Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="62" />
-                                                <DataGridTextColumn Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="68" />
-                                                <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="68" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding CodigoInterno}" Width="82" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding Nombre}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="75" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mínimo" Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="75" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="90" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="75" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </StackPanel>
@@ -1208,12 +1208,12 @@
                                           CanUserAddRows="False"
                                           CellEditEnding="DgPartidasNuevaSolicitud_CellEditEnding">
                                     <DataGrid.Columns>
-                                        <DataGridCheckBoxColumn Header="Cotizar" Binding="{Binding IncluirEnCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="58" />
-                                        <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
-                                        <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                        <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="85" />
-                                        <DataGridTextColumn Header="Cant." Binding="{Binding CantidadSolicitada, UpdateSourceTrigger=PropertyChanged}" Width="65" />
-                                        <DataGridTextColumn Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="65" />
+                                        <DataGridCheckBoxColumn Header="Cotizar" Binding="{Binding IncluirEnCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="85" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding CantidadSolicitada, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="70" />
                                         <DataGridTemplateColumn Header="Acciones" Width="135">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
@@ -1277,10 +1277,10 @@
                                         </ContextMenu>
                                     </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="100" />
-                                        <DataGridTextColumn Header="Modalidad" Binding="{Binding TipoSolicitud}" Width="135" />
-                                        <DataGridTextColumn Header="Destino / Proyecto" Binding="{Binding ProyectoMostrar}" Width="*" />
-                                        <DataGridTextColumn Header="Artículos" Binding="{Binding ResumenArticulos}" Width="100" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="100" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Modalidad" Binding="{Binding TipoSolicitud}" Width="135" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Destino / Proyecto" Binding="{Binding ProyectoMostrar}" Width="*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículos" Binding="{Binding ResumenArticulos}" Width="100" />
                                         <DataGridTemplateColumn Header="Estatus" Width="125">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
@@ -1359,12 +1359,12 @@
                                                   SelectionChanged="DgComparativa_SelectionChanged"
                                                   CellEditEnding="DgComparativa_CellEditEnding">
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
-                                                <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                                <DataGridTextColumn Header="Cant." Binding="{Binding Cantidad}" Width="58" />
-                                                <DataGridTextColumn Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="58" />
-                                                <DataGridTextColumn Header="Decisión / Ganador" Binding="{Binding EstadoDecisionTexto}" IsReadOnly="True" Width="175" />
-                                                <DataGridTextColumn Header="Total c/IVA" Binding="{Binding TotalGanadorConIva, StringFormat={}{0:C2}}" IsReadOnly="True" Width="95" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="70" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="70" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Decisión / Ganador" Binding="{Binding EstadoDecisionTexto}" IsReadOnly="True" Width="175" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA" Binding="{Binding TotalGanadorConIva, StringFormat={}{0:C2}}" IsReadOnly="True" Width="110" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DockPanel>
@@ -1410,11 +1410,11 @@
                                                   IsReadOnly="True"
                                                   CanUserAddRows="False">
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Proveedor Ganador" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                <DataGridTextColumn Header="Partidas" Binding="{Binding CantidadPartidas}" Width="68" />
-                                                <DataGridTextColumn Header="Entrega" Binding="{Binding DiasEntregaMax, StringFormat={}{0} días}" Width="72" />
-                                                <DataGridTextColumn Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="90" />
-                                                <DataGridTextColumn Header="Total OC c/IVA" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="110" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor Ganador" Binding="{Binding ProveedorNombre}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Partidas" Binding="{Binding CantidadPartidas}" Width="90" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasEntregaMax, StringFormat={}{0} días}" Width="80" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="110" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total OC c/IVA" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="125" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DockPanel>
@@ -1686,13 +1686,13 @@
                                                     </DockPanel>
                                                     <DataGrid x:Name="DgProveedoresExtraComp" AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="150">
                                                         <DataGrid.Columns>
-                                                            <DataGridTextColumn Header="Opción" Binding="{Binding NumeroOpcion}" Width="65" />
-                                                            <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                            <DataGridTextColumn Header="P.U. s/IVA" Binding="{Binding PrecioSinIva, StringFormat={}{0:C2}}" Width="90" />
-                                                            <DataGridTextColumn Header="P.U. c/IVA" Binding="{Binding PrecioConIva, StringFormat={}{0:C2}}" Width="90" />
-                                                            <DataGridTextColumn Header="Entrega" Binding="{Binding DiasEntrega, StringFormat={}{0}d}" Width="68" />
-                                                            <DataGridTextColumn Header="Envío" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="80" />
-                                                            <DataGridTextColumn Header="Notas" Binding="{Binding NotasCotizacion}" Width="120" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Opción" Binding="{Binding NumeroOpcion}" Width="75" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="P.U. s/IVA" Binding="{Binding PrecioSinIva, StringFormat={}{0:C2}}" Width="100" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="P.U. c/IVA" Binding="{Binding PrecioConIva, StringFormat={}{0:C2}}" Width="100" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasEntrega, StringFormat={}{0}d}" Width="80" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Envío" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="80" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Notas" Binding="{Binding NotasCotizacion}" Width="120" />
                                                         </DataGrid.Columns>
                                                     </DataGrid>
                                                 </StackPanel>
@@ -1799,12 +1799,12 @@
                                             </ContextMenu>
                                         </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="105" />
-                                            <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                            <DataGridTextColumn Header="Destino" Binding="{Binding ProyectoNombre}" Width="120" />
-                                            <DataGridTextColumn Header="Condición" Binding="{Binding CondicionPago}" Width="105" />
-                                            <DataGridTextColumn Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="82" />
-                                            <DataGridTextColumn Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="88" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="105" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Destino" Binding="{Binding ProyectoNombre}" Width="120" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Condición" Binding="{Binding CondicionPago}" Width="105" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="82" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="88" />
                                             <DataGridTemplateColumn Header="Estatus" Width="145">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
@@ -1859,14 +1859,14 @@
 
                                     <DataGrid x:Name="DgPartidasRecepcionOc" AutoGenerateColumns="False" CanUserAddRows="False">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="78" />
-                                            <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                            <DataGridTextColumn Header="U. Compra" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="78" />
-                                            <DataGridTextColumn Header="Factor" Binding="{Binding FactorConversion}" Width="58" />
-                                            <DataGridTextColumn Header="Pedida" Binding="{Binding CantidadPedida}" IsReadOnly="True" Width="58" />
-                                            <DataGridTextColumn Header="Recibida" Binding="{Binding CantidadRecibida}" IsReadOnly="True" Width="65" />
-                                            <DataGridTextColumn Header="Pendiente" Binding="{Binding CantidadPendiente}" IsReadOnly="True" Width="68" />
-                                            <DataGridTextColumn Header="Recibir Hoy" Binding="{Binding CantidadRecibirAhora}" Width="82" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="78" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="U. Compra" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="95" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Factor" Binding="{Binding FactorConversion}" Width="75" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pedida" Binding="{Binding CantidadPedida}" IsReadOnly="True" Width="75" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibida" Binding="{Binding CantidadRecibida}" IsReadOnly="True" Width="90" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pendiente" Binding="{Binding CantidadPendiente}" IsReadOnly="True" Width="95" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibir Hoy" Binding="{Binding CantidadRecibirAhora}" Width="110" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -1899,14 +1899,14 @@
                                           IsReadOnly="True"
                                           MouseDoubleClick="DgEntradasHistorial_MouseDoubleClick">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="120" />
-                                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="130" />
-                                        <DataGridTextColumn Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="120" />
-                                        <DataGridTextColumn Header="Remisión / Factura" Binding="{Binding FacturaReferencia}" Width="130" />
-                                        <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="180" />
-                                        <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="190" />
-                                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoEntrada}" Width="145" />
-                                        <DataGridTextColumn Header="Notas" Binding="{Binding Notas}" Width="*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="120" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="130" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="135" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Remisión / Factura" Binding="{Binding FacturaReferencia}" Width="155" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="180" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="190" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoEntrada}" Width="145" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Notas" Binding="{Binding Notas}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
@@ -2054,10 +2054,10 @@
 
                                     <DataGrid x:Name="DgPartidasSalidaPos" AutoGenerateColumns="False" CanUserAddRows="False">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="85" />
-                                            <DataGridTextColumn Header="Material" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                            <DataGridTextColumn Header="Cantidad" Binding="{Binding CantidadEntregada}" Width="80" />
-                                            <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadAlmacen}" IsReadOnly="True" Width="70" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="85" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Material" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cantidad" Binding="{Binding CantidadEntregada}" Width="90" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadAlmacen}" IsReadOnly="True" Width="75" />
                                             <DataGridTemplateColumn Header="Acciones" Width="105">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
@@ -2290,13 +2290,13 @@
                                             </ContextMenu>
                                         </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Folio" Binding="{Binding FolioVale}" Width="90" />
-                                            <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="78" />
-                                            <DataGridTextColumn Header="Herramienta" Binding="{Binding HerramientaDescripcion}" Width="*" />
-                                            <DataGridTextColumn Header="Depto. Aprueba" Binding="{Binding DepartamentoNombre}" Width="105" />
-                                            <DataGridTextColumn Header="Quien Recibe" Binding="{Binding EncargadoNombre}" Width="115" />
-                                            <DataGridTextColumn Header="Fecha Promesa" Binding="{Binding FechaPromesa}" Width="95" />
-                                            <DataGridTextColumn Header="Estado" Binding="{Binding EstadoDevolucion}" Width="88" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding FolioVale}" Width="90" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding CodigoIndividual}" Width="78" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Herramienta" Binding="{Binding HerramientaDescripcion}" Width="*" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Depto. Aprueba" Binding="{Binding DepartamentoNombre}" Width="125" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Quien Recibe" Binding="{Binding EncargadoNombre}" Width="115" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha Promesa" Binding="{Binding FechaPromesa}" Width="120" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estado" Binding="{Binding EstadoDevolucion}" Width="88" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -2338,12 +2338,12 @@
                                         </ContextMenu>
                                     </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="125" />
-                                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoMovimiento}" Width="95" />
-                                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="125" />
-                                        <DataGridTextColumn Header="Responsable / Proveedor" Binding="{Binding ResponsableOProveedor}" Width="210" />
-                                        <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="220" />
-                                        <DataGridTextColumn Header="Detalle / Notas" Binding="{Binding DetalleResumen}" Width="*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="125" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoMovimiento}" Width="95" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="125" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Responsable / Proveedor" Binding="{Binding ResponsableOProveedor}" Width="210" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="220" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Detalle / Notas" Binding="{Binding DetalleResumen}" Width="*" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
@@ -2424,14 +2424,14 @@
 
                                             <DataGrid x:Name="DgXmlConceptosActual" AutoGenerateColumns="False" IsReadOnly="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Clave SAT" Binding="{Binding ClaveProdServ}" Width="90" />
-                                                    <DataGridTextColumn Header="Identificación" Binding="{Binding NoIdentificacion}" Width="120" />
-                                                    <DataGridTextColumn Header="Descripción" Binding="{Binding Descripcion}" Width="*" />
-                                                    <DataGridTextColumn Header="Cant." Binding="{Binding Cantidad}" Width="65" />
-                                                    <DataGridTextColumn Header="Unidad" Binding="{Binding Unidad}" Width="110" />
-                                                    <DataGridTextColumn Header="P. Unitario" Binding="{Binding ValorUnitario, StringFormat={}{0:C2}}" Width="105" />
-                                                    <DataGridTextColumn Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="105" />
-                                                    <DataGridTextColumn Header="Estatus / Producto en Catálogo" Binding="{Binding ProductoVinculadoNombre}" Width="280" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Clave SAT" Binding="{Binding ClaveProdServ}" Width="95" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Identificación" Binding="{Binding NoIdentificacion}" Width="125" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Descripción" Binding="{Binding Descripcion}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="70" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding Unidad}" Width="110" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="P. Unitario" Binding="{Binding ValorUnitario, StringFormat={}{0:C2}}" Width="110" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="105" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estatus / Producto en Catálogo" Binding="{Binding ProductoVinculadoNombre}" Width="280" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2531,12 +2531,12 @@
 
                                         <DataGrid x:Name="DgPartidasCompraSinFactura" AutoGenerateColumns="False" CanUserAddRows="False">
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="95" />
-                                                <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                                <DataGridTextColumn Header="Unidad" Binding="{Binding Unidad}" IsReadOnly="True" Width="105" />
-                                                <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad}" Width="90" />
-                                                <DataGridTextColumn Header="Costo Unitario ($)" Binding="{Binding PrecioUnitarioSinIva, StringFormat={}{0:C2}}" Width="130" />
-                                                <DataGridTextColumn Header="Importe ($)" Binding="{Binding ImporteSinIva, StringFormat={}{0:C2}}" IsReadOnly="True" Width="125" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="95" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding Unidad}" IsReadOnly="True" Width="105" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cantidad" Binding="{Binding Cantidad}" Width="90" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Costo Unitario ($)" Binding="{Binding PrecioUnitarioSinIva, StringFormat={}{0:C2}}" Width="155" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Importe ($)" Binding="{Binding ImporteSinIva, StringFormat={}{0:C2}}" IsReadOnly="True" Width="125" />
                                                 <DataGridTemplateColumn Header="Quitar" Width="85">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
@@ -2565,17 +2565,17 @@
                                 </DockPanel>
                                 <DataGrid x:Name="DgFacturasRegistradas" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="DgFacturasRegistradas_SelectionChanged">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoComprobante}" Width="120" />
-                                        <DataGridTextColumn Header="UUID / Referencia" Binding="{Binding Uuid}" Width="185" />
-                                        <DataGridTextColumn Header="Folio" Binding="{Binding SerieFolio}" Width="95" />
-                                        <DataGridTextColumn Header="Fecha" Binding="{Binding FechaTimbrado}" Width="125" />
-                                        <DataGridTextColumn Header="RFC" Binding="{Binding EmisorRfc}" Width="110" />
-                                        <DataGridTextColumn Header="Proveedor" Binding="{Binding EmisorNombre}" Width="*" />
-                                        <DataGridTextColumn Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="110" />
-                                        <DataGridTextColumn Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="145" />
-                                        <DataGridTextColumn Header="Subtotal" Binding="{Binding Subtotal, StringFormat={}{0:C2}}" Width="90" />
-                                        <DataGridTextColumn Header="IVA" Binding="{Binding Iva, StringFormat={}{0:C2}}" Width="80" />
-                                        <DataGridTextColumn Header="Total" Binding="{Binding Total, StringFormat={}{0:C2}}" Width="95" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoComprobante}" Width="120" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="UUID / Referencia" Binding="{Binding Uuid}" Width="185" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding SerieFolio}" Width="95" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding FechaTimbrado}" Width="125" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="RFC" Binding="{Binding EmisorRfc}" Width="110" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding EmisorNombre}" Width="*" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Orden de Compra" Binding="{Binding OrdenCompraFolio}" Width="135" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="145" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Subtotal" Binding="{Binding Subtotal, StringFormat={}{0:C2}}" Width="90" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="IVA" Binding="{Binding Iva, StringFormat={}{0:C2}}" Width="80" />
+                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding Total, StringFormat={}{0:C2}}" Width="95" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DockPanel>
@@ -2614,18 +2614,18 @@
                                             </ContextMenu>
                                         </DataGrid.ContextMenu>
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Código" Binding="{Binding ProductoCodigo}" Width="88" />
-                                            <DataGridTextColumn Header="Artículo / Material" Binding="{Binding ProductoNombre}" Width="*" />
-                                            <DataGridTextColumn Header="Categoría" Binding="{Binding CategoriaNombre}" Width="140" />
-                                            <DataGridTextColumn Header="Solicitudes" Binding="{Binding FrecuenciaSolicitudes}" Width="78" />
-                                            <DataGridTextColumn Header="Salidas Alm." Binding="{Binding FrecuenciaSalidas}" Width="82" />
-                                            <DataGridTextColumn Header="Consumo Neto" Binding="{Binding CantidadTotalConsumida, StringFormat={}{0:0.##}}" Width="92" />
-                                            <DataGridTextColumn Header="Stock Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="82" />
-                                            <DataGridTextColumn Header="Sugerido Comprar" Binding="{Binding SugerenciaCompra, StringFormat={}{0:0.##}}" Width="105" />
-                                            <DataGridTextColumn Header="Último Precio c/IVA" Binding="{Binding UltimoPrecioConIva, StringFormat={}{0:C2}}" Width="110" />
-                                            <DataGridTextColumn Header="Vigencia Cotización" Binding="{Binding VigenciaPrecioTexto}" Width="125" />
-                                            <DataGridTextColumn Header="Último Proveedor" Binding="{Binding UltimoProveedorNombre}" Width="135" />
-                                            <DataGridTextColumn Header="Prioridad" Binding="{Binding PrioridadAbasto}" Width="145" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="88" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo / Material" Binding="{Binding ProductoNombre}" Width="*" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Categoría" Binding="{Binding CategoriaNombre}" Width="140" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Solicitudes" Binding="{Binding FrecuenciaSolicitudes}" Width="110" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Salidas Alm." Binding="{Binding FrecuenciaSalidas}" Width="115" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Consumo Neto" Binding="{Binding CantidadTotalConsumida, StringFormat={}{0:0.##}}" Width="115" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="115" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Sugerido Comprar" Binding="{Binding SugerenciaCompra, StringFormat={}{0:0.##}}" Width="140" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Último Precio c/IVA" Binding="{Binding UltimoPrecioConIva, StringFormat={}{0:C2}}" Width="160" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Vigencia Cotización" Binding="{Binding VigenciaPrecioTexto}" Width="160" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Último Proveedor" Binding="{Binding UltimoProveedorNombre}" Width="140" />
+                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Prioridad" Binding="{Binding PrioridadAbasto}" Width="145" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -2651,11 +2651,11 @@
                                             <TextBlock DockPanel.Dock="Top" Text="Compras por Proveedor" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
                                             <DataGrid x:Name="DgAnalisisProveedores" AutoGenerateColumns="False" IsReadOnly="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="RFC" Binding="{Binding Rfc}" Width="115" />
-                                                    <DataGridTextColumn Header="Proveedor" Binding="{Binding Proveedor}" Width="*" />
-                                                    <DataGridTextColumn Header="Órdenes" Binding="{Binding NumOrdenes}" Width="85" />
-                                                    <DataGridTextColumn Header="Entrega" Binding="{Binding DiasPromedio}" Width="90" />
-                                                    <DataGridTextColumn Header="Total" Binding="{Binding MontoTotal, StringFormat={}{0:C2}}" Width="125" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="RFC" Binding="{Binding Rfc}" Width="115" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding Proveedor}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Órdenes" Binding="{Binding NumOrdenes}" Width="85" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasPromedio}" Width="90" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding MontoTotal, StringFormat={}{0:C2}}" Width="125" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2672,11 +2672,11 @@
                                                       IsReadOnly="True"
                                                       SelectionChanged="DgAnalisisProductos_SelectionChanged">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="90" />
-                                                    <DataGridTextColumn Header="Producto" Binding="{Binding Producto}" Width="*" />
-                                                    <DataGridTextColumn Header="Frecuencia" Binding="{Binding Frecuencia}" Width="95" />
-                                                    <DataGridTextColumn Header="Cantidad" Binding="{Binding CantidadTotal}" Width="115" />
-                                                    <DataGridTextColumn Header="Importe" Binding="{Binding ImporteTotal, StringFormat={}{0:C2}}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding Codigo}" Width="90" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding Producto}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Frecuencia" Binding="{Binding Frecuencia}" Width="100" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cantidad" Binding="{Binding CantidadTotal}" Width="115" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Importe" Binding="{Binding ImporteTotal, StringFormat={}{0:C2}}" Width="120" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2694,10 +2694,10 @@
                                             <TextBlock DockPanel.Dock="Top" Text="Gasto por Proyecto y Departamento" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
                                             <DataGrid x:Name="DgAnalisisProyectos" AutoGenerateColumns="False" IsReadOnly="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Proyecto" Binding="{Binding Proyecto}" Width="*" />
-                                                    <DataGridTextColumn Header="Departamento / Área" Binding="{Binding Departamento}" Width="155" />
-                                                    <DataGridTextColumn Header="Compras (OCs)" Binding="{Binding TotalCompras, StringFormat={}{0:C2}}" Width="110" />
-                                                    <DataGridTextColumn Header="Salidas Almacén" Binding="{Binding TotalSalidas, StringFormat={}{0:C2}}" Width="110" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding Proyecto}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Departamento / Área" Binding="{Binding Departamento}" Width="160" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Compras (OCs)" Binding="{Binding TotalCompras, StringFormat={}{0:C2}}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Salidas Almacén" Binding="{Binding TotalSalidas, StringFormat={}{0:C2}}" Width="135" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2792,12 +2792,12 @@
                                                       IsReadOnly="True"
                                                       SelectionChanged="DgDirProveedores_SelectionChanged">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="RFC" Binding="{Binding Rfc}" Width="115" />
-                                                    <DataGridTextColumn Header="Nombre Comercial" Binding="{Binding NombreComercial}" Width="155" />
-                                                    <DataGridTextColumn Header="Razón Social" Binding="{Binding RazonSocial}" Width="*" />
-                                                    <DataGridTextColumn Header="Contacto" Binding="{Binding Contacto}" Width="125" />
-                                                    <DataGridTextColumn Header="Teléfono" Binding="{Binding Telefono}" Width="105" />
-                                                    <DataGridTextColumn Header="Condiciones" Binding="{Binding CondicionesPago}" Width="110" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="RFC" Binding="{Binding Rfc}" Width="115" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Nombre Comercial" Binding="{Binding NombreComercial}" Width="155" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Razón Social" Binding="{Binding RazonSocial}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Contacto" Binding="{Binding Contacto}" Width="125" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Teléfono" Binding="{Binding Telefono}" Width="105" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Condiciones" Binding="{Binding CondicionesPago}" Width="110" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2808,12 +2808,12 @@
                                             <TextBlock x:Name="TxtDesgloseProveedorTitulo" DockPanel.Dock="Top" Text="Desglose del Proveedor" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             <DataGrid x:Name="DgDesgloseProveedor" AutoGenerateColumns="False" IsReadOnly="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="120" />
-                                                    <DataGridTextColumn Header="Folio / UUID" Binding="{Binding Folio}" Width="150" />
-                                                    <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="130" />
-                                                    <DataGridTextColumn Header="Detalle / Proyecto" Binding="{Binding Detalle}" Width="*" />
-                                                    <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="135" />
-                                                    <DataGridTextColumn Header="Monto" Binding="{Binding Monto, StringFormat={}{0:C2}}" Width="110" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding Tipo}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio / UUID" Binding="{Binding Folio}" Width="150" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="130" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Detalle / Proyecto" Binding="{Binding Detalle}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estatus" Binding="{Binding Estatus}" Width="135" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Monto" Binding="{Binding Monto, StringFormat={}{0:C2}}" Width="110" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2904,10 +2904,10 @@
                                                       IsReadOnly="True"
                                                       SelectionChanged="DgDirProyectos_SelectionChanged">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="120" />
-                                                    <DataGridTextColumn Header="Proyecto" Binding="{Binding Nombre}" Width="*" />
-                                                    <DataGridTextColumn Header="Cliente / Área" Binding="{Binding ClienteArea}" Width="180" />
-                                                    <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="110" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding Codigo}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding Nombre}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cliente / Área" Binding="{Binding ClienteArea}" Width="180" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estatus" Binding="{Binding Estatus}" Width="110" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2918,12 +2918,12 @@
                                             <TextBlock x:Name="TxtDesgloseProyectoTitulo" DockPanel.Dock="Top" Text="Desglose del Proyecto" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             <DataGrid x:Name="DgDesgloseProyecto" AutoGenerateColumns="False" IsReadOnly="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Movimiento" Binding="{Binding Tipo}" Width="130" />
-                                                    <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="125" />
-                                                    <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="130" />
-                                                    <DataGridTextColumn Header="Responsable / Proveedor" Binding="{Binding Detalle}" Width="*" />
-                                                    <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="130" />
-                                                    <DataGridTextColumn Header="Monto" Binding="{Binding Monto, StringFormat={}{0:C2}}" Width="110" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Movimiento" Binding="{Binding Tipo}" Width="130" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="125" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="130" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Responsable / Proveedor" Binding="{Binding Detalle}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estatus" Binding="{Binding Estatus}" Width="130" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Monto" Binding="{Binding Monto, StringFormat={}{0:C2}}" Width="110" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -2988,10 +2988,10 @@
                                                       IsReadOnly="True"
                                                       SelectionChanged="DgDirPersonal_SelectionChanged">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
-                                                    <DataGridTextColumn Header="Departamento" Binding="{Binding DepartamentoNombre}" Width="190" />
-                                                    <DataGridTextColumn Header="Puesto" Binding="{Binding Puesto}" Width="180" />
-                                                    <DataGridTextColumn Header="Teléfono" Binding="{Binding Telefono}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Nombre" Binding="{Binding Nombre}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Departamento" Binding="{Binding DepartamentoNombre}" Width="190" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Puesto" Binding="{Binding Puesto}" Width="180" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Teléfono" Binding="{Binding Telefono}" Width="120" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -3002,11 +3002,11 @@
                                             <TextBlock x:Name="TxtDesglosePersonalTitulo" DockPanel.Dock="Top" Text="Desglose de Solicitudes, Salidas y Préstamos" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             <DataGrid x:Name="DgDesglosePersonal" AutoGenerateColumns="False" IsReadOnly="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="130" />
-                                                    <DataGridTextColumn Header="Folio" Binding="{Binding Folio}" Width="120" />
-                                                    <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="130" />
-                                                    <DataGridTextColumn Header="Proyecto" Binding="{Binding Detalle}" Width="*" />
-                                                    <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" Width="125" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding Tipo}" Width="130" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="120" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="130" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding Detalle}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estatus" Binding="{Binding Estatus}" Width="125" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -3064,8 +3064,8 @@
                                                           Margin="0,0,0,8"
                                                           SelectionChanged="DgDirDepartamentos_SelectionChanged">
                                                     <DataGrid.Columns>
-                                                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="90" />
-                                                        <DataGridTextColumn Header="Departamento" Binding="{Binding Nombre}" Width="*" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding Codigo}" Width="90" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Departamento" Binding="{Binding Nombre}" Width="*" />
                                                     </DataGrid.Columns>
                                                 </DataGrid>
 
@@ -3136,10 +3136,10 @@
                                                     </ContextMenu>
                                                 </DataGrid.ContextMenu>
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Código" Binding="{Binding CodigoIndividual}" Width="95" />
-                                                    <DataGridTextColumn Header="Herramienta" Binding="{Binding ProductoNombre}" Width="*" />
-                                                    <DataGridTextColumn Header="Marca / Modelo" Binding="{Binding MarcaModelo}" Width="140" />
-                                                    <DataGridTextColumn Header="Núm. Serie" Binding="{Binding NumeroSerie}" Width="115" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding CodigoIndividual}" Width="95" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Herramienta" Binding="{Binding ProductoNombre}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Marca / Modelo" Binding="{Binding MarcaModelo}" Width="140" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Núm. Serie" Binding="{Binding NumeroSerie}" Width="115" />
                                                     <DataGridTemplateColumn Header="Estado" Width="125">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
@@ -3149,8 +3149,8 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTextColumn Header="Ubicación" Binding="{Binding Ubicacion}" Width="105" />
-                                                    <DataGridTextColumn Header="En Resguardo De" Binding="{Binding EncargadoActual}" Width="135" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ubicación" Binding="{Binding Ubicacion}" Width="105" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="En Resguardo De" Binding="{Binding EncargadoActual}" Width="135" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>
@@ -3164,9 +3164,9 @@
                                                       IsReadOnly="True"
                                                       SelectionChanged="DgDirCategorias_SelectionChanged">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="55" />
-                                                    <DataGridTextColumn Header="Nombre de la Categoría" Binding="{Binding Nombre}" Width="240" />
-                                                    <DataGridTextColumn Header="Campos Técnicos de esta Categoría" Binding="{Binding CamposResumen}" Width="*" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="ID" Binding="{Binding Id}" Width="55" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Nombre de la Categoría" Binding="{Binding Nombre}" Width="240" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Campos Técnicos de esta Categoría" Binding="{Binding CamposResumen}" Width="*" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>

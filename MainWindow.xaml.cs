@@ -94,6 +94,24 @@ public partial class MainWindow : FluentWindow
         public SalidaAlmacen? SalidaOriginal { get; set; }
     }
 
+    /// <summary>
+    /// Aplica tema y color de acento del sistema; si Windows (o una política de seguridad)
+    /// no permite leer el acento, usa el acento predeterminado del tema.
+    /// </summary>
+    private static void AplicarTemaNativo(ApplicationTheme tema)
+    {
+        try
+        {
+            ApplicationThemeManager.Apply(tema, WindowBackdropType.Mica, true);
+        }
+        catch (Exception)
+        {
+            ApplicationThemeManager.Apply(tema, WindowBackdropType.Mica, false);
+        }
+    }
+
+    private static Style? CeldaRecortable() => Application.Current.TryFindResource("CeldaRecortableStyle") as Style;
+
     private static Brush Tk(string key) => Application.Current.TryFindResource(key) as Brush ?? Brushes.Gray;
 
     public MainWindow()
@@ -101,11 +119,18 @@ public partial class MainWindow : FluentWindow
         InitializeComponent();
 
         // Integración nativa con Windows: tema (claro/oscuro) y color de acento del sistema
-        var temaSistema = ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark
-            ? ApplicationTheme.Dark
-            : ApplicationTheme.Light;
+        var temaSistema = ApplicationTheme.Light;
+        try
+        {
+            if (ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark)
+                temaSistema = ApplicationTheme.Dark;
+        }
+        catch (Exception)
+        {
+            // Sin acceso al registro: se mantiene el tema claro.
+        }
         _temaOscuroActivo = temaSistema == ApplicationTheme.Dark;
-        ApplicationThemeManager.Apply(temaSistema, WindowBackdropType.Mica, true);
+        AplicarTemaNativo(temaSistema);
         if (BtnAlternarTema != null)
             BtnAlternarTema.Content = _temaOscuroActivo ? "Claro" : "Oscuro";
 
@@ -700,7 +725,7 @@ public partial class MainWindow : FluentWindow
     {
         _temaOscuroActivo = !_temaOscuroActivo;
         var nuevoTema = _temaOscuroActivo ? ApplicationTheme.Dark : ApplicationTheme.Light;
-        ApplicationThemeManager.Apply(nuevoTema, WindowBackdropType.Mica, true);
+        AplicarTemaNativo(nuevoTema);
 
         if (BtnAlternarTema != null)
         {
@@ -786,7 +811,7 @@ public partial class MainWindow : FluentWindow
             return;
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Cambiar PIN de Administrador",
             Width = 390,
             Height = 250,
@@ -868,7 +893,7 @@ public partial class MainWindow : FluentWindow
         }
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Autorización de Administrador Requerida",
             Width = 420,
             Height = 275,
@@ -1761,7 +1786,7 @@ public partial class MainWindow : FluentWindow
     {
         var familias = DatabaseService.ObtenerFamiliasProductos();
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Gestión Manual de Familias / Agrupadores de Productos",
             Width = 540,
             Height = 420,
@@ -2498,7 +2523,7 @@ public partial class MainWindow : FluentWindow
         }
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Registro de Información de Herramienta en Almacén (Directorio HER-xxxx)",
             Width = 860,
             Height = 620,
@@ -2614,12 +2639,12 @@ public partial class MainWindow : FluentWindow
             SelectionMode = DataGridSelectionMode.Single,
             Background = Tk("ControlFillColorDefaultBrush")
         };
-        dgHer.Columns.Add(new DataGridTextColumn { Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 100 });
-        dgHer.Columns.Add(new DataGridTextColumn { Header = "N° de Serie", Binding = new System.Windows.Data.Binding("NumeroSerie"), Width = 130 });
-        dgHer.Columns.Add(new DataGridTextColumn { Header = "Marca / Modelo", Binding = new System.Windows.Data.Binding("MarcaModelo"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dgHer.Columns.Add(new DataGridTextColumn { Header = "Ubicación Almacén", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 135 });
-        dgHer.Columns.Add(new DataGridTextColumn { Header = "Estado", Binding = new System.Windows.Data.Binding("Estado"), Width = 110 });
-        dgHer.Columns.Add(new DataGridTextColumn { Header = "Notas / Accesorios", Binding = new System.Windows.Data.Binding("NotasEstado"), Width = 160 });
+        dgHer.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 100 });
+        dgHer.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "N° de Serie", Binding = new System.Windows.Data.Binding("NumeroSerie"), Width = 130 });
+        dgHer.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Marca / Modelo", Binding = new System.Windows.Data.Binding("MarcaModelo"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgHer.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Ubicación Almacén", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 145 });
+        dgHer.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Estado", Binding = new System.Windows.Data.Binding("Estado"), Width = 110 });
+        dgHer.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Notas / Accesorios", Binding = new System.Windows.Data.Binding("NotasEstado"), Width = 160 });
         tableGroup.Children.Add(dgHer);
 
         Grid.SetRow(tableGroup, 2);
@@ -4909,7 +4934,7 @@ public partial class MainWindow : FluentWindow
 
         int numOpcion = 4 + r.ProveedoresExtra.Count;
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = $"Añadir Opción {numOpcion} de Proveedor — {r.ProductoNombre}",
             Width = 460,
             Height = 365,
@@ -5974,7 +5999,7 @@ public partial class MainWindow : FluentWindow
     private bool ConfirmarNombresConceptosAbiertosEnRecepcion(OrdenCompra oc, List<OrdenCompraPartida> conceptosAbiertos)
     {
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = $"Confirmar Alta en Catálogo de Conceptos Abiertos — {oc.Folio}",
             Width = 560,
             Height = Math.Min(540, 230 + conceptosAbiertos.Count * 86),
@@ -6105,7 +6130,7 @@ public partial class MainWindow : FluentWindow
             return;
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = $"Forzar Estatus de Orden de Compra — {oc.Folio}",
             Width = 500,
             Height = 365,
@@ -6203,7 +6228,7 @@ public partial class MainWindow : FluentWindow
             return;
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = $"Liquidar OC sin Factura XML — {oc.Folio}",
             Width = 460,
             Height = 310,
@@ -7017,7 +7042,7 @@ public partial class MainWindow : FluentWindow
         }
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Cargar Material de OC Recibida en Vale de Salida",
             Width = 520,
             Height = 250,
@@ -7445,7 +7470,7 @@ public partial class MainWindow : FluentWindow
         var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Recepción Agrupada de Orden de Compra en Almacén (OC-xxxx → ENT-xxxx)",
             Width = 1040,
             Height = 640,
@@ -7575,7 +7600,7 @@ public partial class MainWindow : FluentWindow
             Margin = new Thickness(0, 0, 0, 10)
         };
 
-        var colCheckOc = new DataGridTemplateColumn { Header = "☑ ¿Llegó Hoy?", Width = 100 };
+        var colCheckOc = new DataGridTemplateColumn { Header = "☑ ¿Llegó Hoy?", Width = 120 };
         var chkOcFactory = new FrameworkElementFactory(typeof(CheckBox));
         chkOcFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoRecibir")
         {
@@ -7588,13 +7613,13 @@ public partial class MainWindow : FluentWindow
         colCheckOc.CellTemplate = new DataTemplate { VisualTree = chkOcFactory };
         dg.Columns.Add(colCheckOc);
 
-        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 85 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Artículo / Concepto", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dg.Columns.Add(new DataGridTextColumn { Header = "U. Compra", Binding = new System.Windows.Data.Binding("UnidadCompra"), IsReadOnly = true, Width = 78 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Pedida", Binding = new System.Windows.Data.Binding("CantidadPedida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 68 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Recibida", Binding = new System.Windows.Data.Binding("CantidadRecibida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 72 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Pendiente", Binding = new System.Windows.Data.Binding("CantidadPendiente") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 78 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Recibir Hoy", Binding = new System.Windows.Data.Binding("CantidadRecibirAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 105 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 85 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Artículo / Concepto", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "U. Compra", Binding = new System.Windows.Data.Binding("UnidadCompra"), IsReadOnly = true, Width = 95 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pedida", Binding = new System.Windows.Data.Binding("CantidadPedida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 75 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Recibida", Binding = new System.Windows.Data.Binding("CantidadRecibida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 90 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pendiente", Binding = new System.Windows.Data.Binding("CantidadPendiente") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 95 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Recibir Hoy", Binding = new System.Windows.Data.Binding("CantidadRecibirAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 125 });
 
         var colUbiOc = new DataGridTemplateColumn { Header = "📍 Ubicación en Almacén", Width = 185 };
         var cboUbiFactory = new FrameworkElementFactory(typeof(ComboBox));
@@ -7885,7 +7910,7 @@ public partial class MainWindow : FluentWindow
         var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Siguiente Acción del Vale de Entrada (ENT-xxxx): Acomodo en Anaquel o Salida de Material",
             Width = 960,
             Height = 580,
@@ -7962,7 +7987,7 @@ public partial class MainWindow : FluentWindow
             Margin = new Thickness(0, 0, 0, 12)
         };
 
-        var colChk = new DataGridTemplateColumn { Header = "☑ Surtir", Width = 75 };
+        var colChk = new DataGridTemplateColumn { Header = "☑ Surtir", Width = 90 };
         var chkFactory = new FrameworkElementFactory(typeof(CheckBox));
         chkFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoAccion")
         {
@@ -7974,13 +7999,13 @@ public partial class MainWindow : FluentWindow
         colChk.CellTemplate = new DataTemplate { VisualTree = chkFactory };
         dg.Columns.Add(colChk);
 
-        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 90 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Artículo Ingresado", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Ingresó a Stock", Binding = new System.Windows.Data.Binding("CantidadIngresadaAlmacen") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 105 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 75 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Cant. a Surtir", Binding = new System.Windows.Data.Binding("CantidadParaSalida") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 110 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 90 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Artículo Ingresado", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Ingresó a Stock", Binding = new System.Windows.Data.Binding("CantidadIngresadaAlmacen") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 135 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 75 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Cant. a Surtir", Binding = new System.Windows.Data.Binding("CantidadParaSalida") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 145 });
 
-        var colUbi = new DataGridTemplateColumn { Header = "📍 Ubicación en Almacén (Anaquel)", Width = 210 };
+        var colUbi = new DataGridTemplateColumn { Header = "📍 Ubicación en Almacén (Anaquel)", Width = 250 };
         var cboUbiFactory = new FrameworkElementFactory(typeof(ComboBox));
         cboUbiFactory.SetValue(ComboBox.IsEditableProperty, true);
         cboUbiFactory.SetValue(ItemsControl.ItemsSourceProperty, ubicacionesCatalogo);
@@ -8176,7 +8201,7 @@ public partial class MainWindow : FluentWindow
         string obsGlobalUI = TxtObsRetornoHerramienta?.Text?.Trim() ?? string.Empty;
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Devolución Agrupada de Préstamo de Herramientas (PRE-xxxx)",
             Width = 940,
             Height = 580,
@@ -8307,7 +8332,7 @@ public partial class MainWindow : FluentWindow
             Margin = new Thickness(0, 0, 0, 10)
         };
 
-        var colCheck = new DataGridTemplateColumn { Header = "☑ ¿Llegó Hoy?", Width = 105 };
+        var colCheck = new DataGridTemplateColumn { Header = "☑ ¿Llegó Hoy?", Width = 120 };
         var chkFactory = new FrameworkElementFactory(typeof(CheckBox));
         chkFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoDevolver")
         {
@@ -8320,13 +8345,13 @@ public partial class MainWindow : FluentWindow
         colCheck.CellTemplate = new DataTemplate { VisualTree = chkFactory };
         dg.Columns.Add(colCheck);
 
-        dg.Columns.Add(new DataGridTextColumn { Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), IsReadOnly = true, Width = 95 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Herramienta", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Marca / Modelo", Binding = new System.Windows.Data.Binding("MarcaModelo"), IsReadOnly = true, Width = 135 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Estatus Actual", Binding = new System.Windows.Data.Binding("EstadoDevolucion"), IsReadOnly = true, Width = 115 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), IsReadOnly = true, Width = 100 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Herramienta", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1.2, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Marca / Modelo", Binding = new System.Windows.Data.Binding("MarcaModelo"), IsReadOnly = true, Width = 135 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Estatus Actual", Binding = new System.Windows.Data.Binding("EstadoDevolucion"), IsReadOnly = true, Width = 125 });
 
         var estadosRetorno = new[] { "Bueno (Completo)", "Incompleto / Falta Pieza", "Dañado", "Extraviado" };
-        var colEstado = new DataGridTemplateColumn { Header = "Estado en que Regresa", Width = 165 };
+        var colEstado = new DataGridTemplateColumn { Header = "Estado en que Regresa", Width = 175 };
         var cboEstFactory = new FrameworkElementFactory(typeof(ComboBox));
         cboEstFactory.SetValue(ItemsControl.ItemsSourceProperty, estadosRetorno);
         cboEstFactory.SetBinding(System.Windows.Controls.Primitives.Selector.SelectedItemProperty, new System.Windows.Data.Binding("EstadoRetornoSeleccionado")
@@ -8615,7 +8640,7 @@ public partial class MainWindow : FluentWindow
         }
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = "Devolución / Reingreso de Material a Almacén (Completa o Parcial)",
             Width = 860,
             Height = 560,
@@ -8747,7 +8772,7 @@ public partial class MainWindow : FluentWindow
             Margin = new Thickness(0, 0, 0, 10)
         };
 
-        var colCheckMat = new DataGridTemplateColumn { Header = "☑ ¿Regresó?", Width = 95 };
+        var colCheckMat = new DataGridTemplateColumn { Header = "☑ ¿Regresó?", Width = 110 };
         var chkMatFactory = new FrameworkElementFactory(typeof(CheckBox));
         chkMatFactory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("SeleccionadoDevolver")
         {
@@ -8760,13 +8785,13 @@ public partial class MainWindow : FluentWindow
         colCheckMat.CellTemplate = new DataTemplate { VisualTree = chkMatFactory };
         dg.Columns.Add(colCheckMat);
 
-        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 85 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Material / Artículo", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 70 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Entregado", Binding = new System.Windows.Data.Binding("CantidadEntregada") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 85 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Ya Devuelto", Binding = new System.Windows.Data.Binding("CantidadDevuelta") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 90 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Pendiente Máx.", Binding = new System.Windows.Data.Binding("CantidadPendienteDevolver") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 100 });
-        dg.Columns.Add(new DataGridTextColumn { Header = "✏️ Cuánto Regresó Hoy", Binding = new System.Windows.Data.Binding("CantidadDevolverAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 135 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 85 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Material / Artículo", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 75 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Entregado", Binding = new System.Windows.Data.Binding("CantidadEntregada") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 95 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Ya Devuelto", Binding = new System.Windows.Data.Binding("CantidadDevuelta") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 110 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pendiente Máx.", Binding = new System.Windows.Data.Binding("CantidadPendienteDevolver") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 125 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Cuánto Regresó Hoy", Binding = new System.Windows.Data.Binding("CantidadDevolverAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 175 });
 
         Grid.SetRow(dg, 2);
         root.Children.Add(dg);
@@ -10953,7 +10978,7 @@ public partial class MainWindow : FluentWindow
         string subContenedorActual = parsedInicial.SubContenedor;
 
         var win = new Window
-        { Foreground = Tk("TextFillColorPrimaryBrush"),
+        { Foreground = Tk("TextFillColorPrimaryBrush"), MaxHeight = SystemParameters.WorkArea.Height - 20, MaxWidth = SystemParameters.WorkArea.Width - 20,
             Title = modoSelector
                 ? "🗺️ Selector Gráfico de Coordenadas e Inventario por Cuadrante (Anaqueles A–F y PISO)"
                 : "🗺️ Mapa Logístico de Almacén — Consulta e Inventario por Cuadrante (Anaqueles A–F y PISO)",
@@ -11233,11 +11258,11 @@ public partial class MainWindow : FluentWindow
             AlternatingRowBackground = Tk("ControlFillColorSecondaryBrush"),
             FontSize = 11.5
         };
-        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 80 });
-        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("CodigoInterno"), Width = 85 });
-        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Artículo / Material", Binding = new System.Windows.Data.Binding("Nombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Stock", Binding = new System.Windows.Data.Binding("StockActual") { StringFormat = "0.##" }, Width = 65 });
-        dgProdCuadrante.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), Width = 70 });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 95 });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Código", Binding = new System.Windows.Data.Binding("CodigoInterno"), Width = 85 });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Artículo / Material", Binding = new System.Windows.Data.Binding("Nombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Stock", Binding = new System.Windows.Data.Binding("StockActual") { StringFormat = "0.##" }, Width = 70 });
+        dgProdCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), Width = 75 });
         prodDock.Children.Add(dgProdCuadrante);
         Grid.SetRow(prodDock, 2);
         rightGrid.Children.Add(prodDock);
@@ -11266,12 +11291,12 @@ public partial class MainWindow : FluentWindow
             AlternatingRowBackground = Tk("ControlFillColorSecondaryBrush"),
             FontSize = 11.5
         };
-        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 80 });
-        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "ID HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 85 });
-        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Herramienta", Binding = new System.Windows.Data.Binding("ProductoNombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Núm. Serie", Binding = new System.Windows.Data.Binding("NumeroSerie"), Width = 95 });
-        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "Estado", Binding = new System.Windows.Data.Binding("Estado"), Width = 90 });
-        dgHerCuadrante.Columns.Add(new DataGridTextColumn { Header = "En Resguardo De", Binding = new System.Windows.Data.Binding("EncargadoActual"), Width = 125 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 95 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "ID HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 85 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Herramienta", Binding = new System.Windows.Data.Binding("ProductoNombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Núm. Serie", Binding = new System.Windows.Data.Binding("NumeroSerie"), Width = 100 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Estado", Binding = new System.Windows.Data.Binding("Estado"), Width = 90 });
+        dgHerCuadrante.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "En Resguardo De", Binding = new System.Windows.Data.Binding("EncargadoActual"), Width = 135 });
         herDock.Children.Add(dgHerCuadrante);
         Grid.SetRow(herDock, 3);
         rightGrid.Children.Add(herDock);

@@ -158,6 +158,13 @@
                 </Setter>
             </Style>
 
+            <!-- Celdas de texto: recorte con puntos suspensivos y texto completo en tooltip -->
+            <Style x:Key="CeldaRecortableStyle" TargetType="TextBlock">
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
             <!-- Chips de estado en celdas de DataGrid -->
             <Style x:Key="StatusPillBorderStyle" TargetType="Border">
                 <Setter Property="CornerRadius" Value="4" />
