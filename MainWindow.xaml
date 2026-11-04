@@ -288,9 +288,13 @@
 
                 <!-- ==================== TAB 0: INICIO ==================== -->
                 <TabItem>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <DockPanel Margin="0,0,0,12">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,12">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                                     <ui:Button Content="Abrir Mapa de Bodega 3×3" Margin="0,0,8,0" Click="BtnAbrirMapaAnaqueles_Click" />
                                     <ui:Button Content="+ Nueva Solicitud" Appearance="Primary" Click="MenuNuevaSolicitud_Click" />
@@ -301,7 +305,7 @@
                                 </StackPanel>
                             </DockPanel>
 
-                            <UniformGrid Columns="5" Margin="0,0,0,16">
+                            <UniformGrid Grid.Row="1" Columns="5" Margin="0,0,0,12">
                                 <!-- KPI 1: Solicitudes Pendientes -->
                                 <Border Margin="0,0,8,0" Padding="14,12" CornerRadius="4" Cursor="Hand"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
@@ -418,7 +422,87 @@
                                 </Border>
                             </UniformGrid>
 
-                            <Grid Margin="0,0,0,14">
+                        <TabControl Grid.Row="2" Padding="0,8,0,0">
+                            <TabItem Header="Pendientes de atenci&#243;n">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                            <ui:Button DockPanel.Dock="Right" Content="Ver Órdenes" Margin="8,0,0,0" Click="BtnIrRecepciones_Click" />
+                                            <TextBlock Text="Órdenes Pendientes" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <DataGrid x:Name="DgDashboardOcs" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Ir a Recepción de Mercancía de esta OC" Click="CtxDashboardOcRecibir_Click" />
+                                                    <MenuItem Header="Imprimir / Ver Orden de Compra" Click="CtxDashboardOcImprimir_Click" />
+                                                    <Separator />
+                                                    <MenuItem Header="Copiar Folio de OC" Click="CtxDashboardOcCopiarFolio_Click" />
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="110" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="130" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="88" />
+                                                <DataGridTemplateColumn Header="Estatus" Width="138">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
+                                                                <TextBlock Text="{Binding}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
+
+                                <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                            <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" Margin="8,0,0,0" Click="BtnIrAlmacenPos_Click" />
+                                            <TextBlock Text="Alertas de Inventario (Stock Mínimo &gt; Actual)" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <DataGrid x:Name="DgDashboardAlertas" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Agregar a Solicitud de Compra (Reabastecer)" Click="CtxAlertaStockAgregarSolicitud_Click" />
+                                                    <MenuItem Header="Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxAlertaStockMapa_Click" />
+                                                    <MenuItem Header="Abrir Ficha del Producto en Catálogo" Click="CtxAlertaStockEditar_Click" />
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
+                                            <DataGrid.Columns>
+                                                <DataGridTemplateColumn Header="Prioridad" Width="140">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding PrioridadAlertaStock}">
+                                                                <TextBlock Text="{Binding}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding CodigoInterno}" Width="82" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding Nombre}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="75" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mínimo" Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="75" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="90" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="75" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
+                            </Grid>
+                            </TabItem>
+                            <TabItem Header="Agenda y calendario">
+                            <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="320" />
                                     <ColumnDefinition Width="*" />
@@ -426,7 +510,7 @@
 
                                 <!-- Calendario Mensual Interactivo -->
                                 <Border Grid.Column="0" Margin="0,0,8,0" Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
-                                    <StackPanel>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
                                         <DockPanel Margin="0,0,0,6">
                                             <ui:Button DockPanel.Dock="Right" Content="Ver Todo" FontSize="11" Padding="8,3" Margin="8,0,0,0" Click="BtnVerTodasFechasCalendario_Click" />
                                             <TextBlock Text="Calendario Operativo" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" TextWrapping="Wrap" />
@@ -440,7 +524,7 @@
                                                    Opacity="0.78"
                                                    TextWrapping="Wrap"
                                                    Margin="2,6,2,0" />
-                                    </StackPanel>
+                                    </StackPanel></ScrollViewer>
                                 </Border>
 
                                 <!-- Agenda de Recordatorios, Entregas OC y Vencimientos -->
@@ -480,7 +564,7 @@
                                             </Border>
                                         </StackPanel>
 
-                                        <DataGrid x:Name="DgDashboardAgenda" AutoGenerateColumns="False" IsReadOnly="True" Height="215" HeadersVisibility="Column">
+                                        <DataGrid x:Name="DgDashboardAgenda" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="95" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Categoría" Binding="{Binding Categoria}" Width="140" />
@@ -519,85 +603,9 @@
                                     </DockPanel>
                                 </Border>
                             </Grid>
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-
-                                <Border Grid.Column="0" Margin="0,0,8,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
-                                    <StackPanel>
-                                        <DockPanel Margin="0,0,0,10">
-                                            <ui:Button DockPanel.Dock="Right" Content="Ver Órdenes" Margin="8,0,0,0" Click="BtnIrRecepciones_Click" />
-                                            <TextBlock Text="Órdenes Pendientes" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
-                                        </DockPanel>
-                                        <DataGrid x:Name="DgDashboardOcs" AutoGenerateColumns="False" IsReadOnly="True" Height="195" HeadersVisibility="Column">
-                                            <DataGrid.ContextMenu>
-                                                <ContextMenu>
-                                                    <MenuItem Header="Ir a Recepción de Mercancía de esta OC" Click="CtxDashboardOcRecibir_Click" />
-                                                    <MenuItem Header="Imprimir / Ver Orden de Compra" Click="CtxDashboardOcImprimir_Click" />
-                                                    <Separator />
-                                                    <MenuItem Header="Copiar Folio de OC" Click="CtxDashboardOcCopiarFolio_Click" />
-                                                </ContextMenu>
-                                            </DataGrid.ContextMenu>
-                                            <DataGrid.Columns>
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="110" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="130" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="88" />
-                                                <DataGridTemplateColumn Header="Estatus" Width="138">
-                                                    <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate>
-                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
-                                                                <TextBlock Text="{Binding}" />
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellTemplate>
-                                                </DataGridTemplateColumn>
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
-                                    <StackPanel>
-                                        <DockPanel Margin="0,0,0,10">
-                                            <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" Margin="8,0,0,0" Click="BtnIrAlmacenPos_Click" />
-                                            <TextBlock Text="Alertas de Inventario (Stock Mínimo &gt; Actual)" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
-                                        </DockPanel>
-                                        <DataGrid x:Name="DgDashboardAlertas" AutoGenerateColumns="False" IsReadOnly="True" Height="195" HeadersVisibility="Column">
-                                            <DataGrid.ContextMenu>
-                                                <ContextMenu>
-                                                    <MenuItem Header="Agregar a Solicitud de Compra (Reabastecer)" Click="CtxAlertaStockAgregarSolicitud_Click" />
-                                                    <MenuItem Header="Ver / Cambiar Ubicación en Mapa 3×3 (A–F)" Click="CtxAlertaStockMapa_Click" />
-                                                    <MenuItem Header="Abrir Ficha del Producto en Catálogo" Click="CtxAlertaStockEditar_Click" />
-                                                </ContextMenu>
-                                            </DataGrid.ContextMenu>
-                                            <DataGrid.Columns>
-                                                <DataGridTemplateColumn Header="Prioridad" Width="140">
-                                                    <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate>
-                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding PrioridadAlertaStock}">
-                                                                <TextBlock Text="{Binding}" />
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellTemplate>
-                                                </DataGridTemplateColumn>
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding CodigoInterno}" Width="82" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding Nombre}" Width="*" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="75" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mínimo" Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="75" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="90" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="75" />
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
-                        </StackPanel>
-                    </ScrollViewer>
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
                 </TabItem>
 
                 <!-- ==================== TAB 1: CATÁLOGO ==================== -->
