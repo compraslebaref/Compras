@@ -2131,7 +2131,7 @@ public partial class MainWindow : FluentWindow
     {
         if (sender is FrameworkElement fe && fe.Tag is Producto p)
         {
-            CargarProductoEnEditor(p);
+            CargarProductoEnEditor(p, abrirEdicion: true);
             e.Handled = true;
         }
     }
@@ -2144,7 +2144,7 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void CargarProductoEnEditor(Producto p)
+    private void CargarProductoEnEditor(Producto p, bool abrirEdicion = false)
     {
         MostrarPanelEditorCatalogo(true);
         _modoAltaNuevoProducto = false;
@@ -2184,6 +2184,8 @@ public partial class MainWindow : FluentWindow
         ActualizarEtiquetasUnidadesYConversionProducto();
         ActualizarSeleccionCatalogo();
         ActualizarBannerModoEditorProducto(p);
+        ActualizarFichaProducto(p);
+        SeleccionarPestanaPanelProducto(abrirEdicion);
     }
 
     private void PonerEditorProductoEnReposo()
@@ -2224,6 +2226,8 @@ public partial class MainWindow : FluentWindow
         ActualizarEtiquetasUnidadesYConversionProducto();
         ActualizarSeleccionCatalogo();
         ActualizarBannerModoEditorProducto(null);
+        ActualizarFichaProducto(null);
+        SeleccionarPestanaPanelProducto(false);
     }
 
     private void LimpiarEditorProducto()
@@ -2266,6 +2270,8 @@ public partial class MainWindow : FluentWindow
         ActualizarEtiquetasUnidadesYConversionProducto();
         ActualizarSeleccionCatalogo();
         ActualizarBannerModoEditorProducto(null);
+        ActualizarFichaProducto(null);
+        SeleccionarPestanaPanelProducto(true);
     }
 
     private void UnidadOFactorProducto_Changed(object sender, EventArgs e)
@@ -12119,28 +12125,28 @@ public partial class MainWindow : FluentWindow
 
     private void MostrarPanelEditorCatalogo(bool visible)
     {
-        if (ColEditorCatalogo == null || SvEditorProducto == null || BtnToggleEditorCatalogo == null || DockCatalogoIzquierda == null)
+        if (ColEditorCatalogo == null || PnlPanelProducto == null || BtnToggleEditorCatalogo == null || DockCatalogoIzquierda == null)
             return;
 
         if (visible)
         {
-            ColEditorCatalogo.Width = new GridLength(360);
-            SvEditorProducto.Visibility = Visibility.Visible;
+            ColEditorCatalogo.Width = new GridLength(TcPanelProducto?.SelectedIndex == 1 ? AnchoPanelEdicion : AnchoPanelFicha);
+            PnlPanelProducto.Visibility = Visibility.Visible;
             DockCatalogoIzquierda.Margin = new Thickness(0, 0, 12, 0);
-            BtnToggleEditorCatalogo.Content = "⟪ Ocultar Editor";
+            BtnToggleEditorCatalogo.Content = "Ocultar panel";
         }
         else
         {
             ColEditorCatalogo.Width = new GridLength(0);
-            SvEditorProducto.Visibility = Visibility.Collapsed;
+            PnlPanelProducto.Visibility = Visibility.Collapsed;
             DockCatalogoIzquierda.Margin = new Thickness(0);
-            BtnToggleEditorCatalogo.Content = "⟫ Mostrar Editor";
+            BtnToggleEditorCatalogo.Content = "Mostrar panel";
         }
     }
 
     private void BtnToggleEditorCatalogo_Click(object sender, RoutedEventArgs e)
     {
-        bool actualmenteVisible = SvEditorProducto?.Visibility == Visibility.Visible;
+        bool actualmenteVisible = PnlPanelProducto?.Visibility == Visibility.Visible;
         MostrarPanelEditorCatalogo(!actualmenteVisible);
     }
 
@@ -12291,7 +12297,7 @@ public partial class MainWindow : FluentWindow
         var p = ExtraerProductoDesdeMenuItem(sender);
         if (p == null) return;
         CambiarSeccion(1);
-        CargarProductoEnEditor(p);
+        CargarProductoEnEditor(p, abrirEdicion: true);
     }
 
     private void CtxCardAbrirMapaUbicacion_Click(object sender, RoutedEventArgs e)
@@ -12398,7 +12404,7 @@ public partial class MainWindow : FluentWindow
         if (DgDashboardAlertas?.SelectedItem is Producto p)
         {
             CambiarSeccion(1);
-            CargarProductoEnEditor(p);
+            CargarProductoEnEditor(p, abrirEdicion: true);
         }
     }
 
