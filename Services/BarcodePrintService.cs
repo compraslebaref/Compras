@@ -183,9 +183,104 @@ public static class BarcodePrintService
             };
         }).ToList();
 
-        decimal totalEstimadoConIva = renglones
+        var adjudicadosPorProv = renglones
             .Where(r => r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
-            .Sum(r => r.TotalGanadorConIva + r.FleteGanadorConIva);
+            .GroupBy(r => r.ProveedorGanadorId)
+            .Select(g =>
+            {
+                string nomCom = Proveedor.ExtraerNombreComercialCorto(g.First().ProveedorGanadorNombre);
+                int cantPartidas = g.Count();
+                string codigos = string.Join(", ", g.Select(x => string.IsNullOrWhiteSpace(x.ProductoCodigo) ? "CONCEPTO" : x.ProductoCodigo));
+                int diasMax = g.Max(x => x.DiasEntregaGanador);
+                decimal subPartidasSinIva = g.Sum(x => Math.Round(x.Cantidad * x.PrecioUnitarioGanadorSinIva, 2));
+                decimal fleteConIva = g.Sum(x => x.FleteGanadorConIva);
+                decimal fleteSinIva = Math.Round(fleteConIva / 1.16m, 2);
+                decimal subtotalSinIva = Math.Round(subPartidasSinIva + fleteSinIva, 2);
+                decimal iva = Math.Round(subtotalSinIva * 0.16m, 2);
+                decimal totalConIva = Math.Round(subtotalSinIva + iva, 2);
+                string foliosOc = string.Join(", ", g.Where(x => x.TieneOcGenerada).Select(x => x.OrdenCompraFolio).Distinct());
+                string etiquetaProv = string.IsNullOrWhiteSpace(foliosOc) ? nomCom : $"{nomCom} [{foliosOc}]";
+
+                return new
+                {
+                    NombreComercial = etiquetaProv,
+                    PartidasTexto = $"{cantPartidas} ({codigos})",
+                    DiasTexto = $"{diasMax} días",
+                    SubtotalSinIva = subtotalSinIva,
+                    FleteConIva = fleteConIva,
+                    Iva = iva,
+                    TotalConIva = totalConIva,
+                    CantPartidas = cantPartidas
+                };
+            })
+            .OrderByDescending(x => x.TotalConIva)
+            .ToList();
+
+        string[] encTablaFinal =
+        {
+            "#",
+            "Proveedor Adjudicado",
+            "Partidas Adjudicadas",
+            "Entrega",
+            "Subtotal s/IVA",
+            "Envío c/IVA",
+            "IVA (16%)",
+            "Total Adjudicado c/IVA"
+        };
+
+        var filasTablaFinal = new List<string[]>();
+        for (int i = 0; i < adjudicadosPorProv.Count; i++)
+        {
+            var item = adjudicadosPorProv[i];
+            filasTablaFinal.Add(new[]
+            {
+                (i + 1).ToString(),
+                item.NombreComercial,
+                item.PartidasTexto,
+                item.DiasTexto,
+                $"${item.SubtotalSinIva:N2}",
+                $"${item.FleteConIva:N2}",
+                $"${item.Iva:N2}",
+                $"${item.TotalConIva:N2}"
+            });
+        }
+
+        if (adjudicadosPorProv.Count > 0)
+        {
+            decimal sumSub = adjudicadosPorProv.Sum(x => x.SubtotalSinIva);
+            decimal sumFlete = adjudicadosPorProv.Sum(x => x.FleteConIva);
+            decimal sumIva = adjudicadosPorProv.Sum(x => x.Iva);
+            decimal sumTot = adjudicadosPorProv.Sum(x => x.TotalConIva);
+            int sumPartidas = adjudicadosPorProv.Sum(x => x.CantPartidas);
+
+            filasTablaFinal.Add(new[]
+            {
+                "TOT",
+                $"TOTAL GENERAL ({adjudicadosPorProv.Count} Proveedor(es))",
+                $"{sumPartidas} partida(s) adjudicadas",
+                "—",
+                $"${sumSub:N2}",
+                $"${sumFlete:N2}",
+                $"${sumIva:N2}",
+                $"${sumTot:N2}"
+            });
+        }
+        else
+        {
+            filasTablaFinal.Add(new[]
+            {
+                "—",
+                "Sin proveedores adjudicados aún",
+                "0 partidas",
+                "—",
+                "$0.00",
+                "$0.00",
+                "$0.00",
+                "$0.00"
+            });
+        }
+
+        decimal totalEstimadoConIva = adjudicadosPorProv.Sum(x => x.TotalConIva);
 
         var metadatos = new List<(string etiq, string val)>
         {
@@ -206,12 +301,16 @@ public static class BarcodePrintService
             totales: new List<(string, string)>
             {
                 ("Partidas Analizadas:", renglones.Count.ToString()),
+                ("Proveedores Adjudicados:", adjudicadosPorProv.Count.ToString()),
                 ("Total Adjudicado c/IVA:", $"${totalEstimadoConIva:N2}")
             },
             notas: sol.Notas,
             firmaIzquierda: "Elaboró: Gerencia de Compras",
             firmaCentro: $"Revisó: Gerencia de {sol.DepartamentoNombre}",
-            firmaDerecha: "Vo.Bo.: Dirección General");
+            firmaDerecha: "Vo.Bo.: Dirección General",
+            tituloTablaSecundaria: "TABLA FINAL DE TOTALES POR PROVEEDOR ADJUDICADO",
+            encabezadosTablaSecundaria: encTablaFinal,
+            filasTablaSecundaria: filasTablaFinal);
 
         if (soloDescargar)
         {
@@ -1006,13 +1105,50 @@ public static class BarcodePrintService
         string firmaIzquierda,
         string firmaDerecha,
         string? firmaCentro,
-        string? clausulaLegal)
+        string? clausulaLegal,
+        string? tituloTablaSecundaria = null,
+        string[]? encabezadosTablaSecundaria = null,
+        List<string[]>? filasTablaSecundaria = null)
     {
         var bloque = new StackPanel
         {
             Width = AnchoContenidoCartaDip,
             Margin = new Thickness(0, 10, 0, 0)
         };
+
+        if (encabezadosTablaSecundaria != null && encabezadosTablaSecundaria.Length > 0 &&
+            filasTablaSecundaria != null && filasTablaSecundaria.Count > 0)
+        {
+            var secContainer = new StackPanel { Margin = new Thickness(0, 2, 0, 14) };
+            if (!string.IsNullOrWhiteSpace(tituloTablaSecundaria))
+            {
+                secContainer.Children.Add(new TextBlock
+                {
+                    Text = tituloTablaSecundaria,
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+                    Margin = new Thickness(0, 0, 0, 5)
+                });
+            }
+
+            secContainer.Children.Add(CrearFilaTablaDocumento(encabezadosTablaSecundaria, encabezadosTablaSecundaria, true, 0));
+            for (int i = 0; i < filasTablaSecundaria.Count; i++)
+            {
+                var filaSec = CrearFilaTablaDocumento(encabezadosTablaSecundaria, filasTablaSecundaria[i], false, i);
+                if (filasTablaSecundaria[i].Length > 0 && filasTablaSecundaria[i][0] == "TOT")
+                {
+                    foreach (var child in filaSec.Children.OfType<Border>())
+                    {
+                        child.Background = new SolidColorBrush(Color.FromRgb(226, 232, 240));
+                        if (child.Child is TextBlock tb)
+                            tb.FontWeight = FontWeights.Bold;
+                    }
+                }
+                secContainer.Children.Add(filaSec);
+            }
+            bloque.Children.Add(secContainer);
+        }
 
         var bottomGrid = new Grid { Margin = new Thickness(0, 0, 0, 20) };
         bottomGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
@@ -1147,7 +1283,10 @@ public static class BarcodePrintService
         string firmaIzquierda,
         string firmaDerecha,
         string? firmaCentro = null,
-        string? clausulaLegal = null)
+        string? clausulaLegal = null,
+        string? tituloTablaSecundaria = null,
+        string[]? encabezadosTablaSecundaria = null,
+        List<string[]>? filasTablaSecundaria = null)
     {
         const double altoPiePagina = 26.0;
         double altoDisponiblePorHoja = AltoContenidoUtilCartaDip - altoPiePagina; // 974 DIPs útiles por hoja
@@ -1162,7 +1301,7 @@ public static class BarcodePrintService
         var muestraCabeceraTabla = CrearFilaTablaDocumento(encabezadosTabla, encabezadosTabla, true, 0);
         double altoCabeceraTabla = MedirAltoElementoCarta(muestraCabeceraTabla);
 
-        var bloqueCierre = CrearBloqueCierreDocumento(totales, notas, firmaIzquierda, firmaDerecha, firmaCentro, clausulaLegal);
+        var bloqueCierre = CrearBloqueCierreDocumento(totales, notas, firmaIzquierda, firmaDerecha, firmaCentro, clausulaLegal, tituloTablaSecundaria, encabezadosTablaSecundaria, filasTablaSecundaria);
         double altoBloqueCierre = MedirAltoElementoCarta(bloqueCierre);
 
         // Pre-medimos cada fila de datos para paginar sin cortar ninguna fila a la mitad
@@ -1299,7 +1438,10 @@ public static class BarcodePrintService
                     firmaIzquierda,
                     firmaDerecha,
                     firmaCentro,
-                    clausulaLegal));
+                    clausulaLegal,
+                    tituloTablaSecundaria,
+                    encabezadosTablaSecundaria,
+                    filasTablaSecundaria));
             }
 
             dockHoja.Children.Add(cuerpoHoja);
@@ -1328,6 +1470,9 @@ public static class BarcodePrintService
             Metadatos = metadatos,
             EncabezadosTabla = encabezadosTabla,
             FilasTabla = filasTabla,
+            TituloTablaSecundaria = tituloTablaSecundaria,
+            EncabezadosTablaSecundaria = encabezadosTablaSecundaria ?? Array.Empty<string>(),
+            FilasTablaSecundaria = filasTablaSecundaria ?? new List<string[]>(),
             Totales = totales,
             Notas = notas,
             ClausulaLegal = clausulaLegal,
@@ -1346,6 +1491,9 @@ public static class BarcodePrintService
         public List<(string etiq, string val)> Metadatos { get; init; } = new();
         public string[] EncabezadosTabla { get; init; } = Array.Empty<string>();
         public List<string[]> FilasTabla { get; init; } = new();
+        public string? TituloTablaSecundaria { get; init; }
+        public string[] EncabezadosTablaSecundaria { get; init; } = Array.Empty<string>();
+        public List<string[]> FilasTablaSecundaria { get; init; } = new();
         public List<(string etiq, string val)> Totales { get; init; } = new();
         public string Notas { get; init; } = string.Empty;
         public string? ClausulaLegal { get; init; }
@@ -1750,6 +1898,18 @@ public static class BarcodePrintService
                 sb.AppendLine(string.Join(",", fila.Select(c => $"\"{(c ?? string.Empty).Replace("\"", "\"\"")}\"")));
             }
             sb.AppendLine();
+
+            if (datos.EncabezadosTablaSecundaria.Length > 0 && datos.FilasTablaSecundaria.Count > 0)
+            {
+                if (!string.IsNullOrWhiteSpace(datos.TituloTablaSecundaria))
+                    sb.AppendLine($"\"{datos.TituloTablaSecundaria.Replace("\"", "\"\"")}\"");
+                sb.AppendLine(string.Join(",", datos.EncabezadosTablaSecundaria.Select(h => $"\"{h.Replace("\"", "\"\"")}\"")));
+                foreach (var filaSec in datos.FilasTablaSecundaria)
+                {
+                    sb.AppendLine(string.Join(",", filaSec.Select(c => $"\"{(c ?? string.Empty).Replace("\"", "\"\"")}\"")));
+                }
+                sb.AppendLine();
+            }
 
             foreach (var (etiq, val) in datos.Totales)
             {

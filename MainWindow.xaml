@@ -1530,6 +1530,29 @@
                                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                                             <TextBlock Text="Artículos de la solicitud: haga clic en uno para comparar proveedores" FontWeight="Bold" FontSize="13.5" VerticalAlignment="Center" />
                                         </DockPanel>
+                                        <Border x:Name="BdrTablaFinalTotalesAdjudicados" DockPanel.Dock="Bottom" Margin="0,10,0,0" Padding="10,8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,6">
+                                                    <TextBlock x:Name="TxtGranTotalAdjudicadoComp" DockPanel.Dock="Right" Text="Gran Total Adjudicado c/IVA: $0.00" FontWeight="Bold" FontSize="12.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="Tabla Final: Totales por Proveedor Adjudicado" FontWeight="Bold" FontSize="12.5" VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <DataGrid x:Name="DgTotalesAdjudicadosComp" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="145">
+                                                    <DataGrid.Columns>
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor Adjudicado" Binding="{Binding ProveedorNombre}" Width="185" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Partidas" Binding="{Binding CantidadPartidas}" Width="70" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículos / Códigos" Binding="{Binding ProductosResumen}" Width="*" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasEntregaMax, StringFormat={}{0} días}" Width="75" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Subtotal s/IVA" Binding="{Binding SubtotalSinIva, StringFormat={}{0:C2}}" Width="105" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="95" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="IVA (16%)" Binding="{Binding IvaTotal, StringFormat={}{0:C2}}" Width="95" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total Adjudicado c/IVA" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="135" FontWeight="Bold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estatus OC" Binding="{Binding EstadoEmision}" Width="140" />
+                                                    </DataGrid.Columns>
+                                                </DataGrid>
+                                            </StackPanel>
+                                        </Border>
+                                        <DockPanel DockPanel.Dock="Top" Height="0">
+                                        </DockPanel>
 
                                         <DataGrid x:Name="DgComparativa"
                                                   AutoGenerateColumns="False"
@@ -1886,7 +1909,10 @@
                                                   IsReadOnly="True"
                                                   CanUserAddRows="False">
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor Ganador" Binding="{Binding ProveedorNombre}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor Adjudicado" Binding="{Binding ProveedorNombre}" Width="185" FontWeight="SemiBold" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículos / Códigos" Binding="{Binding ProductosResumen}" Width="*" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Subtotal s/IVA" Binding="{Binding SubtotalSinIva, StringFormat={}{0:C2}}" Width="105" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="IVA (16%)" Binding="{Binding IvaTotal, StringFormat={}{0:C2}}" Width="95" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Partidas" Binding="{Binding CantidadPartidas}" Width="90" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasEntregaMax, StringFormat={}{0} días}" Width="80" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="110" />

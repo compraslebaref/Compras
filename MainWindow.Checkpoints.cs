@@ -959,6 +959,52 @@ public partial class MainWindow
 
         ColCompTablaProv2.Visibility = mostrarCol2 ? Visibility.Visible : Visibility.Collapsed;
         ColCompTablaProv3.Visibility = mostrarCol3 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Actualizar Tabla Final de Totales por Proveedor Adjudicado
+        var adjudicados = _renglonesComparativa
+            .Where(r => r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
+            .GroupBy(r => r.ProveedorGanadorId)
+            .Select(g =>
+            {
+                string nomCom = Proveedor.ExtraerNombreComercialCorto(g.First().ProveedorGanadorNombre);
+                decimal subPartidas = g.Sum(x => Math.Round(x.Cantidad * x.PrecioUnitarioGanadorSinIva, 2));
+                decimal fleteConIva = g.Sum(x => x.FleteGanadorConIva);
+                decimal fleteSinIva = Math.Round(fleteConIva / 1.16m, 2);
+                decimal subTotal = Math.Round(subPartidas + fleteSinIva, 2);
+                decimal iva = Math.Round(subTotal * 0.16m, 2);
+                decimal total = Math.Round(subTotal + iva, 2);
+                var foliosOc = g.Where(x => x.TieneOcGenerada).Select(x => x.OrdenCompraFolio).Distinct().ToList();
+                int pendientesOc = g.Count(x => !x.TieneOcGenerada);
+                string estado = foliosOc.Count > 0 && pendientesOc == 0
+                    ? $"OC: {string.Join(", ", foliosOc)}"
+                    : (foliosOc.Count > 0 ? $"Parcial ({string.Join(", ", foliosOc)})" : "Lista para emitir OC");
+
+                return new ResumenOcPrevia
+                {
+                    ProveedorId = g.Key,
+                    ProveedorNombre = nomCom,
+                    CantidadPartidas = g.Count(),
+                    ProductosResumen = string.Join(", ", g.Select(x => string.IsNullOrWhiteSpace(x.ProductoCodigo) ? "CONCEPTO" : x.ProductoCodigo)),
+                    DiasEntregaMax = g.Max(x => x.DiasEntregaGanador),
+                    SubtotalSinIva = subTotal,
+                    FleteConIva = fleteConIva,
+                    IvaTotal = iva,
+                    TotalConIva = total,
+                    EstadoEmision = estado
+                };
+            })
+            .OrderByDescending(x => x.TotalConIva)
+            .ToList();
+
+        if (DgTotalesAdjudicadosComp != null)
+            DgTotalesAdjudicadosComp.ItemsSource = adjudicados;
+
+        if (TxtGranTotalAdjudicadoComp != null)
+        {
+            decimal granTotal = adjudicados.Sum(x => x.TotalConIva);
+            int totalPartAdj = adjudicados.Sum(x => x.CantidadPartidas);
+            TxtGranTotalAdjudicadoComp.Text = $"Proveedores Adjudicados: {adjudicados.Count} ({totalPartAdj} partidas) | Gran Total c/IVA: {granTotal:C2}";
+        }
     }
 
     private void BtnNuevoProveedorRapidoComp_Click(object sender, RoutedEventArgs e)
