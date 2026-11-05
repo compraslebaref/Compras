@@ -241,14 +241,14 @@ public static class BarcodePrintService
             }
 
             celdas.Add(r.ProveedorGanadorId > 0 ? $"{Proveedor.ExtraerNombreComercialCorto(r.ProveedorGanadorNombre)} (${r.PrecioUnitarioGanadorConIva:N2})" : "Sin adjudicar");
-            celdas.Add(r.VigenciaEstadoTexto);
+
             return celdas.ToArray();
         }).ToList();
 
         var encabezadosLista = new List<string> { "#", "Código", "Artículo / Concepto", "Cant." };
         encabezadosLista.AddRange(columnasProveedores.Select(c => c.nombreCorto));
         encabezadosLista.Add("Selección");
-        encabezadosLista.Add("Vigencia");
+
         string[] encabezadosTablaComp = encabezadosLista.ToArray();
 
         var adjudicadosPorProv = renglones
@@ -1117,10 +1117,10 @@ public static class BarcodePrintService
             double starWidth = c switch
             {
                 0 when encabezadosTabla[0] == "#" => 0.38,
-                1 when encabezadosTabla[0] == "#" && encabezadosTabla.Length >= 8 => 0.85,
-                2 when encabezadosTabla.Length >= 8 => 1.95,
+                1 when encabezadosTabla[0] == "#" && encabezadosTabla.Length >= 7 => 0.85,
+                2 when encabezadosTabla.Length >= 7 => 2.05,
                 2 => 2.4,
-                3 when encabezadosTabla.Length >= 8 && encabezadosTabla[3].StartsWith("Cant", StringComparison.OrdinalIgnoreCase) => 0.68,
+                3 when encabezadosTabla.Length >= 7 && encabezadosTabla[3].StartsWith("Cant", StringComparison.OrdinalIgnoreCase) => 0.72,
                 _ => 1.0
             };
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition
