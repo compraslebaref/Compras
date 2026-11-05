@@ -257,6 +257,11 @@ public class Solicitud
     public decimal TotalArticulos => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadSolicitada) : 0m;
     public string ResumenArticulos => $"{TotalSkus} SKUs ({TotalArticulos:0.##} pzas)";
     public bool EsEditable => Id == 0 || string.Equals(Estatus, "Pendiente", StringComparison.OrdinalIgnoreCase);
+    public bool PermiteEditarUnidadYQuitarConceptos =>
+        EsEditable ||
+        string.Equals(Estatus, "En Comparativa", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(Estatus, "Parcial en OC", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(Estatus, "Cotización Entregada", StringComparison.OrdinalIgnoreCase);
     public override string ToString() => Id == 0
         ? "📋 [Nueva Solicitud en Captura]"
         : $"{Folio} | {ProyectoMostrar} [{TipoSolicitud}] ({TotalSkus} art. - {EncargadoNombre})";

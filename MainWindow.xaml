@@ -1507,11 +1507,11 @@
                                                       CanUserAddRows="False"
                                                       CellEditEnding="DgPartidasNuevaSolicitud_CellEditEnding">
                                                 <DataGrid.Columns>
-                                                    <DataGridCheckBoxColumn Header="Cotizar" Binding="{Binding IncluirEnCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                                                    <DataGridCheckBoxColumn x:Name="ColSolPartidaCotizar" Header="Cotizar" Binding="{Binding IncluirEnCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="100" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" IsReadOnly="False" Width="95" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding CantidadSolicitada, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                                                    <DataGridTextColumn x:Name="ColSolPartidaUnidad" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" IsReadOnly="False" Width="95" />
+                                                    <DataGridTextColumn x:Name="ColSolPartidaCantidad" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding CantidadSolicitada, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="80" />
                                                     <DataGridTemplateColumn Header="Acciones" Width="150">
                                                         <DataGridTemplateColumn.CellTemplate>

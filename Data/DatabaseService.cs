@@ -2671,6 +2671,23 @@ VALUES (
             pCmd.Parameters.AddWithValue("$vig", prev?.DiasVigenciaCotizacion ?? (item.DiasVigenciaCotizacion > 0 ? item.DiasVigenciaCotizacion : 15));
             pCmd.Parameters.AddWithValue("$fcot", prev?.FechaCotizacion ?? item.FechaCotizacion ?? string.Empty);
             pCmd.ExecuteNonQuery();
+
+            if (prev != null && prev.Id > 0)
+            {
+                using var idCmd = conn.CreateCommand();
+                idCmd.Transaction = tx;
+                idCmd.CommandText = "SELECT last_insert_rowid();";
+                int nuevoSpId = Convert.ToInt32(idCmd.ExecuteScalar());
+                if (nuevoSpId > 0)
+                {
+                    using var relinkCmd = conn.CreateCommand();
+                    relinkCmd.Transaction = tx;
+                    relinkCmd.CommandText = "UPDATE CotizacionesPartidaProveedor SET SolicitudPartidaId = $newId WHERE SolicitudPartidaId = $oldId";
+                    relinkCmd.Parameters.AddWithValue("$newId", nuevoSpId);
+                    relinkCmd.Parameters.AddWithValue("$oldId", prev.Id);
+                    relinkCmd.ExecuteNonQuery();
+                }
+            }
         }
 
         tx.Commit();
@@ -2700,6 +2717,82 @@ VALUES (
         cmd.Parameters.AddWithValue("$est", estatus);
         cmd.Parameters.AddWithValue("$id", solicitudId);
         cmd.ExecuteNonQuery();
+    }
+
+    public static void ActualizarUnidadPartidaEnSolicitud(int solicitudPartidaId, int solicitudId, int productoId, string? descripcionLibre, string nuevaUnidad)
+    {
+        string uNorm = NormalizarUnidadMedida(nuevaUnidad);
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        if (solicitudPartidaId > 0)
+        {
+            cmd.CommandText = "UPDATE SolicitudPartidas SET UnidadLibre = $u WHERE Id = $id AND COALESCE(OrdenCompraId, 0) = 0";
+            cmd.Parameters.AddWithValue("$u", uNorm);
+            cmd.Parameters.AddWithValue("$id", solicitudPartidaId);
+            cmd.ExecuteNonQuery();
+        }
+        else if (solicitudId > 0)
+        {
+            cmd.CommandText = @"
+UPDATE SolicitudPartidas
+SET UnidadLibre = $u
+WHERE SolicitudId = $sid
+  AND COALESCE(OrdenCompraId, 0) = 0
+  AND (($pid > 0 AND ProductoId = $pid) OR ($pid <= 0 AND UPPER(TRIM(DescripcionLibre)) = UPPER(TRIM($dlib))))";
+            cmd.Parameters.AddWithValue("$u", uNorm);
+            cmd.Parameters.AddWithValue("$sid", solicitudId);
+            cmd.Parameters.AddWithValue("$pid", productoId);
+            cmd.Parameters.AddWithValue("$dlib", (descripcionLibre ?? string.Empty).Trim());
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public static void EliminarPartidaEspecificaDeSolicitud(int solicitudPartidaId, int solicitudId, int productoId, string? descripcionLibre)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        int targetId = solicitudPartidaId;
+        if (targetId <= 0 && solicitudId > 0)
+        {
+            using var findCmd = conn.CreateCommand();
+            findCmd.Transaction = tx;
+            findCmd.CommandText = @"
+SELECT Id FROM SolicitudPartidas
+WHERE SolicitudId = $sid
+  AND COALESCE(OrdenCompraId, 0) = 0
+  AND (($pid > 0 AND ProductoId = $pid) OR ($pid <= 0 AND UPPER(TRIM(DescripcionLibre)) = UPPER(TRIM($dlib))))
+LIMIT 1";
+            findCmd.Parameters.AddWithValue("$sid", solicitudId);
+            findCmd.Parameters.AddWithValue("$pid", productoId);
+            findCmd.Parameters.AddWithValue("$dlib", (descripcionLibre ?? string.Empty).Trim());
+            var obj = findCmd.ExecuteScalar();
+            if (obj != null && obj != DBNull.Value)
+                targetId = Convert.ToInt32(obj);
+        }
+
+        if (targetId > 0)
+        {
+            using (var delExtra = conn.CreateCommand())
+            {
+                delExtra.Transaction = tx;
+                delExtra.CommandText = "DELETE FROM CotizacionesPartidaProveedor WHERE SolicitudPartidaId = $spid";
+                delExtra.Parameters.AddWithValue("$spid", targetId);
+                delExtra.ExecuteNonQuery();
+            }
+
+            using (var delSp = conn.CreateCommand())
+            {
+                delSp.Transaction = tx;
+                delSp.CommandText = "DELETE FROM SolicitudPartidas WHERE Id = $spid AND COALESCE(OrdenCompraId, 0) = 0";
+                delSp.Parameters.AddWithValue("$spid", targetId);
+                delSp.ExecuteNonQuery();
+            }
+        }
+
+        tx.Commit();
     }
 
     public static EntradaAlmacen RegistrarEntradaDirectaSinOc(

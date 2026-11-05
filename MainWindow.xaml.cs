@@ -3414,6 +3414,9 @@ public partial class MainWindow : FluentWindow
             TxtEstadoEditorSolicitud.Text = "EN CAPTURA";
             BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(29, 78, 216));
             BtnGuardarSolicitud.Content = "Guardar Solicitud de Compra";
+            if (ColSolPartidaCotizar != null) ColSolPartidaCotizar.IsReadOnly = false;
+            if (ColSolPartidaUnidad != null) ColSolPartidaUnidad.IsReadOnly = false;
+            if (ColSolPartidaCantidad != null) ColSolPartidaCantidad.IsReadOnly = false;
             BtnGuardarSolicitud.IsEnabled = true;
             BtnLimpiarPartidasSolicitud.IsEnabled = true;
         }
@@ -3423,6 +3426,9 @@ public partial class MainWindow : FluentWindow
             TxtEstadoEditorSolicitud.Text = $"ABIERTA ({sol.TotalSkus} SKUs)";
             BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(5, 150, 105));
             BtnGuardarSolicitud.Content = $"Guardar Cambios en {sol.Folio} e Ir a Comparativa";
+            if (ColSolPartidaCotizar != null) ColSolPartidaCotizar.IsReadOnly = false;
+            if (ColSolPartidaUnidad != null) ColSolPartidaUnidad.IsReadOnly = false;
+            if (ColSolPartidaCantidad != null) ColSolPartidaCantidad.IsReadOnly = false;
             BtnGuardarSolicitud.IsEnabled = true;
             BtnLimpiarPartidasSolicitud.IsEnabled = true;
         }
@@ -3431,7 +3437,18 @@ public partial class MainWindow : FluentWindow
             TxtTituloEditorSolicitud.Text = $"Solicitud Bloqueada: {sol.Folio}";
             TxtEstadoEditorSolicitud.Text = $"{sol.Estatus.ToUpperInvariant()} (SOLO LECTURA)";
             BdrEstadoEditorSolicitud.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(107, 114, 128));
-            BtnGuardarSolicitud.Content = $"Bloqueada ({sol.Estatus}) — Use '+ Crear Anexo'";
+            bool permiteUnidadYQuitar = sol.PermiteEditarUnidadYQuitarConceptos;
+            TxtTituloEditorSolicitud.Text = permiteUnidadYQuitar ? $"Solicitud en Comparativa: {sol.Folio}" : $"Solicitud Bloqueada: {sol.Folio}";
+            TxtEstadoEditorSolicitud.Text = permiteUnidadYQuitar ? $"{sol.Estatus.ToUpperInvariant()} (SOLO UNIDAD Y QUITAR)" : $"{sol.Estatus.ToUpperInvariant()} (SOLO LECTURA)";
+            BdrEstadoEditorSolicitud.Background = permiteUnidadYQuitar
+                ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(217, 119, 6))
+                : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(107, 114, 128));
+            BtnGuardarSolicitud.Content = permiteUnidadYQuitar
+                ? $"Bloqueada ({sol.Estatus}) — Solo permite modificar Unidad y Quitar conceptos"
+                : $"Bloqueada ({sol.Estatus}) — Use '+ Crear Anexo'";
+            if (ColSolPartidaCotizar != null) ColSolPartidaCotizar.IsReadOnly = true;
+            if (ColSolPartidaUnidad != null) ColSolPartidaUnidad.IsReadOnly = !permiteUnidadYQuitar;
+            if (ColSolPartidaCantidad != null) ColSolPartidaCantidad.IsReadOnly = true;
             BtnGuardarSolicitud.IsEnabled = false;
             BtnLimpiarPartidasSolicitud.IsEnabled = false;
         }
@@ -3569,7 +3586,7 @@ public partial class MainWindow : FluentWindow
             var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
             if (solActual != null && !solActual.EsEditable)
             {
-                DialogoFluent.Show(this, $"La solicitud {solActual.Folio} ya tiene Orden de Compra generada y no puede modificarse.\n\nHaga clic en '+ Nueva Solicitud' para crear una nueva solicitud.", "Solicitud cerrada", MessageBoxButton.OK, MessageBoxImage.Information);
+                VerificarPermisoEdicionSolicitudActual();
                 return;
             }
         }
@@ -3741,6 +3758,42 @@ public partial class MainWindow : FluentWindow
         if (sender is not FrameworkElement fe || fe.DataContext is not SolicitudPartida partida)
             return;
 
+        if (partida.TieneOcGenerada)
+        {
+            DialogoFluent.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partida.OrdenCompraFolio} y no puede quitarse de la solicitud.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (_solicitudEditandoId > 0)
+        {
+            var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+            if (solActual != null && !solActual.EsEditable)
+            {
+                if (!solActual.PermiteEditarUnidadYQuitarConceptos)
+                {
+                    VerificarPermisoEdicionSolicitudActual();
+                    return;
+                }
+
+                DatabaseService.EliminarPartidaEspecificaDeSolicitud(partida.Id, solActual.Id, partida.ProductoId, partida.DescripcionLibre);
+                _partidasNuevaSolicitud.Remove(partida);
+                DgPartidasNuevaSolicitud.Items.Refresh();
+                RefrescarSolicitudes(_solicitudEditandoId);
+                RefrescarDashboard();
+                return;
+            }
+        }
+
+        _partidasNuevaSolicitud.Remove(partida);
+        DgPartidasNuevaSolicitud.Items.Refresh();
+        PersistirCambioSiSolicitudEnEdicion();
+    }
+
+    private void BtnQuitarPartidaSolicitudLegacy_Unused(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not SolicitudPartida partida)
+            return;
+
         if (!VerificarPermisoEdicionSolicitudActual()) return;
         if (partida.TieneOcGenerada)
         {
@@ -3754,6 +3807,60 @@ public partial class MainWindow : FluentWindow
     }
 
     private void DgPartidasNuevaSolicitud_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        var partidaEditada = e.Row?.Item as SolicitudPartida;
+        bool esColumnaUnidad = e.Column == ColSolPartidaUnidad ||
+            string.Equals(e.Column?.Header?.ToString(), "✏️ Unidad", StringComparison.OrdinalIgnoreCase);
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_solicitudEditandoId > 0)
+            {
+                var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+                if (solActual != null && !solActual.EsEditable)
+                {
+                    if (solActual.PermiteEditarUnidadYQuitarConceptos && esColumnaUnidad && partidaEditada != null)
+                    {
+                        if (partidaEditada.TieneOcGenerada)
+                        {
+                            DialogoFluent.Show(this, $"Este artículo ya fue emitido en la Orden de Compra {partidaEditada.OrdenCompraFolio} y no puede modificarse.", "Artículo con OC emitida", MessageBoxButton.OK, MessageBoxImage.Information);
+                            RefrescarSolicitudes(_solicitudEditandoId);
+                            return;
+                        }
+
+                        partidaEditada.UnidadCompra = DatabaseService.NormalizarUnidadMedida(partidaEditada.UnidadCompra);
+                        DatabaseService.ActualizarUnidadPartidaEnSolicitud(
+                            partidaEditada.Id,
+                            solActual.Id,
+                            partidaEditada.ProductoId,
+                            partidaEditada.DescripcionLibre,
+                            partidaEditada.UnidadCompra);
+                        DgPartidasNuevaSolicitud.Items.Refresh();
+                        RefrescarSolicitudes(_solicitudEditandoId);
+                        return;
+                    }
+
+                    VerificarPermisoEdicionSolicitudActual();
+                    RefrescarSolicitudes(_solicitudEditandoId);
+                    return;
+                }
+            }
+
+            var invalidas = _partidasNuevaSolicitud.Where(p => p.CantidadSolicitada <= 0).ToList();
+            foreach (var inv in invalidas)
+            {
+                _partidasNuevaSolicitud.Remove(inv);
+            }
+            foreach (var p in _partidasNuevaSolicitud)
+            {
+                p.UnidadCompra = DatabaseService.NormalizarUnidadMedida(p.UnidadCompra);
+            }
+            DgPartidasNuevaSolicitud.Items.Refresh();
+            PersistirCambioSiSolicitudEnEdicion();
+        }), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private void DgPartidasNuevaSolicitud_CellEditEndingLegacy_Unused(object sender, DataGridCellEditEndingEventArgs e)
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
@@ -3783,7 +3890,10 @@ public partial class MainWindow : FluentWindow
         var sol = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
         if (sol != null && !sol.EsEditable)
         {
-            DialogoFluent.Show(this, $"La solicitud {sol.Folio} se encuentra en etapa '{sol.Estatus}' y está bloqueada contra edición.\n\nUse el botón '+ Crear Anexo' arriba a la derecha para agregar artículos adicionales como un anexo vinculado ({sol.Folio}-A1).", "Solicitud bloqueada por etapa", MessageBoxButton.OK, MessageBoxImage.Warning);
+            string detallePermitido = sol.PermiteEditarUnidadYQuitarConceptos
+                ? "En esta etapa únicamente se permite modificar la Unidad de medida ('✏️ Unidad') y eliminar conceptos ('Quitar').\n\n"
+                : string.Empty;
+            DialogoFluent.Show(this, $"La solicitud {sol.Folio} se encuentra en etapa '{sol.Estatus}' y está bloqueada contra agregar artículos o cambiar cantidades.\n\n{detallePermitido}Use el botón '+ Crear Anexo' arriba a la derecha para agregar artículos adicionales como un anexo vinculado ({sol.Folio}-A1).", "Solicitud bloqueada por etapa", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         return true;
