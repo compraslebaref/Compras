@@ -449,11 +449,11 @@
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="110" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="88" FontWeight="SemiBold" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="130" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="88" />
-                                                <DataGridTemplateColumn Header="Estatus" Width="138">
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto" Binding="{Binding ProyectoNombre}" Width="92" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Avance" Binding="{Binding AvanceRecepcionTexto}" Width="58" />
+                                                <DataGridTemplateColumn Header="Estatus" Width="112">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
@@ -462,13 +462,13 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn x:Name="ColDashboardOcTotal" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
-                                                <DataGridTemplateColumn Header="Acciones Rápidas" Width="175">
+                                                <DataGridTextColumn x:Name="ColDashboardOcTotal" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="80" />
+                                                <DataGridTemplateColumn Header="Acciones" Width="118">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                                <Button Content="✓ Atender / Recibir" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Autorizar Vo.Bo., avanzar etapa o ir a recibir mercancía de esta OC" Click="BtnDashboardOcAccionPrincipal_Click" />
-                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Cerrar parcialmente o cancelar esta OC para quitarla de pendientes" Click="BtnDashboardOcCerrarPendiente_Click" />
+                                                                <Button Content="✓ Atender" FontSize="10" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Autorizar Vo.Bo., avanzar etapa o ir a recibir mercancía de esta OC" Click="BtnDashboardOcAccionPrincipal_Click" />
+                                                                <Button Content="✕" FontSize="10" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Cerrar parcialmente o cancelar esta OC para quitarla de pendientes" Click="BtnDashboardOcCerrarPendiente_Click" />
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
@@ -494,7 +494,7 @@
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
-                                                <DataGridTemplateColumn Header="Prioridad" Width="140">
+                                                <DataGridTemplateColumn Header="Prioridad" Width="108">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding PrioridadAlertaStock}">
@@ -505,16 +505,16 @@
                                                 </DataGridTemplateColumn>
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding CodigoInterno}" Width="82" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding Nombre}" Width="*" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="75" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mínimo" Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="75" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="90" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="70" />
-                                                <DataGridTemplateColumn Header="Acciones" Width="165">
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="54" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mín." Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="54" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="62" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unid." Binding="{Binding UnidadAlmacen}" Width="54" />
+                                                <DataGridTemplateColumn Header="Acciones" Width="112">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
-                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                                <Button Content="+ Pedir" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Agregar la cantidad faltante al carrito de Solicitud de Compra" Click="BtnDashboardAlertaPedir_Click" />
-                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Descartar alerta (ajusta el Stock Mínimo a la existencia actual para que ya no aparezca como pendiente)" Click="BtnDashboardAlertaDescartar_Click" />
+                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                                                <Button Content="+ Pedir" FontSize="10" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Agregar la cantidad faltante al carrito de Solicitud de Compra" Click="BtnDashboardAlertaPedir_Click" />
+                                                                <Button Content="✕" FontSize="10" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Descartar alerta (ajusta el Stock Mínimo a la existencia actual para que ya no aparezca como pendiente)" Click="BtnDashboardAlertaDescartar_Click" />
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
@@ -555,8 +555,8 @@
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                                <Button Content="{Binding TextoAccionPrincipal}" Padding="7,2" Margin="0,0,4,0" FontWeight="SemiBold" Click="BtnAtenderPendienteCompra_Click" />
-                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Descartar o marcar como resuelto este pendiente" Click="BtnDescartarPendienteCompra_Click" />
+                                                                <Button Content="{Binding TextoAccionPrincipal}" FontSize="10" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" Click="BtnAtenderPendienteCompra_Click" />
+                                                                <Button Content="✕" FontSize="10" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Descartar o marcar como resuelto este pendiente" Click="BtnDescartarPendienteCompra_Click" />
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
@@ -683,14 +683,14 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="Acciones" Width="230">
+                                                <DataGridTemplateColumn Header="Acciones" Width="180">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                                <Button Content="Ir →" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Abrir documento relacionado (OC, Solicitud, Préstamo)" Tag="{Binding}" Click="BtnIrDocumentoEventoCalendario_Click" />
-                                                                <Button Content="{Binding TextoBotonCompletar}" Padding="6,2" Margin="0,0,4,0" ToolTip="Marcar como completado o reabrir" Tag="{Binding}" Click="BtnCompletarEventoCalendario_Click" />
+                                                                <Button Content="Ir →" FontSize="10" Padding="5,1" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Abrir documento relacionado (OC, Solicitud, Préstamo)" Tag="{Binding}" Click="BtnIrDocumentoEventoCalendario_Click" />
+                                                                <Button Content="{Binding TextoBotonCompletar}" FontSize="10" Padding="5,1" Margin="0,0,4,0" ToolTip="Marcar como completado o reabrir" Tag="{Binding}" Click="BtnCompletarEventoCalendario_Click" />
                                                                 <Button Content="+1d" Padding="5,2" Margin="0,0,4,0" ToolTip="Posponer 1 día (doble clic en la fila para editar fecha/título)" Tag="{Binding}" Click="BtnPosponer1DiaEventoCalendario_Click" />
-                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Quitar o descartar este evento inmediatamente" Tag="{Binding}" Click="BtnEliminarEventoCalendario_Click" />
+                                                                <Button Content="✕" FontSize="10" Padding="6,1" Background="#DC2626" Foreground="White" ToolTip="Quitar o descartar este evento inmediatamente" Tag="{Binding}" Click="BtnEliminarEventoCalendario_Click" />
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
@@ -1698,15 +1698,17 @@
                                                         <DockPanel Margin="0,0,0,8">
                                                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                                                 <ui:Button x:Name="BtnCargarHistoricoProveedorHoja"
-                                                                           Content="⚡ Cargar Últimos Precios de este Proveedor"
-                                                                           FontSize="11.5"
-                                                                           Margin="0,0,6,0"
+                                                                           Content="⚡ Cargar Histórico del Proveedor"
+                                                                           FontSize="11"
+                                                                           Padding="9,4"
+                                                                           Margin="0,0,8,0"
                                                                            ToolTip="Rellena automáticamente los precios vigentes o históricos que ya se le hayan cotizado a este proveedor"
                                                                            Click="BtnCargarHistoricoProveedorHoja_Click" />
                                                                 <ui:Button x:Name="BtnAdjudicarTodoHojaProveedor"
                                                                            Appearance="Primary"
-                                                                           Content="✓ Adjudicar Todo lo Cotizado a este Proveedor"
-                                                                           FontSize="11.5"
+                                                                           Content="✓ Adjudicar Cotizados a este Proveedor"
+                                                                           FontSize="11"
+                                                                           Padding="9,4"
                                                                            ToolTip="Marca como ganador a este proveedor en todas las partidas donde tenga precio capturado"
                                                                            Click="BtnAdjudicarTodoHojaProveedor_Click" />
                                                             </StackPanel>
@@ -1741,8 +1743,9 @@
                                                             </StackPanel>
 
                                                             <ui:Button x:Name="BtnAplicarCondicionesGeneralesHoja"
-                                                                       Content="Aplicar Condiciones a Toda la Hoja"
-                                                                       FontSize="11.5"
+                                                                       Content="Aplicar a Toda la Hoja"
+                                                                       FontSize="11"
+                                                                       Padding="9,4"
                                                                        Margin="0,0,0,4"
                                                                        ToolTip="Aplica el proveedor, días de entrega, vigencia y flete a todos los artículos de esta hoja"
                                                                        Click="BtnAplicarCondicionesGeneralesHoja_Click" />
@@ -1775,19 +1778,19 @@
                                                           SelectionMode="Single"
                                                           SelectionUnit="FullRow">
                                                     <DataGrid.Columns>
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="105" IsReadOnly="True" FontWeight="SemiBold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo / Descripción" Binding="{Binding ProductoNombre}" Width="*" IsReadOnly="True" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="65" IsReadOnly="True" FontWeight="Bold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra}" Width="75" IsReadOnly="True" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ref. Histórica" Binding="{Binding ReferenciaHistoricaCorta}" Width="155" IsReadOnly="True" />
-                                                        <DataGridTextColumn Header="✏️ P.U. SIN IVA ($)" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="125" FontWeight="Bold" />
-                                                        <DataGridTextColumn Header="✏️ P.U. CON IVA ($)" Binding="{Binding PrecioConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="125" />
-                                                        <DataGridTextColumn Header="✏️ Entrega (días)" Binding="{Binding DiasEntrega, UpdateSourceTrigger=LostFocus}" Width="105" />
-                                                        <DataGridTextColumn Header="✏️ Vigencia (días)" Binding="{Binding DiasVigencia, UpdateSourceTrigger=LostFocus}" Width="105" />
-                                                        <DataGridTextColumn Header="✏️ Envío c/IVA ($)" Binding="{Binding FleteConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="115" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total Partida c/IVA" Binding="{Binding ImporteTotalConIva, StringFormat={}{0:C2}}" Width="130" IsReadOnly="True" FontWeight="Bold" />
-                                                        <DataGridTextColumn Header="✏️ Notas / Marca" Binding="{Binding NotasCotizacion, UpdateSourceTrigger=LostFocus}" Width="150" />
-                                                        <DataGridCheckBoxColumn Header="Adjudicar" Binding="{Binding EsGanadorEnEstaOpcion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="82" IsReadOnly="True" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo / Descripción" Binding="{Binding ProductoNombre}" Width="*" MinWidth="170" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="52" IsReadOnly="True" FontWeight="Bold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unid." Binding="{Binding UnidadCompra}" Width="60" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ref. Histórica" Binding="{Binding ReferenciaHistoricaCorta}" Width="125" IsReadOnly="True" />
+                                                        <DataGridTextColumn Header="✏️ P.U. s/IVA" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="96" FontWeight="Bold" />
+                                                        <DataGridTextColumn Header="✏️ P.U. c/IVA" Binding="{Binding PrecioConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="96" />
+                                                        <DataGridTextColumn Header="✏️ Entrega (d)" Binding="{Binding DiasEntrega, UpdateSourceTrigger=LostFocus}" Width="78" />
+                                                        <DataGridTextColumn Header="✏️ Vigencia (d)" Binding="{Binding DiasVigencia, UpdateSourceTrigger=LostFocus}" Width="80" />
+                                                        <DataGridTextColumn Header="✏️ Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="88" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA" Binding="{Binding ImporteTotalConIva, StringFormat={}{0:C2}}" Width="102" IsReadOnly="True" FontWeight="Bold" />
+                                                        <DataGridTextColumn Header="✏️ Notas / Marca" Binding="{Binding NotasCotizacion, UpdateSourceTrigger=LostFocus}" Width="125" />
+                                                        <DataGridCheckBoxColumn Header="Adjudicar" Binding="{Binding EsGanadorEnEstaOpcion, UpdateSourceTrigger=PropertyChanged}" Width="66" />
                                                     </DataGrid.Columns>
                                                 </DataGrid>
                                             </DockPanel>
@@ -1819,17 +1822,17 @@
                                                           CanUserAddRows="False"
                                                           CellEditEnding="DgMatrizComparativaRapida_CellEditEnding">
                                                     <DataGrid.Columns>
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="95" IsReadOnly="True" FontWeight="SemiBold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding ProductoNombre}" Width="*" IsReadOnly="True" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="60" IsReadOnly="True" FontWeight="Bold" />
-                                                        <DataGridTextColumn x:Name="ColMatrizProv1" Header="✏️ P.U. s/IVA Prov 1" Binding="{Binding PrecioSinIva1, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="135" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (1)" Binding="{Binding ImporteTotal1, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
-                                                        <DataGridTextColumn x:Name="ColMatrizProv2" Header="✏️ P.U. s/IVA Prov 2" Binding="{Binding PrecioSinIva2, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="135" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (2)" Binding="{Binding ImporteTotal2, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
-                                                        <DataGridTextColumn x:Name="ColMatrizProv3" Header="✏️ P.U. s/IVA Prov 3" Binding="{Binding PrecioSinIva3, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="135" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (3)" Binding="{Binding ImporteTotal3, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado Actual" Binding="{Binding EstadoDecisionTexto}" Width="165" IsReadOnly="True" FontWeight="SemiBold" />
-                                                        <DataGridTemplateColumn Header="Elegir Ganador" Width="155">
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="80" IsReadOnly="True" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding ProductoNombre}" Width="*" MinWidth="160" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="50" IsReadOnly="True" FontWeight="Bold" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv1" Header="✏️ P.U. s/IVA Prov 1" Binding="{Binding PrecioSinIva1, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="110" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (1)" Binding="{Binding ImporteTotal1, StringFormat={}{0:C2}}" Width="92" IsReadOnly="True" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv2" Header="✏️ P.U. s/IVA Prov 2" Binding="{Binding PrecioSinIva2, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="110" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (2)" Binding="{Binding ImporteTotal2, StringFormat={}{0:C2}}" Width="92" IsReadOnly="True" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv3" Header="✏️ P.U. s/IVA Prov 3" Binding="{Binding PrecioSinIva3, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="110" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (3)" Binding="{Binding ImporteTotal3, StringFormat={}{0:C2}}" Width="92" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado Actual" Binding="{Binding EstadoDecisionTexto}" Width="135" IsReadOnly="True" FontWeight="SemiBold" />
+                                                        <DataGridTemplateColumn Header="Elegir Ganador" Width="138">
                                                             <DataGridTemplateColumn.CellTemplate>
                                                                 <DataTemplate>
                                                                     <StackPanel Orientation="Horizontal">
@@ -1903,8 +1906,8 @@
                                                                Margin="0,0,6,0"
                                                                ToolTip="Añade otra tarjeta u opción de proveedor concursante para comparar precios en este artículo"
                                                                Click="BtnAgregarOpcionProveedorComp_Click" />
-                                                    <ui:Button x:Name="BtnNuevoProveedorRapidoComp" Content="+ Nuevo Proveedor" FontSize="11.5" Margin="0,0,6,0" ToolTip="Registrar un nuevo proveedor con su Nombre Comercial para usar en la comparativa" Click="BtnNuevoProveedorRapidoComp_Click" />
-                                                    <ui:Button x:Name="BtnVincularLineaAbiertaComp" Content="🔗 Asociar Línea Abierta a SKU" FontSize="11.5" Margin="0,0,6,0" Visibility="Collapsed" ToolTip="Vincula o convierte esta partida de Línea Abierta a un Producto (SKU) del Catálogo conservando todas sus cotizaciones y vigencias" Click="BtnVincularLineaAbiertaComp_Click" />
+                                                    <ui:Button x:Name="BtnNuevoProveedorRapidoComp" Content="+ Proveedor" FontSize="11" Padding="8,4" Margin="0,0,6,4" ToolTip="Registrar un nuevo proveedor con su Nombre Comercial para usar en la comparativa" Click="BtnNuevoProveedorRapidoComp_Click" />
+                                                    <ui:Button x:Name="BtnVincularLineaAbiertaComp" Content="🔗 Asociar a SKU" FontSize="11" Padding="8,4" Margin="0,0,6,4" Visibility="Collapsed" ToolTip="Vincula o convierte esta partida de Línea Abierta a un Producto (SKU) del Catálogo conservando todas sus cotizaciones y vigencias" Click="BtnVincularLineaAbiertaComp_Click" />
                                                     <ui:Button Content="Mejor Precio"
                                                                FontSize="11.5"
                                                                Margin="0,0,6,0"
@@ -2287,16 +2290,16 @@
                                                           MaxHeight="155"
                                                           Margin="0,2,0,0">
                                                     <DataGrid.Columns>
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding Codigo}" Width="90" FontWeight="SemiBold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding Producto}" Width="*" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="55" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mín. Cotizado c/IVA" Binding="{Binding MejorPrecioTotalConIva, StringFormat={}{0:C2}}" Width="135" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Prom. Cotizado c/IVA" Binding="{Binding PromedioTotalConIva, StringFormat={}{0:C2}}" Width="135" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Máx. Cotizado c/IVA" Binding="{Binding PeorPrecioTotalConIva, StringFormat={}{0:C2}}" Width="135" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado a" Binding="{Binding ProveedorElegido}" Width="140" FontWeight="SemiBold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total Elegido c/IVA" Binding="{Binding ElegidoTotalConIva, StringFormat={}{0:C2}}" Width="130" FontWeight="Bold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ahorro vs. Máx." Binding="{Binding AhorroVsMaximoTexto}" Width="135" FontWeight="SemiBold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Diagnóstico Compras" Binding="{Binding DiagnosticoDiferencia}" Width="175" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding Codigo}" Width="78" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding Producto}" Width="*" MinWidth="150" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="48" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mín. c/IVA" Binding="{Binding MejorPrecioTotalConIva, StringFormat={}{0:C2}}" Width="95" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Prom. c/IVA" Binding="{Binding PromedioTotalConIva, StringFormat={}{0:C2}}" Width="95" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Máx. c/IVA" Binding="{Binding PeorPrecioTotalConIva, StringFormat={}{0:C2}}" Width="95" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado a" Binding="{Binding ProveedorElegido}" Width="120" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Elegido c/IVA" Binding="{Binding ElegidoTotalConIva, StringFormat={}{0:C2}}" Width="100" FontWeight="Bold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ahorro vs. Máx." Binding="{Binding AhorroVsMaximoTexto}" Width="115" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Diagnóstico Compras" Binding="{Binding DiagnosticoDiferencia}" Width="155" />
                                                     </DataGrid.Columns>
                                                 </DataGrid>
                                             </StackPanel>
