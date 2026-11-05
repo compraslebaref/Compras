@@ -133,13 +133,6 @@
                                Margin="0,0,4,0"
                                ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
                                Click="BtnAbrirMapaAnaqueles_Click" />
-                    <ui:Button x:Name="BtnAlternarTema"
-                               Content="Oscuro"
-                               FontSize="10.8"
-                               Padding="7,3"
-                               Margin="0,0,4,0"
-                               ToolTip="Alternar entre Modo Claro de Alto Contraste (Bodega) y Modo Oscuro Slate (Oficina)"
-                               Click="BtnAlternarTema_Click" />
                     <ui:Button x:Name="BtnNotificacionesCheckpoints" Content="Avisos (0)" FontSize="10.8" Padding="7,3" Margin="0,0,4,0" ToolTip="Ver bandeja de checkpoints, cambios de etapa y notificaciones por perfil" Click="BtnNotificacionesCheckpoints_Click" />
                     <ui:Button x:Name="BtnRolOperativo" Content="Rol: Compras" Appearance="Primary" FontSize="10.8" Padding="8,3" Margin="0,0,4,0" ToolTip="Cambiar vista operativa activa entre Compras y Almacén (en Almacén se ocultan precios e importes)" Click="BtnRolOperativo_Click" />
                 </StackPanel>

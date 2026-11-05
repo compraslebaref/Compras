@@ -44,7 +44,6 @@ public partial class MainWindow
 
         var visBotonesSecundarios = w < AnchoVentanaCompacta ? Visibility.Collapsed : Visibility.Visible;
         if (BtnMapaTopbar != null) BtnMapaTopbar.Visibility = visBotonesSecundarios;
-        if (BtnAlternarTema != null) BtnAlternarTema.Visibility = visBotonesSecundarios;
     }
 
     private void SvContenidoPrincipal_SizeChanged(object sender, SizeChangedEventArgs e)

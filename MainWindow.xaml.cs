@@ -62,7 +62,6 @@ public partial class MainWindow : FluentWindow
     private DateTime _ultimoPulsoPistolaUtc = DateTime.MinValue;
     private int _rachaPulsosRapidosPistola = 0;
     private string _origenAutoEscaneo = string.Empty;
-    private bool _temaOscuroActivo = false;
     private bool _sidebarColapsado = false;
 
     public class PrestamoVistaFila
@@ -118,21 +117,8 @@ public partial class MainWindow : FluentWindow
     {
         InitializeComponent();
 
-        // Integración nativa con Windows: tema (claro/oscuro) y color de acento del sistema
-        var temaSistema = ApplicationTheme.Light;
-        try
-        {
-            if (ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark)
-                temaSistema = ApplicationTheme.Dark;
-        }
-        catch (Exception)
-        {
-            // Sin acceso al registro: se mantiene el tema claro.
-        }
-        _temaOscuroActivo = temaSistema == ApplicationTheme.Dark;
-        AplicarTemaNativo(temaSistema);
-        if (BtnAlternarTema != null)
-            BtnAlternarTema.Content = _temaOscuroActivo ? "Claro" : "Oscuro";
+        // Tema fijo en modo Claro permanentemente
+        AplicarTemaNativo(ApplicationTheme.Light);
 
         IcCatalogoVisual.ItemsSource = _catalogoVisible;
         DgPartidasNuevaSolicitud.ItemsSource = _partidasNuevaSolicitud;
@@ -745,20 +731,10 @@ public partial class MainWindow : FluentWindow
     private void KpiCardAnalisis_Click(object sender, MouseButtonEventArgs e) =>
         AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Analisis));
 
-    // --- ALTERNAR TEMA CLARO / OSCURO Y COLAPSAR SIDEBAR ---
-    private void BtnAlternarTema_Click(object sender, RoutedEventArgs e) =>
-        AppMediator.Instance.Publicar(new AlternarTemaVisualMessage());
-
+    // --- TEMA CLARO FIJO Y COLAPSAR SIDEBAR ---
     private void AlternarTemaVisualInterno()
     {
-        _temaOscuroActivo = !_temaOscuroActivo;
-        var nuevoTema = _temaOscuroActivo ? ApplicationTheme.Dark : ApplicationTheme.Light;
-        AplicarTemaNativo(nuevoTema);
-
-        if (BtnAlternarTema != null)
-        {
-            BtnAlternarTema.Content = _temaOscuroActivo ? "Claro" : "Oscuro";
-        }
+        AplicarTemaNativo(ApplicationTheme.Light);
     }
 
     private void BtnToggleSidebar_Click(object sender, RoutedEventArgs e)
