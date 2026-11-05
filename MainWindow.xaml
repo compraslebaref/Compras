@@ -1780,13 +1780,13 @@
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="65" IsReadOnly="True" FontWeight="Bold" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra}" Width="75" IsReadOnly="True" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ref. Histórica" Binding="{Binding ReferenciaHistoricaCorta}" Width="155" IsReadOnly="True" />
-                                                        <DataGridTextColumn Header="✏️ P.U. SIN IVA ($)" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="125" FontWeight="Bold" />
-                                                        <DataGridTextColumn Header="✏️ P.U. CON IVA ($)" Binding="{Binding PrecioConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="125" />
-                                                        <DataGridTextColumn Header="✏️ Entrega (días)" Binding="{Binding DiasEntrega, UpdateSourceTrigger=PropertyChanged}" Width="105" />
-                                                        <DataGridTextColumn Header="✏️ Vigencia (días)" Binding="{Binding DiasVigencia, UpdateSourceTrigger=PropertyChanged}" Width="105" />
-                                                        <DataGridTextColumn Header="✏️ Envío c/IVA ($)" Binding="{Binding FleteConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="115" />
+                                                        <DataGridTextColumn Header="✏️ P.U. SIN IVA ($)" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="125" FontWeight="Bold" />
+                                                        <DataGridTextColumn Header="✏️ P.U. CON IVA ($)" Binding="{Binding PrecioConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="125" />
+                                                        <DataGridTextColumn Header="✏️ Entrega (días)" Binding="{Binding DiasEntrega, UpdateSourceTrigger=LostFocus}" Width="105" />
+                                                        <DataGridTextColumn Header="✏️ Vigencia (días)" Binding="{Binding DiasVigencia, UpdateSourceTrigger=LostFocus}" Width="105" />
+                                                        <DataGridTextColumn Header="✏️ Envío c/IVA ($)" Binding="{Binding FleteConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="115" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total Partida c/IVA" Binding="{Binding ImporteTotalConIva, StringFormat={}{0:C2}}" Width="130" IsReadOnly="True" FontWeight="Bold" />
-                                                        <DataGridTextColumn Header="✏️ Notas / Marca" Binding="{Binding NotasCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="150" />
+                                                        <DataGridTextColumn Header="✏️ Notas / Marca" Binding="{Binding NotasCotizacion, UpdateSourceTrigger=LostFocus}" Width="150" />
                                                         <DataGridCheckBoxColumn Header="Adjudicar" Binding="{Binding EsGanadorEnEstaOpcion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                                     </DataGrid.Columns>
                                                 </DataGrid>
@@ -1822,11 +1822,11 @@
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="95" IsReadOnly="True" FontWeight="SemiBold" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding ProductoNombre}" Width="*" IsReadOnly="True" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="60" IsReadOnly="True" FontWeight="Bold" />
-                                                        <DataGridTextColumn x:Name="ColMatrizProv1" Header="✏️ P.U. s/IVA Prov 1" Binding="{Binding PrecioSinIva1, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv1" Header="✏️ P.U. s/IVA Prov 1" Binding="{Binding PrecioSinIva1, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="135" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (1)" Binding="{Binding ImporteTotal1, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
-                                                        <DataGridTextColumn x:Name="ColMatrizProv2" Header="✏️ P.U. s/IVA Prov 2" Binding="{Binding PrecioSinIva2, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv2" Header="✏️ P.U. s/IVA Prov 2" Binding="{Binding PrecioSinIva2, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="135" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (2)" Binding="{Binding ImporteTotal2, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
-                                                        <DataGridTextColumn x:Name="ColMatrizProv3" Header="✏️ P.U. s/IVA Prov 3" Binding="{Binding PrecioSinIva3, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv3" Header="✏️ P.U. s/IVA Prov 3" Binding="{Binding PrecioSinIva3, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="135" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (3)" Binding="{Binding ImporteTotal3, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado Actual" Binding="{Binding EstadoDecisionTexto}" Width="165" IsReadOnly="True" FontWeight="SemiBold" />
                                                         <DataGridTemplateColumn Header="Elegir Ganador" Width="155">

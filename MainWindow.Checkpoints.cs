@@ -1140,10 +1140,15 @@ public partial class MainWindow
             if (CboCompProv1 != null) CboCompProv1.ItemsSource = provs;
             if (CboCompProv2 != null) CboCompProv2.ItemsSource = provs;
             if (CboCompProv3 != null) CboCompProv3.ItemsSource = provs;
+            if (CboHojaProveedor != null) CboHojaProveedor.ItemsSource = provs;
             if (DgDirProveedores != null) DgDirProveedores.ItemsSource = provs;
 
             var nuevoProv = provs.FirstOrDefault(p => p.Id == nuevoProvId);
-            if (nuevoProv != null && DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
+            if (nuevoProv != null && CboHojaProveedor != null && TcModoCapturaComparativa?.SelectedIndex == 0)
+            {
+                CboHojaProveedor.SelectedItem = nuevoProv;
+            }
+            else if (nuevoProv != null && DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
             {
                 if (r.Proveedor1Id <= 0 && CboCompProv1 != null)
                 {
@@ -2408,7 +2413,7 @@ public partial class MainWindow
 
     private void BtnNuevoProveedorDesdeComp_Click(object sender, RoutedEventArgs e)
     {
-        CambiarSeccion(8);
+        BtnNuevoProveedorRapidoComp_Click(sender, e);
     }
 
     private void BtnAdjudicarTodoHojaProveedor_Click(object sender, RoutedEventArgs e)

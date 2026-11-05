@@ -231,6 +231,8 @@ public class Proveedor
         !string.IsNullOrWhiteSpace(Rfc) && !string.Equals(Rfc.Trim(), "XAXX010101000", StringComparison.OrdinalIgnoreCase)
             ? $"{NombreMostrar} ({Rfc})"
             : NombreMostrar;
+
+    public string EtiquetaSelectorComparativa => ToString();
 }
 
 public class Solicitud

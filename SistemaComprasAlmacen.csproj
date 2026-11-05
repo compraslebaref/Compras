@@ -16,4 +16,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
   </ItemGroup>
 
+  <Target Name="LiberarBinariosEnUso" BeforeTargets="CopyFilesToOutputDirectory">
+    <Exec Command="powershell -NoProfile -Command &quot;$out = '$(OutDir)'; Get-ChildItem -Path $out -Filter '*.old*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; $ts = [DateTime]::UtcNow.Ticks; if (Test-Path (Join-Path $out 'SistemaComprasAlmacen.exe')) { Move-Item -Force (Join-Path $out 'SistemaComprasAlmacen.exe') (Join-Path $out ('SistemaComprasAlmacen.exe.old_' + $ts)) -ErrorAction SilentlyContinue }; if (Test-Path (Join-Path $out 'SistemaComprasAlmacen.dll')) { Move-Item -Force (Join-Path $out 'SistemaComprasAlmacen.dll') (Join-Path $out ('SistemaComprasAlmacen.dll.old_' + $ts)) -ErrorAction SilentlyContinue }&quot;" IgnoreExitCode="true" />
+  </Target>
+
 </Project>
