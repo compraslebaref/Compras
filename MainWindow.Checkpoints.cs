@@ -3021,6 +3021,23 @@ public partial class MainWindow
             ? $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 12)} (+{extraCount})"
             : $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 15)}";
 
+        var visTotal = ChkMatrizMostrarTotalConIva?.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        if (ColMatrizTotal1 != null)
+        {
+            ColMatrizTotal1.Header = $"Total {AbreviarNombreProveedorSlot(p1.nombreCorto, 11)}";
+            ColMatrizTotal1.Visibility = visTotal;
+        }
+        if (ColMatrizTotal2 != null)
+        {
+            ColMatrizTotal2.Header = $"Total {AbreviarNombreProveedorSlot(p2.nombreCorto, 11)}";
+            ColMatrizTotal2.Visibility = visTotal;
+        }
+        if (ColMatrizTotal3 != null)
+        {
+            ColMatrizTotal3.Header = $"Total {AbreviarNombreProveedorSlot(p3.nombreCorto, 11)}";
+            ColMatrizTotal3.Visibility = visTotal;
+        }
+
         if (!ReferenceEquals(DgMatrizComparativaRapida.ItemsSource, _renglonesComparativa))
         {
             DgMatrizComparativaRapida.ItemsSource = _renglonesComparativa;
@@ -3106,6 +3123,11 @@ public partial class MainWindow
             CargarProductoEnTarjetasComparativa(r);
 
         RecalcularTotalesComparativa();
+    }
+
+    private void ChkMatrizMostrarTotalConIva_Changed(object sender, RoutedEventArgs e)
+    {
+        ConstruirMatrizComparativaRapida();
     }
 
     private void BtnMatrizElegirOp1_Click(object sender, RoutedEventArgs e) => ElegirGanadorDesdeMatriz(sender, 1);

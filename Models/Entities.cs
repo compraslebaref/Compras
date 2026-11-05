@@ -419,6 +419,7 @@ public class CotizacionRenglonComparativo
     public string NotasCotizacion1 { get; set; } = string.Empty;
     public decimal TotalPartidaConIva1 => Math.Round(Cantidad * PrecioSinIva1 * 1.16m, 2);
     public decimal TotalConFlete1 => Math.Round(TotalPartidaConIva1 + FleteConIva1, 2);
+    public decimal ImporteTotal1 => TotalConFlete1;
     public string EstadoVigencia1 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion1) ? FechaCotizacion1 : FechaCotizacion, DiasVigencia1, true);
     public string ResumenOpcion1 => Proveedor1Id > 0 && PrecioSinIva1 > 0
         ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor1Nombre)}: ${PrecioConIva1:N2} c/u ({DiasEntrega1}d · Vig.{DiasVigencia1}d)"
@@ -438,6 +439,7 @@ public class CotizacionRenglonComparativo
     public string NotasCotizacion2 { get; set; } = string.Empty;
     public decimal TotalPartidaConIva2 => Math.Round(Cantidad * PrecioSinIva2 * 1.16m, 2);
     public decimal TotalConFlete2 => Math.Round(TotalPartidaConIva2 + FleteConIva2, 2);
+    public decimal ImporteTotal2 => TotalConFlete2;
     public string EstadoVigencia2 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion2) ? FechaCotizacion2 : FechaCotizacion, DiasVigencia2, true);
     public string ResumenOpcion2 => Proveedor2Id > 0 && PrecioSinIva2 > 0
         ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor2Nombre)}: ${PrecioConIva2:N2} c/u ({DiasEntrega2}d · Vig.{DiasVigencia2}d)"
@@ -457,6 +459,7 @@ public class CotizacionRenglonComparativo
     public string NotasCotizacion3 { get; set; } = string.Empty;
     public decimal TotalPartidaConIva3 => Math.Round(Cantidad * PrecioSinIva3 * 1.16m, 2);
     public decimal TotalConFlete3 => Math.Round(TotalPartidaConIva3 + FleteConIva3, 2);
+    public decimal ImporteTotal3 => TotalConFlete3;
     public string EstadoVigencia3 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion3) ? FechaCotizacion3 : FechaCotizacion, DiasVigencia3, true);
     public string ResumenOpcion3
     {
