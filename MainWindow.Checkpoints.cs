@@ -3565,7 +3565,7 @@ public partial class MainWindow
         var (renglones, ordenes, entradas, facturas, salidas, anexos, bitacora) = ObtenerDatosExpedienteSolicitud(sol);
 
         if (TxtExpTituloFolio != null)
-            TxtExpTituloFolio.Text = $"📁 Expediente Completo: {sol.Folio} — {sol.ProyectoMostrar} [{sol.Estatus}]";
+            TxtExpTituloFolio.Text = $"Expediente Completo: {sol.Folio} — {sol.ProyectoMostrar} [{sol.Estatus}]";
         if (TxtExpSubtituloResumen != null)
             TxtExpSubtituloResumen.Text = $"Solicitó: {sol.EncargadoNombre} ({sol.DepartamentoNombre}) el {sol.Fecha} · Modalidad: {sol.TipoSolicitud} · {ordenes.Count} OC(s) · {entradas.Count} Entrada(s) · {facturas.Count} Factura(s)/Nota(s) · {salidas.Count} Salida(s)";
 

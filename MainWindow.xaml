@@ -627,17 +627,17 @@
                                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <CheckBox x:Name="ChkAgendaOcultarCompletados" Content="Ocultar completados" FontSize="11.5" Margin="0,0,10,0" VerticalAlignment="Center" Checked="FiltroAgendaRapido_Changed" Unchecked="FiltroAgendaRapido_Changed" />
-                                                <ui:Button Content="🧹 Limpiar completados" FontSize="11" Padding="8,3" ToolTip="Elimina o archiva todos los eventos que ya están marcados como completados" Click="BtnLimpiarCompletadosAgenda_Click" />
+                                                <ui:Button Content="Limpiar completados" FontSize="11" Padding="8,3" ToolTip="Elimina o archiva todos los eventos que ya están marcados como completados" Click="BtnLimpiarCompletadosAgenda_Click" />
                                             </StackPanel>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                 <TextBlock Text="Vista rápida:" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
                                                 <ComboBox x:Name="CboFiltroCategoriaAgenda" Width="225" FontSize="11.5" SelectedIndex="0" SelectionChanged="FiltroAgendaRapido_Changed">
                                                     <ComboBoxItem Content="Todos los eventos" />
-                                                    <ComboBoxItem Content="🔴 Vencidos y Para Hoy" />
-                                                    <ComboBoxItem Content="🛒 Compras, Pagos y Autorizaciones" />
-                                                    <ComboBoxItem Content="📦 Almacén, Entregas y Herramientas" />
-                                                    <ComboBoxItem Content="⏱️ Cotizaciones por Vencer" />
-                                                    <ComboBoxItem Content="📌 Solo Recordatorios Manuales" />
+                                                    <ComboBoxItem Content="Vencidos y Para Hoy" />
+                                                    <ComboBoxItem Content="Compras, Pagos y Autorizaciones" />
+                                                    <ComboBoxItem Content="Almacén, Entregas y Herramientas" />
+                                                    <ComboBoxItem Content="Cotizaciones por Vencer" />
+                                                    <ComboBoxItem Content="Solo Recordatorios Manuales" />
                                                 </ComboBox>
                                             </StackPanel>
                                         </DockPanel>
@@ -645,12 +645,12 @@
                                             <DataGrid.ContextMenu>
                                                 <ContextMenu>
                                                     <MenuItem Header="✓ Completar / Reabrir evento" Click="CtxAgendaCompletar_Click" FontWeight="Bold" />
-                                                    <MenuItem Header="🔗 Ir al Documento vinculado (OC / Solicitud / Préstamo)" Click="CtxAgendaIrDocumento_Click" />
+                                                    <MenuItem Header="Ir al Documento vinculado (OC / Solicitud / Préstamo)" Click="CtxAgendaIrDocumento_Click" />
                                                     <Separator />
-                                                    <MenuItem Header="⏱️ Posponer +1 día (Mañana)" Click="CtxAgendaPosponer1_Click" />
-                                                    <MenuItem Header="⏱️ Posponer +3 días" Click="CtxAgendaPosponer3_Click" />
-                                                    <MenuItem Header="⏱️ Posponer +7 días (Próxima semana)" Click="CtxAgendaPosponer7_Click" />
-                                                    <MenuItem Header="✏️ Editar fecha, título o prioridad..." Click="CtxAgendaEditar_Click" />
+                                                    <MenuItem Header="Posponer +1 día (Mañana)" Click="CtxAgendaPosponer1_Click" />
+                                                    <MenuItem Header="Posponer +3 días" Click="CtxAgendaPosponer3_Click" />
+                                                    <MenuItem Header="Posponer +7 días (Próxima semana)" Click="CtxAgendaPosponer7_Click" />
+                                                    <MenuItem Header="Editar fecha, título o prioridad..." Click="CtxAgendaEditar_Click" />
                                                     <Separator />
                                                     <MenuItem Header="✕ Quitar / Descartar de la Agenda" Click="CtxAgendaEliminar_Click" />
                                                 </ContextMenu>
@@ -1378,7 +1378,7 @@
                                     <DataGrid.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Abrir solicitud" Click="BtnAbrirSolicitudSeleccionada_Click" FontWeight="Bold" />
-                                            <MenuItem Header="📁 Ver Expediente Completo y Reimprimir Documentos" Click="BtnAbrirExpedienteSolicitudContext_Click" FontWeight="SemiBold" />
+                                            <MenuItem Header="Ver Expediente Completo y Reimprimir Documentos" Click="BtnAbrirExpedienteSolicitudContext_Click" FontWeight="SemiBold" />
                                             <MenuItem Header="Abrir en Cuadro Comparativo" Click="BtnEnviarSolicitudAComparativa_Click" />
                                             <MenuItem Header="Ir al Catálogo Visual con esta Solicitud activa" Click="BtnIrCatalogoConSolicitud_Click" />
                                             <Separator />
@@ -1428,7 +1428,7 @@
                                         <ui:Button x:Name="BtnAbrirEnComparativaSol" Content="Ir a Comparativa" Appearance="Primary" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" Click="BtnEnviarSolicitudAComparativa_Click" />
                                         <Menu Background="Transparent" VerticalAlignment="Center">
                                             <MenuItem Header="Más acciones" Padding="8,4" FontSize="11" FontWeight="SemiBold">
-                                                <MenuItem Header="📁 Ver Expediente y Reimprimir Documentos" Click="BtnVerExpedienteSolicitudDetalle_Click" FontWeight="SemiBold" />
+                                                <MenuItem Header="Ver Expediente y Reimprimir Documentos" Click="BtnVerExpedienteSolicitudDetalle_Click" FontWeight="SemiBold" />
                                                 <MenuItem Header="Ir al Catálogo con esta Solicitud" Click="BtnIrCatalogoConSolicitud_Click" />
                                                 <Separator />
                                                 <MenuItem Header="Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
@@ -1514,7 +1514,7 @@
                                                     <DataGridCheckBoxColumn x:Name="ColSolPartidaCotizar" Header="Cotizar" Binding="{Binding IncluirEnCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="100" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                                    <DataGridTextColumn x:Name="ColSolPartidaUnidad" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" IsReadOnly="False" Width="95" />
+                                                    <DataGridTextColumn x:Name="ColSolPartidaUnidad" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" IsReadOnly="False" Width="95" />
                                                     <DataGridTextColumn x:Name="ColSolPartidaCantidad" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding CantidadSolicitada, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="80" />
                                                     <DataGridTemplateColumn Header="Acciones" Width="150">
@@ -1533,16 +1533,16 @@
                                         </DockPanel>
                                     </TabItem>
 
-                                    <TabItem x:Name="TabSolExpediente" Header="📁 Expediente y Documentos">
+                                    <TabItem x:Name="TabSolExpediente" Header="Expediente y Documentos">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <StackPanel Margin="0,6,4,10">
                                                 <!-- BARRA DE REIMPRESIÓN Y DESCARGA DE DOCUMENTOS PRINCIPALES -->
                                                 <Border Padding="10,8" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                     <DockPanel>
                                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                                                            <ui:Button Content="🖨️ Solicitud" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" ToolTip="Abrir vista previa para imprimir o descargar la Solicitud (PDF / PNG / CSV)" Click="BtnImprimirSolicitud_Click" />
-                                                            <ui:Button x:Name="BtnExpReimprimirComparativa" Content="⚖️ Comparativa" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Abrir vista previa para imprimir o descargar el Cuadro Comparativo de Cotizaciones (PDF / PNG / CSV)" Click="BtnExpReimprimirComparativa_Click" />
-                                                            <ui:Button Appearance="Primary" Content="📁 Expediente Completo" FontSize="10.8" Padding="9,3" ToolTip="Abrir vista previa para imprimir o descargar en PDF el Expediente Completo consolidado (Solicitud, Comparativa, OCs, Recepciones, Facturas y Salidas)" Click="BtnExpImprimirExpedienteConsolidado_Click" />
+                                                            <ui:Button Content="Imprimir Solicitud" Icon="{ui:SymbolIcon Print24}" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" ToolTip="Abrir vista previa para imprimir o descargar la Solicitud (PDF / PNG / CSV)" Click="BtnImprimirSolicitud_Click" />
+                                                            <ui:Button x:Name="BtnExpReimprimirComparativa" Content="Imprimir Comparativa" Icon="{ui:SymbolIcon Scales24}" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Abrir vista previa para imprimir o descargar el Cuadro Comparativo de Cotizaciones (PDF / PNG / CSV)" Click="BtnExpReimprimirComparativa_Click" />
+                                                            <ui:Button Appearance="Primary" Content="Expediente Completo" Icon="{ui:SymbolIcon DocumentText24}" FontSize="10.8" Padding="9,3" ToolTip="Abrir vista previa para imprimir o descargar en PDF el Expediente Completo consolidado (Solicitud, Comparativa, OCs, Recepciones, Facturas y Salidas)" Click="BtnExpImprimirExpedienteConsolidado_Click" />
                                                         </StackPanel>
                                                         <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
                                                             <TextBlock x:Name="TxtExpTituloFolio" Text="Expediente Integral de Solicitud" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
@@ -1586,7 +1586,7 @@
                                                 <!-- SECCIÓN 1: PARTIDAS Y RESULTADO DE COMPARATIVA / ADJUDICACIÓN -->
                                                 <Border Padding="10" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                     <StackPanel>
-                                                        <TextBlock Text="📋 Partidas Solicitadas, Proveedores Cotizados y Adjudicación" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                                        <TextBlock Text="Partidas Solicitadas, Proveedores Cotizados y Adjudicación" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                                         <DataGrid x:Name="DgExpedienteSolPartidas" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="210">
                                                             <DataGrid.Columns>
                                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding Codigo}" Width="85" FontWeight="SemiBold" />
@@ -1606,7 +1606,7 @@
                                                 <!-- SECCIÓN 2: ÓRDENES DE COMPRA GENERADAS (CON REIMPRESIÓN INDIVIDUAL) -->
                                                 <Border Padding="10" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                     <StackPanel>
-                                                        <TextBlock Text="🛒 Órdenes de Compra Emitidas (OC-xxxx) — Reimpresión Directa" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                                        <TextBlock Text="Órdenes de Compra Emitidas (OC-xxxx) — Reimpresión Directa" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                                         <DataGrid x:Name="DgExpedienteSolOrdenes" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="185">
                                                             <DataGrid.Columns>
                                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio OC" Binding="{Binding Folio}" Width="115" FontWeight="Bold" />
@@ -1620,7 +1620,7 @@
                                                                     <DataGridTemplateColumn.CellTemplate>
                                                                         <DataTemplate>
                                                                             <StackPanel Orientation="Horizontal">
-                                                                                <ui:Button Content="🖨️ OC" FontSize="10" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnExpReimprimirOc_Click" />
+                                                                                <ui:Button Content="Imprimir OC" FontSize="10" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnExpReimprimirOc_Click" />
                                                                                 <ui:Button Content="Ir →" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Abrir esta Orden de Compra en el módulo de Órdenes de Compra" Click="BtnExpIrAOc_Click" />
                                                                             </StackPanel>
                                                                         </DataTemplate>
@@ -1640,7 +1640,7 @@
 
                                                     <Border Grid.Column="0" Padding="10" CornerRadius="6" Margin="0,0,5,0" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                         <StackPanel>
-                                                            <TextBlock Text="📦 Recepciones en Almacén (ENT-xxxx)" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                                            <TextBlock Text="Recepciones en Almacén (ENT-xxxx)" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                                             <DataGrid x:Name="DgExpedienteSolEntradas" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="165">
                                                                 <DataGrid.Columns>
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio Entrada" Binding="{Binding Folio}" Width="105" FontWeight="Bold" />
@@ -1650,7 +1650,7 @@
                                                                     <DataGridTemplateColumn Header="Vale" Width="82">
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
-                                                                                <ui:Button Content="🖨️ Vale" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Vale de Entrada (PDF / PNG / CSV)" Click="BtnExpReimprimirEntrada_Click" />
+                                                                                <ui:Button Content="Imprimir" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Vale de Entrada (PDF / PNG / CSV)" Click="BtnExpReimprimirEntrada_Click" />
                                                                             </DataTemplate>
                                                                         </DataGridTemplateColumn.CellTemplate>
                                                                     </DataGridTemplateColumn>
@@ -1661,7 +1661,7 @@
 
                                                     <Border Grid.Column="1" Padding="10" CornerRadius="6" Margin="5,0,0,0" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                         <StackPanel>
-                                                            <TextBlock Text="🧾 Facturas CFDI / Notas Vinculadas" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                                            <TextBlock Text="Facturas CFDI / Notas Vinculadas" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                                             <DataGrid x:Name="DgExpedienteSolFacturas" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="165">
                                                                 <DataGrid.Columns>
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Tipo" Binding="{Binding TipoComprobante}" Width="105" FontWeight="SemiBold" />
@@ -1685,7 +1685,7 @@
 
                                                     <Border Grid.Column="0" Padding="10" CornerRadius="6" Margin="0,0,5,0" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                         <StackPanel>
-                                                            <TextBlock Text="📤 Vales de Salida / Entregas de Material (SAL-xxxx)" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                                            <TextBlock Text="Vales de Salida / Entregas de Material (SAL-xxxx)" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                                             <DataGrid x:Name="DgExpedienteSolSalidas" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="165">
                                                                 <DataGrid.Columns>
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio Vale" Binding="{Binding Folio}" Width="105" FontWeight="Bold" />
@@ -1695,7 +1695,7 @@
                                                                     <DataGridTemplateColumn Header="Vale" Width="82">
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
-                                                                                <ui:Button Content="🖨️ Vale" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Vale de Salida (PDF / PNG / CSV)" Click="BtnExpReimprimirSalida_Click" />
+                                                                                <ui:Button Content="Imprimir" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Vale de Salida (PDF / PNG / CSV)" Click="BtnExpReimprimirSalida_Click" />
                                                                             </DataTemplate>
                                                                         </DataGridTemplateColumn.CellTemplate>
                                                                     </DataGridTemplateColumn>
@@ -1706,7 +1706,7 @@
 
                                                     <Border Grid.Column="1" Padding="10" CornerRadius="6" Margin="5,0,0,0" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                         <StackPanel>
-                                                            <TextBlock Text="🕒 Bitácora de Trazabilidad y Checkpoints" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
+                                                            <TextBlock Text="Bitácora de Trazabilidad y Checkpoints" FontWeight="Bold" FontSize="12.5" Margin="0,0,0,6" />
                                                             <DataGrid x:Name="DgExpedienteSolBitacora" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MaxHeight="165">
                                                                 <DataGrid.Columns>
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha / Hora" Binding="{Binding FechaHora}" Width="115" />
@@ -1871,7 +1871,7 @@
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="65" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" Width="75" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" Width="75" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="70" />
                                                 <DataGridTextColumn x:Name="ColCompTablaProv1" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor 1" Binding="{Binding ResumenOpcion1}" IsReadOnly="True" Width="155" />
                                                 <DataGridTextColumn x:Name="ColCompTablaProv2" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor 2" Binding="{Binding ResumenOpcion2}" IsReadOnly="True" Width="155" Visibility="Collapsed" />
@@ -1886,7 +1886,7 @@
                             <TabItem x:Name="TabCompDetalle" Header="2 &#183; Comparar proveedores">
                                 <TabControl x:Name="TcModoCapturaComparativa" Padding="0,6,0,0" SelectionChanged="TcModoCapturaComparativa_SelectionChanged">
                                     <!-- MODO 1: CAPTURA POR PROVEEDOR (HOJA COMPLETA) -->
-                                    <TabItem Header="📋 Captura por Proveedor (Hoja Completa)">
+                                    <TabItem Header="Captura por Proveedor (Hoja Completa)">
                                         <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                             <DockPanel>
                                                 <!-- Encabezado de Selección de Proveedor y Condiciones Generales -->
@@ -1895,7 +1895,7 @@
                                                         <DockPanel Margin="0,0,0,6">
                                                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                                                                 <ui:Button x:Name="BtnCargarHistoricoProveedorHoja"
-                                                                           Content="⚡ Histórico"
+                                                                           Content="Cargar Histórico"
                                                                            FontSize="10.5"
                                                                            Padding="7,3"
                                                                            Margin="0,0,4,0"
@@ -1962,7 +1962,7 @@
                                                                    Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                                                    VerticalAlignment="Center"
                                                                    Text="Cotizados: 0/0 · Total Hoja c/IVA: $0.00" />
-                                                        <TextBlock Text="💡 Tip: Capture hacia abajo en la columna 'P.U. SIN IVA' o 'P.U. CON IVA' (use Enter o Tab para bajar de renglón como en Excel). Los cambios se guardan al instante."
+                                                        <TextBlock Text="Tip: Capture hacia abajo en la columna 'P.U. SIN IVA' o 'P.U. CON IVA' (use Enter o Tab para bajar de renglón como en Excel). Los cambios se guardan al instante."
                                                                    FontSize="11.5"
                                                                    Opacity="0.82"
                                                                    VerticalAlignment="Center"
@@ -1998,7 +1998,7 @@
                                     </TabItem>
 
                                     <!-- MODO 2: MATRIZ COMPARATIVA LADO A LADO -->
-                                    <TabItem Header="⚖️ Matriz Comparativa (Lado a Lado)">
+                                    <TabItem Header="Matriz Comparativa (Lado a Lado)">
                                         <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                             <DockPanel>
                                                 <Border DockPanel.Dock="Top" Padding="10" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
@@ -2044,7 +2044,7 @@
                                     </TabItem>
 
                                     <!-- MODO 3: DETALLE POR ARTÍCULO INDIVIDUAL (TARJETAS) -->
-                                    <TabItem Header="🔍 Detalle por Artículo Individual">
+                                    <TabItem Header="Detalle por Artículo Individual">
                             <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <DockPanel>
                                     <!-- Encabezado del Producto Seleccionado -->
@@ -2112,7 +2112,7 @@
                                                                ToolTip="Añade otra tarjeta u opción de proveedor concursante para comparar precios en este artículo"
                                                                Click="BtnAgregarOpcionProveedorComp_Click" />
                                                     <ui:Button x:Name="BtnNuevoProveedorRapidoComp" Content="+ Nuevo Prov." FontSize="10.5" Padding="7,3" Margin="0,0,4,0" ToolTip="Registrar un nuevo proveedor con su Nombre Comercial para usar en la comparativa" Click="BtnNuevoProveedorRapidoComp_Click" />
-                                                    <ui:Button x:Name="BtnVincularLineaAbiertaComp" Content="🔗 Asociar SKU" FontSize="10.5" Padding="7,3" Margin="0,0,4,0" Visibility="Collapsed" ToolTip="Vincula o convierte esta partida de Línea Abierta a un Producto (SKU) del Catálogo conservando todas sus cotizaciones y vigencias" Click="BtnVincularLineaAbiertaComp_Click" />
+                                                    <ui:Button x:Name="BtnVincularLineaAbiertaComp" Content="Asociar SKU" FontSize="10.5" Padding="7,3" Margin="0,0,4,0" Visibility="Collapsed" ToolTip="Vincula o convierte esta partida de Línea Abierta a un Producto (SKU) del Catálogo conservando todas sus cotizaciones y vigencias" Click="BtnVincularLineaAbiertaComp_Click" />
                                                     <ui:Button Content="Sin Decidir"
                                                                FontSize="10.5"
                                                                Padding="7,3"
@@ -2431,7 +2431,7 @@
                                                                    Padding="8,4"
                                                                    Click="BtnToggleTablaAnalisisPaso3_Click" />
                                                     </StackPanel>
-                                                    <TextBlock Text="📊 Inteligencia de Compras · Análisis Comparativo de Escenarios y Ahorros (Exclusivo Compras)"
+                                                    <TextBlock Text="Inteligencia de Compras · Análisis Comparativo de Escenarios y Ahorros (Exclusivo Compras)"
                                                                FontWeight="Bold"
                                                                FontSize="12.5"
                                                                Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
@@ -2643,11 +2643,11 @@
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
 
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="U. Compra" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="85" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Factor Conv." Binding="{Binding FactorConversion, UpdateSourceTrigger=PropertyChanged}" Width="92" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Factor Conv." Binding="{Binding FactorConversion, UpdateSourceTrigger=PropertyChanged}" Width="92" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pedida" Binding="{Binding CantidadPedida}" IsReadOnly="True" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibida" Binding="{Binding CantidadRecibida}" IsReadOnly="True" Width="95" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pendiente" Binding="{Binding CantidadPendiente}" IsReadOnly="True" Width="100" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Recibir Hoy" Binding="{Binding CantidadRecibirAhora, UpdateSourceTrigger=PropertyChanged}" Width="92" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibir Hoy" Binding="{Binding CantidadRecibirAhora, UpdateSourceTrigger=PropertyChanged}" Width="92" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entra a Stock" Binding="{Binding ResumenConversionAlmacen}" IsReadOnly="True" Width="105" FontWeight="SemiBold" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
@@ -3606,7 +3606,7 @@
                                     <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
                                             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                                                <ui:Button x:Name="BtnAsociarLineaAbiertaDirProv" DockPanel.Dock="Right" Content="🔗 Asociar Línea Abierta a SKU" FontSize="11.5" Margin="8,0,0,0" ToolTip="Selecciona una cotización de Línea Abierta de la tabla para asociarla o convertirla en un SKU del Catálogo" Click="BtnAsociarLineaAbiertaDirProv_Click" />
+                                                <ui:Button x:Name="BtnAsociarLineaAbiertaDirProv" DockPanel.Dock="Right" Content="Asociar Línea Abierta a SKU" FontSize="10.8" Padding="8,3" Margin="8,0,0,0" ToolTip="Selecciona una cotización de Línea Abierta de la tabla para asociarla o convertirla en un SKU del Catálogo" Click="BtnAsociarLineaAbiertaDirProv_Click" />
                                                 <TextBlock x:Name="TxtDesgloseProveedorTitulo" Text="Desglose y Cotizaciones del Proveedor" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap" />
                                             </DockPanel>
                                             <DataGrid x:Name="DgDesgloseProveedor" AutoGenerateColumns="False" IsReadOnly="True">

@@ -14,11 +14,12 @@ public partial class App : Application
     {
         DispatcherUnhandledException += (_, ex) =>
         {
-            RegistrarError(ex.Exception);
+            RegistrarError(ex.Exception, "DispatcherUnhandledException");
+            ex.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
         {
-            RegistrarError(ex.ExceptionObject as Exception);
+            RegistrarError(ex.ExceptionObject as Exception, "AppDomainUnhandledException");
         };
 
         base.OnStartup(e);
@@ -129,12 +130,15 @@ public partial class App : Application
         }
     }
 
-    private static void RegistrarError(Exception? ex)
+    public static void RegistrarError(Exception? ex, string origen = "App")
     {
+        if (ex == null) return;
         try
         {
-            var ruta = System.IO.Path.Combine(AppContext.BaseDirectory, "error.log");
-            System.IO.File.AppendAllText(ruta, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\r\n\r\n");
+            System.IO.Directory.CreateDirectory(DatabaseService.LogsFolder);
+            string archivo = System.IO.Path.Combine(DatabaseService.LogsFolder, $"errores_{DateTime.Now:yyyyMMdd}.log");
+            string entrada = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{origen}] {ex.GetType().Name}: {ex.Message}\r\n{ex.StackTrace}\r\n" + new string('-', 80) + "\r\n";
+            System.IO.File.AppendAllText(archivo, entrada);
         }
         catch
         {

@@ -17,9 +17,11 @@ public static class DatabaseService
     public static readonly string ImagesFolder = Path.Combine(BaseFolder, "ImagenesCatalogo");
     public static readonly string XmlFolder = Path.Combine(BaseFolder, "FacturasXml");
     public static readonly string BackupsFolder = Path.Combine(BaseFolder, "Respaldos");
+    public static readonly string LogsFolder = Path.Combine(BaseFolder, "Logs");
     public static readonly string DbPath = Path.Combine(BaseFolder, "compras_almacen.db");
 
-    private static string ConnectionString => $"Data Source={DbPath}";
+    private const string PinSalt = "Lebaref_WMS_Salt_2026#";
+    private static string ConnectionString => $"Data Source={DbPath};Default Timeout=5";
 
     public static void Initialize()
     {
@@ -27,11 +29,21 @@ public static class DatabaseService
         Directory.CreateDirectory(ImagesFolder);
         Directory.CreateDirectory(XmlFolder);
         Directory.CreateDirectory(BackupsFolder);
+        Directory.CreateDirectory(LogsFolder);
 
         RestaurarDatosRepositorioSiEsNecesario();
 
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
+
+        using (var pragmaCmd = conn.CreateCommand())
+        {
+            pragmaCmd.CommandText = @"
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA busy_timeout = 5000;";
+            pragmaCmd.ExecuteNonQuery();
+        }
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
@@ -344,9 +356,17 @@ CREATE TABLE IF NOT EXISTS NotificacionesCheckpoint (
 CREATE INDEX IF NOT EXISTS IDX_Productos_CodigoInterno ON Productos(CodigoInterno);
 CREATE INDEX IF NOT EXISTS IDX_Productos_Nombre ON Productos(Nombre);
 CREATE INDEX IF NOT EXISTS IDX_Productos_CategoriaId ON Productos(CategoriaId);
+CREATE INDEX IF NOT EXISTS IDX_Productos_Ubicacion ON Productos(Ubicacion);
+CREATE INDEX IF NOT EXISTS IDX_Herramientas_Ubicacion ON HerramientasActivos(Ubicacion);
+CREATE INDEX IF NOT EXISTS IDX_SolicitudPartidas_SolId ON SolicitudPartidas(SolicitudId);
+CREATE INDEX IF NOT EXISTS IDX_CotizacionesPartidaProveedor_PartId ON CotizacionesPartidaProveedor(SolicitudPartidaId);
 CREATE INDEX IF NOT EXISTS IDX_OrdenCompraPartidas_OcId ON OrdenCompraPartidas(OrdenCompraId);
 CREATE INDEX IF NOT EXISTS IDX_OrdenCompraPartidas_ProdId ON OrdenCompraPartidas(ProductoId);
+CREATE INDEX IF NOT EXISTS IDX_EntradaPartidas_EntId ON EntradaPartidas(EntradaAlmacenId);
+CREATE INDEX IF NOT EXISTS IDX_SalidaPartidas_SalId ON SalidaPartidas(SalidaAlmacenId);
 CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(FacturaXmlId);
+CREATE INDEX IF NOT EXISTS IDX_ProductoProveedorMapa_RfcClave ON ProductoProveedorMapa(EmisorRfc, ClaveProveedor);
+CREATE INDEX IF NOT EXISTS IDX_NotificacionesCheckpoint_Folio ON NotificacionesCheckpoint(FolioReferencia);
 ";
         cmd.ExecuteNonQuery();
 
@@ -422,8 +442,22 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
 
         using (var pinCmd = conn.CreateCommand())
         {
-            pinCmd.CommandText = "INSERT OR IGNORE INTO ConfiguracionSistema (Clave, Valor) VALUES ('AdminPin', '1234');";
-            pinCmd.ExecuteNonQuery();
+            pinCmd.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave = 'AdminPin' LIMIT 1;";
+            var pinActual = pinCmd.ExecuteScalar()?.ToString();
+            if (string.IsNullOrWhiteSpace(pinActual))
+            {
+                using var insPin = conn.CreateCommand();
+                insPin.CommandText = "INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ('AdminPin', $hash);";
+                insPin.Parameters.AddWithValue("$hash", CalcularHashPinAdministrador("1234"));
+                insPin.ExecuteNonQuery();
+            }
+            else if (!pinActual.StartsWith("SHA256:", StringComparison.Ordinal))
+            {
+                using var migPin = conn.CreateCommand();
+                migPin.CommandText = "UPDATE ConfiguracionSistema SET Valor = $hash WHERE Clave = 'AdminPin';";
+                migPin.Parameters.AddWithValue("$hash", CalcularHashPinAdministrador(pinActual.Trim()));
+                migPin.ExecuteNonQuery();
+            }
         }
 
         SeedInitialDataIfEmpty(conn);
@@ -5823,6 +5857,14 @@ FROM FacturaConceptos";
 
     // ==================== PERFIL ADMINISTRADOR Y BITÁCORA ====================
 
+    private static string CalcularHashPinAdministrador(string pinPlano)
+    {
+        string limpio = (pinPlano ?? string.Empty).Trim();
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(PinSalt + limpio);
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        return "SHA256:" + Convert.ToHexString(hash);
+    }
+
     public static string ObtenerPinAdministrador()
     {
         using var conn = new SqliteConnection(ConnectionString);
@@ -5830,24 +5872,36 @@ FROM FacturaConceptos";
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave = 'AdminPin' LIMIT 1";
         var res = cmd.ExecuteScalar()?.ToString();
-        return string.IsNullOrWhiteSpace(res) ? "1234" : res.Trim();
+        return string.IsNullOrWhiteSpace(res) ? CalcularHashPinAdministrador("1234") : res.Trim();
     }
 
     public static bool ValidarPinAdministrador(string pinIngresado)
     {
-        string pinActual = ObtenerPinAdministrador();
-        return !string.IsNullOrWhiteSpace(pinIngresado) && pinIngresado.Trim() == pinActual;
+        if (string.IsNullOrWhiteSpace(pinIngresado))
+            return false;
+
+        string limpio = pinIngresado.Trim();
+        string valorGuardado = ObtenerPinAdministrador();
+
+        if (valorGuardado.StartsWith("SHA256:", StringComparison.Ordinal))
+        {
+            string hashIngresado = CalcularHashPinAdministrador(limpio);
+            return string.Equals(hashIngresado, valorGuardado, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(limpio, valorGuardado, StringComparison.Ordinal);
     }
 
     public static void CambiarPinAdministrador(string nuevoPin)
     {
+        string hashNuevo = CalcularHashPinAdministrador(nuevoPin);
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO ConfiguracionSistema (Clave, Valor) VALUES ('AdminPin', $pin)
 ON CONFLICT(Clave) DO UPDATE SET Valor = $pin";
-        cmd.Parameters.AddWithValue("$pin", nuevoPin.Trim());
+        cmd.Parameters.AddWithValue("$pin", hashNuevo);
         cmd.ExecuteNonQuery();
     }
 
