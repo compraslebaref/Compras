@@ -264,7 +264,7 @@ public class Solicitud
         string.Equals(Estatus, "Cotización Entregada", StringComparison.OrdinalIgnoreCase);
     public override string ToString() => Id == 0
         ? "📋 [Nueva Solicitud en Captura]"
-        : $"{Folio} | {ProyectoMostrar} [{TipoSolicitud}] ({TotalSkus} art. - {EncargadoNombre})";
+        : $"{Folio} · {(string.IsNullOrWhiteSpace(ProyectoNombre) ? DepartamentoNombre : ProyectoNombre)} ({TotalSkus} art. · {EncargadoNombre})";
 }
 
 public class SolicitudPartida

@@ -1728,7 +1728,7 @@
                                                         <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                             <StackPanel Orientation="Horizontal" Margin="0,0,14,4" VerticalAlignment="Center">
                                                                 <TextBlock Text="2. Proveedor:" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                                                <ComboBox x:Name="CboHojaProveedor" Width="245" DisplayMemberPath="EtiquetaSelectorComparativa" SelectedValuePath="Id" SelectionChanged="CboHojaProveedor_SelectionChanged" />
+                                                                <ComboBox x:Name="CboHojaProveedor" Width="285" DisplayMemberPath="EtiquetaSelectorComparativa" SelectedValuePath="Id" SelectionChanged="CboHojaProveedor_SelectionChanged" />
                                                                 <ui:Button Content="+ Nuevo" FontSize="11" Padding="8,4" Margin="6,0,0,0" ToolTip="Dar de alta un nuevo proveedor en el directorio" Click="BtnNuevoProveedorDesdeComp_Click" />
                                                             </StackPanel>
 
