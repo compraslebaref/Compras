@@ -2270,11 +2270,13 @@ public partial class MainWindow
         {
             int cot = col.provId > 0 ? ContarCotizadosDeProveedor(col.provId) : 0;
             btn.Content = col.provId > 0
-                ? $"{col.indiceColumna} · {AbreviarNombreProveedorSlot(col.nombreCorto, 20)} ({cot}/{tot})"
-                : $"Proveedor {col.indiceColumna} ({cot}/{tot})";
+                ? $"{col.indiceColumna} · {AbreviarNombreProveedorSlot(col.nombreCorto, 15)} ({cot}/{tot})"
+                : $"Prov. {col.indiceColumna} ({cot}/{tot})";
             btn.ToolTip = col.provId > 0
                 ? $"Opción {col.indiceColumna}: {col.nombreCorto} ({cot} de {tot} cotizados)"
                 : $"Opción {col.indiceColumna} (Sin proveedor asignado)";
+            btn.FontSize = 10.5;
+            btn.Padding = new Thickness(7, 3, 7, 3);
             btn.Appearance = _indiceSlotHojaProveedorActiva == col.indiceColumna
                 ? Wpf.Ui.Controls.ControlAppearance.Primary
                 : Wpf.Ui.Controls.ControlAppearance.Secondary;
@@ -2292,9 +2294,9 @@ public partial class MainWindow
                 var colExtra = cols[i];
                 var btnEx = new Wpf.Ui.Controls.Button
                 {
-                    FontSize = 11.5,
-                    Padding = new Thickness(10, 4, 10, 4),
-                    Margin = new Thickness(0, 2, 6, 2),
+                    FontSize = 10.5,
+                    Padding = new Thickness(7, 3, 7, 3),
+                    Margin = new Thickness(0, 1, 4, 1),
                     Tag = colExtra.indiceColumna
                 };
                 ConfigurarBotonSlot(btnEx, colExtra);

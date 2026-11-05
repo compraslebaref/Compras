@@ -103,20 +103,22 @@
                     </Grid.ColumnDefinitions>
                     <ui:SymbolIcon Grid.Column="0"
                                    Symbol="BarcodeScanner24"
-                                   FontSize="18"
-                                   Margin="0,0,8,0"
+                                   FontSize="16"
+                                   Margin="0,0,6,0"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                     <ui:TextBox x:Name="TxtOmniScanner"
                                 Grid.Column="1"
                                 PlaceholderText="Escanear folio o código (F2)"
                                 VerticalContentAlignment="Center"
-                                FontSize="12.5"
+                                FontSize="11.5"
                                 FontFamily="Consolas"
                                 PreviewKeyDown="TxtOmniScanner_KeyDown"
                                 TextChanged="TxtOmniScanner_TextChanged" />
                     <ui:Button Grid.Column="2"
-                               Margin="6,0,0,0"
+                               Margin="5,0,0,0"
+                               Padding="8,3"
+                               FontSize="10.8"
                                Appearance="Primary"
                                Icon="{ui:SymbolIcon Search24}"
                                Content="Buscar"
@@ -126,26 +128,26 @@
                 <!-- Derecha: Botones Ejecutivos (Mapa A–F, Tema Claro/Oscuro y Perfil) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <ui:Button x:Name="BtnMapaTopbar" Content="Mapa A-F" 
-                               FontSize="11.5"
-                               Padding="10,5"
-                               Margin="0,0,6,0"
+                               FontSize="10.8"
+                               Padding="7,3"
+                               Margin="0,0,4,0"
                                ToolTip="Abrir Mapa Gráfico 3x3 e Inventario por Cuadrante (Atajo: F4)"
                                Click="BtnAbrirMapaAnaqueles_Click" />
                     <ui:Button x:Name="BtnAlternarTema"
                                Content="Oscuro"
-                               FontSize="11.5"
-                               Padding="10,5"
-                               Margin="0,0,6,0"
+                               FontSize="10.8"
+                               Padding="7,3"
+                               Margin="0,0,4,0"
                                ToolTip="Alternar entre Modo Claro de Alto Contraste (Bodega) y Modo Oscuro Slate (Oficina)"
                                Click="BtnAlternarTema_Click" />
-                    <ui:Button x:Name="BtnNotificacionesCheckpoints" Content="Avisos (0)" FontSize="11.5" Padding="10,5" Margin="0,0,6,0" ToolTip="Ver bandeja de checkpoints, cambios de etapa y notificaciones por perfil" Click="BtnNotificacionesCheckpoints_Click" />
-                    <ui:Button x:Name="BtnRolOperativo" Content="Rol: Compras" Appearance="Primary" FontSize="11.5" Padding="10,5" Margin="0,0,6,0" ToolTip="Cambiar vista operativa activa entre Compras y Almacén (en Almacén se ocultan precios e importes)" Click="BtnRolOperativo_Click" />
+                    <ui:Button x:Name="BtnNotificacionesCheckpoints" Content="Avisos (0)" FontSize="10.8" Padding="7,3" Margin="0,0,4,0" ToolTip="Ver bandeja de checkpoints, cambios de etapa y notificaciones por perfil" Click="BtnNotificacionesCheckpoints_Click" />
+                    <ui:Button x:Name="BtnRolOperativo" Content="Rol: Compras" Appearance="Primary" FontSize="10.8" Padding="8,3" Margin="0,0,4,0" ToolTip="Cambiar vista operativa activa entre Compras y Almacén (en Almacén se ocultan precios e importes)" Click="BtnRolOperativo_Click" />
                 </StackPanel>
                 <ui:Button x:Name="BtnPerfilAdmin"
                            Grid.Column="3"
                            Content="Perfil: Estándar"
-                           FontSize="11.5"
-                           Padding="10,5"
+                           FontSize="10.8"
+                           Padding="7,3"
                            ToolTip="Activar o cerrar sesión de Perfil Administrador (PIN por defecto: 1234)"
                            Click="BtnPerfilAdmin_Click" />
             </Grid>
@@ -207,10 +209,10 @@
                         <StackPanel>
                             <TextBlock x:Name="LblSecGeneral" Text="OPERACIÓN GENERAL" FontSize="10" FontWeight="Bold" Opacity="0.52" Margin="8,2,0,4" />
 
-                            <ui:Button x:Name="NavDashboard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Appearance="Primary" Icon="{ui:SymbolIcon Home24}" Content="Inicio" ToolTip="Inicio y Resumen Ejecutivo" Click="NavButton_Click" Tag="0" />
+                            <ui:Button x:Name="NavDashboard" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Appearance="Primary" Icon="{ui:SymbolIcon Home24}" Content="Inicio" ToolTip="Inicio y Resumen Ejecutivo" Click="NavButton_Click" Tag="0" />
 
                             <Grid>
-                                <ui:Button x:Name="NavCatalogo" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Grid24}" Content="Catálogo" ToolTip="Catálogo Visual, Alertas y Coordenadas 3x3 (Atajo: F3)" Click="NavButton_Click" Tag="1" />
+                                <ui:Button x:Name="NavCatalogo" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon Grid24}" Content="Catálogo" ToolTip="Catálogo Visual, Alertas y Coordenadas 3x3 (Atajo: F3)" Click="NavButton_Click" Tag="1" />
                                 <Border x:Name="BdgSidebarAlertas" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="#FEE2E2" BorderBrush="#FCA5A5" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarAlertas" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#991B1B" />
                                 </Border>
@@ -219,34 +221,34 @@
                             <TextBlock x:Name="LblSecCompras" Text="ABASTECIMIENTO Y COMPRAS" FontSize="10" FontWeight="Bold" Opacity="0.52" Margin="8,10,0,4" />
 
                             <Grid>
-                                <ui:Button x:Name="NavSolicitudes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon ClipboardTaskListLtr24}" Content="Solicitudes" ToolTip="Solicitudes de Compra y Carritos" Click="NavButton_Click" Tag="2" />
+                                <ui:Button x:Name="NavSolicitudes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon ClipboardTaskListLtr24}" Content="Solicitudes" ToolTip="Solicitudes de Compra y Carritos" Click="NavButton_Click" Tag="2" />
                                 <Border x:Name="BdgSidebarSolicitudes" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarSolicitudes" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 </Border>
                             </Grid>
 
-                            <ui:Button x:Name="NavComparativa" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Scales24}" Content="Comparativa" ToolTip="Cuadro Comparativo Multiproveedor" Click="NavButton_Click" Tag="3" />
+                            <ui:Button x:Name="NavComparativa" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon Scales24}" Content="Comparativa" ToolTip="Cuadro Comparativo Multiproveedor" Click="NavButton_Click" Tag="3" />
 
                             <Grid>
-                                <ui:Button x:Name="NavOrdenes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon DocumentText24}" Content="Órdenes de Compra" ToolTip="Órdenes de Compra y Recepción de Mercancía" Click="NavButton_Click" Tag="4" />
+                                <ui:Button x:Name="NavOrdenes" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon DocumentText24}" Content="Órdenes de Compra" ToolTip="Órdenes de Compra y Recepción de Mercancía" Click="NavButton_Click" Tag="4" />
                                 <Border x:Name="BdgSidebarOcs" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="#FEF3C7" BorderBrush="#FCD34D" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarOcs" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#92400E" />
                                 </Border>
                             </Grid>
 
-                            <ui:Button x:Name="NavFacturasXml" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon ReceiptMoney24}" Content="Facturas" ToolTip="Facturas CFDI 4.0 y Notas de Compra" Click="NavButton_Click" Tag="6" />
+                            <ui:Button x:Name="NavFacturasXml" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon ReceiptMoney24}" Content="Facturas" ToolTip="Facturas CFDI 4.0 y Notas de Compra" Click="NavButton_Click" Tag="6" />
 
                             <TextBlock x:Name="LblSecAlmacen" Text="BODEGA Y CONTROL" FontSize="10" FontWeight="Bold" Opacity="0.52" Margin="8,10,0,4" />
 
                             <Grid>
-                                <ui:Button x:Name="NavAlmacenPos" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Box24}" Content="Almacén" ToolTip="Salidas de Almacén y Préstamos de Herramientas" Click="NavButton_Click" Tag="5" />
+                                <ui:Button x:Name="NavAlmacenPos" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon Box24}" Content="Almacén" ToolTip="Salidas de Almacén y Préstamos de Herramientas" Click="NavButton_Click" Tag="5" />
                                 <Border x:Name="BdgSidebarPrestamos" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Padding="7,2" CornerRadius="4" Background="#F3E8FF" BorderBrush="#D8B4FE" BorderThickness="1" IsHitTestVisible="False" Visibility="Collapsed">
                                     <TextBlock x:Name="TxtBadgeSidebarPrestamos" Text="0" FontSize="10.5" FontWeight="Bold" Foreground="#6B21A8" />
                                 </Border>
                             </Grid>
 
-                            <ui:Button x:Name="NavAnalisis" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon DataTrending24}" Content="Análisis" ToolTip="Ranking de Consumo e Historial Gráfico de Precios" Click="NavButton_Click" Tag="7" />
-                            <ui:Button x:Name="NavDirectorios" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="10,9" Icon="{ui:SymbolIcon Settings24}" Content="Directorios" ToolTip="Proveedores, Proyectos, Personal y Herramientas" Click="NavButton_Click" Tag="8" />
+                            <ui:Button x:Name="NavAnalisis" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon DataTrending24}" Content="Análisis" ToolTip="Ranking de Consumo e Historial Gráfico de Precios" Click="NavButton_Click" Tag="7" />
+                            <ui:Button x:Name="NavDirectorios" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,2" Padding="9,6" FontSize="11.5" Icon="{ui:SymbolIcon Settings24}" Content="Directorios" ToolTip="Proveedores, Proyectos, Personal y Herramientas" Click="NavButton_Click" Tag="8" />
                         </StackPanel>
                     </ScrollViewer>
 
@@ -481,8 +483,8 @@
                                 <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
                                     <DockPanel>
                                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                                            <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" Margin="6,0,0,0" Click="BtnIrAlmacenPos_Click" />
-                                            <ui:Button DockPanel.Dock="Right" Content="+ Reabastecer Todo en 1 Solicitud" Appearance="Primary" Margin="8,0,0,0" ToolTip="Genera o carga en el carrito todos los artículos con stock bajo para pedir su faltante en 1 clic" Click="BtnReabastecerTodasAlertasStock_Click" />
+                                            <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" FontSize="10.8" Padding="7,3" Margin="6,0,0,0" Click="BtnIrAlmacenPos_Click" />
+                                            <ui:Button DockPanel.Dock="Right" Content="+ Reabastecer Faltantes" Appearance="Primary" FontSize="10.8" Padding="8,3" Margin="8,0,0,0" ToolTip="Genera o carga en el carrito todos los artículos con stock bajo para pedir su faltante en 1 clic" Click="BtnReabastecerTodasAlertasStock_Click" />
                                             <TextBlock Text="Alertas de Inventario (Stock Mínimo &gt; Actual)" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DataGrid x:Name="DgDashboardAlertas" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
@@ -1399,10 +1401,10 @@
                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Destino / Proyecto" Binding="{Binding ProyectoMostrar}" Width="*" />
                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Solicitante" Binding="{Binding EncargadoNombre}" Width="1*" />
                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículos" Binding="{Binding ResumenArticulos}" Width="130" />
-                                        <DataGridTemplateColumn Header="Expediente" Width="115">
+                                        <DataGridTemplateColumn Header="Expediente" Width="92">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <ui:Button Content="📁 Expediente" FontSize="11" Padding="8,3" Tag="{Binding}" ToolTip="Ver expediente completo y reimprimir documentos (Solicitud, Comparativa, OCs, Recepciones, Salidas)" Click="BtnAbrirExpedienteSolicitudFila_Click" />
+                                                    <ui:Button Content="Expediente" FontSize="10.2" Padding="6,2" Tag="{Binding}" ToolTip="Ver expediente completo y reimprimir documentos (Solicitud, Comparativa, OCs, Recepciones, Salidas)" Click="BtnAbrirExpedienteSolicitudFila_Click" />
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
@@ -1427,13 +1429,15 @@
                                 <!-- Barra superior: volver, título, estado y acciones -->
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                                        <ui:Button x:Name="BtnAprobarSurtirStockSol" Content="Aprobar surtido de stock" FontSize="11.5" Margin="0,0,6,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Compras aprueba que esta solicitud se surta con stock existente en Almacén (Checkpoint CP-1A)" Click="BtnAprobarSurtirStockSolicitud_Click" />
-                                        <ui:Button x:Name="BtnCrearAnexoSolicitud" Content="+ Crear Anexo" FontSize="11.5" Margin="0,0,6,0" ToolTip="Generar anexo vinculado (ej. SOL-xxxx-A1) para agregar artículos adicionales cuando esta solicitud ya está bloqueada" Click="BtnCrearAnexoSolicitud_Click" />
-                                        <ui:Button x:Name="BtnVerExpedienteSolicitudDetalle" Content="📁 Expediente / Reimprimir" FontSize="11.5" Margin="0,0,6,0" ToolTip="Ver el expediente completo de esta solicitud y reimprimir todos sus documentos vinculados" Click="BtnVerExpedienteSolicitudDetalle_Click" />
-                                        <ui:Button x:Name="BtnAbrirEnComparativaSol" Content="Abrir en Comparativa" Appearance="Primary" FontSize="11.5" Margin="0,0,6,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" Click="BtnEnviarSolicitudAComparativa_Click" />
+                                        <ui:Button x:Name="BtnAprobarSurtirStockSol" Content="✓ Aprobar Stock" FontSize="10.8" Padding="7,3" Margin="0,0,5,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Compras aprueba que esta solicitud se surta con stock existente en Almacén (Checkpoint CP-1A)" Click="BtnAprobarSurtirStockSolicitud_Click" />
+                                        <ui:Button x:Name="BtnCrearAnexoSolicitud" Content="+ Anexo" FontSize="10.8" Padding="7,3" Margin="0,0,5,0" ToolTip="Generar anexo vinculado (ej. SOL-xxxx-A1) para agregar artículos adicionales cuando esta solicitud ya está bloqueada" Click="BtnCrearAnexoSolicitud_Click" />
+                                        <ui:Button x:Name="BtnVerExpedienteSolicitudDetalle" Content="Expediente" Visibility="Collapsed" Click="BtnVerExpedienteSolicitudDetalle_Click" />
+                                        <ui:Button x:Name="BtnAbrirEnComparativaSol" Content="Ir a Comparativa" Appearance="Primary" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" Click="BtnEnviarSolicitudAComparativa_Click" />
                                         <Menu Background="Transparent" VerticalAlignment="Center">
-                                            <MenuItem Header="Más acciones" Padding="10,6" FontWeight="SemiBold">
+                                            <MenuItem Header="Más acciones" Padding="8,4" FontSize="11" FontWeight="SemiBold">
+                                                <MenuItem Header="📁 Ver Expediente y Reimprimir Documentos" Click="BtnVerExpedienteSolicitudDetalle_Click" FontWeight="SemiBold" />
                                                 <MenuItem Header="Ir al Catálogo con esta Solicitud" Click="BtnIrCatalogoConSolicitud_Click" />
+                                                <Separator />
                                                 <MenuItem Header="Vista Previa / Imprimir Solicitud" Click="BtnImprimirSolicitud_Click" />
                                                 <MenuItem Header="Descargar Solicitud (PDF / PNG / CSV)" Click="BtnDescargarSolicitudArchivo_Click" />
                                                 <MenuItem Header="Exportar Existencias de Almacén (CSV)" Click="BtnExportarExistenciasCatalogo_Click" />
@@ -1500,13 +1504,11 @@
                                                         <ComboBox x:Name="CboSolProductoAgregar" Grid.Column="0" Margin="0,0,6,0" SelectionChanged="CboSolProductoAgregar_SelectionChanged" />
                                                         <ui:TextBox x:Name="TxtSolCantidadAgregar" Grid.Column="1" PlaceholderText="Cant. (1)" Margin="0,0,6,0" VerticalContentAlignment="Center" />
                                                         <ComboBox x:Name="CboSolUnidadAgregar" Grid.Column="2" IsEditable="True" Width="100" Margin="0,0,0,0" ToolTip="Unidad de medida para esta solicitud (ej. Pieza, Caja, Rollo, Metro, Paquete)" />
-                                                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,6,0,0"><ui:Button Content="Agregar del catálogo" Appearance="Primary" Margin="0,0,6,4" Click="BtnAgregarPartidaSolicitud_Click" />
-                                                        <ui:Button
-                                                                   Content="Concepto abierto"
-                                                                   Margin="0,0,6,4"
-                                                                   ToolTip="Agrega el texto escrito en el buscador como necesidad genérica sin crear un producto vacío en el catálogo todavía"
-                                                                   Click="BtnAgregarConceptoLibreSolicitud_Click" />
-                                                        <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="Elegir en catálogo visual" Click="BtnCrearCarritoEIrCatalogo_Click" /></WrapPanel>
+                                                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,6,0,0">
+                                                            <ui:Button Content="+ Agregar del catálogo" Appearance="Primary" FontSize="10.8" Padding="8,3" Margin="0,0,5,2" Click="BtnAgregarPartidaSolicitud_Click" />
+                                                            <ui:Button Content="+ Concepto abierto" FontSize="10.8" Padding="8,3" Margin="0,0,5,2" ToolTip="Agrega el texto escrito en el buscador como necesidad genérica sin crear un producto vacío en el catálogo todavía" Click="BtnAgregarConceptoLibreSolicitud_Click" />
+                                                            <ui:Button x:Name="BtnCrearCarritoEIrCatalogo" Content="Catálogo visual" FontSize="10.8" Padding="8,3" Margin="0,0,0,2" Click="BtnCrearCarritoEIrCatalogo_Click" />
+                                                        </WrapPanel>
                                                     </Grid>
                                                 </StackPanel>
                                             </Border>
@@ -1542,19 +1544,16 @@
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <StackPanel Margin="0,6,4,10">
                                                 <!-- BARRA DE REIMPRESIÓN Y DESCARGA DE DOCUMENTOS PRINCIPALES -->
-                                                <Border Padding="12" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                                <Border Padding="10,8" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                     <DockPanel>
-                                                        <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <ui:Button Content="🖨️ Reimprimir Solicitud" FontSize="11.5" Padding="9,4" Margin="0,2,6,2" ToolTip="Abrir vista previa e imprimir el formato oficial de la Solicitud" Click="BtnImprimirSolicitud_Click" />
-                                                            <ui:Button Content="📥 Descargar Solicitud" FontSize="11" Padding="8,4" Margin="0,2,10,2" ToolTip="Guardar Solicitud en PDF, PNG o CSV" Click="BtnDescargarSolicitudArchivo_Click" />
-                                                            <ui:Button x:Name="BtnExpReimprimirComparativa" Content="🖨️ Reimprimir Comparativa" FontSize="11.5" Padding="9,4" Margin="0,2,6,2" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Abrir vista previa e imprimir el Cuadro Comparativo de Cotizaciones de esta Solicitud" Click="BtnExpReimprimirComparativa_Click" />
-                                                            <ui:Button x:Name="BtnExpDescargarComparativa" Content="📥 Descargar Comparativa" FontSize="11" Padding="8,4" Margin="0,2,10,2" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Guardar el Cuadro Comparativo en PDF, PNG o CSV" Click="BtnExpDescargarComparativa_Click" />
-                                                            <ui:Button Appearance="Primary" Content="🖨️ Imprimir Expediente Completo" FontSize="11.5" Padding="10,4" Margin="0,2,6,2" ToolTip="Imprimir carátula y reporte consolidado de todo el expediente (Solicitud, Comparativa, OCs, Recepciones, Facturas y Salidas)" Click="BtnExpImprimirExpedienteConsolidado_Click" />
-                                                            <ui:Button Content="📥 PDF Expediente" FontSize="11" Padding="8,4" Margin="0,2,0,2" ToolTip="Descargar el Expediente Consolidado en archivo PDF o PNG" Click="BtnExpDescargarExpedienteConsolidado_Click" />
-                                                        </WrapPanel>
-                                                        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
-                                                            <TextBlock x:Name="TxtExpTituloFolio" Text="Expediente Integral de Solicitud" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                                            <TextBlock x:Name="TxtExpSubtituloResumen" Text="Consulte la trazabilidad completa de principio a fin y reimprima cualquiera de sus documentos vinculados." FontSize="11.5" Opacity="0.82" TextWrapping="Wrap" />
+                                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                                            <ui:Button Content="🖨️ Solicitud" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" ToolTip="Abrir vista previa para imprimir o descargar la Solicitud (PDF / PNG / CSV)" Click="BtnImprimirSolicitud_Click" />
+                                                            <ui:Button x:Name="BtnExpReimprimirComparativa" Content="⚖️ Comparativa" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" ToolTip="Abrir vista previa para imprimir o descargar el Cuadro Comparativo de Cotizaciones (PDF / PNG / CSV)" Click="BtnExpReimprimirComparativa_Click" />
+                                                            <ui:Button Appearance="Primary" Content="📁 Expediente Completo" FontSize="10.8" Padding="9,3" ToolTip="Abrir vista previa para imprimir o descargar en PDF el Expediente Completo consolidado (Solicitud, Comparativa, OCs, Recepciones, Facturas y Salidas)" Click="BtnExpImprimirExpedienteConsolidado_Click" />
+                                                        </StackPanel>
+                                                        <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                                                            <TextBlock x:Name="TxtExpTituloFolio" Text="Expediente Integral de Solicitud" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                            <TextBlock x:Name="TxtExpSubtituloResumen" Text="Consulte la trazabilidad completa de principio a fin y reimprima o descargue en PDF cualquiera de sus documentos." FontSize="11" Opacity="0.82" TextWrapping="Wrap" />
                                                         </StackPanel>
                                                     </DockPanel>
                                                 </Border>
@@ -1624,13 +1623,12 @@
                                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recepción" Binding="{Binding AvanceRecepcionTexto}" Width="105" />
                                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Estatus" Binding="{Binding Estatus}" Width="145" FontWeight="SemiBold" />
                                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="105" FontWeight="Bold" Visibility="{DynamicResource VisibilidadPreciosPerfil}" />
-                                                                <DataGridTemplateColumn Header="Reimprimir / Acciones" Width="235">
+                                                                <DataGridTemplateColumn Header="Acciones" Width="135">
                                                                     <DataGridTemplateColumn.CellTemplate>
                                                                         <DataTemplate>
                                                                             <StackPanel Orientation="Horizontal">
-                                                                                <ui:Button Content="🖨️ Reimprimir OC" FontSize="10.5" Padding="7,2" Margin="0,0,4,0" Tag="{Binding}" Click="BtnExpReimprimirOc_Click" />
-                                                                                <ui:Button Content="📥 PDF" FontSize="10.5" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" ToolTip="Descargar Orden de Compra en PDF / PNG / CSV" Click="BtnExpDescargarOc_Click" />
-                                                                                <ui:Button Content="🔍 Ir a OC" FontSize="10.5" Padding="6,2" Tag="{Binding}" ToolTip="Abrir esta Orden de Compra en el módulo de Órdenes de Compra" Click="BtnExpIrAOc_Click" />
+                                                                                <ui:Button Content="🖨️ OC" FontSize="10" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnExpReimprimirOc_Click" />
+                                                                                <ui:Button Content="Ir →" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Abrir esta Orden de Compra en el módulo de Órdenes de Compra" Click="BtnExpIrAOc_Click" />
                                                                             </StackPanel>
                                                                         </DataTemplate>
                                                                     </DataGridTemplateColumn.CellTemplate>
@@ -1656,13 +1654,10 @@
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="88" />
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="OC" Binding="{Binding OrdenCompraFolio}" Width="95" />
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                                    <DataGridTemplateColumn Header="Documento" Width="155">
+                                                                    <DataGridTemplateColumn Header="Vale" Width="82">
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
-                                                                                <StackPanel Orientation="Horizontal">
-                                                                                    <ui:Button Content="🖨️ Reimprimir" FontSize="10.5" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" Click="BtnExpReimprimirEntrada_Click" />
-                                                                                    <ui:Button Content="📥 PDF" FontSize="10.5" Padding="6,2" Tag="{Binding}" Click="BtnExpDescargarEntrada_Click" />
-                                                                                </StackPanel>
+                                                                                <ui:Button Content="🖨️ Vale" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Vale de Entrada (PDF / PNG / CSV)" Click="BtnExpReimprimirEntrada_Click" />
                                                                             </DataTemplate>
                                                                         </DataGridTemplateColumn.CellTemplate>
                                                                     </DataGridTemplateColumn>
@@ -1704,13 +1699,10 @@
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="88" />
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibió" Binding="{Binding PersonaRecibeEfectiva}" Width="*" />
                                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pzas." Binding="{Binding TotalUnidadesEntregadas}" Width="55" FontWeight="Bold" />
-                                                                    <DataGridTemplateColumn Header="Documento" Width="155">
+                                                                    <DataGridTemplateColumn Header="Vale" Width="82">
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
-                                                                                <StackPanel Orientation="Horizontal">
-                                                                                    <ui:Button Content="🖨️ Reimprimir" FontSize="10.5" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" Click="BtnExpReimprimirSalida_Click" />
-                                                                                    <ui:Button Content="📥 PDF" FontSize="10.5" Padding="6,2" Tag="{Binding}" Click="BtnExpDescargarSalida_Click" />
-                                                                                </StackPanel>
+                                                                                <ui:Button Content="🖨️ Vale" FontSize="10" Padding="6,2" Tag="{Binding}" ToolTip="Vista previa, imprimir o descargar Vale de Salida (PDF / PNG / CSV)" Click="BtnExpReimprimirSalida_Click" />
                                                                             </DataTemplate>
                                                                         </DataGridTemplateColumn.CellTemplate>
                                                                     </DataGridTemplateColumn>
@@ -1907,60 +1899,60 @@
                                                 <!-- Encabezado de Selección de Proveedor y Condiciones Generales -->
                                                 <Border DockPanel.Dock="Top" Padding="12" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                                     <StackPanel>
-                                                        <DockPanel Margin="0,0,0,8">
-                                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                                        <DockPanel Margin="0,0,0,6">
+                                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                                                                 <ui:Button x:Name="BtnCargarHistoricoProveedorHoja"
-                                                                           Content="⚡ Cargar Histórico"
-                                                                           FontSize="11"
-                                                                           Padding="9,4"
-                                                                           Margin="0,0,6,0"
+                                                                           Content="⚡ Histórico"
+                                                                           FontSize="10.5"
+                                                                           Padding="7,3"
+                                                                           Margin="0,0,4,0"
                                                                            ToolTip="Rellena automáticamente los precios vigentes o históricos que ya se le hayan cotizado a este proveedor"
                                                                            Click="BtnCargarHistoricoProveedorHoja_Click" />
                                                                 <ui:Button x:Name="BtnAdjudicarTodoHojaProveedor"
                                                                            Appearance="Primary"
                                                                            Content="✓ Adjudicar Cotizados"
-                                                                           FontSize="11"
-                                                                           Padding="9,4"
+                                                                           FontSize="10.5"
+                                                                           Padding="8,3"
                                                                            ToolTip="Marca como ganador a este proveedor en todas las partidas donde tenga precio capturado"
                                                                            Click="BtnAdjudicarTodoHojaProveedor_Click" />
                                                             </StackPanel>
-                                                            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
-                                                                <TextBlock Text="1. Columna:" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="0,2,8,2" />
-                                                                <ui:Button x:Name="BtnHojaSlot1" Content="Proveedor 1" Appearance="Primary" FontSize="11.5" Padding="10,4" Margin="0,2,6,2" Click="BtnHojaSlot1_Click" />
-                                                                <ui:Button x:Name="BtnHojaSlot2" Content="Proveedor 2" FontSize="11.5" Padding="10,4" Margin="0,2,6,2" Click="BtnHojaSlot2_Click" />
-                                                                <ui:Button x:Name="BtnHojaSlot3" Content="Proveedor 3" FontSize="11.5" Padding="10,4" Margin="0,2,6,2" Click="BtnHojaSlot3_Click" />
+                                                            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
+                                                                <TextBlock Text="1. Columna:" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" Margin="0,1,6,1" />
+                                                                <ui:Button x:Name="BtnHojaSlot1" Content="Proveedor 1" Appearance="Primary" FontSize="10.5" Padding="7,3" Margin="0,1,4,1" Click="BtnHojaSlot1_Click" />
+                                                                <ui:Button x:Name="BtnHojaSlot2" Content="Proveedor 2" FontSize="10.5" Padding="7,3" Margin="0,1,4,1" Click="BtnHojaSlot2_Click" />
+                                                                <ui:Button x:Name="BtnHojaSlot3" Content="Proveedor 3" FontSize="10.5" Padding="7,3" Margin="0,1,4,1" Click="BtnHojaSlot3_Click" />
                                                                 <WrapPanel x:Name="WpBotonesSlotsExtraHoja" Orientation="Horizontal" VerticalAlignment="Center" />
-                                                                <ui:Button x:Name="BtnHojaAgregarSlotProveedor" Content="+ Añadir Proveedor" FontSize="11" Padding="8,4" Margin="0,2,6,2" ToolTip="Agregar otra columna / hoja de proveedor concursante a esta comparativa" Click="BtnHojaAgregarSlotProveedor_Click" />
+                                                                <ui:Button x:Name="BtnHojaAgregarSlotProveedor" Content="+ Proveedor" FontSize="10.5" Padding="7,3" Margin="0,1,4,1" ToolTip="Agregar otra columna / hoja de proveedor concursante a esta comparativa" Click="BtnHojaAgregarSlotProveedor_Click" />
                                                             </WrapPanel>
                                                         </DockPanel>
 
                                                         <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <StackPanel Orientation="Horizontal" Margin="0,0,14,4" VerticalAlignment="Center">
-                                                                <TextBlock Text="2. Proveedor:" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                                                <ComboBox x:Name="CboHojaProveedor" Width="285" DisplayMemberPath="EtiquetaSelectorComparativa" SelectedValuePath="Id" SelectionChanged="CboHojaProveedor_SelectionChanged" />
-                                                                <ui:Button Content="+ Nuevo" FontSize="11" Padding="8,4" Margin="6,0,0,0" ToolTip="Dar de alta un nuevo proveedor en el directorio" Click="BtnNuevoProveedorDesdeComp_Click" />
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,2" VerticalAlignment="Center">
+                                                                <TextBlock Text="2. Proveedor:" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                                <ComboBox x:Name="CboHojaProveedor" Width="270" DisplayMemberPath="EtiquetaSelectorComparativa" SelectedValuePath="Id" SelectionChanged="CboHojaProveedor_SelectionChanged" />
+                                                                <ui:Button Content="+ Nuevo" FontSize="10.5" Padding="7,3" Margin="5,0,0,0" ToolTip="Dar de alta un nuevo proveedor en el directorio" Click="BtnNuevoProveedorDesdeComp_Click" />
                                                             </StackPanel>
 
-                                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
-                                                                <TextBlock Text="Entrega (días):" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,5,0" Opacity="0.85" />
-                                                                <ui:TextBox x:Name="TxtHojaDiasEntregaGral" Width="52" Text="3" ToolTip="Días de entrega generales de esta cotización" />
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,10,2" VerticalAlignment="Center">
+                                                                <TextBlock Text="Entrega (días):" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85" />
+                                                                <ui:TextBox x:Name="TxtHojaDiasEntregaGral" Width="48" Text="3" ToolTip="Días de entrega generales de esta cotización" />
                                                             </StackPanel>
 
-                                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
-                                                                <TextBlock Text="Vigencia (días):" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,5,0" Opacity="0.85" />
-                                                                <ui:TextBox x:Name="TxtHojaDiasVigenciaGral" Width="52" Text="15" ToolTip="Días de vigencia general de los precios cotizados por este proveedor" />
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,10,2" VerticalAlignment="Center">
+                                                                <TextBlock Text="Vigencia (días):" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85" />
+                                                                <ui:TextBox x:Name="TxtHojaDiasVigenciaGral" Width="48" Text="15" ToolTip="Días de vigencia general de los precios cotizados por este proveedor" />
                                                             </StackPanel>
 
-                                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
-                                                                <TextBlock Text="Envío c/IVA ($):" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,5,0" Opacity="0.85" />
-                                                                <ui:TextBox x:Name="TxtHojaFleteGral" Width="72" Text="0.00" ToolTip="Flete global de esta cotización (se asigna a la primera partida cotizada o puede ajustarse por renglón)" />
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,10,2" VerticalAlignment="Center">
+                                                                <TextBlock Text="Envío c/IVA ($):" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.85" />
+                                                                <ui:TextBox x:Name="TxtHojaFleteGral" Width="68" Text="0.00" ToolTip="Flete global de esta cotización (se asigna a la primera partida cotizada o puede ajustarse por renglón)" />
                                                             </StackPanel>
 
                                                             <ui:Button x:Name="BtnAplicarCondicionesGeneralesHoja"
-                                                                       Content="Aplicar a Toda la Hoja"
-                                                                       FontSize="11"
-                                                                       Padding="9,4"
-                                                                       Margin="0,0,0,4"
+                                                                       Content="Aplicar a hoja"
+                                                                       FontSize="10.5"
+                                                                       Padding="8,3"
+                                                                       Margin="0,0,0,2"
                                                                        ToolTip="Aplica el proveedor, días de entrega, vigencia y flete a todos los artículos de esta hoja"
                                                                        Click="BtnAplicarCondicionesGeneralesHoja_Click" />
                                                         </WrapPanel>
@@ -2106,32 +2098,31 @@
                                                 </StackPanel>
 
                                                 <WrapPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                    <ui:Button Content="← Anterior"
-                                                               FontSize="11.5"
-                                                               Margin="0,0,6,0"
+                                                    <ui:Button Content="← Ant."
+                                                               FontSize="10.5"
+                                                               Padding="7,3"
+                                                               Margin="0,0,4,0"
                                                                ToolTip="Pasar al artículo anterior de la lista"
                                                                Click="BtnCompAnterior_Click" />
-                                                    <ui:Button Content="Siguiente →"
-                                                               FontSize="11.5"
-                                                               Margin="0,0,6,0"
+                                                    <ui:Button Content="Sig. →"
+                                                               FontSize="10.5"
+                                                               Padding="7,3"
+                                                               Margin="0,0,4,0"
                                                                ToolTip="Pasar al siguiente artículo de la lista"
                                                                Click="BtnCompSiguiente_Click" />
                                                     <ui:Button x:Name="BtnAgregarOpcionProveedorComp"
-                                                               Content="+ Añadir Proveedor Concursante"
+                                                               Content="+ Opción Cotización"
                                                                Appearance="Primary"
-                                                               FontSize="11.5"
-                                                               Margin="0,0,6,0"
+                                                               FontSize="10.5"
+                                                               Padding="8,3"
+                                                               Margin="0,0,4,0"
                                                                ToolTip="Añade otra tarjeta u opción de proveedor concursante para comparar precios en este artículo"
                                                                Click="BtnAgregarOpcionProveedorComp_Click" />
-                                                    <ui:Button x:Name="BtnNuevoProveedorRapidoComp" Content="+ Proveedor" FontSize="11" Padding="8,4" Margin="0,0,6,4" ToolTip="Registrar un nuevo proveedor con su Nombre Comercial para usar en la comparativa" Click="BtnNuevoProveedorRapidoComp_Click" />
-                                                    <ui:Button x:Name="BtnVincularLineaAbiertaComp" Content="🔗 Asociar a SKU" FontSize="11" Padding="8,4" Margin="0,0,6,4" Visibility="Collapsed" ToolTip="Vincula o convierte esta partida de Línea Abierta a un Producto (SKU) del Catálogo conservando todas sus cotizaciones y vigencias" Click="BtnVincularLineaAbiertaComp_Click" />
-                                                    <ui:Button Content="Mejor Precio" Visibility="Collapsed"
-                                                               FontSize="11.5"
-                                                               Margin="0,0,6,0"
-                                                               ToolTip="Selecciona automáticamente al proveedor con menor costo total en este artículo"
-                                                               Click="BtnMejorPrecioProductoActual_Click" />
+                                                    <ui:Button x:Name="BtnNuevoProveedorRapidoComp" Content="+ Nuevo Prov." FontSize="10.5" Padding="7,3" Margin="0,0,4,0" ToolTip="Registrar un nuevo proveedor con su Nombre Comercial para usar en la comparativa" Click="BtnNuevoProveedorRapidoComp_Click" />
+                                                    <ui:Button x:Name="BtnVincularLineaAbiertaComp" Content="🔗 Asociar SKU" FontSize="10.5" Padding="7,3" Margin="0,0,4,0" Visibility="Collapsed" ToolTip="Vincula o convierte esta partida de Línea Abierta a un Producto (SKU) del Catálogo conservando todas sus cotizaciones y vigencias" Click="BtnVincularLineaAbiertaComp_Click" />
                                                     <ui:Button Content="Sin Decidir"
-                                                               FontSize="11.5"
+                                                               FontSize="10.5"
+                                                               Padding="7,3"
                                                                ToolTip="Limpia la decisión de proveedor ganador en este artículo"
                                                                Click="BtnLimpiarGanadorProductoActual_Click" />
                                                 </WrapPanel>
@@ -2601,10 +2592,10 @@
 
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                                        <ui:Button x:Name="BtnDespacharSalidaDesdeOcDetalle" Content="Despachar a Salida (SAL)" FontSize="11.5" Margin="0,0,6,0" ToolTip="Cargar artículos de esta Orden de Compra directamente en un Vale de Salida de Almacén" Click="BtnCargarMaterialOcActualEnSalida_Click" />
-                                        <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" FontSize="11.5" Margin="0,0,6,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" Click="BtnImprimirOcSeleccionada_Click" />
+                                        <ui:Button x:Name="BtnDespacharSalidaDesdeOcDetalle" Content="Despachar a Salida" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" ToolTip="Cargar artículos de esta Orden de Compra directamente en un Vale de Salida de Almacén" Click="BtnCargarMaterialOcActualEnSalida_Click" />
+                                        <ui:Button Content="Imprimir OC" Icon="{ui:SymbolIcon Print24}" FontSize="10.8" Padding="8,3" Margin="0,0,5,0" Visibility="{DynamicResource VisibilidadPreciosPerfil}" Click="BtnImprimirOcSeleccionada_Click" />
                                         <Menu Background="Transparent" VerticalAlignment="Center">
-                                            <MenuItem Header="Más acciones" Padding="10,6" FontWeight="SemiBold">
+                                            <MenuItem Header="Más acciones" Padding="8,4" FontSize="11" FontWeight="SemiBold">
                                                 <MenuItem Header="Descargar Orden de Compra (PDF / PNG / CSV)" Click="BtnDescargarOcSeleccionada_Click" />
                                                 <MenuItem Header="Liquidar sin Factura (Nota / Remisión)" Click="BtnLiquidarOcSinFactura_Click" />
                                                 <Separator />
@@ -3278,10 +3269,10 @@
                                         <DockPanel>
                                             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                                                 <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,0,0,0">
-                                                    <ComboBox x:Name="CboXmlVincularProducto" Width="250" Margin="0,0,6,0" ToolTip="Seleccione un producto existente del catálogo para vincularlo" />
-                                                    <ui:Button Content="Vincular a Existente" Margin="0,0,6,0" Click="BtnVincularConceptoXmlConProducto_Click" />
-                                                    <ui:Button Content="Marcar como Nuevo" Margin="0,0,6,0" ToolTip="Desvincular para que se cree como un producto nuevo en el catálogo" Click="BtnMarcarConceptoComoNuevo_Click" />
-                                                    <ui:Button Content="Crear Nuevos en Catálogo" Appearance="Primary" ToolTip="Crear en el catálogo los productos que aún no están registrados" Click="BtnCrearProductoDesdeConceptoXml_Click" />
+                                                    <ComboBox x:Name="CboXmlVincularProducto" Width="230" Margin="0,0,5,0" ToolTip="Seleccione un producto existente del catálogo para vincularlo" />
+                                                    <ui:Button Content="Vincular" FontSize="10.8" Padding="7,3" Margin="0,0,5,0" Click="BtnVincularConceptoXmlConProducto_Click" />
+                                                    <ui:Button Content="Como Nuevo" FontSize="10.8" Padding="7,3" Margin="0,0,5,0" ToolTip="Desvincular para que se cree como un producto nuevo en el catálogo" Click="BtnMarcarConceptoComoNuevo_Click" />
+                                                    <ui:Button Content="+ Crear en Catálogo" FontSize="10.8" Padding="8,3" Appearance="Primary" ToolTip="Crear en el catálogo los productos que aún no están registrados" Click="BtnCrearProductoDesdeConceptoXml_Click" />
                                                 </WrapPanel>
                                                 <TextBlock Text="Conceptos del XML" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
                                             </DockPanel>
