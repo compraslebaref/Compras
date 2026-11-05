@@ -1687,6 +1687,167 @@
                                 </Border>
                             </TabItem>
                             <TabItem x:Name="TabCompDetalle" Header="2 &#183; Comparar proveedores">
+                                <TabControl x:Name="TcModoCapturaComparativa" Padding="0,6,0,0" SelectionChanged="TcModoCapturaComparativa_SelectionChanged">
+                                    <!-- MODO 1: CAPTURA POR PROVEEDOR (HOJA COMPLETA) -->
+                                    <TabItem Header="📋 Captura por Proveedor (Hoja Completa)">
+                                        <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                            <DockPanel>
+                                                <!-- Encabezado de Selección de Proveedor y Condiciones Generales -->
+                                                <Border DockPanel.Dock="Top" Padding="12" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                                    <StackPanel>
+                                                        <DockPanel Margin="0,0,0,8">
+                                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                                <ui:Button x:Name="BtnCargarHistoricoProveedorHoja"
+                                                                           Content="⚡ Cargar Últimos Precios de este Proveedor"
+                                                                           FontSize="11.5"
+                                                                           Margin="0,0,6,0"
+                                                                           ToolTip="Rellena automáticamente los precios vigentes o históricos que ya se le hayan cotizado a este proveedor"
+                                                                           Click="BtnCargarHistoricoProveedorHoja_Click" />
+                                                                <ui:Button x:Name="BtnAdjudicarTodoHojaProveedor"
+                                                                           Appearance="Primary"
+                                                                           Content="✓ Adjudicar Todo lo Cotizado a este Proveedor"
+                                                                           FontSize="11.5"
+                                                                           ToolTip="Marca como ganador a este proveedor en todas las partidas donde tenga precio capturado"
+                                                                           Click="BtnAdjudicarTodoHojaProveedor_Click" />
+                                                            </StackPanel>
+                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <TextBlock Text="1. Seleccione columna de cotización:" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                                <ui:Button x:Name="BtnHojaSlot1" Content="Proveedor 1" Appearance="Primary" FontSize="11.5" Padding="10,4" Margin="0,0,6,0" Click="BtnHojaSlot1_Click" />
+                                                                <ui:Button x:Name="BtnHojaSlot2" Content="Proveedor 2" FontSize="11.5" Padding="10,4" Margin="0,0,6,0" Click="BtnHojaSlot2_Click" />
+                                                                <ui:Button x:Name="BtnHojaSlot3" Content="Proveedor 3" FontSize="11.5" Padding="10,4" Click="BtnHojaSlot3_Click" />
+                                                            </StackPanel>
+                                                        </DockPanel>
+
+                                                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,14,4" VerticalAlignment="Center">
+                                                                <TextBlock Text="2. Proveedor (Nombre Comercial):" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                                <ComboBox x:Name="CboHojaProveedor" Width="280" DisplayMemberPath="EtiquetaSelectorComparativa" SelectedValuePath="Id" SelectionChanged="CboHojaProveedor_SelectionChanged" />
+                                                                <ui:Button Content="+ Nuevo" FontSize="11" Padding="8,4" Margin="6,0,0,0" ToolTip="Dar de alta un nuevo proveedor en el directorio" Click="BtnNuevoProveedorDesdeComp_Click" />
+                                                            </StackPanel>
+
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                                                                <TextBlock Text="Entrega gral. (días):" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.85" />
+                                                                <ui:TextBox x:Name="TxtHojaDiasEntregaGral" Width="62" Text="3" ToolTip="Días de entrega generales de esta cotización" />
+                                                            </StackPanel>
+
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                                                                <TextBlock Text="Vigencia gral. (días):" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.85" />
+                                                                <ui:TextBox x:Name="TxtHojaDiasVigenciaGral" Width="62" Text="15" ToolTip="Días de vigencia general de los precios cotizados por este proveedor" />
+                                                            </StackPanel>
+
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                                                                <TextBlock Text="Flete / Envío gral. c/IVA ($):" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.85" />
+                                                                <ui:TextBox x:Name="TxtHojaFleteGral" Width="85" Text="0.00" ToolTip="Flete global de esta cotización (se asigna a la primera partida cotizada o puede ajustarse por renglón)" />
+                                                            </StackPanel>
+
+                                                            <ui:Button x:Name="BtnAplicarCondicionesGeneralesHoja"
+                                                                       Content="Aplicar Condiciones a Toda la Hoja"
+                                                                       FontSize="11.5"
+                                                                       Margin="0,0,0,4"
+                                                                       ToolTip="Aplica el proveedor, días de entrega, vigencia y flete a todos los artículos de esta hoja"
+                                                                       Click="BtnAplicarCondicionesGeneralesHoja_Click" />
+                                                        </WrapPanel>
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <!-- Barra inferior de totales de la hoja -->
+                                                <Border DockPanel.Dock="Bottom" Padding="10,8" CornerRadius="6" Margin="0,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                                    <DockPanel>
+                                                        <TextBlock x:Name="TxtResumenHojaProveedorActual"
+                                                                   DockPanel.Dock="Right"
+                                                                   FontWeight="Bold"
+                                                                   FontSize="12.5"
+                                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                   VerticalAlignment="Center"
+                                                                   Text="Cotizados: 0/0 · Total Hoja c/IVA: $0.00" />
+                                                        <TextBlock Text="💡 Tip: Capture hacia abajo en la columna 'P.U. SIN IVA' o 'P.U. CON IVA' (use Enter o Tab para bajar de renglón como en Excel). Los cambios se guardan al instante."
+                                                                   FontSize="11.5"
+                                                                   Opacity="0.82"
+                                                                   VerticalAlignment="Center"
+                                                                   TextWrapping="Wrap" />
+                                                    </DockPanel>
+                                                </Border>
+
+                                                <!-- Tabla tipo Hoja de Cálculo para capturar toda la cotización del proveedor de corrido -->
+                                                <DataGrid x:Name="DgHojaCotizacionProveedor"
+                                                          AutoGenerateColumns="False"
+                                                          CanUserAddRows="False"
+                                                          SelectionMode="Single"
+                                                          SelectionUnit="FullRow">
+                                                    <DataGrid.Columns>
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="105" IsReadOnly="True" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo / Descripción" Binding="{Binding ProductoNombre}" Width="*" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="65" IsReadOnly="True" FontWeight="Bold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra}" Width="75" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ref. Histórica" Binding="{Binding ReferenciaHistoricaCorta}" Width="155" IsReadOnly="True" />
+                                                        <DataGridTextColumn Header="✏️ P.U. SIN IVA ($)" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="125" FontWeight="Bold" />
+                                                        <DataGridTextColumn Header="✏️ P.U. CON IVA ($)" Binding="{Binding PrecioConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="125" />
+                                                        <DataGridTextColumn Header="✏️ Entrega (días)" Binding="{Binding DiasEntrega, UpdateSourceTrigger=PropertyChanged}" Width="105" />
+                                                        <DataGridTextColumn Header="✏️ Vigencia (días)" Binding="{Binding DiasVigencia, UpdateSourceTrigger=PropertyChanged}" Width="105" />
+                                                        <DataGridTextColumn Header="✏️ Envío c/IVA ($)" Binding="{Binding FleteConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="115" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total Partida c/IVA" Binding="{Binding ImporteTotalConIva, StringFormat={}{0:C2}}" Width="130" IsReadOnly="True" FontWeight="Bold" />
+                                                        <DataGridTextColumn Header="✏️ Notas / Marca" Binding="{Binding NotasCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="150" />
+                                                        <DataGridCheckBoxColumn Header="Adjudicar" Binding="{Binding EsGanadorEnEstaOpcion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                                                    </DataGrid.Columns>
+                                                </DataGrid>
+                                            </DockPanel>
+                                        </Border>
+                                    </TabItem>
+
+                                    <!-- MODO 2: MATRIZ COMPARATIVA LADO A LADO -->
+                                    <TabItem Header="⚖️ Matriz Comparativa (Lado a Lado)">
+                                        <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Top" Padding="10" CornerRadius="6" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                                    <DockPanel>
+                                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                            <ui:Button x:Name="BtnMatrizAutoMejorPrecio"
+                                                                       Appearance="Primary"
+                                                                       Content="⚡ Elegir Mejor Precio en Todas las Partidas"
+                                                                       FontSize="11.5"
+                                                                       Click="BtnSeleccionarMejorPrecioPorPartida_Click" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="Compare los 3 proveedores lado a lado en todos los productos, edite precios unitarios s/IVA directamente o elija al proveedor ganador con un clic."
+                                                                   FontSize="12"
+                                                                   VerticalAlignment="Center"
+                                                                   TextWrapping="Wrap" />
+                                                    </DockPanel>
+                                                </Border>
+
+                                                <DataGrid x:Name="DgMatrizComparativaRapida"
+                                                          AutoGenerateColumns="False"
+                                                          CanUserAddRows="False"
+                                                          CellEditEnding="DgMatrizComparativaRapida_CellEditEnding">
+                                                    <DataGrid.Columns>
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="95" IsReadOnly="True" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding ProductoNombre}" Width="*" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="60" IsReadOnly="True" FontWeight="Bold" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv1" Header="✏️ P.U. s/IVA Prov 1" Binding="{Binding PrecioSinIva1, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (1)" Binding="{Binding ImporteTotal1, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv2" Header="✏️ P.U. s/IVA Prov 2" Binding="{Binding PrecioSinIva2, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (2)" Binding="{Binding ImporteTotal2, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
+                                                        <DataGridTextColumn x:Name="ColMatrizProv3" Header="✏️ P.U. s/IVA Prov 3" Binding="{Binding PrecioSinIva3, StringFormat={}{0:N2}, UpdateSourceTrigger=PropertyChanged}" Width="135" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (3)" Binding="{Binding ImporteTotal3, StringFormat={}{0:C2}}" Width="110" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado Actual" Binding="{Binding EstadoDecisionTexto}" Width="165" IsReadOnly="True" FontWeight="SemiBold" />
+                                                        <DataGridTemplateColumn Header="Elegir Ganador" Width="155">
+                                                            <DataGridTemplateColumn.CellTemplate>
+                                                                <DataTemplate>
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <ui:Button Content="Op. 1" FontSize="10.5" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" Click="BtnMatrizElegirOp1_Click" />
+                                                                        <ui:Button Content="Op. 2" FontSize="10.5" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" Click="BtnMatrizElegirOp2_Click" />
+                                                                        <ui:Button Content="Op. 3" FontSize="10.5" Padding="6,2" Tag="{Binding}" Click="BtnMatrizElegirOp3_Click" />
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </DataGridTemplateColumn.CellTemplate>
+                                                        </DataGridTemplateColumn>
+                                                    </DataGrid.Columns>
+                                                </DataGrid>
+                                            </DockPanel>
+                                        </Border>
+                                    </TabItem>
+
+                                    <!-- MODO 3: DETALLE POR ARTÍCULO INDIVIDUAL (TARJETAS) -->
+                                    <TabItem Header="🔍 Detalle por Artículo Individual">
                             <Border Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                 <DockPanel>
                                     <!-- Encabezado del Producto Seleccionado -->
@@ -2009,6 +2170,8 @@
                                 </DockPanel>
                             </Border>
                             </TabItem>
+                                </TabControl>
+                            </TabItem>
                             <TabItem Header="3 &#183; Emitir &#243;rdenes">
                                 <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                     <DockPanel>
@@ -2043,6 +2206,101 @@
                                                        Content="Emitir Órdenes de Compra"
                                                        Click="BtnGenerarOrdenesDesdeComparativa_Click" />
                                         </Grid>
+
+                                        <!-- PANEL DE ANÁLISIS DE PRECIOS, DIFERENCIAS Y ESCENARIOS (EXCLUSIVO COMPRAS) -->
+                                        <Border x:Name="BdrAnalisisPreciosComprasPaso3"
+                                                DockPanel.Dock="Top"
+                                                Visibility="{DynamicResource VisibilidadPreciosPerfil}"
+                                                Padding="12"
+                                                CornerRadius="6"
+                                                Margin="0,0,0,10"
+                                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                                BorderThickness="1">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,8">
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                        <ui:Button x:Name="BtnOptimizarMixPaso3"
+                                                                   Content="⚡ Aplicar Mix Óptimo (Menor Precio por Partida)"
+                                                                   FontSize="11"
+                                                                   Padding="8,4"
+                                                                   Margin="0,0,6,0"
+                                                                   ToolTip="Selecciona automáticamente el proveedor más económico en cada artículo"
+                                                                   Click="BtnSeleccionarMejorPrecioPorPartida_Click" />
+                                                        <ui:Button x:Name="BtnToggleTablaAnalisisPaso3"
+                                                                   Content="Ver/Ocultar Desglose por Partida"
+                                                                   FontSize="11"
+                                                                   Padding="8,4"
+                                                                   Click="BtnToggleTablaAnalisisPaso3_Click" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="📊 Inteligencia de Compras · Análisis Comparativo de Escenarios y Ahorros (Exclusivo Compras)"
+                                                               FontWeight="Bold"
+                                                               FontSize="12.5"
+                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                               VerticalAlignment="Center"
+                                                               TextWrapping="Wrap" />
+                                                </DockPanel>
+
+                                                <!-- 4 Tarjetas de Escenarios y Ahorro -->
+                                                <UniformGrid Columns="4" Margin="0,0,0,8">
+                                                    <!-- Tarjeta 1: Selección Adjudicada Actual -->
+                                                    <Border Padding="10,8" Margin="0,0,6,0" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                                        <StackPanel>
+                                                            <TextBlock Text="1. SELECCIÓN ADJUDICADA" FontSize="10.5" FontWeight="Bold" Opacity="0.72" />
+                                                            <TextBlock x:Name="TxtKpiCompActualTotal" Text="$0.00" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Margin="0,2,0,2" />
+                                                            <TextBlock x:Name="TxtKpiCompActualSub" Text="0 de 0 partidas decididas" FontSize="11" Opacity="0.82" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Tarjeta 2: Mix Óptimo (Mejor Precio por Partida) -->
+                                                    <Border Padding="10,8" Margin="3,0,3,0" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                                        <StackPanel>
+                                                            <TextBlock Text="2. ESCENARIO MIX ÓPTIMO" FontSize="10.5" FontWeight="Bold" Opacity="0.72" />
+                                                            <TextBlock x:Name="TxtKpiCompOptimoTotal" Text="$0.00" FontSize="16" FontWeight="Bold" Foreground="#107C41" Margin="0,2,0,2" />
+                                                            <TextBlock x:Name="TxtKpiCompOptimoSub" Text="Combinando mejor precio por ítem" FontSize="11" Opacity="0.82" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Tarjeta 3: Comparativa 1 Solo Proveedor (Consolidado) -->
+                                                    <Border Padding="10,8" Margin="3,0,3,0" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                                        <StackPanel>
+                                                            <TextBlock Text="3. TODO CON 1 SOLO PROVEEDOR" FontSize="10.5" FontWeight="Bold" Opacity="0.72" />
+                                                            <TextBlock x:Name="TxtKpiCompUnicoProvResumen" Text="Sin cotizaciones" FontSize="11" FontWeight="SemiBold" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Tarjeta 4: Ahorro Obtenido ($ y %) -->
+                                                    <Border Padding="10,8" Margin="6,0,0,0" CornerRadius="6" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                                                        <StackPanel>
+                                                            <TextBlock Text="4. AHORRO OBTENIDO ($ Y %)" FontSize="10.5" FontWeight="Bold" Opacity="0.72" />
+                                                            <TextBlock x:Name="TxtKpiCompAhorroTotal" Text="$0.00 (0.0%)" FontSize="15.5" FontWeight="Bold" Foreground="#107C41" Margin="0,2,0,2" />
+                                                            <TextBlock x:Name="TxtKpiCompAhorroSub" Text="vs. opción más alta y promedio" FontSize="11" Opacity="0.82" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </UniformGrid>
+
+                                                <!-- Desglose por partida de diferencias de precios -->
+                                                <DataGrid x:Name="DgAnalisisDiferenciasComp"
+                                                          AutoGenerateColumns="False"
+                                                          IsReadOnly="True"
+                                                          CanUserAddRows="False"
+                                                          MaxHeight="155"
+                                                          Margin="0,2,0,0">
+                                                    <DataGrid.Columns>
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding Codigo}" Width="90" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding Producto}" Width="*" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="55" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mín. Cotizado c/IVA" Binding="{Binding MejorPrecioTotalConIva, StringFormat={}{0:C2}}" Width="135" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Prom. Cotizado c/IVA" Binding="{Binding PromedioTotalConIva, StringFormat={}{0:C2}}" Width="135" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Máx. Cotizado c/IVA" Binding="{Binding PeorPrecioTotalConIva, StringFormat={}{0:C2}}" Width="135" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado a" Binding="{Binding ProveedorElegido}" Width="140" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total Elegido c/IVA" Binding="{Binding ElegidoTotalConIva, StringFormat={}{0:C2}}" Width="130" FontWeight="Bold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ahorro vs. Máx." Binding="{Binding AhorroVsMaximoTexto}" Width="135" FontWeight="SemiBold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Diagnóstico Compras" Binding="{Binding DiagnosticoDiferencia}" Width="175" />
+                                                    </DataGrid.Columns>
+                                                </DataGrid>
+                                            </StackPanel>
+                                        </Border>
 
                                         <DataGrid x:Name="DgPrevisualizacionOcs"
                                                   AutoGenerateColumns="False"

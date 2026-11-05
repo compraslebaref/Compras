@@ -1220,3 +1220,199 @@ public class NotificacionCheckpoint
         ? EstatusNuevo
         : $"{EstatusAnterior} → {EstatusNuevo}";
 }
+
+public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
+{
+    public CotizacionRenglonComparativo RenglonBase { get; }
+    public int IndiceOpcion { get; } // 1, 2 o 3
+    public Action<RenglonHojaCotizacionProveedor>? AlModificar { get; set; }
+
+    public RenglonHojaCotizacionProveedor(CotizacionRenglonComparativo baseRow, int indiceOpcion, Action<RenglonHojaCotizacionProveedor>? onModify = null)
+    {
+        RenglonBase = baseRow;
+        IndiceOpcion = Math.Clamp(indiceOpcion, 1, 3);
+        AlModificar = onModify;
+    }
+
+    public int SolicitudPartidaId => RenglonBase.SolicitudPartidaId;
+    public int ProductoId => RenglonBase.ProductoId;
+    public string ProductoCodigo => RenglonBase.ProductoCodigo;
+    public string ProductoNombre => RenglonBase.ProductoNombre;
+    public string UnidadCompra => RenglonBase.UnidadCompra;
+    public decimal Cantidad => RenglonBase.Cantidad;
+    public decimal StockActualAlmacen => RenglonBase.StockActualAlmacen;
+    public string ReferenciaHistoricaCorta => RenglonBase.UltimoCostoCompraConIva > 0
+        ? $"Últ.: {RenglonBase.UltimoCostoCompraConIva:C2} c/IVA"
+        : (!string.IsNullOrWhiteSpace(RenglonBase.ReferenciaHistorica) && !RenglonBase.ReferenciaHistorica.StartsWith("Sin compras", StringComparison.OrdinalIgnoreCase)
+            ? RenglonBase.ReferenciaHistorica
+            : "Sin compra previa");
+
+    public decimal PrecioSinIva
+    {
+        get => IndiceOpcion switch
+        {
+            1 => RenglonBase.PrecioSinIva1,
+            2 => RenglonBase.PrecioSinIva2,
+            _ => RenglonBase.PrecioSinIva3
+        };
+        set
+        {
+            decimal val = Math.Max(0m, Math.Round(value, 2));
+            string hoy = DateTime.Today.ToString("yyyy-MM-dd");
+            if (IndiceOpcion == 1)
+            {
+                RenglonBase.PrecioSinIva1 = val;
+                if (val > 0 && string.IsNullOrWhiteSpace(RenglonBase.FechaCotizacion1)) RenglonBase.FechaCotizacion1 = hoy;
+            }
+            else if (IndiceOpcion == 2)
+            {
+                RenglonBase.PrecioSinIva2 = val;
+                if (val > 0 && string.IsNullOrWhiteSpace(RenglonBase.FechaCotizacion2)) RenglonBase.FechaCotizacion2 = hoy;
+            }
+            else
+            {
+                RenglonBase.PrecioSinIva3 = val;
+                if (val > 0 && string.IsNullOrWhiteSpace(RenglonBase.FechaCotizacion3)) RenglonBase.FechaCotizacion3 = hoy;
+            }
+            NotificarTodo();
+            AlModificar?.Invoke(this);
+        }
+    }
+
+    public decimal PrecioConIva
+    {
+        get => Math.Round(PrecioSinIva * 1.16m, 2);
+        set
+        {
+            decimal sinIva = Math.Max(0m, Math.Round(value / 1.16m, 2));
+            PrecioSinIva = sinIva;
+        }
+    }
+
+    public decimal ImporteSubtotalSinIva => Math.Round(Cantidad * PrecioSinIva, 2);
+    public decimal ImporteTotalConIva => Math.Round(ImporteSubtotalSinIva * 1.16m + FleteConIva, 2);
+
+    public decimal FleteConIva
+    {
+        get => IndiceOpcion switch
+        {
+            1 => RenglonBase.FleteConIva1,
+            2 => RenglonBase.FleteConIva2,
+            _ => RenglonBase.FleteConIva3
+        };
+        set
+        {
+            decimal val = Math.Max(0m, Math.Round(value, 2));
+            if (IndiceOpcion == 1) RenglonBase.FleteConIva1 = val;
+            else if (IndiceOpcion == 2) RenglonBase.FleteConIva2 = val;
+            else RenglonBase.FleteConIva3 = val;
+            NotificarTodo();
+            AlModificar?.Invoke(this);
+        }
+    }
+
+    public int DiasEntrega
+    {
+        get => IndiceOpcion switch
+        {
+            1 => RenglonBase.DiasEntrega1,
+            2 => RenglonBase.DiasEntrega2,
+            _ => RenglonBase.DiasEntrega3
+        };
+        set
+        {
+            int val = Math.Max(1, value);
+            if (IndiceOpcion == 1) RenglonBase.DiasEntrega1 = val;
+            else if (IndiceOpcion == 2) RenglonBase.DiasEntrega2 = val;
+            else RenglonBase.DiasEntrega3 = val;
+            NotificarTodo();
+            AlModificar?.Invoke(this);
+        }
+    }
+
+    public int DiasVigencia
+    {
+        get => IndiceOpcion switch
+        {
+            1 => RenglonBase.DiasVigencia1 > 0 ? RenglonBase.DiasVigencia1 : 15,
+            2 => RenglonBase.DiasVigencia2 > 0 ? RenglonBase.DiasVigencia2 : 15,
+            _ => RenglonBase.DiasVigencia3 > 0 ? RenglonBase.DiasVigencia3 : 15
+        };
+        set
+        {
+            int val = Math.Max(1, value);
+            if (IndiceOpcion == 1) RenglonBase.DiasVigencia1 = val;
+            else if (IndiceOpcion == 2) RenglonBase.DiasVigencia2 = val;
+            else RenglonBase.DiasVigencia3 = val;
+            NotificarTodo();
+            AlModificar?.Invoke(this);
+        }
+    }
+
+    public string NotasCotizacion
+    {
+        get => IndiceOpcion switch
+        {
+            1 => RenglonBase.NotasCotizacion1,
+            2 => RenglonBase.NotasCotizacion2,
+            _ => RenglonBase.NotasCotizacion3
+        };
+        set
+        {
+            string val = value ?? string.Empty;
+            if (IndiceOpcion == 1) RenglonBase.NotasCotizacion1 = val;
+            else if (IndiceOpcion == 2) RenglonBase.NotasCotizacion2 = val;
+            else RenglonBase.NotasCotizacion3 = val;
+            NotificarTodo();
+            AlModificar?.Invoke(this);
+        }
+    }
+
+    public bool EsGanadorEnEstaOpcion
+    {
+        get => RenglonBase.ProveedorGanadorIndice == IndiceOpcion;
+        set
+        {
+            if (value)
+                RenglonBase.ProveedorGanadorIndice = IndiceOpcion;
+            else if (RenglonBase.ProveedorGanadorIndice == IndiceOpcion)
+                RenglonBase.ProveedorGanadorIndice = 0;
+            NotificarTodo();
+            AlModificar?.Invoke(this);
+        }
+    }
+
+    public void NotificarTodo()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PrecioSinIva)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PrecioConIva)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ImporteSubtotalSinIva)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ImporteTotalConIva)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FleteConIva)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DiasEntrega)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DiasVigencia)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NotasCotizacion)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(EsGanadorEnEstaOpcion)));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+}
+
+public class RenglonAnalisisPrecioPartida
+{
+    public string Codigo { get; set; } = string.Empty;
+    public string Producto { get; set; } = string.Empty;
+    public decimal Cantidad { get; set; }
+    public int OpcionesCotizadas { get; set; }
+    public decimal MejorPrecioTotalConIva { get; set; }
+    public decimal PeorPrecioTotalConIva { get; set; }
+    public decimal PromedioTotalConIva { get; set; }
+    public decimal ElegidoTotalConIva { get; set; }
+    public string ProveedorElegido { get; set; } = "Sin adjudicar";
+    public decimal AhorroVsMaximo { get; set; }
+    public decimal PorcentajeAhorroVsMaximo { get; set; }
+    public string AhorroVsMaximoTexto => AhorroVsMaximo > 0
+        ? $"{AhorroVsMaximo:C2} ({PorcentajeAhorroVsMaximo:0.0}%)"
+        : "$0.00 (0.0%)";
+    public string DiagnosticoDiferencia { get; set; } = "Pendiente";
+}

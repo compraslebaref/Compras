@@ -5638,6 +5638,7 @@ public partial class MainWindow : FluentWindow
             .ToList();
 
         DgPrevisualizacionOcs.ItemsSource = resumenesOc;
+        RefrescarHojaProveedorYAnalisisComparativa();
 
         int totalProductos = _renglonesComparativa.Count;
         int yaConOc = _renglonesComparativa.Count(r => r.TieneOcGenerada);
