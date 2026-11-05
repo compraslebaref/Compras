@@ -1482,14 +1482,16 @@
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="90" />
+                                                            <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
                                                         <Grid.RowDefinitions>
                                                             <RowDefinition Height="Auto" />
                                                             <RowDefinition Height="Auto" />
                                                         </Grid.RowDefinitions>
-                                                        <ComboBox x:Name="CboSolProductoAgregar" Grid.Column="0" Margin="0,0,6,0" />
+                                                        <ComboBox x:Name="CboSolProductoAgregar" Grid.Column="0" Margin="0,0,6,0" SelectionChanged="CboSolProductoAgregar_SelectionChanged" />
                                                         <ui:TextBox x:Name="TxtSolCantidadAgregar" Grid.Column="1" PlaceholderText="Cant. (1)" Margin="0,0,6,0" VerticalContentAlignment="Center" />
-                                                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,0"><ui:Button Content="Agregar del catálogo" Appearance="Primary" Margin="0,0,6,4" Click="BtnAgregarPartidaSolicitud_Click" />
+                                                        <ComboBox x:Name="CboSolUnidadAgregar" Grid.Column="2" IsEditable="True" Width="100" Margin="0,0,0,0" ToolTip="Unidad de medida para esta solicitud (ej. Pieza, Caja, Rollo, Metro, Paquete)" />
+                                                        <WrapPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,6,0,0"><ui:Button Content="Agregar del catálogo" Appearance="Primary" Margin="0,0,6,4" Click="BtnAgregarPartidaSolicitud_Click" />
                                                         <ui:Button
                                                                    Content="Concepto abierto"
                                                                    Margin="0,0,6,4"
@@ -1508,7 +1510,7 @@
                                                     <DataGridCheckBoxColumn Header="Cotizar" Binding="{Binding IncluirEnCotizacion, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="100" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="95" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" IsReadOnly="False" Width="95" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding CantidadSolicitada, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="80" />
                                                     <DataGridTemplateColumn Header="Acciones" Width="150">
@@ -1674,7 +1676,8 @@
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="80" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="70" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="65" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" Width="75" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Stock" Binding="{Binding StockActualAlmacen}" IsReadOnly="True" Width="70" />
                                                 <DataGridTextColumn x:Name="ColCompTablaProv1" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor 1" Binding="{Binding ResumenOpcion1}" IsReadOnly="True" Width="155" />
                                                 <DataGridTextColumn x:Name="ColCompTablaProv2" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor 2" Binding="{Binding ResumenOpcion2}" IsReadOnly="True" Width="155" Visibility="Collapsed" />
@@ -1781,7 +1784,7 @@
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="82" IsReadOnly="True" FontWeight="SemiBold" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo / Descripción" Binding="{Binding ProductoNombre}" Width="*" MinWidth="170" IsReadOnly="True" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="52" IsReadOnly="True" FontWeight="Bold" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unid." Binding="{Binding UnidadCompra}" Width="60" IsReadOnly="True" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unid." Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" Width="68" IsReadOnly="False" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ref. Histórica" Binding="{Binding ReferenciaHistoricaCorta}" Width="125" IsReadOnly="True" />
                                                         <DataGridTextColumn Header="✏️ P.U. s/IVA" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="96" FontWeight="Bold" />
                                                         <DataGridTextColumn Header="✏️ P.U. c/IVA" Binding="{Binding PrecioConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="96" />
@@ -1825,6 +1828,7 @@
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="80" IsReadOnly="True" FontWeight="SemiBold" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo" Binding="{Binding ProductoNombre}" Width="*" MinWidth="160" IsReadOnly="True" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="50" IsReadOnly="True" FontWeight="Bold" />
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Unid." Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" Width="64" />
                                                         <DataGridTextColumn x:Name="ColMatrizProv1" Header="✏️ P.U. s/IVA Prov 1" Binding="{Binding PrecioSinIva1, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="110" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (1)" Binding="{Binding ImporteTotal1, StringFormat={}{0:C2}}" Width="92" IsReadOnly="True" />
                                                         <DataGridTextColumn x:Name="ColMatrizProv2" Header="✏️ P.U. s/IVA Prov 2" Binding="{Binding PrecioSinIva2, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="110" />
@@ -1881,6 +1885,8 @@
                                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
                                                     <TextBlock Text="Cant.:" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
                                                     <ui:TextBox x:Name="TxtCompProdCantidad" Width="64" Text="1" TextChanged="TxtCompProdCantidad_TextChanged" />
+                                                    <TextBlock Text="Unidad:" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,6,0" />
+                                                    <ComboBox x:Name="CboCompProdUnidad" IsEditable="True" Width="95" SelectionChanged="CboCompProdUnidad_SelectionChanged" LostFocus="CboCompProdUnidad_LostFocus" />
                                                 </StackPanel>
 
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
@@ -2446,12 +2452,14 @@
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" IsReadOnly="True" Width="100" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Producto" Binding="{Binding ProductoNombre}" IsReadOnly="True" Width="*" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="U. Compra" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="100" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Factor" Binding="{Binding FactorConversion}" Width="80" />
+
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="U. Compra" Binding="{Binding UnidadCompra}" IsReadOnly="True" Width="85" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Factor Conv." Binding="{Binding FactorConversion, UpdateSourceTrigger=PropertyChanged}" Width="92" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pedida" Binding="{Binding CantidadPedida}" IsReadOnly="True" Width="80" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibida" Binding="{Binding CantidadRecibida}" IsReadOnly="True" Width="95" />
                                                     <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Pendiente" Binding="{Binding CantidadPendiente}" IsReadOnly="True" Width="100" />
-                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Recibir Hoy" Binding="{Binding CantidadRecibirAhora}" Width="115" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="✏️ Recibir Hoy" Binding="{Binding CantidadRecibirAhora, UpdateSourceTrigger=PropertyChanged}" Width="92" />
+                                                    <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entra a Stock" Binding="{Binding ResumenConversionAlmacen}" IsReadOnly="True" Width="105" FontWeight="SemiBold" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </DockPanel>

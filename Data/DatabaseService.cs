@@ -2428,7 +2428,7 @@ ORDER BY s.Id DESC";
             pCmd.CommandText = @"
 SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'CONCEPTO'),
        CASE WHEN sp.ProductoId > 0 AND p.Nombre IS NOT NULL THEN p.Nombre ELSE COALESCE(NULLIF(sp.DescripcionLibre, ''), 'Concepto Abierto') END,
-       CASE WHEN sp.ProductoId > 0 AND p.UnidadCompra IS NOT NULL THEN p.UnidadCompra ELSE COALESCE(NULLIF(sp.UnidadLibre, ''), 'Pieza') END,
+       COALESCE(NULLIF(TRIM(sp.UnidadLibre), ''), p.UnidadCompra, 'Pieza'),
        sp.CantidadSolicitada, COALESCE(p.StockActual, 0), sp.NotasPartida,
        COALESCE(sp.Proveedor1Id, 0), COALESCE(sp.PrecioSinIva1, 0), COALESCE(sp.DiasEntrega1, 2), COALESCE(sp.FleteConIva1, 0), COALESCE(sp.NotasCotizacion1, ''),
        COALESCE(sp.Proveedor2Id, 0), COALESCE(sp.PrecioSinIva2, 0), COALESCE(sp.DiasEntrega2, 3), COALESCE(sp.FleteConIva2, 0), COALESCE(sp.NotasCotizacion2, ''),
@@ -2960,9 +2960,10 @@ ORDER BY oc.Id DESC";
             pCmd.CommandText = @"
 SELECT ocp.Id, ocp.OrdenCompraId, ocp.ProductoId, COALESCE(p.CodigoInterno, 'CONCEPTO'),
        CASE WHEN ocp.ProductoId > 0 AND p.Nombre IS NOT NULL THEN p.Nombre ELSE COALESCE(NULLIF(ocp.DescripcionLibre, ''), 'Concepto Abierto') END,
-       CASE WHEN ocp.ProductoId > 0 AND p.UnidadCompra IS NOT NULL THEN p.UnidadCompra ELSE COALESCE(NULLIF(ocp.UnidadLibre, ''), 'Pieza') END,
-       COALESCE(p.UnidadAlmacen, COALESCE(NULLIF(ocp.UnidadLibre, ''), 'Pieza')), COALESCE(p.FactorConversion, 1),
-       ocp.CantidadPedida, ocp.CantidadRecibida, ocp.PrecioUnitarioSinIva, COALESCE(ocp.DescripcionLibre, '')
+       COALESCE(NULLIF(TRIM(ocp.UnidadLibre), ''), p.UnidadCompra, 'Pieza'),
+       COALESCE(p.UnidadAlmacen, COALESCE(NULLIF(TRIM(ocp.UnidadLibre), ''), 'Pieza')), COALESCE(p.FactorConversion, 1),
+       ocp.CantidadPedida, ocp.CantidadRecibida, ocp.PrecioUnitarioSinIva, COALESCE(ocp.DescripcionLibre, ''),
+       COALESCE(p.UnidadCompra, 'Pieza')
 FROM OrdenCompraPartidas ocp
 LEFT JOIN Productos p ON p.Id = ocp.ProductoId";
             using var pr = pCmd.ExecuteReader();
@@ -2975,6 +2976,18 @@ LEFT JOIN Productos p ON p.Id = ocp.ProductoId";
                 int prodId = pr.GetInt32(2);
                 string nom = pr.GetString(4);
                 string dLib = pr.GetString(11);
+                string unidadCompraOc = pr.GetString(5);
+                string unidadAlmacenProd = pr.GetString(6);
+                decimal factorCatalogo = Convert.ToDecimal(pr.GetDouble(7));
+                string unidadCatalogo = pr.GetString(12);
+                decimal factorEfectivo;
+                if (string.Equals(unidadCompraOc.Trim(), unidadAlmacenProd.Trim(), StringComparison.OrdinalIgnoreCase))
+                    factorEfectivo = 1m;
+                else if (string.Equals(unidadCompraOc.Trim(), unidadCatalogo.Trim(), StringComparison.OrdinalIgnoreCase))
+                    factorEfectivo = factorCatalogo > 0m ? factorCatalogo : 1m;
+                else
+                    factorEfectivo = 1m;
+
                 var part = new OrdenCompraPartida
                 {
                     Id = pr.GetInt32(0),
@@ -2983,9 +2996,9 @@ LEFT JOIN Productos p ON p.Id = ocp.ProductoId";
                     ProductoCodigo = prodId > 0 ? pr.GetString(3) : "CONCEPTO",
                     ProductoNombre = nom,
                     DescripcionLibre = !string.IsNullOrWhiteSpace(dLib) ? dLib : nom,
-                    UnidadCompra = pr.GetString(5),
-                    UnidadAlmacen = pr.GetString(6),
-                    FactorConversion = Convert.ToDecimal(pr.GetDouble(7)),
+                    UnidadCompra = unidadCompraOc,
+                    UnidadAlmacen = unidadAlmacenProd,
+                    FactorConversion = factorEfectivo,
                     CantidadPedida = Convert.ToDecimal(pr.GetDouble(8)),
                     CantidadRecibida = Convert.ToDecimal(pr.GetDouble(9)),
                     PrecioUnitarioSinIva = Convert.ToDecimal(pr.GetDouble(10))
@@ -3439,6 +3452,7 @@ VALUES ($pid, $desc, $fam, $pv, $pr, $de, $dv, $fc, $fol, $not, $gan, $spid)";
         cmd.CommandText = @"
 UPDATE SolicitudPartidas
 SET CantidadSolicitada = $cant,
+    UnidadLibre = $ulib,
     Proveedor1Id = $pv1, PrecioSinIva1 = $pr1, DiasEntrega1 = $d1, FleteConIva1 = $fl1, NotasCotizacion1 = $nc1, DiasVigencia1 = $dv1, FechaCotizacion1 = $fc1,
     Proveedor2Id = $pv2, PrecioSinIva2 = $pr2, DiasEntrega2 = $d2, FleteConIva2 = $fl2, NotasCotizacion2 = $nc2, DiasVigencia2 = $dv2, FechaCotizacion2 = $fc2,
     Proveedor3Id = $pv3, PrecioSinIva3 = $pr3, DiasEntrega3 = $d3, FleteConIva3 = $fl3, NotasCotizacion3 = $nc3, DiasVigencia3 = $dv3, FechaCotizacion3 = $fc3,
@@ -3447,6 +3461,7 @@ SET CantidadSolicitada = $cant,
     FechaCotizacion = $fcot
 WHERE Id = $id";
         cmd.Parameters.AddWithValue("$cant", (double)r.Cantidad);
+        cmd.Parameters.AddWithValue("$ulib", NormalizarUnidadMedida(r.UnidadCompra));
         cmd.Parameters.AddWithValue("$pv1", r.Proveedor1Id);
         cmd.Parameters.AddWithValue("$pr1", (double)r.PrecioSinIva1);
         cmd.Parameters.AddWithValue("$d1", r.DiasEntrega1);
@@ -3887,9 +3902,10 @@ WHERE Id = $spid";
                 {
                     using var upPr = conn.CreateCommand();
                     upPr.Transaction = tx;
-                    upPr.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid";
+                    upPr.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid AND UPPER(TRIM(COALESCE(UnidadCompra, 'Pieza'))) = UPPER(TRIM($uc))";
                     upPr.Parameters.AddWithValue("$costo", (double)p.precioSinIva);
                     upPr.Parameters.AddWithValue("$pid", p.prodId);
+                    upPr.Parameters.AddWithValue("$uc", string.IsNullOrWhiteSpace(p.unidadCompra) ? "Pieza" : p.unidadCompra);
                     upPr.ExecuteNonQuery();
                 }
             }
@@ -4140,12 +4156,13 @@ WHERE Id = $id";
 UPDATE Productos
 SET StockActual = StockActual + $ca,
     StockReservadoProyecto = StockReservadoProyecto + $res,
-    FactorConversion = $fc,
-    UltimoCostoCompra = $costo
+    FactorConversion = CASE WHEN UPPER(TRIM(UnidadCompra)) = UPPER(TRIM($uc)) THEN $fc ELSE FactorConversion END,
+    UltimoCostoCompra = CASE WHEN UPPER(TRIM(UnidadCompra)) = UPPER(TRIM($uc)) THEN $costo ELSE ROUND($costo / $fc, 2) END
 WHERE Id = $pid";
             upProd.Parameters.AddWithValue("$ca", (double)cantAlmacen);
             upProd.Parameters.AddWithValue("$res", (double)cantReserva);
             upProd.Parameters.AddWithValue("$fc", (double)factor);
+            upProd.Parameters.AddWithValue("$uc", partida.UnidadCompra ?? "Pieza");
             upProd.Parameters.AddWithValue("$costo", (double)partida.PrecioUnitarioConIva);
             upProd.Parameters.AddWithValue("$pid", partida.ProductoId);
             upProd.ExecuteNonQuery();

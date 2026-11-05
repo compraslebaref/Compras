@@ -620,11 +620,28 @@ public class OrdenCompraPartida : INotifyPropertyChanged
     public string DescripcionLibre { get; set; } = string.Empty;
     public string UnidadCompra { get; set; } = "Pieza";
     public string UnidadAlmacen { get; set; } = "Pieza";
-    public decimal FactorConversion { get; set; } = 1m;
+    private decimal _factorConversion = 1m;
+    public decimal FactorConversion
+    {
+        get => _factorConversion;
+        set
+        {
+            decimal ajustado = Math.Max(0.0001m, Math.Round(value, 4));
+            if (_factorConversion != ajustado)
+            {
+                _factorConversion = ajustado;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FactorConversion)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TotalUnidadesAlmacenRecibirHoy)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResumenConversionAlmacen)));
+            }
+        }
+    }
     public decimal CantidadPedida { get; set; }
     public decimal CantidadRecibida { get; set; }
     public decimal CantidadPendiente => Math.Max(0, CantidadPedida - CantidadRecibida);
     public bool TienePendientePorRecibir => CantidadPendiente > 0m;
+    public decimal TotalUnidadesAlmacenRecibirHoy => Math.Round(CantidadRecibirAhora * Math.Max(0.0001m, FactorConversion), 2);
+    public string ResumenConversionAlmacen => $"{TotalUnidadesAlmacenRecibirHoy:0.##} {UnidadAlmacen}";
 
     public bool SeleccionadoRecibir
     {
@@ -638,11 +655,15 @@ public class OrdenCompraPartida : INotifyPropertyChanged
                 {
                     _cantidadRecibirAhora = CantidadPendiente;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadRecibirAhora)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TotalUnidadesAlmacenRecibirHoy)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResumenConversionAlmacen)));
                 }
                 else if (!_seleccionadoRecibir && _cantidadRecibirAhora > 0m)
                 {
                     _cantidadRecibirAhora = 0m;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadRecibirAhora)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TotalUnidadesAlmacenRecibirHoy)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResumenConversionAlmacen)));
                 }
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoRecibir)));
             }
@@ -666,6 +687,8 @@ public class OrdenCompraPartida : INotifyPropertyChanged
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SeleccionadoRecibir)));
                 }
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CantidadRecibirAhora)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TotalUnidadesAlmacenRecibirHoy)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ResumenConversionAlmacen)));
             }
         }
     }
@@ -1240,7 +1263,20 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
     public int ProductoId => RenglonBase.ProductoId;
     public string ProductoCodigo => RenglonBase.ProductoCodigo;
     public string ProductoNombre => RenglonBase.ProductoNombre;
-    public string UnidadCompra => RenglonBase.UnidadCompra;
+    public string UnidadCompra
+    {
+        get => RenglonBase.UnidadCompra;
+        set
+        {
+            string val = string.IsNullOrWhiteSpace(value) ? "Pieza" : value.Trim();
+            if (!string.Equals(RenglonBase.UnidadCompra, val, StringComparison.Ordinal))
+            {
+                RenglonBase.UnidadCompra = val;
+                NotificarTodo();
+                AlModificar?.Invoke(this);
+            }
+        }
+    }
     public decimal Cantidad => RenglonBase.Cantidad;
     public decimal StockActualAlmacen => RenglonBase.StockActualAlmacen;
     public string ReferenciaHistoricaCorta => RenglonBase.UltimoCostoCompraConIva > 0
@@ -1386,6 +1422,7 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 
     public void NotificarTodo()
     {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UnidadCompra)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PrecioSinIva)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PrecioConIva)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ImporteSubtotalSinIva)));

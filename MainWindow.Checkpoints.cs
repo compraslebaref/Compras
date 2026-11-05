@@ -2112,6 +2112,8 @@ public partial class MainWindow
         if (r.NumeroOpcionesVisibles < slot)
             r.NumeroOpcionesVisibles = slot;
 
+        r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
         DatabaseService.GuardarCotizacionPartida(r);
 
         _sincronizandoHojaProveedor = true;
@@ -2265,7 +2267,9 @@ public partial class MainWindow
         {
             if (r.TieneOcGenerada) continue;
             AsignarProveedorASlotEnRenglon(r, slot, prov);
-            DatabaseService.GuardarCotizacionPartida(r);
+            r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+        DatabaseService.GuardarCotizacionPartida(r);
         }
 
         if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel)
@@ -2329,7 +2333,9 @@ public partial class MainWindow
                     break;
             }
 
-            DatabaseService.GuardarCotizacionPartida(r);
+            r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+        DatabaseService.GuardarCotizacionPartida(r);
         }
 
         if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel)
@@ -2391,7 +2397,9 @@ public partial class MainWindow
                     break;
             }
 
-            DatabaseService.GuardarCotizacionPartida(r);
+            r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+        DatabaseService.GuardarCotizacionPartida(r);
             cargados++;
         }
 
@@ -2433,7 +2441,9 @@ public partial class MainWindow
             if (provId > 0 && precio > 0)
             {
                 r.ProveedorGanadorIndice = slot;
-                DatabaseService.GuardarCotizacionPartida(r);
+                r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+        DatabaseService.GuardarCotizacionPartida(r);
                 adjudicados++;
             }
         }
@@ -2529,7 +2539,9 @@ public partial class MainWindow
                 if (string.IsNullOrWhiteSpace(r.FechaCotizacion3)) r.FechaCotizacion3 = hoyStr;
             }
 
-            DatabaseService.GuardarCotizacionPartida(r);
+            r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+        DatabaseService.GuardarCotizacionPartida(r);
             if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel && ReferenceEquals(sel, r))
                 CargarProductoEnTarjetasComparativa(r);
 
@@ -2552,6 +2564,8 @@ public partial class MainWindow
         }
 
         r.ProveedorGanadorIndice = slot;
+        r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
         DatabaseService.GuardarCotizacionPartida(r);
         if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel && ReferenceEquals(sel, r))
             CargarProductoEnTarjetasComparativa(r);

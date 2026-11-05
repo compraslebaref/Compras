@@ -556,6 +556,18 @@ public partial class MainWindow : FluentWindow
                 TxtProdUnidadAlmacen.ItemsSource = DatabaseService.UnidadesMedidaEstandar;
                 TxtProdUnidadAlmacen.Text = uaActual;
             }
+            if (CboSolUnidadAgregar != null)
+            {
+                string uSolActual = CboSolUnidadAgregar.Text;
+                CboSolUnidadAgregar.ItemsSource = DatabaseService.UnidadesMedidaEstandar;
+                CboSolUnidadAgregar.Text = string.IsNullOrWhiteSpace(uSolActual) ? "Pieza" : uSolActual;
+            }
+            if (CboCompProdUnidad != null)
+            {
+                string uCompActual = CboCompProdUnidad.Text;
+                CboCompProdUnidad.ItemsSource = DatabaseService.UnidadesMedidaEstandar;
+                CboCompProdUnidad.Text = uCompActual;
+            }
             var ubicacionesCatalogo = ObtenerCatalogoUbicacionesDesplegable();
             if (CboFiltroUbicacion != null)
             {
@@ -3236,7 +3248,7 @@ public partial class MainWindow : FluentWindow
             var prodExacto = DatabaseService.BuscarProductoPorCodigo(code) ?? DatabaseService.BuscarProductoPorCodigo(raw);
             if (prodExacto != null)
             {
-                AgregarProductoAPartidasSolicitud(prodExacto, cant, "Búsqueda / Escáner");
+                AgregarProductoAPartidasSolicitud(prodExacto, cant, "Búsqueda / Escáner", CboSolUnidadAgregar?.Text);
                 TxtBuscarProductoSolicitud.Clear();
                 e.Handled = true;
                 return;
@@ -3245,7 +3257,7 @@ public partial class MainWindow : FluentWindow
             // Si hay un producto seleccionado en el combo filtrado, agregarlo con Enter
             if (CboSolProductoAgregar.SelectedItem is Producto prodSel)
             {
-                AgregarProductoAPartidasSolicitud(prodSel, cant, "Buscador de Solicitud");
+                AgregarProductoAPartidasSolicitud(prodSel, cant, "Buscador de Solicitud", CboSolUnidadAgregar?.Text);
                 TxtBuscarProductoSolicitud.SelectAll();
                 e.Handled = true;
                 return;
@@ -3254,7 +3266,7 @@ public partial class MainWindow : FluentWindow
             // Si no existe en el catálogo pero el usuario escribió un concepto y presionó Enter, agregarlo como Concepto Abierto
             if (!string.IsNullOrWhiteSpace(raw))
             {
-                AgregarConceptoLibreAPartidasSolicitud(raw, cant, "Concepto Abierto (Buscador)");
+                AgregarConceptoLibreAPartidasSolicitud(raw, cant, "Concepto Abierto (Buscador)", CboSolUnidadAgregar?.Text);
                 TxtBuscarProductoSolicitud.Clear();
                 e.Handled = true;
             }
@@ -3525,7 +3537,15 @@ public partial class MainWindow : FluentWindow
         RefrescarDashboard();
     }
 
-    private void AgregarProductoAPartidasSolicitud(Producto prod, decimal cant, string notas = "")
+    private void CboSolProductoAgregar_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CboSolProductoAgregar?.SelectedItem is Producto prod && CboSolUnidadAgregar != null)
+        {
+            CboSolUnidadAgregar.Text = string.IsNullOrWhiteSpace(prod.UnidadCompra) ? "Pieza" : prod.UnidadCompra;
+        }
+    }
+
+    private void AgregarProductoAPartidasSolicitud(Producto prod, decimal cant, string notas = "", string? unidadPersonalizada = null)
     {
         if (cant <= 0) cant = 1m;
 
@@ -3539,10 +3559,19 @@ public partial class MainWindow : FluentWindow
             }
         }
 
+        string uEfectiva = DatabaseService.NormalizarUnidadMedida(!string.IsNullOrWhiteSpace(unidadPersonalizada) ? unidadPersonalizada : prod.UnidadCompra);
+        var prodCopia = new Producto { Id = prod.Id, CodigoInterno = prod.CodigoInterno, Nombre = prod.Nombre, Familia = prod.Familia, UnidadCompra = uEfectiva, StockActual = prod.StockActual };
+        prod = prodCopia;
         var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == prod.Id);
         if (existente != null)
         {
             existente.CantidadSolicitada += cant;
+            if (!string.IsNullOrWhiteSpace(unidadPersonalizada))
+                existente.UnidadCompra = uEfectiva;
+            foreach (var p in _partidasNuevaSolicitud)
+            {
+                p.UnidadCompra = DatabaseService.NormalizarUnidadMedida(p.UnidadCompra);
+            }
             DgPartidasNuevaSolicitud.Items.Refresh();
         }
         else
@@ -3564,9 +3593,10 @@ public partial class MainWindow : FluentWindow
         ActualizarIndicadorCarritoSuperior();
     }
 
-    private void AgregarConceptoLibreAPartidasSolicitud(string concepto, decimal cant, string notas = "Concepto Abierto")
+    private void AgregarConceptoLibreAPartidasSolicitud(string concepto, decimal cant, string notas = "Concepto Abierto", string? unidadPersonalizada = null)
     {
         string desc = concepto.Trim();
+        string uEfectiva = DatabaseService.NormalizarUnidadMedida(!string.IsNullOrWhiteSpace(unidadPersonalizada) ? unidadPersonalizada : "Pieza");
         if (string.IsNullOrWhiteSpace(desc))
             return;
 
@@ -3580,6 +3610,12 @@ public partial class MainWindow : FluentWindow
         if (existente != null)
         {
             existente.CantidadSolicitada += cant;
+            if (!string.IsNullOrWhiteSpace(unidadPersonalizada))
+                existente.UnidadCompra = uEfectiva;
+            foreach (var p in _partidasNuevaSolicitud)
+            {
+                p.UnidadCompra = DatabaseService.NormalizarUnidadMedida(p.UnidadCompra);
+            }
             DgPartidasNuevaSolicitud.Items.Refresh();
         }
         else
@@ -3592,7 +3628,7 @@ public partial class MainWindow : FluentWindow
                 ProductoNombre = desc.ToUpperInvariant(),
                 DescripcionLibre = desc.ToUpperInvariant(),
                 Familia = famSug,
-                UnidadCompra = "Pieza",
+                UnidadCompra = DatabaseService.NormalizarUnidadMedida(!string.IsNullOrWhiteSpace(unidadPersonalizada) ? unidadPersonalizada : "Pieza"),
                 CantidadSolicitada = cant,
                 StockActualAlmacen = 0m,
                 NotasPartida = notas
@@ -3608,14 +3644,14 @@ public partial class MainWindow : FluentWindow
         decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
         if (CboSolProductoAgregar.SelectedItem is Producto prod)
         {
-            AgregarProductoAPartidasSolicitud(prod, cant, "Manual");
+            AgregarProductoAPartidasSolicitud(prod, cant, "Manual", CboSolUnidadAgregar?.Text);
             return;
         }
 
         string texto = TxtBuscarProductoSolicitud?.Text?.Trim() ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(texto))
         {
-            AgregarConceptoLibreAPartidasSolicitud(texto, cant, "Concepto Abierto");
+            AgregarConceptoLibreAPartidasSolicitud(texto, cant, "Concepto Abierto", CboSolUnidadAgregar?.Text);
             TxtBuscarProductoSolicitud?.Clear();
         }
     }
@@ -3635,7 +3671,7 @@ public partial class MainWindow : FluentWindow
         }
 
         decimal cant = ParseDecimal(TxtSolCantidadAgregar.Text, 1m);
-        AgregarConceptoLibreAPartidasSolicitud(texto, cant, "Concepto Abierto (Se dará de alta al comprar)");
+        AgregarConceptoLibreAPartidasSolicitud(texto, cant, "Concepto Abierto (Se dará de alta al comprar)", CboSolUnidadAgregar?.Text);
         TxtBuscarProductoSolicitud?.Clear();
     }
 
@@ -3654,6 +3690,10 @@ public partial class MainWindow : FluentWindow
         if (partida.CantidadSolicitada > 1)
         {
             partida.CantidadSolicitada -= 1;
+            foreach (var p in _partidasNuevaSolicitud)
+            {
+                p.UnidadCompra = DatabaseService.NormalizarUnidadMedida(p.UnidadCompra);
+            }
             DgPartidasNuevaSolicitud.Items.Refresh();
         }
         else
@@ -3712,6 +3752,10 @@ public partial class MainWindow : FluentWindow
             foreach (var inv in invalidas)
             {
                 _partidasNuevaSolicitud.Remove(inv);
+            }
+            foreach (var p in _partidasNuevaSolicitud)
+            {
+                p.UnidadCompra = DatabaseService.NormalizarUnidadMedida(p.UnidadCompra);
             }
             DgPartidasNuevaSolicitud.Items.Refresh();
             PersistirCambioSiSolicitudEnEdicion();
@@ -4531,6 +4575,10 @@ public partial class MainWindow : FluentWindow
                 if (item.cantSurtiendo >= item.part.CantidadSolicitada)
                     item.part.IncluirEnCotizacion = false;
             }
+            foreach (var p in _partidasNuevaSolicitud)
+            {
+                p.UnidadCompra = DatabaseService.NormalizarUnidadMedida(p.UnidadCompra);
+            }
             DgPartidasNuevaSolicitud.Items.Refresh();
             PersistirCambioSiSolicitudEnEdicion();
         }
@@ -4829,6 +4877,8 @@ public partial class MainWindow : FluentWindow
             TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")} | Vigencia: {r.VigenciaEstadoTexto}";
             TxtCompProdHistorial.Text = r.ReferenciaHistorica;
             TxtCompProdCantidad.Text = r.Cantidad.ToString("0.##", CultureInfo.InvariantCulture);
+            if (CboCompProdUnidad != null)
+                CboCompProdUnidad.Text = string.IsNullOrWhiteSpace(r.UnidadCompra) ? "Pieza" : r.UnidadCompra;
             if (BtnVincularLineaAbiertaComp != null)
                 BtnVincularLineaAbiertaComp.Visibility = r.ProductoId <= 0 ? Visibility.Visible : Visibility.Collapsed;
             if (TxtCompDiasVigencia != null)
@@ -5347,6 +5397,11 @@ public partial class MainWindow : FluentWindow
 
         decimal cant = ParseDecimal(TxtCompProdCantidad.Text, r.Cantidad);
         if (cant > 0) r.Cantidad = cant;
+        if (CboCompProdUnidad != null && !string.IsNullOrWhiteSpace(CboCompProdUnidad.Text))
+        {
+            r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(CboCompProdUnidad.Text);
+            SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+        }
 
         if (CboCompProv1.SelectedItem is Proveedor p1)
         {
@@ -5585,12 +5640,48 @@ public partial class MainWindow : FluentWindow
         return candidatos.Count > 0 ? candidatos.OrderBy(c => c.costoTotal).First().idx : 0;
     }
 
+    private void SincronizarUnidadEnEditorSolicitudSiAbierta(int solicitudPartidaId, string unidadNormalizada)
+    {
+        if (solicitudPartidaId <= 0) return;
+        var part = _partidasNuevaSolicitud.FirstOrDefault(x => x.Id == solicitudPartidaId);
+        if (part != null && !string.Equals(part.UnidadCompra, unidadNormalizada, StringComparison.Ordinal))
+        {
+            part.UnidadCompra = unidadNormalizada;
+            DgPartidasNuevaSolicitud?.Items.Refresh();
+        }
+    }
+
+    private void CboCompProdUnidad_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_cargandoDetalleComparativa || !IsLoaded) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_cargandoDetalleComparativa) return;
+            SincronizarRenglonActualDesdeTarjetas();
+            RecalcularTotalesComparativa();
+        }), System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    private void CboCompProdUnidad_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_cargandoDetalleComparativa || !IsLoaded) return;
+        SincronizarRenglonActualDesdeTarjetas();
+        if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo r)
+        {
+            CargarProductoEnTarjetasComparativa(r);
+        }
+        RecalcularTotalesComparativa();
+    }
+
     private void DgComparativa_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
             if (DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
             {
+                DatabaseService.GuardarCotizacionPartida(r);
+                r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+                SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
                 DatabaseService.GuardarCotizacionPartida(r);
                 CargarProductoEnTarjetasComparativa(r);
             }
@@ -7810,11 +7901,13 @@ public partial class MainWindow : FluentWindow
 
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 85 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Artículo / Concepto", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "U. Compra", Binding = new System.Windows.Data.Binding("UnidadCompra"), IsReadOnly = true, Width = 95 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "U. Compra", Binding = new System.Windows.Data.Binding("UnidadCompra"), IsReadOnly = true, Width = 80 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Factor Conv.", Binding = new System.Windows.Data.Binding("FactorConversion") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 92 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pedida", Binding = new System.Windows.Data.Binding("CantidadPedida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 75 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Recibida", Binding = new System.Windows.Data.Binding("CantidadRecibida") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 90 });
         dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Pendiente", Binding = new System.Windows.Data.Binding("CantidadPendiente") { StringFormat = "{0:0.##}" }, IsReadOnly = true, Width = 95 });
-        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Recibir Hoy", Binding = new System.Windows.Data.Binding("CantidadRecibirAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 125 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "✏️ Recibir Hoy", Binding = new System.Windows.Data.Binding("CantidadRecibirAhora") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged }, IsReadOnly = false, Width = 95 });
+        dg.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Entra a Stock", Binding = new System.Windows.Data.Binding("ResumenConversionAlmacen"), IsReadOnly = true, Width = 105 });
 
         var colUbiOc = new DataGridTemplateColumn { Header = "Ubicación en Almacén", Width = 185 };
         var cboUbiFactory = new FrameworkElementFactory(typeof(ComboBox));
