@@ -3487,6 +3487,8 @@ public partial class MainWindow : FluentWindow
         TxtSolNotas.Clear();
         DgPartidasNuevaSolicitud.Items.Refresh();
         ActualizarEncabezadoEditorSolicitud(null);
+        CargarExpedienteSolicitudEnEditor(null);
+        SeleccionarTabDetalleSolicitudAlAbrir(null, false);
         ActualizarIndicadorCarritoSuperior();
     }
 
@@ -3518,6 +3520,8 @@ public partial class MainWindow : FluentWindow
 
         TxtSolNotas.Text = sol.Notas;
         SincronizarPartidasEditorDesdeSolicitud(sol);
+        CargarExpedienteSolicitudEnEditor(sol);
+        SeleccionarTabDetalleSolicitudAlAbrir(sol, false);
 
         if (sol.EsEditable && CboCarritoSolicitudDestino?.ItemsSource is IEnumerable<Solicitud> opciones)
         {
@@ -3913,7 +3917,7 @@ public partial class MainWindow : FluentWindow
         PnlSolicitudDetalle.Visibility = detalle ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void AbrirSolicitudDeLista(Solicitud? sol)
+    private void AbrirSolicitudDeLista(Solicitud? sol, bool abrirEnExpediente = false)
     {
         if (sol == null) return;
         CargarSolicitudEnEditor(sol);
@@ -3924,7 +3928,7 @@ public partial class MainWindow : FluentWindow
     {
         // Solo se abre al hacer clic sobre una fila (no en encabezados ni espacios vacíos)
         var origen = e.OriginalSource as DependencyObject;
-        while (origen != null && origen is not DataGridRow && origen is not System.Windows.Controls.Primitives.DataGridColumnHeader)
+        while (origen != null && origen is not DataGridRow && origen is not System.Windows.Controls.Primitives.DataGridColumnHeader && origen is not System.Windows.Controls.Primitives.ButtonBase)
             origen = System.Windows.Media.VisualTreeHelper.GetParent(origen);
 
         if (origen is DataGridRow fila && fila.Item is Solicitud sol)
@@ -7886,7 +7890,7 @@ public partial class MainWindow : FluentWindow
     private static T? FilaClicada<T>(MouseButtonEventArgs e) where T : class
     {
         var origen = e.OriginalSource as DependencyObject;
-        while (origen != null && origen is not DataGridRow && origen is not System.Windows.Controls.Primitives.DataGridColumnHeader)
+        while (origen != null && origen is not DataGridRow && origen is not System.Windows.Controls.Primitives.DataGridColumnHeader && origen is not System.Windows.Controls.Primitives.ButtonBase)
             origen = System.Windows.Media.VisualTreeHelper.GetParent(origen);
 
         return (origen as DataGridRow)?.Item as T;

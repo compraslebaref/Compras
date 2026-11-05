@@ -130,6 +130,157 @@ public static class BarcodePrintService
         AbrirVentanaVistaPreviaCarta(owner, $"Solicitud {sol.Folio}", hoja);
     }
 
+    public static void MostrarVistaPreviaEImprimirExpedienteSolicitud(
+        Window owner,
+        Solicitud sol,
+        List<CotizacionRenglonComparativo> renglones,
+        List<OrdenCompra> ordenes,
+        List<EntradaAlmacen> entradas,
+        List<FacturaXml> facturas,
+        List<SalidaAlmacen> salidas,
+        List<Solicitud> anexos,
+        bool soloDescargar = false)
+    {
+        var filasPartidas = renglones.Select((r, idx) =>
+        {
+            var cots = new List<string>();
+            if (r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0)
+                cots.Add($"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre)}: {r.PrecioConIva1:C2}");
+            if (r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0)
+                cots.Add($"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre)}: {r.PrecioConIva2:C2}");
+            if (r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0)
+                cots.Add($"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre)}: {r.PrecioConIva3:C2}");
+            foreach (var ex in r.ProveedoresExtra.Where(x => x.ProveedorId > 0 && x.PrecioSinIva > 0))
+                cots.Add($"{Proveedor.ExtraerNombreComercialCorto(ex.ProveedorNombre)}: {ex.PrecioConIva:C2}");
+
+            string ganador = r.ProveedorGanadorId > 0
+                ? Proveedor.ExtraerNombreComercialCorto(r.ProveedorGanadorNombre)
+                : "Sin adjudicar";
+
+            return new[]
+            {
+                (idx + 1).ToString(),
+                string.IsNullOrWhiteSpace(r.ProductoCodigo) ? "CONCEPTO" : r.ProductoCodigo,
+                r.ProductoNombre,
+                $"{r.Cantidad:0.##} {r.UnidadCompra}",
+                cots.Count > 0 ? string.Join(" | ", cots) : "Sin cotizar",
+                ganador,
+                r.PrecioUnitarioGanadorConIva > 0 ? $"{r.TotalGanadorConIva:C2}" : "-",
+                string.IsNullOrWhiteSpace(r.OrdenCompraFolio) ? "-" : r.OrdenCompraFolio
+            };
+        }).ToList();
+
+        var filasDocumentos = new List<string[]>();
+        foreach (var oc in ordenes)
+        {
+            filasDocumentos.Add(new[]
+            {
+                "Orden de Compra",
+                oc.Folio,
+                oc.Fecha,
+                Proveedor.ExtraerNombreComercialCorto(oc.ProveedorNombre),
+                $"{oc.Estatus} ({oc.AvanceRecepcionTexto})",
+                $"{oc.TotalConIva:C2}"
+            });
+        }
+        foreach (var ent in entradas)
+        {
+            filasDocumentos.Add(new[]
+            {
+                "Recepción Almacén",
+                ent.Folio,
+                ent.Fecha,
+                Proveedor.ExtraerNombreComercialCorto(ent.ProveedorNombre),
+                $"OC: {(string.IsNullOrWhiteSpace(ent.OrdenCompraFolio) ? "Directa" : ent.OrdenCompraFolio)}",
+                $"{ent.Partidas.Sum(p => p.CantidadIngresadaAlmacen):0.##} u. recibidas"
+            });
+        }
+        foreach (var fac in facturas)
+        {
+            filasDocumentos.Add(new[]
+            {
+                fac.TipoComprobante,
+                string.IsNullOrWhiteSpace(fac.SerieFolio) ? fac.Uuid : fac.SerieFolio,
+                fac.FechaTimbrado,
+                Proveedor.ExtraerNombreComercialCorto(fac.EmisorNombre),
+                $"OC: {fac.OrdenCompraFolio}",
+                $"{fac.Total:C2}"
+            });
+        }
+        foreach (var sal in salidas)
+        {
+            filasDocumentos.Add(new[]
+            {
+                "Vale de Salida",
+                sal.Folio,
+                sal.Fecha,
+                $"Recibió: {sal.PersonaRecibeEfectiva}",
+                sal.EstatusDevolucionTexto,
+                $"{sal.TotalUnidadesEntregadas:0.##} pzas."
+            });
+        }
+        if (filasDocumentos.Count == 0)
+        {
+            filasDocumentos.Add(new[]
+            {
+                "Solicitud",
+                sol.Folio,
+                sol.Fecha,
+                sol.EncargadoNombre,
+                sol.Estatus,
+                "Sin OCs/Movimientos adicionales"
+            });
+        }
+
+        string textoAnexos = anexos.Count > 0
+            ? string.Join(", ", anexos.Select(a => $"{a.Folio} ({a.Estatus})"))
+            : "Ninguno";
+
+        var metadatos = new List<(string etiq, string val)>
+        {
+            ("Solicitud y Fecha:", $"{sol.Folio} ({sol.Fecha}) — Estatus: {sol.Estatus}"),
+            ("Área y Solicitante:", $"{sol.DepartamentoNombre} — {sol.EncargadoNombre}"),
+            ("Proyecto / Destino:", sol.ProyectoMostrar),
+            ("Modalidad y Anexos:", $"{sol.TipoSolicitud} | Anexos vinculados: {textoAnexos}"),
+            ("Documentos Derivados:", $"{ordenes.Count} OC(s) · {entradas.Count} Recepción(es) · {facturas.Count} Factura(s)/Nota(s) · {salidas.Count} Salida(s)")
+        };
+
+        decimal totalOcConIva = ordenes.Sum(o => o.TotalConIva);
+        decimal totalAdjudicadoPartidas = renglones.Where(r => r.ProveedorGanadorId > 0).Sum(r => r.TotalGanadorConIva + r.FleteGanadorConIva);
+        decimal montoExpediente = totalOcConIva > 0 ? totalOcConIva : totalAdjudicadoPartidas;
+
+        var hoja = ConstruirHojaCartaDocumento(
+            tituloDocumento: "EXPEDIENTE INTEGRAL DE SOLICITUD DE COMPRA",
+            subtitulo: "Lebaref | Trazabilidad Completa: Solicitud · Comparativa · Órdenes de Compra · Almacén · Facturación",
+            folioCodigoBarras: sol.Folio,
+            fecha: sol.Fecha,
+            metadatos: metadatos,
+            encabezadosTabla: new[] { "#", "Código", "Artículo / Concepto", "Cant.", "Cotizaciones (c/IVA)", "Adjudicado", "Total c/IVA", "Folio OC" },
+            filasTabla: filasPartidas,
+            totales: new List<(string, string)>
+            {
+                ("Partidas / SKUs:", $"{sol.Partidas.Count} ({sol.TotalArticulos:0.##} u.)"),
+                ("Órdenes Emitidas:", ordenes.Count.ToString()),
+                ("Recepciones / Salidas:", $"{entradas.Count} ENT / {salidas.Count} SAL"),
+                ("Total Expediente c/IVA:", $"{montoExpediente:C2}")
+            },
+            notas: string.IsNullOrWhiteSpace(sol.Notas) ? "Expediente generado desde el Sistema de Compras y Almacén." : sol.Notas,
+            firmaIzquierda: $"Solicitó: {sol.EncargadoNombre} ({sol.DepartamentoNombre})",
+            firmaDerecha: "Departamento de Compras y Abastecimiento",
+            firmaCentro: "Almacén / Control de Recepciones",
+            tituloTablaSecundaria: "DOCUMENTOS VINCULADOS AL EXPEDIENTE (ÓRDENES DE COMPRA, RECEPCIONES, FACTURAS Y SALIDAS)",
+            encabezadosTablaSecundaria: new[] { "Tipo Documento", "Folio / Serie", "Fecha", "Proveedor / Responsable", "Estatus / Referencia", "Monto / Detalle" },
+            filasTablaSecundaria: filasDocumentos);
+
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"Expediente_{sol.Folio}", hoja);
+            return;
+        }
+
+        AbrirVentanaVistaPreviaCarta(owner, $"Expediente Completo {sol.Folio}", hoja);
+    }
+
     public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones, bool soloDescargar = false)
     {
         var columnasProveedores = new List<(int slotBase, int provId, string nombreCorto)>();

@@ -3311,4 +3311,471 @@ public partial class MainWindow
 
         DgAnalisisDiferenciasComp.ItemsSource = desglose;
     }
+
+    // =========================================================================
+    // EXPEDIENTE COMPLETO DE SOLICITUD Y REIMPRESIÓN DE DOCUMENTOS VINCULADOS
+    // =========================================================================
+
+    private sealed class RenglonExpedientePartidaSolicitud
+    {
+        public string Codigo { get; set; } = string.Empty;
+        public string Articulo { get; set; } = string.Empty;
+        public string CantidadTexto { get; set; } = string.Empty;
+        public string Unidad { get; set; } = string.Empty;
+        public string OpcionesCotizadas { get; set; } = string.Empty;
+        public string ProveedorGanador { get; set; } = string.Empty;
+        public decimal PrecioUnitarioConIva { get; set; }
+        public decimal TotalConIva { get; set; }
+        public string FolioOc { get; set; } = string.Empty;
+    }
+
+    private static bool EsSolicitudFinalizadaOAvanzada(Solicitud? sol)
+    {
+        if (sol == null || sol.Id <= 0) return false;
+        return string.Equals(sol.Estatus, "OC Generada", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(sol.Estatus, "Atendida", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(sol.Estatus, "Cotización Entregada", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(sol.Estatus, "Autorizada para Surtir Stock", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(sol.Estatus, "Parcial en OC", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SeleccionarTabDetalleSolicitudAlAbrir(Solicitud? sol, bool forzarExpediente)
+    {
+        if (forzarExpediente || EsSolicitudFinalizadaOAvanzada(sol))
+        {
+            if (TabSolExpediente != null)
+                TabSolExpediente.IsSelected = true;
+        }
+        else
+        {
+            if (TabSolArticulos != null)
+                TabSolArticulos.IsSelected = true;
+        }
+    }
+
+    private Solicitud? ObtenerSolicitudActualParaExpediente()
+    {
+        if (_solicitudEditandoId > 0)
+        {
+            var porId = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
+            if (porId != null) return porId;
+        }
+        if (DgHistorialSolicitudes?.SelectedItem is Solicitud sel && sel.Id > 0)
+        {
+            return DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == sel.Id) ?? sel;
+        }
+        return null;
+    }
+
+    private List<CotizacionRenglonComparativo> ConstruirRenglonesComparativaDeSolicitud(Solicitud sol)
+    {
+        var lista = new List<CotizacionRenglonComparativo>();
+        var productos = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var provDict = DatabaseService.ObtenerProveedores().ToDictionary(p => p.Id);
+
+        foreach (var part in sol.Partidas)
+        {
+            productos.TryGetValue(part.ProductoId, out var pObj);
+            var provsExtra = part.Id > 0 ? DatabaseService.ObtenerProveedoresExtraPartida(part.Id) : new List<CotizacionProveedorExtra>();
+
+            int numOpciones = 1;
+            if (provsExtra.Count > 0)
+                numOpciones = Math.Max(3, provsExtra.Max(x => x.NumeroOpcion));
+            else if (part.Proveedor3Id > 0 || part.PrecioSinIva3 > 0 || part.ProveedorGanadorIndice == 3)
+                numOpciones = 3;
+            else if (part.Proveedor2Id > 0 || part.PrecioSinIva2 > 0 || part.ProveedorGanadorIndice == 2)
+                numOpciones = 2;
+
+            lista.Add(new CotizacionRenglonComparativo
+            {
+                SolicitudPartidaId = part.Id,
+                ProductoId = part.ProductoId,
+                ProductoCodigo = part.ProductoCodigo,
+                ProductoNombre = part.ProductoNombre,
+                DescripcionLibre = part.DescripcionLibre,
+                Familia = !string.IsNullOrWhiteSpace(part.Familia) ? part.Familia : (pObj?.Familia ?? string.Empty),
+                UnidadCompra = string.IsNullOrWhiteSpace(part.UnidadCompra) ? (pObj?.UnidadCompra ?? "Pieza") : part.UnidadCompra,
+                Cantidad = part.CantidadSolicitada,
+                StockActualAlmacen = pObj?.StockActual ?? part.StockActualAlmacen,
+                DiasVigenciaCotizacion = part.DiasVigenciaCotizacion > 0 ? part.DiasVigenciaCotizacion : 15,
+                FechaCotizacion = part.FechaCotizacion,
+                Proveedor1Id = part.Proveedor1Id,
+                Proveedor1Nombre = provDict.TryGetValue(part.Proveedor1Id, out var p1) ? p1.RazonSocial : "Sin asignar",
+                PrecioSinIva1 = part.PrecioSinIva1,
+                DiasEntrega1 = part.DiasEntrega1 > 0 ? part.DiasEntrega1 : 2,
+                DiasVigencia1 = part.DiasVigencia1 > 0 ? part.DiasVigencia1 : 15,
+                FechaCotizacion1 = part.FechaCotizacion1,
+                FleteConIva1 = part.FleteConIva1,
+                NotasCotizacion1 = part.NotasCotizacion1,
+                Proveedor2Id = part.Proveedor2Id,
+                Proveedor2Nombre = provDict.TryGetValue(part.Proveedor2Id, out var p2) ? p2.RazonSocial : "Sin asignar",
+                PrecioSinIva2 = part.PrecioSinIva2,
+                DiasEntrega2 = part.DiasEntrega2 > 0 ? part.DiasEntrega2 : 3,
+                DiasVigencia2 = part.DiasVigencia2 > 0 ? part.DiasVigencia2 : 15,
+                FechaCotizacion2 = part.FechaCotizacion2,
+                FleteConIva2 = part.FleteConIva2,
+                NotasCotizacion2 = part.NotasCotizacion2,
+                Proveedor3Id = part.Proveedor3Id,
+                Proveedor3Nombre = provDict.TryGetValue(part.Proveedor3Id, out var p3) ? p3.RazonSocial : "Sin asignar",
+                PrecioSinIva3 = part.PrecioSinIva3,
+                DiasEntrega3 = part.DiasEntrega3 > 0 ? part.DiasEntrega3 : 1,
+                DiasVigencia3 = part.DiasVigencia3 > 0 ? part.DiasVigencia3 : 15,
+                FechaCotizacion3 = part.FechaCotizacion3,
+                FleteConIva3 = part.FleteConIva3,
+                NotasCotizacion3 = part.NotasCotizacion3,
+                ProveedoresExtra = provsExtra,
+                ProveedorGanadorIndice = part.ProveedorGanadorIndice,
+                NumeroOpcionesVisibles = numOpciones,
+                OrdenCompraId = part.OrdenCompraId,
+                OrdenCompraFolio = part.OrdenCompraFolio
+            });
+        }
+
+        return lista;
+    }
+
+    private (
+        List<CotizacionRenglonComparativo> renglones,
+        List<OrdenCompra> ordenes,
+        List<EntradaAlmacen> entradas,
+        List<FacturaXml> facturas,
+        List<SalidaAlmacen> salidas,
+        List<Solicitud> anexos,
+        List<NotificacionCheckpoint> bitacora) ObtenerDatosExpedienteSolicitud(Solicitud sol)
+    {
+        var renglones = ConstruirRenglonesComparativaDeSolicitud(sol);
+
+        string folioRaiz = sol.Folio ?? string.Empty;
+        int idxAnexo = folioRaiz.IndexOf("-A", StringComparison.OrdinalIgnoreCase);
+        if (idxAnexo > 0)
+            folioRaiz = folioRaiz[..idxAnexo];
+
+        var todasSolicitudes = DatabaseService.ObtenerSolicitudes();
+        var anexos = todasSolicitudes
+            .Where(s => s.Id != sol.Id &&
+                        !string.IsNullOrWhiteSpace(folioRaiz) &&
+                        (string.Equals(s.Folio, folioRaiz, StringComparison.OrdinalIgnoreCase) ||
+                         s.Folio.StartsWith($"{folioRaiz}-A", StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(s => s.Id)
+            .ToList();
+
+        var idsOcPartidas = sol.Partidas.Where(p => p.OrdenCompraId > 0).Select(p => p.OrdenCompraId).ToHashSet();
+        var foliosOcPartidas = sol.Partidas
+            .Where(p => !string.IsNullOrWhiteSpace(p.OrdenCompraFolio))
+            .Select(p => p.OrdenCompraFolio.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var ordenes = DatabaseService.ObtenerOrdenesCompra()
+            .Where(oc => oc.SolicitudId == sol.Id
+                         || (!string.IsNullOrWhiteSpace(sol.Folio) && string.Equals(oc.SolicitudFolio, sol.Folio, StringComparison.OrdinalIgnoreCase))
+                         || idsOcPartidas.Contains(oc.Id)
+                         || (!string.IsNullOrWhiteSpace(oc.Folio) && foliosOcPartidas.Contains(oc.Folio)))
+            .OrderByDescending(oc => oc.Id)
+            .ToList();
+
+        var idsOcs = ordenes.Select(o => o.Id).ToHashSet();
+        var foliosOcs = ordenes
+            .Where(o => !string.IsNullOrWhiteSpace(o.Folio))
+            .Select(o => o.Folio.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in foliosOcPartidas) foliosOcs.Add(f);
+
+        var entradas = DatabaseService.ObtenerEntradasAlmacen()
+            .Where(ent => (ent.OrdenCompraId.HasValue && idsOcs.Contains(ent.OrdenCompraId.Value))
+                          || (!string.IsNullOrWhiteSpace(ent.OrdenCompraFolio) && foliosOcs.Contains(ent.OrdenCompraFolio.Trim()))
+                          || (!string.IsNullOrWhiteSpace(sol.Folio) && (ent.Notas ?? string.Empty).Contains(sol.Folio, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(ent => ent.Id)
+            .ToList();
+
+        var foliosEntradas = entradas
+            .Where(e => !string.IsNullOrWhiteSpace(e.Folio))
+            .Select(e => e.Folio.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var facturas = DatabaseService.ObtenerFacturasXml()
+            .Where(fac => (fac.OrdenCompraId.HasValue && idsOcs.Contains(fac.OrdenCompraId.Value))
+                          || (!string.IsNullOrWhiteSpace(fac.OrdenCompraFolio) && foliosOcs.Contains(fac.OrdenCompraFolio.Trim())))
+            .OrderByDescending(fac => fac.Id)
+            .ToList();
+
+        var salidas = DatabaseService.ObtenerSalidasAlmacen()
+            .Where(sal =>
+            {
+                string notas = sal.Notas ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(sol.Folio) && notas.Contains(sol.Folio, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (foliosOcs.Any(foc => notas.Contains(foc, StringComparison.OrdinalIgnoreCase)))
+                    return true;
+                if (foliosEntradas.Any(fent => notas.Contains(fent, StringComparison.OrdinalIgnoreCase)))
+                    return true;
+                return false;
+            })
+            .OrderByDescending(sal => sal.Id)
+            .ToList();
+
+        var foliosSalidas = salidas
+            .Where(s => !string.IsNullOrWhiteSpace(s.Folio))
+            .Select(s => s.Folio.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var todosFoliosExpediente = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(sol.Folio)) todosFoliosExpediente.Add(sol.Folio.Trim());
+        foreach (var a in anexos.Where(a => !string.IsNullOrWhiteSpace(a.Folio))) todosFoliosExpediente.Add(a.Folio.Trim());
+        foreach (var f in foliosOcs) todosFoliosExpediente.Add(f);
+        foreach (var f in foliosEntradas) todosFoliosExpediente.Add(f);
+        foreach (var f in foliosSalidas) todosFoliosExpediente.Add(f);
+
+        var bitacora = DatabaseService.ObtenerNotificacionesCheckpoint(null, 300)
+            .Where(n => (!string.IsNullOrWhiteSpace(n.FolioReferencia) && todosFoliosExpediente.Contains(n.FolioReferencia.Trim()))
+                        || (!string.IsNullOrWhiteSpace(sol.Folio) && (n.Mensaje ?? string.Empty).Contains(sol.Folio, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(n => n.Id)
+            .ToList();
+
+        return (renglones, ordenes, entradas, facturas, salidas, anexos, bitacora);
+    }
+
+    private void CargarExpedienteSolicitudEnEditor(Solicitud? sol)
+    {
+        if (DgExpedienteSolPartidas == null)
+            return;
+
+        if (sol == null || sol.Id <= 0)
+        {
+            if (TxtExpTituloFolio != null) TxtExpTituloFolio.Text = "Expediente de Solicitud (Guarde primero la solicitud)";
+            if (TxtExpSubtituloResumen != null) TxtExpSubtituloResumen.Text = "Una vez guardada la solicitud podrá consultar su expediente completo y reimprimir todos sus documentos.";
+            if (TxtExpCard1Principal != null) TxtExpCard1Principal.Text = "En captura";
+            if (TxtExpCard1Detalle != null) TxtExpCard1Detalle.Text = "-";
+            if (TxtExpCard2Principal != null) TxtExpCard2Principal.Text = "-";
+            if (TxtExpCard2Detalle != null) TxtExpCard2Detalle.Text = "-";
+            if (TxtExpCard3Principal != null) TxtExpCard3Principal.Text = "$0.00";
+            if (TxtExpCard3Detalle != null) TxtExpCard3Detalle.Text = "0 OCs";
+            if (TxtExpCard4Principal != null) TxtExpCard4Principal.Text = "0 mov.";
+            if (TxtExpCard4Detalle != null) TxtExpCard4Detalle.Text = "-";
+            DgExpedienteSolPartidas.ItemsSource = null;
+            if (DgExpedienteSolOrdenes != null) DgExpedienteSolOrdenes.ItemsSource = null;
+            if (DgExpedienteSolEntradas != null) DgExpedienteSolEntradas.ItemsSource = null;
+            if (DgExpedienteSolFacturas != null) DgExpedienteSolFacturas.ItemsSource = null;
+            if (DgExpedienteSolSalidas != null) DgExpedienteSolSalidas.ItemsSource = null;
+            if (DgExpedienteSolBitacora != null) DgExpedienteSolBitacora.ItemsSource = null;
+            return;
+        }
+
+        var (renglones, ordenes, entradas, facturas, salidas, anexos, bitacora) = ObtenerDatosExpedienteSolicitud(sol);
+
+        if (TxtExpTituloFolio != null)
+            TxtExpTituloFolio.Text = $"📁 Expediente Completo: {sol.Folio} — {sol.ProyectoMostrar} [{sol.Estatus}]";
+        if (TxtExpSubtituloResumen != null)
+            TxtExpSubtituloResumen.Text = $"Solicitó: {sol.EncargadoNombre} ({sol.DepartamentoNombre}) el {sol.Fecha} · Modalidad: {sol.TipoSolicitud} · {ordenes.Count} OC(s) · {entradas.Count} Entrada(s) · {facturas.Count} Factura(s)/Nota(s) · {salidas.Count} Salida(s)";
+
+        if (TxtExpCard1Principal != null)
+            TxtExpCard1Principal.Text = $"{sol.Folio} · {sol.Estatus}";
+        if (TxtExpCard1Detalle != null)
+            TxtExpCard1Detalle.Text = $"{sol.Fecha} · {sol.DepartamentoNombre}\nSolicitante: {sol.EncargadoNombre}";
+
+        int cotizadas = renglones.Count(r => r.PrecioSinIva1 > 0 || r.PrecioSinIva2 > 0 || r.PrecioSinIva3 > 0 || r.ProveedoresExtra.Any(x => x.PrecioSinIva > 0));
+        int adjudicadas = renglones.Count(r => r.ProveedorGanadorId > 0 || r.TieneOcGenerada);
+        if (TxtExpCard2Principal != null)
+            TxtExpCard2Principal.Text = $"{adjudicadas}/{renglones.Count} adjudicadas ({cotizadas} cot.)";
+        if (TxtExpCard2Detalle != null)
+            TxtExpCard2Detalle.Text = anexos.Count > 0
+                ? $"Anexos vinculados: {string.Join(", ", anexos.Select(a => a.Folio))}"
+                : "Sin anexos adicionales · Cuadro comparativo listo para reimprimir";
+
+        decimal totalOcs = ordenes.Sum(o => o.TotalConIva);
+        decimal totalAdjudicado = renglones.Where(r => r.ProveedorGanadorId > 0).Sum(r => r.TotalGanadorConIva + r.FleteGanadorConIva);
+        decimal montoMostrar = totalOcs > 0 ? totalOcs : totalAdjudicado;
+        if (TxtExpCard3Principal != null)
+            TxtExpCard3Principal.Text = $"{ordenes.Count} OC(s) · {montoMostrar:C2}";
+        if (TxtExpCard3Detalle != null)
+            TxtExpCard3Detalle.Text = ordenes.Count > 0
+                ? $"Folios: {string.Join(", ", ordenes.Select(o => o.Folio))}\nComprobantes: {facturas.Count} ({facturas.Sum(f => f.Total):C2})"
+                : "Aún sin Órdenes de Compra emitidas";
+
+        if (TxtExpCard4Principal != null)
+            TxtExpCard4Principal.Text = $"{entradas.Count} Entrada(s) · {salidas.Count} Salida(s)";
+        if (TxtExpCard4Detalle != null)
+            TxtExpCard4Detalle.Text = entradas.Count > 0 || salidas.Count > 0
+                ? $"Recibido en almacén: {entradas.Sum(e => e.Partidas.Sum(p => p.CantidadIngresadaAlmacen)):0.##} u. · Entregado en vales: {salidas.Sum(s => s.TotalUnidadesEntregadas):0.##} u."
+                : "Sin recepciones o vales de salida registrados aún";
+
+        var filasPartidas = renglones.Select(r =>
+        {
+            var opts = new List<string>();
+            if (r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0)
+                opts.Add($"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre)}: {r.PrecioConIva1:C2}");
+            if (r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0)
+                opts.Add($"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre)}: {r.PrecioConIva2:C2}");
+            if (r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0)
+                opts.Add($"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre)}: {r.PrecioConIva3:C2}");
+            foreach (var ex in r.ProveedoresExtra.Where(x => x.ProveedorId > 0 && x.PrecioSinIva > 0))
+                opts.Add($"{Proveedor.ExtraerNombreComercialCorto(ex.ProveedorNombre)}: {ex.PrecioConIva:C2}");
+
+            return new RenglonExpedientePartidaSolicitud
+            {
+                Codigo = string.IsNullOrWhiteSpace(r.ProductoCodigo) ? "CONCEPTO" : r.ProductoCodigo,
+                Articulo = r.ProductoNombre,
+                CantidadTexto = $"{r.Cantidad:0.##}",
+                Unidad = r.UnidadCompra,
+                OpcionesCotizadas = opts.Count > 0 ? string.Join(" | ", opts) : "Sin cotizar",
+                ProveedorGanador = r.ProveedorGanadorId > 0 ? Proveedor.ExtraerNombreComercialCorto(r.ProveedorGanadorNombre) : "Sin adjudicar",
+                PrecioUnitarioConIva = r.PrecioUnitarioGanadorConIva,
+                TotalConIva = r.TotalGanadorConIva,
+                FolioOc = string.IsNullOrWhiteSpace(r.OrdenCompraFolio) ? "Pendiente" : r.OrdenCompraFolio
+            };
+        }).ToList();
+
+        DgExpedienteSolPartidas.ItemsSource = filasPartidas;
+        if (DgExpedienteSolOrdenes != null) DgExpedienteSolOrdenes.ItemsSource = ordenes;
+        if (DgExpedienteSolEntradas != null) DgExpedienteSolEntradas.ItemsSource = entradas;
+        if (DgExpedienteSolFacturas != null) DgExpedienteSolFacturas.ItemsSource = facturas;
+        if (DgExpedienteSolSalidas != null) DgExpedienteSolSalidas.ItemsSource = salidas;
+        if (DgExpedienteSolBitacora != null) DgExpedienteSolBitacora.ItemsSource = bitacora;
+    }
+
+    private void BtnAbrirExpedienteSolicitudFila_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Solicitud sol })
+        {
+            DgHistorialSolicitudes.SelectedItem = sol;
+            var fresca = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == sol.Id) ?? sol;
+            CargarSolicitudEnEditor(fresca);
+            MostrarDetalleSolicitud(true);
+            SeleccionarTabDetalleSolicitudAlAbrir(fresca, true);
+            e.Handled = true;
+        }
+    }
+
+    private void BtnAbrirExpedienteSolicitudContext_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgHistorialSolicitudes?.SelectedItem is Solicitud sol)
+        {
+            var fresca = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == sol.Id) ?? sol;
+            CargarSolicitudEnEditor(fresca);
+            MostrarDetalleSolicitud(true);
+            SeleccionarTabDetalleSolicitudAlAbrir(fresca, true);
+        }
+    }
+
+    private void BtnVerExpedienteSolicitudDetalle_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = ObtenerSolicitudActualParaExpediente();
+        if (sol != null)
+            CargarExpedienteSolicitudEnEditor(sol);
+        if (TabSolExpediente != null)
+            TabSolExpediente.IsSelected = true;
+    }
+
+    private void BtnExpReimprimirComparativa_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = ObtenerSolicitudActualParaExpediente();
+        if (sol == null || sol.Partidas.Count == 0)
+        {
+            DialogoFluent.Show(this, "Seleccione o guarde primero una solicitud con partidas para reimprimir su Cuadro Comparativo.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var renglones = ConstruirRenglonesComparativaDeSolicitud(sol);
+        BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, renglones, soloDescargar: false);
+    }
+
+    private void BtnExpDescargarComparativa_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = ObtenerSolicitudActualParaExpediente();
+        if (sol == null || sol.Partidas.Count == 0)
+        {
+            DialogoFluent.Show(this, "Seleccione o guarde primero una solicitud con partidas para descargar su Cuadro Comparativo.", "Sin partidas", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var renglones = ConstruirRenglonesComparativaDeSolicitud(sol);
+        BarcodePrintService.MostrarVistaPreviaEImprimirComparativa(this, sol, renglones, soloDescargar: true);
+    }
+
+    private void BtnExpImprimirExpedienteConsolidado_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = ObtenerSolicitudActualParaExpediente();
+        if (sol == null || sol.Id <= 0)
+        {
+            DialogoFluent.Show(this, "Guarde o seleccione primero una solicitud para imprimir su Expediente Completo.", "Solicitud no guardada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var datos = ObtenerDatosExpedienteSolicitud(sol);
+        BarcodePrintService.MostrarVistaPreviaEImprimirExpedienteSolicitud(
+            this, sol, datos.renglones, datos.ordenes, datos.entradas, datos.facturas, datos.salidas, datos.anexos, soloDescargar: false);
+    }
+
+    private void BtnExpDescargarExpedienteConsolidado_Click(object sender, RoutedEventArgs e)
+    {
+        var sol = ObtenerSolicitudActualParaExpediente();
+        if (sol == null || sol.Id <= 0)
+        {
+            DialogoFluent.Show(this, "Guarde o seleccione primero una solicitud para descargar su Expediente Completo.", "Solicitud no guardada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var datos = ObtenerDatosExpedienteSolicitud(sol);
+        BarcodePrintService.MostrarVistaPreviaEImprimirExpedienteSolicitud(
+            this, sol, datos.renglones, datos.ordenes, datos.entradas, datos.facturas, datos.salidas, datos.anexos, soloDescargar: true);
+    }
+
+    private void BtnExpReimprimirOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: OrdenCompra oc })
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirOrdenCompra(this, oc, soloDescargar: false);
+        }
+    }
+
+    private void BtnExpDescargarOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: OrdenCompra oc })
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirOrdenCompra(this, oc, soloDescargar: true);
+        }
+    }
+
+    private void BtnExpIrAOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: OrdenCompra oc })
+        {
+            CambiarSeccion(4);
+            RefrescarOrdenesYEntradas();
+            if (DgOrdenesCompra?.ItemsSource is IEnumerable<OrdenCompra> lista)
+            {
+                var match = lista.FirstOrDefault(x => x.Id == oc.Id);
+                if (match != null)
+                    DgOrdenesCompra.SelectedItem = match;
+            }
+            MostrarDetalleOrdenCompra(true);
+        }
+    }
+
+    private void BtnExpReimprimirEntrada_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: EntradaAlmacen ent })
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent, soloDescargar: false);
+        }
+    }
+
+    private void BtnExpDescargarEntrada_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: EntradaAlmacen ent })
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirEntrada(this, ent, soloDescargar: true);
+        }
+    }
+
+    private void BtnExpReimprimirSalida_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: SalidaAlmacen sal })
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, sal, soloDescargar: false);
+        }
+    }
+
+    private void BtnExpDescargarSalida_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: SalidaAlmacen sal })
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, sal, soloDescargar: true);
+        }
+    }
 }
