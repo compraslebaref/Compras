@@ -1818,13 +1818,8 @@
                                                                       Checked="ChkMatrizMostrarTotalConIva_Changed"
                                                                       Unchecked="ChkMatrizMostrarTotalConIva_Changed"
                                                                       ToolTip="Muestra u oculta la segunda columna de Total c/IVA por cada proveedor" />
-                                                            <ui:Button x:Name="BtnMatrizAutoMejorPrecio"
-                                                                       Appearance="Primary"
-                                                                       Content="⚡ Elegir Mejor Precio en Todas las Partidas"
-                                                                       FontSize="11.5"
-                                                                       Click="BtnSeleccionarMejorPrecioPorPartida_Click" />
                                                         </StackPanel>
-                                                        <TextBlock Text="Compare los 3 proveedores lado a lado en todos los productos, edite precios unitarios s/IVA directamente o elija al proveedor ganador con un clic."
+                                                        <TextBlock Text="Compare los proveedores lado a lado en todos los productos y edite precios unitarios s/IVA directamente."
                                                                    FontSize="12"
                                                                    VerticalAlignment="Center"
                                                                    TextWrapping="Wrap" />
@@ -1847,18 +1842,7 @@
                                                         <DataGridTextColumn x:Name="ColMatrizTotal2" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (2)" Binding="{Binding ImporteTotal2, StringFormat={}{0:C2}}" Width="92" IsReadOnly="True" Visibility="Collapsed" />
                                                         <DataGridTextColumn x:Name="ColMatrizProv3" Header="P.U. Prov 3" Binding="{Binding PrecioSinIva3, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="112" />
                                                         <DataGridTextColumn x:Name="ColMatrizTotal3" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total c/IVA (3)" Binding="{Binding ImporteTotal3, StringFormat={}{0:C2}}" Width="92" IsReadOnly="True" Visibility="Collapsed" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado Actual" Binding="{Binding EstadoDecisionTexto}" Width="135" IsReadOnly="True" FontWeight="SemiBold" />
-                                                        <DataGridTemplateColumn Header="Elegir Ganador" Width="138">
-                                                            <DataGridTemplateColumn.CellTemplate>
-                                                                <DataTemplate>
-                                                                    <StackPanel Orientation="Horizontal">
-                                                                        <ui:Button Content="Op. 1" FontSize="10.5" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" Click="BtnMatrizElegirOp1_Click" />
-                                                                        <ui:Button Content="Op. 2" FontSize="10.5" Padding="6,2" Margin="0,0,4,0" Tag="{Binding}" Click="BtnMatrizElegirOp2_Click" />
-                                                                        <ui:Button Content="Op. 3" FontSize="10.5" Padding="6,2" Tag="{Binding}" Click="BtnMatrizElegirOp3_Click" />
-                                                                    </StackPanel>
-                                                                </DataTemplate>
-                                                            </DataGridTemplateColumn.CellTemplate>
-                                                        </DataGridTemplateColumn>
+                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Adjudicado Actual" Binding="{Binding EstadoDecisionTexto}" Width="150" IsReadOnly="True" FontWeight="SemiBold" />
                                                     </DataGrid.Columns>
                                                 </DataGrid>
                                             </DockPanel>
@@ -1932,7 +1916,7 @@
                                                                Click="BtnAgregarOpcionProveedorComp_Click" />
                                                     <ui:Button x:Name="BtnNuevoProveedorRapidoComp" Content="+ Proveedor" FontSize="11" Padding="8,4" Margin="0,0,6,4" ToolTip="Registrar un nuevo proveedor con su Nombre Comercial para usar en la comparativa" Click="BtnNuevoProveedorRapidoComp_Click" />
                                                     <ui:Button x:Name="BtnVincularLineaAbiertaComp" Content="🔗 Asociar a SKU" FontSize="11" Padding="8,4" Margin="0,0,6,4" Visibility="Collapsed" ToolTip="Vincula o convierte esta partida de Línea Abierta a un Producto (SKU) del Catálogo conservando todas sus cotizaciones y vigencias" Click="BtnVincularLineaAbiertaComp_Click" />
-                                                    <ui:Button Content="Mejor Precio"
+                                                    <ui:Button Content="Mejor Precio" Visibility="Collapsed"
                                                                FontSize="11.5"
                                                                Margin="0,0,6,0"
                                                                ToolTip="Selecciona automáticamente al proveedor con menor costo total en este artículo"
@@ -2248,13 +2232,6 @@
                                             <StackPanel>
                                                 <DockPanel Margin="0,0,0,8">
                                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                                        <ui:Button x:Name="BtnOptimizarMixPaso3"
-                                                                   Content="⚡ Aplicar Mix Óptimo (Menor Precio por Partida)"
-                                                                   FontSize="11"
-                                                                   Padding="8,4"
-                                                                   Margin="0,0,6,0"
-                                                                   ToolTip="Selecciona automáticamente el proveedor más económico en cada artículo"
-                                                                   Click="BtnSeleccionarMejorPrecioPorPartida_Click" />
                                                         <ui:Button x:Name="BtnToggleTablaAnalisisPaso3"
                                                                    Content="Ver/Ocultar Desglose por Partida"
                                                                    FontSize="11"
