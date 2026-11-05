@@ -1788,7 +1788,7 @@
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo / Descripción" Binding="{Binding ProductoNombre}" Width="*" MinWidth="170" IsReadOnly="True" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Cant." Binding="{Binding Cantidad}" Width="52" IsReadOnly="True" FontWeight="Bold" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadCompra, UpdateSourceTrigger=LostFocus}" Width="68" IsReadOnly="False" />
-                                                        <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Ref. Histórica" Binding="{Binding ReferenciaHistoricaCorta}" Width="120" IsReadOnly="True" />
+
                                                         <DataGridTextColumn Header="P.U. s/IVA" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="86" FontWeight="Bold" />
                                                         <DataGridTextColumn Header="P.U. c/IVA" Binding="{Binding PrecioConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="86" />
                                                         <DataGridTextColumn Header="Entrega (d)" Binding="{Binding DiasEntrega, UpdateSourceTrigger=LostFocus}" Width="78" />
@@ -1877,7 +1877,7 @@
                                                        TextWrapping="Wrap" />
                                             </DockPanel>
                                             <TextBlock x:Name="TxtCompProdSubtitulo"
-                                                       Text="Empieza con 1 opción (mejor histórico o en blanco). Use '+ Añadir Proveedor Concursante' para comparar más proveedores."
+                                                       Text="Capture la cotización del proveedor o use '+ Añadir Proveedor Concursante' para comparar más proveedores."
                                                        FontSize="11.5"
                                                        Opacity="0.82"
                                                        TextWrapping="Wrap"
@@ -1992,7 +1992,7 @@
                                                             <Border x:Name="BdrBadgeGanador1" DockPanel.Dock="Right" Padding="6,2" CornerRadius="4" Background="#059669" Margin="6,0,0,0" Visibility="Collapsed">
                                                                 <TextBlock Text="SELECCIONADO" FontSize="9.5" FontWeight="Bold" Foreground="White" />
                                                             </Border>
-                                                            <TextBlock x:Name="TxtTituloCardComp1" Text="Proveedor 1 (Principal / Histórico)" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock x:Name="TxtTituloCardComp1" Text="Proveedor 1" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                                         </DockPanel>
 
                                                         <TextBlock Text="Proveedor que cotiza este artículo" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,0,2" />

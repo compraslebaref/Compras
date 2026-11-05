@@ -4852,10 +4852,42 @@ public partial class MainWindow : FluentWindow
             int d3 = part.DiasEntrega3 > 0 ? part.DiasEntrega3 : 1;
             string nc3 = part.NotasCotizacion3;
 
+            static bool EsNotaReferenciaHistoricaAuto(string? nota)
+            {
+                if (string.IsNullOrWhiteSpace(nota)) return false;
+                string n = nota.Trim();
+                return n.StartsWith("OC Histórica ", StringComparison.OrdinalIgnoreCase) ||
+                       n.StartsWith("Factura XML (", StringComparison.OrdinalIgnoreCase) ||
+                       (n.StartsWith("Cotización ", StringComparison.OrdinalIgnoreCase) &&
+                        (n.Contains("[Vigente", StringComparison.OrdinalIgnoreCase) ||
+                         n.Contains("[Vencido", StringComparison.OrdinalIgnoreCase) ||
+                         n.Contains("[Por vencer", StringComparison.OrdinalIgnoreCase)));
+            }
+
+            bool limpioHistoricoAuto = false;
+            if (!part.TieneOcGenerada)
+            {
+                if (pv1 > 0 && part.ProveedorGanadorIndice != 1 && EsNotaReferenciaHistoricaAuto(nc1))
+                {
+                    pv1 = 0; pr1 = 0m; d1 = 2; nc1 = string.Empty;
+                    limpioHistoricoAuto = true;
+                }
+                if (pv2 > 0 && part.ProveedorGanadorIndice != 2 && EsNotaReferenciaHistoricaAuto(nc2))
+                {
+                    pv2 = 0; pr2 = 0m; d2 = 3; nc2 = string.Empty;
+                    limpioHistoricoAuto = true;
+                }
+                if (pv3 > 0 && part.ProveedorGanadorIndice != 3 && EsNotaReferenciaHistoricaAuto(nc3))
+                {
+                    pv3 = 0; pr3 = 0m; d3 = 1; nc3 = string.Empty;
+                    limpioHistoricoAuto = true;
+                }
+            }
+
             bool sinProveedoresGuardados = pv1 == 0 && pv2 == 0 && pv3 == 0 && pr1 <= 0 && pr2 <= 0 && pr3 <= 0 && provsExtra.Count == 0;
             if (sinProveedoresGuardados)
             {
-                if (sugerencias.Count >= 1)
+                if (false && sugerencias.Count >= 1)
                 {
                     pv1 = sugerencias[0].proveedorId;
                     pr1 = sugerencias[0].precioSinIva;
@@ -4930,7 +4962,7 @@ public partial class MainWindow : FluentWindow
                 OrdenCompraFolio = part.OrdenCompraFolio
             };
 
-            if (sinProveedoresGuardados && pv1 > 0 && renglon.SolicitudPartidaId > 0)
+            if (limpioHistoricoAuto && renglon.SolicitudPartidaId > 0)
             {
                 DatabaseService.GuardarCotizacionPartida(renglon);
             }
@@ -4989,7 +5021,7 @@ public partial class MainWindow : FluentWindow
                 }
                 if (CboCompProv1 != null) CboCompProv1.SelectedIndex = -1;
                 if (BtnVincularLineaAbiertaComp != null) BtnVincularLineaAbiertaComp.Visibility = Visibility.Collapsed;
-                if (TxtTituloCardComp1 != null) TxtTituloCardComp1.Text = "Proveedor 1 (Principal / Histórico)";
+                if (TxtTituloCardComp1 != null) TxtTituloCardComp1.Text = "Proveedor 1";
                 if (TxtTituloCardComp2 != null) TxtTituloCardComp2.Text = "Proveedor 2";
                 if (TxtTituloCardComp3 != null) TxtTituloCardComp3.Text = "Proveedor 3";
                 if (CboCompProv2 != null) CboCompProv2.SelectedIndex = -1;
@@ -5151,7 +5183,7 @@ public partial class MainWindow : FluentWindow
         var (sugerencias, _) = DatabaseService.ObtenerSugerenciasCotizacionPorProducto(r.ProductoId, r.ProductoNombre, r.Familia);
         var provDict = (CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores()).ToDictionary(p => p.Id);
 
-        if (r.NumeroOpcionesVisibles == 2 && r.Proveedor2Id == 0 && sugerencias.Count >= 2)
+        if (false && r.NumeroOpcionesVisibles == 2 && r.Proveedor2Id == 0 && sugerencias.Count >= 2)
         {
             var sug2 = sugerencias.FirstOrDefault(s => s.proveedorId != r.Proveedor1Id);
             if (sug2.proveedorId > 0)
@@ -5164,7 +5196,7 @@ public partial class MainWindow : FluentWindow
                 DatabaseService.GuardarCotizacionPartida(r);
             }
         }
-        else if (r.NumeroOpcionesVisibles == 3 && r.Proveedor3Id == 0 && sugerencias.Count >= 3)
+        else if (false && r.NumeroOpcionesVisibles == 3 && r.Proveedor3Id == 0 && sugerencias.Count >= 3)
         {
             var sug3 = sugerencias.FirstOrDefault(s => s.proveedorId != r.Proveedor1Id && s.proveedorId != r.Proveedor2Id);
             if (sug3.proveedorId > 0)
