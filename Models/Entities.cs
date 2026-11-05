@@ -1032,9 +1032,10 @@ public class EventoCalendario
     public string Fecha { get; set; } = string.Empty; // yyyy-MM-dd
     public string Titulo { get; set; } = string.Empty;
     public string Descripcion { get; set; } = string.Empty;
-    public string Categoria { get; set; } = "Recordatorio"; // Recordatorio, Entrega OC, Herramienta, Vencimiento Pago, Inventario
-    public string Prioridad { get; set; } = "Normal";       // Alta, Normal, Baja
+    public string Categoria { get; set; } = "Recordatorio"; // Recordatorio, Entrega OC, Herramienta, Vencimiento Pago, Inventario, Cotización por Vencer
+    public string Prioridad { get; set; } = "Media";        // Alta, Media, Baja
     public bool Completado { get; set; }
+    public bool Oculto { get; set; }
     public string Notas { get; set; } = string.Empty;
     public bool EsAutomatico { get; set; }
     public bool EsManual => !EsAutomatico;
@@ -1044,8 +1045,30 @@ public class EventoCalendario
         get => !string.IsNullOrWhiteSpace(OrigenFolio) ? OrigenFolio : string.Empty;
         set => OrigenFolio = value;
     }
+    public string ClaveUnicaAutomatico => $"AUTO:{Categoria}:{ReferenciaFolio}";
     public string EstadoTiempoTexto { get; set; } = string.Empty;
     public string EstatusMostrar => Completado ? "Completado" : EstadoTiempoTexto;
+    public string EstatusTexto => EstatusMostrar;
+    public string TextoBotonCompletar => Completado ? "Reabrir" : "✓ Listo";
+    public bool TieneDocumentoVinculado =>
+        !string.IsNullOrWhiteSpace(ReferenciaFolio) &&
+        (ReferenciaFolio.StartsWith("OC-", StringComparison.OrdinalIgnoreCase) ||
+         ReferenciaFolio.StartsWith("SOL-", StringComparison.OrdinalIgnoreCase) ||
+         ReferenciaFolio.StartsWith("PRE-", StringComparison.OrdinalIgnoreCase) ||
+         ReferenciaFolio.StartsWith("ENT-", StringComparison.OrdinalIgnoreCase) ||
+         ReferenciaFolio.StartsWith("PRD-", StringComparison.OrdinalIgnoreCase));
+}
+
+public class PendienteOperativoCompra
+{
+    public string Tipo { get; set; } = string.Empty;        // Solicitud, Factura XML, Cotización por Vencer
+    public string Folio { get; set; } = string.Empty;       // SOL-2026-0001, ENT-2026-0001, COT-...
+    public string Fecha { get; set; } = string.Empty;
+    public string Titulo { get; set; } = string.Empty;
+    public string Detalle { get; set; } = string.Empty;
+    public string Estatus { get; set; } = string.Empty;
+    public string TextoAccionPrincipal { get; set; } = "Atender";
+    public int EntidadId { get; set; }
 }
 
 public class PuntoHistorialCompraProducto

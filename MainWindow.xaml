@@ -463,6 +463,16 @@
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
                                                 <DataGridTextColumn x:Name="ColDashboardOcTotal" ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Total" Binding="{Binding TotalConIva, StringFormat={}{0:C2}}" Width="90" />
+                                                <DataGridTemplateColumn Header="Acciones Rápidas" Width="175">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                                <Button Content="✓ Atender / Recibir" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Autorizar Vo.Bo., avanzar etapa o ir a recibir mercancía de esta OC" Click="BtnDashboardOcAccionPrincipal_Click" />
+                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Cerrar parcialmente o cancelar esta OC para quitarla de pendientes" Click="BtnDashboardOcCerrarPendiente_Click" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DockPanel>
@@ -471,7 +481,8 @@
                                 <Border Grid.Column="1" Margin="8,0,0,0" Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
                                     <DockPanel>
                                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                                            <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" Margin="8,0,0,0" Click="BtnIrAlmacenPos_Click" />
+                                            <ui:Button DockPanel.Dock="Right" Content="Ir a Almacén" Margin="6,0,0,0" Click="BtnIrAlmacenPos_Click" />
+                                            <ui:Button DockPanel.Dock="Right" Content="+ Reabastecer Todo en 1 Solicitud" Appearance="Primary" Margin="8,0,0,0" ToolTip="Genera o carga en el carrito todos los artículos con stock bajo para pedir su faltante en 1 clic" Click="BtnReabastecerTodasAlertasStock_Click" />
                                             <TextBlock Text="Alertas de Inventario (Stock Mínimo &gt; Actual)" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
                                         </DockPanel>
                                         <DataGrid x:Name="DgDashboardAlertas" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
@@ -497,12 +508,63 @@
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Actual" Binding="{Binding StockActual, StringFormat={}{0:0.##}}" Width="75" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Mínimo" Binding="{Binding StockMinimo, StringFormat={}{0:0.##}}" Width="75" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Faltante" Binding="{Binding FaltanteStock, StringFormat={}{0:0.##}}" Width="90" />
-                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="75" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Unidad" Binding="{Binding UnidadAlmacen}" Width="70" />
+                                                <DataGridTemplateColumn Header="Acciones" Width="165">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                                <Button Content="+ Pedir" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Agregar la cantidad faltante al carrito de Solicitud de Compra" Click="BtnDashboardAlertaPedir_Click" />
+                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Descartar alerta (ajusta el Stock Mínimo a la existencia actual para que ya no aparezca como pendiente)" Click="BtnDashboardAlertaDescartar_Click" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DockPanel>
                                 </Border>
                             </Grid>
+                            </TabItem>
+                            <TabItem x:Name="TabDashboardCheckpointsCompras" Header="Solicitudes, XML y Vigencias Pendientes" Visibility="{DynamicResource VisibilidadPreciosPerfil}">
+                                <Border Padding="14" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" Effect="{StaticResource CardElevationShadow}">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                <ui:Button Content="Ir a Comparativa" Margin="0,0,6,0" Click="MenuIrComparativa_Click" />
+                                                <ui:Button Content="Ir a Facturas XML" Click="MenuIrFacturasXml_Click" />
+                                            </StackPanel>
+                                            <TextBlock x:Name="TxtTituloPendientesComprasDashboard" Text="Checkpoints de Compras: Solicitudes por Cotizar, Entradas sin XML y Cotizaciones por Vencer" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <DataGrid x:Name="DgDashboardPendientesCompras" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Categoría" Binding="{Binding Tipo}" Width="145" FontWeight="SemiBold" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Folio" Binding="{Binding Folio}" Width="115" FontWeight="Bold" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha / Vence" Binding="{Binding Fecha}" Width="105" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proyecto / Proveedor / Concepto" Binding="{Binding Titulo}" Width="240" FontWeight="SemiBold" />
+                                                <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Detalle Operativo" Binding="{Binding Detalle}" Width="*" />
+                                                <DataGridTemplateColumn Header="Estatus" Width="135">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource StatusPillBorderStyle}" DataContext="{Binding Estatus}">
+                                                                <TextBlock Text="{Binding}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTemplateColumn Header="Acciones" Width="180">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                                <Button Content="{Binding TextoAccionPrincipal}" Padding="7,2" Margin="0,0,4,0" FontWeight="SemiBold" Click="BtnAtenderPendienteCompra_Click" />
+                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Descartar o marcar como resuelto este pendiente" Click="BtnDescartarPendienteCompra_Click" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
                             </TabItem>
                             <TabItem Header="Agenda y calendario">
                             <Grid>
@@ -567,7 +629,37 @@
                                             </Border>
                                         </StackPanel>
 
-                                        <DataGrid x:Name="DgDashboardAgenda" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column">
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <CheckBox x:Name="ChkAgendaOcultarCompletados" Content="Ocultar completados" FontSize="11.5" Margin="0,0,10,0" VerticalAlignment="Center" Checked="FiltroAgendaRapido_Changed" Unchecked="FiltroAgendaRapido_Changed" />
+                                                <ui:Button Content="🧹 Limpiar completados" FontSize="11" Padding="8,3" ToolTip="Elimina o archiva todos los eventos que ya están marcados como completados" Click="BtnLimpiarCompletadosAgenda_Click" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="Vista rápida:" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <ComboBox x:Name="CboFiltroCategoriaAgenda" Width="225" FontSize="11.5" SelectedIndex="0" SelectionChanged="FiltroAgendaRapido_Changed">
+                                                    <ComboBoxItem Content="Todos los eventos" />
+                                                    <ComboBoxItem Content="🔴 Vencidos y Para Hoy" />
+                                                    <ComboBoxItem Content="🛒 Compras, Pagos y Autorizaciones" />
+                                                    <ComboBoxItem Content="📦 Almacén, Entregas y Herramientas" />
+                                                    <ComboBoxItem Content="⏱️ Cotizaciones por Vencer" />
+                                                    <ComboBoxItem Content="📌 Solo Recordatorios Manuales" />
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <DataGrid x:Name="DgDashboardAgenda" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" MouseDoubleClick="DgDashboardAgenda_MouseDoubleClick">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="✓ Completar / Reabrir evento" Click="CtxAgendaCompletar_Click" FontWeight="Bold" />
+                                                    <MenuItem Header="🔗 Ir al Documento vinculado (OC / Solicitud / Préstamo)" Click="CtxAgendaIrDocumento_Click" />
+                                                    <Separator />
+                                                    <MenuItem Header="⏱️ Posponer +1 día (Mañana)" Click="CtxAgendaPosponer1_Click" />
+                                                    <MenuItem Header="⏱️ Posponer +3 días" Click="CtxAgendaPosponer3_Click" />
+                                                    <MenuItem Header="⏱️ Posponer +7 días (Próxima semana)" Click="CtxAgendaPosponer7_Click" />
+                                                    <MenuItem Header="✏️ Editar fecha, título o prioridad..." Click="CtxAgendaEditar_Click" />
+                                                    <Separator />
+                                                    <MenuItem Header="✕ Quitar / Descartar de la Agenda" Click="CtxAgendaEliminar_Click" />
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Fecha" Binding="{Binding Fecha}" Width="95" />
                                                 <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Categoría" Binding="{Binding Categoria}" Width="140" />
@@ -591,12 +683,14 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="Acciones" Width="135">
+                                                <DataGridTemplateColumn Header="Acciones" Width="230">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                                <Button Content="Completar" Padding="6,2" Margin="0,0,4,0" ToolTip="Marcar como completado / pendiente" Click="BtnCompletarEventoCalendario_Click" />
-                                                                <Button Content="Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Eliminar recordatorio manual" Click="BtnEliminarEventoCalendario_Click" />
+                                                                <Button Content="Ir →" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" ToolTip="Abrir documento relacionado (OC, Solicitud, Préstamo)" Tag="{Binding}" Click="BtnIrDocumentoEventoCalendario_Click" />
+                                                                <Button Content="{Binding TextoBotonCompletar}" Padding="6,2" Margin="0,0,4,0" ToolTip="Marcar como completado o reabrir" Tag="{Binding}" Click="BtnCompletarEventoCalendario_Click" />
+                                                                <Button Content="+1d" Padding="5,2" Margin="0,0,4,0" ToolTip="Posponer 1 día (doble clic en la fila para editar fecha/título)" Tag="{Binding}" Click="BtnPosponer1DiaEventoCalendario_Click" />
+                                                                <Button Content="✕ Quitar" Padding="6,2" Background="#DC2626" Foreground="White" ToolTip="Quitar o descartar este evento inmediatamente" Tag="{Binding}" Click="BtnEliminarEventoCalendario_Click" />
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>

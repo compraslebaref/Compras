@@ -415,6 +415,8 @@ CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(Factur
         // Columnas de EventosCalendario y BitacoraAdministrador
         AsegurarColumnaExiste(conn, "EventosCalendario", "Descripcion", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "EventosCalendario", "ReferenciaFolio", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "EventosCalendario", "Oculto", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "EventosCalendario", "ClaveAutomatica", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "BitacoraAdministrador", "Referencia", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "BitacoraAdministrador", "Motivo", "TEXT NOT NULL DEFAULT ''");
 
@@ -6067,6 +6069,20 @@ VALUES ($ocid, $pid, $cant, 0, $precio)";
 
     private static void SeedEventosCalendarioSiVacio(SqliteConnection conn)
     {
+        using (var chkSeed = conn.CreateCommand())
+        {
+            chkSeed.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave = 'AgendaSeedInicializado' LIMIT 1";
+            var val = chkSeed.ExecuteScalar()?.ToString();
+            if (val == "1")
+                return;
+        }
+
+        using (var markCmd = conn.CreateCommand())
+        {
+            markCmd.CommandText = "INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ('AgendaSeedInicializado', '1');";
+            markCmd.ExecuteNonQuery();
+        }
+
         using var chk = conn.CreateCommand();
         chk.CommandText = "SELECT COUNT(*) FROM EventosCalendario";
         if (Convert.ToInt32(chk.ExecuteScalar()) > 0)
@@ -6094,8 +6110,8 @@ INSERT INTO EventosCalendario (Fecha, Titulo, Descripcion, Categoria, Prioridad,
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-INSERT INTO EventosCalendario (Fecha, Titulo, Descripcion, Categoria, Prioridad, Completado, ReferenciaFolio)
-VALUES ($fec, $tit, $desc, $cat, $prio, $comp, $ref)";
+INSERT INTO EventosCalendario (Fecha, Titulo, Descripcion, Categoria, Prioridad, Completado, ReferenciaFolio, Oculto, ClaveAutomatica)
+VALUES ($fec, $tit, $desc, $cat, $prio, $comp, $ref, 0, '')";
         cmd.Parameters.AddWithValue("$fec", string.IsNullOrWhiteSpace(ev.Fecha) ? DateTime.Now.ToString("yyyy-MM-dd") : ev.Fecha.Trim());
         cmd.Parameters.AddWithValue("$tit", ev.Titulo.Trim());
         cmd.Parameters.AddWithValue("$desc", (ev.Descripcion ?? string.Empty).Trim());
@@ -6129,22 +6145,278 @@ VALUES ($fec, $tit, $desc, $cat, $prio, $comp, $ref)";
         cmd.ExecuteNonQuery();
     }
 
+    public static void AlternarCompletadoEventoUnificado(EventoCalendario ev)
+    {
+        if (ev == null) return;
+        bool nuevoEstado = !ev.Completado;
+        if (!ev.EsAutomatico && ev.Id > 0)
+        {
+            AlternarCompletadoEventoCalendario(ev.Id, nuevoEstado);
+            return;
+        }
+
+        GuardarOverrideEventoAutomatico(ev, ev.Fecha, ev.Titulo, ev.Prioridad, completado: nuevoEstado, oculto: false);
+    }
+
+    public static void EliminarODescartarEventoUnificado(EventoCalendario ev)
+    {
+        if (ev == null) return;
+        if (!ev.EsAutomatico && ev.Id > 0)
+        {
+            EliminarEventoCalendario(ev.Id);
+            return;
+        }
+
+        GuardarOverrideEventoAutomatico(ev, ev.Fecha, ev.Titulo, ev.Prioridad, completado: ev.Completado, oculto: true);
+    }
+
+    public static void PosponerOEditarEventoUnificado(EventoCalendario ev, int diasExtra = 0, string? nuevaFechaFija = null, string? nuevoTitulo = null, string? nuevaPrioridad = null, string? nuevaDescripcion = null)
+    {
+        if (ev == null) return;
+        DateTime dtBase = DateTime.TryParse(ev.Fecha, out var d) ? d.Date : DateTime.Today;
+        string fechaFinal = !string.IsNullOrWhiteSpace(nuevaFechaFija)
+            ? nuevaFechaFija.Trim()
+            : dtBase.AddDays(diasExtra).ToString("yyyy-MM-dd");
+        string tituloFinal = !string.IsNullOrWhiteSpace(nuevoTitulo) ? nuevoTitulo.Trim() : ev.Titulo;
+        string prioFinal = !string.IsNullOrWhiteSpace(nuevaPrioridad) ? nuevaPrioridad.Trim() : ev.Prioridad;
+        string descFinal = nuevaDescripcion != null ? nuevaDescripcion.Trim() : ev.Descripcion;
+
+        if (!ev.EsAutomatico && ev.Id > 0)
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+UPDATE EventosCalendario
+SET Fecha = $fec, Titulo = $tit, Prioridad = $prio, Descripcion = $desc
+WHERE Id = $id";
+            cmd.Parameters.AddWithValue("$fec", fechaFinal);
+            cmd.Parameters.AddWithValue("$tit", tituloFinal);
+            cmd.Parameters.AddWithValue("$prio", prioFinal);
+            cmd.Parameters.AddWithValue("$desc", descFinal);
+            cmd.Parameters.AddWithValue("$id", ev.Id);
+            cmd.ExecuteNonQuery();
+            return;
+        }
+
+        // Si es evento automático de OC o Préstamo, también actualizar su fecha compromiso si aplica
+        if (ev.ReferenciaFolio.StartsWith("OC-", StringComparison.OrdinalIgnoreCase))
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE OrdenesCompra SET FechaProgramadaPago = $fec WHERE Folio = $fol";
+            cmd.Parameters.AddWithValue("$fec", fechaFinal);
+            cmd.Parameters.AddWithValue("$fol", ev.ReferenciaFolio);
+            cmd.ExecuteNonQuery();
+        }
+        else if (ev.ReferenciaFolio.StartsWith("PRE-", StringComparison.OrdinalIgnoreCase))
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE PrestamosHerramienta SET FechaCompromiso = $fec WHERE Folio = $fol";
+            cmd.Parameters.AddWithValue("$fec", fechaFinal);
+            cmd.Parameters.AddWithValue("$fol", ev.ReferenciaFolio);
+            cmd.ExecuteNonQuery();
+        }
+
+        GuardarOverrideEventoAutomatico(ev, fechaFinal, tituloFinal, prioFinal, completado: ev.Completado, oculto: false);
+    }
+
+    private static void GuardarOverrideEventoAutomatico(EventoCalendario ev, string fecha, string titulo, string prioridad, bool completado, bool oculto)
+    {
+        string clave = ev.ClaveUnicaAutomatico;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        using (var del = conn.CreateCommand())
+        {
+            del.CommandText = "DELETE FROM EventosCalendario WHERE ClaveAutomatica = $clv";
+            del.Parameters.AddWithValue("$clv", clave);
+            del.ExecuteNonQuery();
+        }
+
+        using var ins = conn.CreateCommand();
+        ins.CommandText = @"
+INSERT INTO EventosCalendario (Fecha, Titulo, Descripcion, Categoria, Prioridad, Completado, ReferenciaFolio, Oculto, ClaveAutomatica)
+VALUES ($fec, $tit, $desc, $cat, $prio, $comp, $ref, $ocu, $clv)";
+        ins.Parameters.AddWithValue("$fec", fecha);
+        ins.Parameters.AddWithValue("$tit", titulo);
+        ins.Parameters.AddWithValue("$desc", ev.Descripcion ?? string.Empty);
+        ins.Parameters.AddWithValue("$cat", ev.Categoria ?? string.Empty);
+        ins.Parameters.AddWithValue("$prio", prioridad ?? "Media");
+        ins.Parameters.AddWithValue("$comp", completado ? 1 : 0);
+        ins.Parameters.AddWithValue("$ref", ev.ReferenciaFolio ?? string.Empty);
+        ins.Parameters.AddWithValue("$ocu", oculto ? 1 : 0);
+        ins.Parameters.AddWithValue("$clv", clave);
+        ins.ExecuteNonQuery();
+    }
+
+    public static int LimpiarEventosCompletadosCalendario()
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        int afectados = 0;
+        // 1. Eliminar los manuales completados
+        using (var cmdMan = conn.CreateCommand())
+        {
+            cmdMan.CommandText = "DELETE FROM EventosCalendario WHERE Completado = 1 AND COALESCE(ClaveAutomatica, '') = ''";
+            afectados += cmdMan.ExecuteNonQuery();
+        }
+        // 2. Ocultar los automáticos que estaban marcados como completados
+        using (var cmdAuto = conn.CreateCommand())
+        {
+            cmdAuto.CommandText = "UPDATE EventosCalendario SET Oculto = 1 WHERE Completado = 1 AND COALESCE(ClaveAutomatica, '') <> ''";
+            afectados += cmdAuto.ExecuteNonQuery();
+        }
+        return afectados;
+    }
+
+    public static void ActualizarStockMinimoProducto(int productoId, decimal nuevoStockMinimo)
+    {
+        if (productoId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE Productos SET StockMinimo = $min WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$min", (double)Math.Max(0m, nuevoStockMinimo));
+        cmd.Parameters.AddWithValue("$id", productoId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static List<PendienteOperativoCompra> ObtenerPendientesOperativosCompras()
+    {
+        var lista = new List<PendienteOperativoCompra>();
+
+        // 1. Solicitudes pendientes de revisión o en comparativa sin OC
+        var solicitudes = ObtenerSolicitudes()
+            .Where(s => s.Estatus == "Pendiente" || s.Estatus == "En Comparativa" || s.Estatus == "Parcial en OC")
+            .OrderByDescending(s => s.Id)
+            .ToList();
+
+        foreach (var s in solicitudes)
+        {
+            int sinOc = s.Partidas.Count(p => !p.TieneOcGenerada);
+            lista.Add(new PendienteOperativoCompra
+            {
+                Tipo = "Solicitud Compra",
+                Folio = s.Folio,
+                Fecha = s.Fecha.Length >= 10 ? s.Fecha[..10] : s.Fecha,
+                Titulo = $"{s.ProyectoMostrar} ({s.DepartamentoNombre})",
+                Detalle = $"{sinOc} partida(s) por cotizar/adjudicar de {s.Partidas.Count} · Solicita: {s.EncargadoNombre}",
+                Estatus = s.Estatus == "Pendiente" ? "Por Aprobar / Cotizar" : s.Estatus,
+                TextoAccionPrincipal = "Cotizar →",
+                EntidadId = s.Id
+            });
+        }
+
+        // 2. Entradas de almacén pendientes de subir Factura XML
+        var entradasSinXml = ObtenerEntradasAlmacen()
+            .Where(e => string.IsNullOrWhiteSpace(e.FacturaUuid) || e.Notas.Contains("[PENDIENTE_XML]", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(e => e.Id)
+            .ToList();
+
+        foreach (var en in entradasSinXml)
+        {
+            lista.Add(new PendienteOperativoCompra
+            {
+                Tipo = "Falta Factura XML",
+                Folio = en.Folio,
+                Fecha = en.Fecha.Length >= 10 ? en.Fecha[..10] : en.Fecha,
+                Titulo = $"Entrada de {en.ProveedorNombre} {(string.IsNullOrWhiteSpace(en.OrdenCompraFolio) ? "(Sin OC previa)" : $"({en.OrdenCompraFolio})")}",
+                Detalle = $"Proyecto: {en.ProyectoNombre} · {en.Partidas.Count} artículo(s) ingresados",
+                Estatus = "Pendiente XML",
+                TextoAccionPrincipal = "Subir XML →",
+                EntidadId = en.Id
+            });
+        }
+
+        // 3. Cotizaciones guardadas próximas a vencer (<= 3 días restantes)
+        var cotizaciones = ObtenerCotizacionesBancoHistorico()
+            .GroupBy(c => new { c.ProductoId, Concepto = c.DescripcionConcepto.ToUpperInvariant(), c.ProveedorId })
+            .Select(g => g.First())
+            .ToList();
+
+        foreach (var cot in cotizaciones)
+        {
+            if (!DateTime.TryParse(cot.FechaCotizacion, out var dtCot))
+                continue;
+            int diasRest = (dtCot.Date.AddDays(cot.DiasVigencia > 0 ? cot.DiasVigencia : 15) - DateTime.Today).Days;
+            if (diasRest >= -2 && diasRest <= 3)
+            {
+                lista.Add(new PendienteOperativoCompra
+                {
+                    Tipo = "Vigencia Cotización",
+                    Folio = string.IsNullOrWhiteSpace(cot.OrigenFolio) ? "COT" : cot.OrigenFolio,
+                    Fecha = dtCot.Date.AddDays(cot.DiasVigencia > 0 ? cot.DiasVigencia : 15).ToString("yyyy-MM-dd"),
+                    Titulo = $"{cot.ProveedorNombre} — {cot.DescripcionConcepto}",
+                    Detalle = $"Precio: {cot.PrecioSinIva:C2} s/IVA ({cot.PrecioConIva:C2} c/IVA) · {cot.TipoPartidaTexto}",
+                    Estatus = diasRest < 0 ? $"Vencida ({Math.Abs(diasRest)}d)" : (diasRest == 0 ? "Vence Hoy" : $"Vence en {diasRest}d"),
+                    TextoAccionPrincipal = "Ver Comparativa →",
+                    EntidadId = cot.Id
+                });
+            }
+        }
+
+        return lista;
+    }
+
+    public static void DescartarAlertaVigenciaCotizacion(int bancoPrecioId)
+    {
+        if (bancoPrecioId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE BancoPreciosHistorico SET DiasVigencia = DiasVigencia + 15 WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$id", bancoPrecioId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void MarcarEntradaXmlResueltaManual(int entradaId, string referenciaXmlONota)
+    {
+        if (entradaId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+UPDATE EntradasAlmacen
+SET FacturaUuid = CASE WHEN TRIM(COALESCE(FacturaUuid, '')) = '' THEN $ref ELSE FacturaUuid END,
+    Notas = REPLACE(COALESCE(Notas, ''), '[PENDIENTE_XML]', '[XML_RESUELTO]')
+WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$ref", string.IsNullOrWhiteSpace(referenciaXmlONota) ? "RESUELTO-MANUAL" : referenciaXmlONota.Trim());
+        cmd.Parameters.AddWithValue("$id", entradaId);
+        cmd.ExecuteNonQuery();
+    }
+
     public static List<EventoCalendario> ObtenerEventosCalendarioUnificados(string? filtroFecha = null)
     {
         var lista = new List<EventoCalendario>();
+        var overridesAuto = new Dictionary<string, (string fecha, string titulo, string prioridad, bool completado, bool oculto)>(StringComparer.OrdinalIgnoreCase);
 
-        // 1. Eventos manuales guardados en la tabla EventosCalendario
+        // 1. Eventos manuales y overrides de automáticos guardados en la tabla EventosCalendario
         using (var conn = new SqliteConnection(ConnectionString))
         {
             conn.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-SELECT Id, Fecha, Titulo, Descripcion, Categoria, Prioridad, Completado, ReferenciaFolio
+SELECT Id, Fecha, Titulo, Descripcion, Categoria, Prioridad, Completado, ReferenciaFolio, COALESCE(Oculto, 0), COALESCE(ClaveAutomatica, '')
 FROM EventosCalendario
 ORDER BY Fecha ASC, Id DESC";
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
+                bool oculto = r.GetInt32(8) != 0;
+                string claveAuto = r.GetString(9);
+                if (!string.IsNullOrWhiteSpace(claveAuto))
+                {
+                    overridesAuto[claveAuto] = (r.GetString(1), r.GetString(2), r.GetString(5), r.GetInt32(6) == 1, oculto);
+                    continue;
+                }
+
+                if (oculto) continue;
+
                 lista.Add(new EventoCalendario
                 {
                     Id = r.GetInt32(0),
@@ -6158,6 +6430,19 @@ ORDER BY Fecha ASC, Id DESC";
                     EsAutomatico = false
                 });
             }
+        }
+
+        void AgregarEventoAutomaticoConOverride(EventoCalendario evAuto)
+        {
+            if (overridesAuto.TryGetValue(evAuto.ClaveUnicaAutomatico, out var ov))
+            {
+                if (ov.oculto) return;
+                if (!string.IsNullOrWhiteSpace(ov.fecha)) evAuto.Fecha = ov.fecha;
+                if (!string.IsNullOrWhiteSpace(ov.titulo)) evAuto.Titulo = ov.titulo;
+                if (!string.IsNullOrWhiteSpace(ov.prioridad)) evAuto.Prioridad = ov.prioridad;
+                evAuto.Completado = ov.completado;
+            }
+            lista.Add(evAuto);
         }
 
         // 2. Eventos automáticos: Órdenes de Compra (Vo.Bo. Dirección, Pago Finanzas y Recepción Almacén)
@@ -6175,7 +6460,7 @@ ORDER BY Fecha ASC, Id DESC";
                     ? oc.FechaProgramadaPago
                     : fechaBase.AddDays(1).ToString("yyyy-MM-dd");
                 bool vencida = DateTime.TryParse(fSeg, out var dtS) && dtS.Date < DateTime.Now.Date;
-                lista.Add(new EventoCalendario
+                AgregarEventoAutomaticoConOverride(new EventoCalendario
                 {
                     Id = -(200000 + oc.Id),
                     Fecha = fSeg.Length >= 10 ? fSeg[..10] : fSeg,
@@ -6194,7 +6479,7 @@ ORDER BY Fecha ASC, Id DESC";
                     ? oc.FechaProgramadaPago
                     : fechaBase.AddDays(1).ToString("yyyy-MM-dd");
                 bool vencida = DateTime.TryParse(fPago, out var dtP) && dtP.Date < DateTime.Now.Date;
-                lista.Add(new EventoCalendario
+                AgregarEventoAutomaticoConOverride(new EventoCalendario
                 {
                     Id = -(300000 + oc.Id),
                     Fecha = fPago.Length >= 10 ? fPago[..10] : fPago,
@@ -6212,7 +6497,7 @@ ORDER BY Fecha ASC, Id DESC";
                 DateTime fechaEstimada = fechaBase.AddDays(Math.Max(1, oc.TiempoEntregaDias));
                 bool vencida = fechaEstimada.Date < DateTime.Now.Date;
 
-                lista.Add(new EventoCalendario
+                AgregarEventoAutomaticoConOverride(new EventoCalendario
                 {
                     Id = -oc.Id,
                     Fecha = fechaEstimada.ToString("yyyy-MM-dd"),
@@ -6231,7 +6516,7 @@ ORDER BY Fecha ASC, Id DESC";
                 !string.IsNullOrWhiteSpace(oc.FechaProgramadaPago))
             {
                 bool vencida = DateTime.TryParse(oc.FechaProgramadaPago, out var dtCred) && dtCred.Date < DateTime.Now.Date;
-                lista.Add(new EventoCalendario
+                AgregarEventoAutomaticoConOverride(new EventoCalendario
                 {
                     Id = -(400000 + oc.Id),
                     Fecha = oc.FechaProgramadaPago.Length >= 10 ? oc.FechaProgramadaPago[..10] : oc.FechaProgramadaPago,
@@ -6263,7 +6548,7 @@ ORDER BY Fecha ASC, Id DESC";
             }
 
             bool vencido = DateTime.TryParse(fechaComp, out var dtC) && dtC.Date < DateTime.Now.Date;
-            lista.Add(new EventoCalendario
+            AgregarEventoAutomaticoConOverride(new EventoCalendario
             {
                 Id = -(100000 + pre.Id),
                 Fecha = fechaComp.Length >= 10 ? fechaComp[..10] : fechaComp,
@@ -6275,6 +6560,41 @@ ORDER BY Fecha ASC, Id DESC";
                 ReferenciaFolio = pre.Folio,
                 EsAutomatico = true
             });
+        }
+
+        // 4. Eventos automáticos: Cotizaciones próximas a vencer (<= 3 días restantes o recién vencidas hace <= 2 días)
+        var cotizacionesRecientes = ObtenerCotizacionesBancoHistorico()
+            .GroupBy(c => new { c.ProductoId, Concepto = c.DescripcionConcepto.ToUpperInvariant(), c.ProveedorId })
+            .Select(g => g.First())
+            .ToList();
+
+        int idxCot = 1;
+        foreach (var cot in cotizacionesRecientes)
+        {
+            if (!DateTime.TryParse(cot.FechaCotizacion, out var dtCot))
+                continue;
+            DateTime dtVence = dtCot.Date.AddDays(cot.DiasVigencia > 0 ? cot.DiasVigencia : 15);
+            int diasRest = (dtVence - DateTime.Today).Days;
+            if (diasRest >= -2 && diasRest <= 3)
+            {
+                string refFol = !string.IsNullOrWhiteSpace(cot.OrigenFolio) && cot.OrigenFolio.StartsWith("SOL-", StringComparison.OrdinalIgnoreCase)
+                    ? cot.OrigenFolio
+                    : (cot.ProductoId > 0 ? cot.ProductoCodigo : cot.OrigenFolio);
+
+                AgregarEventoAutomaticoConOverride(new EventoCalendario
+                {
+                    Id = -(500000 + (cot.Id > 0 ? cot.Id : idxCot)),
+                    Fecha = dtVence.ToString("yyyy-MM-dd"),
+                    Titulo = $"Vigencia de cotización ({cot.ProveedorNombre}): {cot.DescripcionConcepto}",
+                    Descripcion = $"Precio cotizado: {cot.PrecioSinIva:C2} s/IVA ({cot.PrecioConIva:C2} c/IVA) · Origen: {cot.OrigenFolio}",
+                    Categoria = "Cotización por Vencer",
+                    Prioridad = diasRest <= 0 ? "Alta" : "Media",
+                    Completado = false,
+                    ReferenciaFolio = refFol,
+                    EsAutomatico = true
+                });
+                idxCot++;
+            }
         }
 
         foreach (var ev in lista)

@@ -1337,6 +1337,7 @@ public partial class MainWindow : FluentWindow
 
         DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToList();
         DgDashboardAlertas.ItemsSource = alertasStock;
+        RefrescarPendientesOperativosComprasDashboard();
 
         RefrescarCalendarioYAgendaDashboard();
     }
@@ -1371,7 +1372,7 @@ public partial class MainWindow : FluentWindow
     {
         if (DgDashboardAgenda == null) return;
         var eventos = DatabaseService.ObtenerEventosCalendarioUnificados(_filtroFechaAgendaDashboard);
-        DgDashboardAgenda.ItemsSource = eventos;
+        RefrescarAgendaConFiltrosRapidos();
     }
 
     private void CalDashboard_SelectedDatesChanged(object sender, SelectionChangedEventArgs e)
@@ -1423,7 +1424,8 @@ public partial class MainWindow : FluentWindow
         RefrescarCalendarioYAgendaDashboard();
     }
 
-    private void BtnCompletarEventoCalendario_Click(object sender, RoutedEventArgs e)
+    private void BtnCompletarEventoCalendario_Click(object sender, RoutedEventArgs e) { CompletarEventoUnificadoDashboard(sender); }
+    private void BtnCompletarEventoCalendarioLegacy(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: EventoCalendario ev }) return;
 
@@ -1444,7 +1446,8 @@ public partial class MainWindow : FluentWindow
         RefrescarCalendarioYAgendaDashboard();
     }
 
-    private void BtnEliminarEventoCalendario_Click(object sender, RoutedEventArgs e)
+    private void BtnEliminarEventoCalendario_Click(object sender, RoutedEventArgs e) { EliminarEventoUnificadoDashboard(sender); }
+    private void BtnEliminarEventoCalendarioLegacy(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: EventoCalendario ev }) return;
 

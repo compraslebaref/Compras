@@ -1475,4 +1475,497 @@ public partial class MainWindow
         win.ShowDialog();
         return resultado;
     }
+
+    // =========================================================================
+    // BOOST DASHBOARD: AGENDA Y CALENDARIO + PENDIENTES DE ATENCIÓN
+    // =========================================================================
+
+    private static EventoCalendario? ExtraerEventoDesdeSender(object? sender, System.Windows.Controls.DataGrid? fallbackGrid = null)
+    {
+        if (sender is FrameworkElement fe)
+        {
+            if (fe.Tag is EventoCalendario evTag) return evTag;
+            if (fe.DataContext is EventoCalendario evCtx) return evCtx;
+        }
+        return fallbackGrid?.SelectedItem as EventoCalendario;
+    }
+
+    private void CompletarEventoUnificadoDashboard(object? sender)
+    {
+        var ev = ExtraerEventoDesdeSender(sender, DgDashboardAgenda);
+        if (ev == null) return;
+        DatabaseService.AlternarCompletadoEventoUnificado(ev);
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void EliminarEventoUnificadoDashboard(object? sender)
+    {
+        var ev = ExtraerEventoDesdeSender(sender, DgDashboardAgenda);
+        if (ev == null) return;
+        DatabaseService.EliminarODescartarEventoUnificado(ev);
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void RefrescarAgendaConFiltrosRapidos()
+    {
+        if (DgDashboardAgenda == null) return;
+        var todos = DatabaseService.ObtenerEventosCalendarioUnificados(_filtroFechaAgendaDashboard);
+        IEnumerable<EventoCalendario> filtrados = todos;
+
+        if (ChkAgendaOcultarCompletados?.IsChecked == true)
+        {
+            filtrados = filtrados.Where(e => !e.Completado);
+        }
+
+        int idxFiltro = CboFiltroCategoriaAgenda?.SelectedIndex ?? 0;
+        filtrados = idxFiltro switch
+        {
+            1 => filtrados.Where(e => !e.Completado && (e.EstadoTiempoTexto.StartsWith("Vencido", StringComparison.OrdinalIgnoreCase) || e.EstadoTiempoTexto.Equals("Hoy", StringComparison.OrdinalIgnoreCase))),
+            2 => filtrados.Where(e => e.Categoria.Contains("Pago", StringComparison.OrdinalIgnoreCase) || e.Categoria.Contains("Dirección", StringComparison.OrdinalIgnoreCase) || e.Categoria.Contains("Compra", StringComparison.OrdinalIgnoreCase)),
+            3 => filtrados.Where(e => e.Categoria.Contains("Entrega", StringComparison.OrdinalIgnoreCase) || e.Categoria.Contains("Herramienta", StringComparison.OrdinalIgnoreCase) || e.Categoria.Contains("Inventario", StringComparison.OrdinalIgnoreCase)),
+            4 => filtrados.Where(e => e.Categoria.Contains("Cotización", StringComparison.OrdinalIgnoreCase) || e.Categoria.Contains("Vigencia", StringComparison.OrdinalIgnoreCase)),
+            5 => filtrados.Where(e => !e.EsAutomatico),
+            _ => filtrados
+        };
+
+        var listaFinal = filtrados.ToList();
+        DgDashboardAgenda.ItemsSource = listaFinal;
+
+        if (TxtFiltroFechaAgenda != null)
+        {
+            int vencidos = listaFinal.Count(e => !e.Completado && e.EstadoTiempoTexto.StartsWith("Vencido", StringComparison.OrdinalIgnoreCase));
+            int hoy = listaFinal.Count(e => !e.Completado && e.EstadoTiempoTexto.Equals("Hoy", StringComparison.OrdinalIgnoreCase));
+            string prefijoFecha = string.IsNullOrWhiteSpace(_filtroFechaAgendaDashboard) ? "Todos" : $"Día {_filtroFechaAgendaDashboard}";
+            TxtFiltroFechaAgenda.Text = $"{prefijoFecha}: {listaFinal.Count} evento(s) · {vencidos} vencido(s) · {hoy} para hoy";
+        }
+    }
+
+    private void FiltroAgendaRapido_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        RefrescarAgendaConFiltrosRapidos();
+    }
+
+    private void BtnLimpiarCompletadosAgenda_Click(object sender, RoutedEventArgs e)
+    {
+        int limpios = DatabaseService.LimpiarEventosCompletadosCalendario();
+        RefrescarCalendarioYAgendaDashboard();
+        if (limpios == 0)
+        {
+            DialogoFluent.Show(this, "No hay eventos marcados como completados para limpiar en este momento.", "Agenda limpia", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnPosponer1DiaEventoCalendario_Click(object sender, RoutedEventArgs e)
+    {
+        var ev = ExtraerEventoDesdeSender(sender, DgDashboardAgenda);
+        if (ev == null) return;
+        DatabaseService.PosponerOEditarEventoUnificado(ev, diasExtra: 1);
+        RefrescarCalendarioYAgendaDashboard();
+    }
+
+    private void BtnIrDocumentoEventoCalendario_Click(object sender, RoutedEventArgs e)
+    {
+        var ev = ExtraerEventoDesdeSender(sender, DgDashboardAgenda);
+        if (ev == null) return;
+        NavegarADocumentoDesdeEventoAgenda(ev);
+    }
+
+    private void NavegarADocumentoDesdeEventoAgenda(EventoCalendario ev)
+    {
+        string fol = (ev.ReferenciaFolio ?? string.Empty).Trim();
+        if (fol.StartsWith("OC-", StringComparison.OrdinalIgnoreCase) ||
+            fol.StartsWith("PRE-", StringComparison.OrdinalIgnoreCase) ||
+            fol.StartsWith("ENT-", StringComparison.OrdinalIgnoreCase) ||
+            fol.StartsWith("PRD-", StringComparison.OrdinalIgnoreCase))
+        {
+            ProcesarCodigoEscaneado(fol);
+            return;
+        }
+        if (fol.StartsWith("SOL-", StringComparison.OrdinalIgnoreCase))
+        {
+            CambiarSeccion(3);
+            var sol = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Folio.Equals(fol, StringComparison.OrdinalIgnoreCase));
+            if (sol != null && CboCompSolicitud != null)
+            {
+                var item = (CboCompSolicitud.ItemsSource as IEnumerable<Solicitud>)?.FirstOrDefault(x => x.Id == sol.Id);
+                if (item != null) CboCompSolicitud.SelectedItem = item;
+            }
+            return;
+        }
+        if (ev.Categoria.Contains("Cotización", StringComparison.OrdinalIgnoreCase))
+        {
+            CambiarSeccion(3);
+            return;
+        }
+        if (ev.Categoria.Contains("Inventario", StringComparison.OrdinalIgnoreCase))
+        {
+            CambiarSeccion(1);
+            return;
+        }
+        MostrarModalEditarEventoCalendario(ev);
+    }
+
+    private void DgDashboardAgenda_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+        {
+            MostrarModalEditarEventoCalendario(ev);
+        }
+    }
+
+    private void CtxAgendaCompletar_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+        {
+            DatabaseService.AlternarCompletadoEventoUnificado(ev);
+            RefrescarCalendarioYAgendaDashboard();
+        }
+    }
+
+    private void CtxAgendaIrDocumento_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+            NavegarADocumentoDesdeEventoAgenda(ev);
+    }
+
+    private void CtxAgendaPosponer1_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+        {
+            DatabaseService.PosponerOEditarEventoUnificado(ev, diasExtra: 1);
+            RefrescarCalendarioYAgendaDashboard();
+        }
+    }
+
+    private void CtxAgendaPosponer3_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+        {
+            DatabaseService.PosponerOEditarEventoUnificado(ev, diasExtra: 3);
+            RefrescarCalendarioYAgendaDashboard();
+        }
+    }
+
+    private void CtxAgendaPosponer7_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+        {
+            DatabaseService.PosponerOEditarEventoUnificado(ev, diasExtra: 7);
+            RefrescarCalendarioYAgendaDashboard();
+        }
+    }
+
+    private void CtxAgendaEditar_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+            MostrarModalEditarEventoCalendario(ev);
+    }
+
+    private void CtxAgendaEliminar_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAgenda?.SelectedItem is EventoCalendario ev)
+        {
+            DatabaseService.EliminarODescartarEventoUnificado(ev);
+            RefrescarCalendarioYAgendaDashboard();
+        }
+    }
+
+    private void MostrarModalEditarEventoCalendario(EventoCalendario ev)
+    {
+        var win = new Window
+        {
+            Foreground = Tk("TextFillColorPrimaryBrush"),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Title = "Editar o Reprogramar Evento de Agenda",
+            Width = 480,
+            Height = 360,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "✏️ Editar / Reprogramar Evento",
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+
+        var gridTop = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        gridTop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridTop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+
+        var spFec = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        spFec.Children.Add(new TextBlock { Text = "Fecha programada:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var dpFec = new DatePicker
+        {
+            SelectedDate = DateTime.TryParse(ev.Fecha, out var dt) ? dt : DateTime.Today
+        };
+        spFec.Children.Add(dpFec);
+        Grid.SetColumn(spFec, 0);
+        gridTop.Children.Add(spFec);
+
+        var spPrio = new StackPanel();
+        spPrio.Children.Add(new TextBlock { Text = "Prioridad:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var cboPrio = new ComboBox();
+        foreach (var pr in new[] { "Alta", "Media", "Baja" }) cboPrio.Items.Add(pr);
+        cboPrio.SelectedItem = ev.Prioridad;
+        if (cboPrio.SelectedIndex < 0) cboPrio.SelectedIndex = 1;
+        spPrio.Children.Add(cboPrio);
+        Grid.SetColumn(spPrio, 1);
+        gridTop.Children.Add(spPrio);
+        root.Children.Add(gridTop);
+
+        root.Children.Add(new TextBlock { Text = "Título del evento / recordatorio:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtTit = new System.Windows.Controls.TextBox { Text = ev.Titulo, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 8) };
+        root.Children.Add(txtTit);
+
+        root.Children.Add(new TextBlock { Text = "Detalle / Notas:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtDesc = new System.Windows.Controls.TextBox { Text = ev.Descripcion, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 14) };
+        root.Children.Add(txtDesc);
+
+        var pnlBtns = new DockPanel();
+        var btnQuitar = new System.Windows.Controls.Button
+        {
+            Content = "✕ Quitar de Agenda",
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DC2626")),
+            Foreground = Brushes.White,
+            Padding = new Thickness(12, 6, 12, 6)
+        };
+        DockPanel.SetDock(btnQuitar, Dock.Left);
+        pnlBtns.Children.Add(btnQuitar);
+
+        var rightBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnSave = new Wpf.Ui.Controls.Button { Content = "Guardar Cambios", Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Padding = new Thickness(14, 6, 14, 6) };
+        rightBtns.Children.Add(btnCancel);
+        rightBtns.Children.Add(btnSave);
+        pnlBtns.Children.Add(rightBtns);
+        root.Children.Add(pnlBtns);
+
+        btnQuitar.Click += (_, _) =>
+        {
+            DatabaseService.EliminarODescartarEventoUnificado(ev);
+            win.DialogResult = true;
+        };
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnSave.Click += (_, _) =>
+        {
+            string nuevaFec = (dpFec.SelectedDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+            string nuevoTit = string.IsNullOrWhiteSpace(txtTit.Text) ? ev.Titulo : txtTit.Text.Trim();
+            string nuevaPrio = cboPrio.SelectedItem?.ToString() ?? ev.Prioridad;
+            DatabaseService.PosponerOEditarEventoUnificado(ev, 0, nuevaFec, nuevoTit, nuevaPrio, txtDesc.Text);
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() == true)
+        {
+            RefrescarCalendarioYAgendaDashboard();
+        }
+    }
+
+    // --- ACCIONES RÁPIDAS EN PENDIENTES DE ATENCIÓN: ÓRDENES PENDIENTES ---
+
+    private void BtnDashboardOcAccionPrincipal_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: OrdenCompra oc })
+            return;
+
+        if (string.Equals(oc.Estatus, "Pendiente Vo.Bo. Dirección", StringComparison.OrdinalIgnoreCase))
+        {
+            bool esCredito = oc.CondicionPago.StartsWith("Crédito", StringComparison.OrdinalIgnoreCase);
+            string nuevoEst = esCredito ? "Emitida" : "Autorizada / Pendiente Pago Finanzas";
+            string fProg = string.IsNullOrWhiteSpace(oc.FechaProgramadaPago) ? DateTime.Today.AddDays(1).ToString("yyyy-MM-dd") : oc.FechaProgramadaPago;
+            DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, nuevoEst, oc.CondicionPago, fProg);
+            RegistrarTransicionCheckpoint("Etapa 3: Vo.Bo. Dirección", "CP-3A", oc.Folio, oc.Estatus, nuevoEst, "Compras, Almacén, Finanzas", $"Dirección otorgó Vo.Bo. a la {oc.Folio} ({oc.ProveedorNombre}) desde el Panel de Control.");
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            return;
+        }
+
+        if (string.Equals(oc.Estatus, "Autorizada / Pendiente Pago Finanzas", StringComparison.OrdinalIgnoreCase))
+        {
+            string fProg = string.IsNullOrWhiteSpace(oc.FechaProgramadaPago) ? DateTime.Today.ToString("yyyy-MM-dd") : oc.FechaProgramadaPago;
+            DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, "Pagada / Lista para Almacén", oc.CondicionPago, fProg);
+            RegistrarTransicionCheckpoint("Etapa 3: Pago Finanzas", "CP-4A", oc.Folio, oc.Estatus, "Pagada / Lista para Almacén", "Compras, Almacén", $"Se confirmó pago de {oc.Folio} ({oc.ProveedorNombre}); lista para recepción en Almacén.");
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            return;
+        }
+
+        // Si ya está lista para recibir en almacén, ir directo a Recepción con esa OC seleccionada
+        ProcesarCodigoEscaneado(oc.Folio);
+    }
+
+    private void BtnDashboardOcCerrarPendiente_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: OrdenCompra oc })
+            return;
+
+        bool tieneRecibido = oc.TotalUnidadesRecibidas > 0;
+        string nuevoEstatus = tieneRecibido ? "Cerrada Parcial Definitiva" : "Cancelada";
+        string accionTexto = tieneRecibido
+            ? $"cerrar definitivamente como Parcial la orden {oc.Folio} ({oc.ProveedorNombre})"
+            : $"cancelar y quitar de pendientes la orden {oc.Folio} ({oc.ProveedorNombre})";
+
+        var resp = DialogoFluent.Show(
+            this,
+            $"¿Desea {accionTexto}?\n\nDejará de aparecer en la lista de Órdenes Pendientes y en los recordatorios automáticos.",
+            "Quitar Orden de Pendientes",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (resp != MessageBoxResult.Yes)
+            return;
+
+        DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, nuevoEstatus, oc.CondicionPago, oc.FechaProgramadaPago);
+        CargarTodoElSistema(conservarPosicionCatalogo: true);
+    }
+
+    // --- ACCIONES RÁPIDAS EN PENDIENTES DE ATENCIÓN: ALERTAS DE STOCK ---
+
+    private void BtnDashboardAlertaPedir_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: Producto p })
+            return;
+
+        decimal cantPedir = Math.Max(1m, p.FaltanteStock);
+        AgregarAlCarritoTienda(p, cantPedir);
+        DialogoFluent.Show(
+            this,
+            $"Se agregaron {cantPedir:0.##} {p.UnidadCompra} de [{p.CodigoInterno}] {p.Nombre} a la Solicitud de Compra en curso.",
+            "Agregado a Solicitud",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void BtnDashboardAlertaDescartar_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: Producto p })
+            return;
+
+        decimal nuevoMin = Math.Max(0m, p.StockActual);
+        DatabaseService.ActualizarStockMinimoProducto(p.Id, nuevoMin);
+        p.StockMinimo = nuevoMin;
+        CargarTodoElSistema(conservarPosicionCatalogo: true);
+    }
+
+    private void BtnReabastecerTodasAlertasStock_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgDashboardAlertas?.ItemsSource is not IEnumerable<Producto> alertas)
+            return;
+
+        var listaAlertas = alertas.ToList();
+        if (listaAlertas.Count == 0)
+        {
+            DialogoFluent.Show(this, "No hay productos con déficit de stock en este momento.", "Sin alertas de stock", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        foreach (var prod in listaAlertas)
+        {
+            decimal faltante = Math.Max(1m, prod.FaltanteStock);
+            AgregarAlCarritoTienda(prod, faltante);
+        }
+
+        CambiarSeccion(2);
+        MostrarDetalleSolicitud(true);
+        DialogoFluent.Show(
+            this,
+            $"Se cargaron los {listaAlertas.Count} artículo(s) con déficit de stock en la Solicitud de Compra con su cantidad faltante lista para guardar.",
+            "Solicitud de Reabastecimiento Lista",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    // --- TERCER PANEL DE PENDIENTES: SOLICITUDES, XML Y VIGENCIAS ---
+
+    private void RefrescarPendientesOperativosComprasDashboard()
+    {
+        if (DgDashboardPendientesCompras == null) return;
+        var pendientes = DatabaseService.ObtenerPendientesOperativosCompras();
+        DgDashboardPendientesCompras.ItemsSource = pendientes;
+        if (TabDashboardCheckpointsCompras != null)
+        {
+            TabDashboardCheckpointsCompras.Header = $"Solicitudes, XML y Vigencias ({pendientes.Count})";
+        }
+    }
+
+    private void BtnAtenderPendienteCompra_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PendienteOperativoCompra item })
+            return;
+
+        if (item.Tipo.Contains("Solicitud", StringComparison.OrdinalIgnoreCase))
+        {
+            CambiarSeccion(3);
+            if (CboCompSolicitud?.ItemsSource is IEnumerable<Solicitud> sols)
+            {
+                var target = sols.FirstOrDefault(s => s.Id == item.EntidadId || s.Folio.Equals(item.Folio, StringComparison.OrdinalIgnoreCase));
+                if (target != null) CboCompSolicitud.SelectedItem = target;
+            }
+            return;
+        }
+
+        if (item.Tipo.Contains("XML", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(item.Folio))
+                Clipboard.SetText(item.Folio);
+            CambiarSeccion(6);
+            return;
+        }
+
+        if (item.Tipo.Contains("Vigencia", StringComparison.OrdinalIgnoreCase))
+        {
+            if (item.Folio.StartsWith("SOL-", StringComparison.OrdinalIgnoreCase))
+            {
+                CambiarSeccion(3);
+                if (CboCompSolicitud?.ItemsSource is IEnumerable<Solicitud> sols)
+                {
+                    var target = sols.FirstOrDefault(s => s.Folio.Equals(item.Folio, StringComparison.OrdinalIgnoreCase));
+                    if (target != null) CboCompSolicitud.SelectedItem = target;
+                }
+            }
+            else
+            {
+                CambiarSeccion(3);
+            }
+        }
+    }
+
+    private void BtnDescartarPendienteCompra_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: PendienteOperativoCompra item })
+            return;
+
+        if (item.Tipo.Contains("Solicitud", StringComparison.OrdinalIgnoreCase))
+        {
+            var resp = DialogoFluent.Show(
+                this,
+                $"¿Desea descartar / cancelar la solicitud {item.Folio} ({item.Titulo}) para quitarla de pendientes?",
+                "Descartar Solicitud",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (resp != MessageBoxResult.Yes) return;
+
+            DatabaseService.ActualizarTipoYEstatusSolicitud(item.EntidadId, "Requerimiento de Compra", "Cancelada");
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            return;
+        }
+
+        if (item.Tipo.Contains("XML", StringComparison.OrdinalIgnoreCase))
+        {
+            DatabaseService.MarcarEntradaXmlResueltaManual(item.EntidadId, "SIN-FACTURA-DESCARTADO");
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+            return;
+        }
+
+        if (item.Tipo.Contains("Vigencia", StringComparison.OrdinalIgnoreCase))
+        {
+            DatabaseService.DescartarAlertaVigenciaCotizacion(item.EntidadId);
+            CargarTodoElSistema(conservarPosicionCatalogo: true);
+        }
+    }
 }
