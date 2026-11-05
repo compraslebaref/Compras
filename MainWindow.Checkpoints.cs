@@ -2032,6 +2032,30 @@ public partial class MainWindow
         return (grupos.Key, string.IsNullOrWhiteSpace(corto) ? $"Proveedor {slot}" : corto);
     }
 
+    private static string AbreviarNombreProveedorSlot(string nombre, int maxLen = 20)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+            return string.Empty;
+
+        string s = nombre.Trim();
+        if (s.Length <= maxLen)
+            return s;
+
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bDISTRIBUIDORA\b", "DIST.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bCOMERCIALIZADORA\b", "COMERC.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bFERRETERIA\b", "FERRET.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bFERRETERA\b", "FERRET.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bSUMINISTROS\b", "SUMIN.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bMATERIALES\b", "MAT.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bINDUSTRIALES\b", "IND.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\bINDUSTRIAL\b", "IND.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        if (s.Length <= maxLen)
+            return s;
+
+        return s[..(maxLen - 1)].TrimEnd() + "…";
+    }
+
     private void ActualizarBotonesSlotsHojaProveedor()
     {
         if (BtnHojaSlot1 == null || BtnHojaSlot2 == null || BtnHojaSlot3 == null)
@@ -2046,9 +2070,13 @@ public partial class MainWindow
         int cot3 = _renglonesComparativa.Count(r => r.PrecioSinIva3 > 0);
         int tot = _renglonesComparativa.Count;
 
-        BtnHojaSlot1.Content = p1.provId > 0 ? $"1 · {p1.nombreCorto} ({cot1}/{tot})" : $"Proveedor 1 ({cot1}/{tot})";
-        BtnHojaSlot2.Content = p2.provId > 0 ? $"2 · {p2.nombreCorto} ({cot2}/{tot})" : $"Proveedor 2 ({cot2}/{tot})";
-        BtnHojaSlot3.Content = p3.provId > 0 ? $"3 · {p3.nombreCorto} ({cot3}/{tot})" : $"Proveedor 3 ({cot3}/{tot})";
+        BtnHojaSlot1.Content = p1.provId > 0 ? $"1 · {AbreviarNombreProveedorSlot(p1.nombreCorto, 20)} ({cot1}/{tot})" : $"Proveedor 1 ({cot1}/{tot})";
+        BtnHojaSlot2.Content = p2.provId > 0 ? $"2 · {AbreviarNombreProveedorSlot(p2.nombreCorto, 20)} ({cot2}/{tot})" : $"Proveedor 2 ({cot2}/{tot})";
+        BtnHojaSlot3.Content = p3.provId > 0 ? $"3 · {AbreviarNombreProveedorSlot(p3.nombreCorto, 20)} ({cot3}/{tot})" : $"Proveedor 3 ({cot3}/{tot})";
+
+        BtnHojaSlot1.ToolTip = p1.provId > 0 ? $"Opción 1: {p1.nombreCorto} ({cot1} de {tot} cotizados)" : "Opción 1 (Sin proveedor asignado)";
+        BtnHojaSlot2.ToolTip = p2.provId > 0 ? $"Opción 2: {p2.nombreCorto} ({cot2} de {tot} cotizados)" : "Opción 2 (Sin proveedor asignado)";
+        BtnHojaSlot3.ToolTip = p3.provId > 0 ? $"Opción 3: {p3.nombreCorto} ({cot3} de {tot} cotizados)" : "Opción 3 (Sin proveedor asignado)";
 
         BtnHojaSlot1.Appearance = _indiceSlotHojaProveedorActiva == 1 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
         BtnHojaSlot2.Appearance = _indiceSlotHojaProveedorActiva == 2 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
@@ -2482,9 +2510,9 @@ public partial class MainWindow
         var p2 = ObtenerProveedorPredominanteSlot(2);
         var p3 = ObtenerProveedorPredominanteSlot(3);
 
-        if (ColMatrizProv1 != null) ColMatrizProv1.Header = $"✏️ P.U. s/IVA {p1.nombreCorto}";
-        if (ColMatrizProv2 != null) ColMatrizProv2.Header = $"✏️ P.U. s/IVA {p2.nombreCorto}";
-        if (ColMatrizProv3 != null) ColMatrizProv3.Header = $"✏️ P.U. s/IVA {p3.nombreCorto}";
+        if (ColMatrizProv1 != null) ColMatrizProv1.Header = $"P.U. {AbreviarNombreProveedorSlot(p1.nombreCorto, 15)}";
+        if (ColMatrizProv2 != null) ColMatrizProv2.Header = $"P.U. {AbreviarNombreProveedorSlot(p2.nombreCorto, 15)}";
+        if (ColMatrizProv3 != null) ColMatrizProv3.Header = $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 15)}";
 
         if (!ReferenceEquals(DgMatrizComparativaRapida.ItemsSource, _renglonesComparativa))
         {
