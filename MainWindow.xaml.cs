@@ -601,9 +601,24 @@ public partial class MainWindow : FluentWindow
             FiltrarComboProductoSolicitud();
 
             // Comparativa proveedores (en blanco por defecto si no hay opción asignada)
-            CboCompProv1.ItemsSource = proveedores;
+            int compP1Prev = (CboCompProv1.SelectedItem as Proveedor)?.Id ?? 0;
+            int compP2Prev = (CboCompProv2.SelectedItem as Proveedor)?.Id ?? 0;
+            int compP3Prev = (CboCompProv3.SelectedItem as Proveedor)?.Id ?? 0;
+            bool prevCargandoComp = _cargandoDetalleComparativa;
+            _cargandoDetalleComparativa = true;
+            try
+            {
+                CboCompProv1.ItemsSource = proveedores;
             CboCompProv2.ItemsSource = proveedores;
-            CboCompProv3.ItemsSource = proveedores;
+                CboCompProv3.ItemsSource = proveedores;
+                CboCompProv1.SelectedItem = compP1Prev > 0 ? proveedores.FirstOrDefault(p => p.Id == compP1Prev) : null;
+                CboCompProv2.SelectedItem = compP2Prev > 0 ? proveedores.FirstOrDefault(p => p.Id == compP2Prev) : null;
+                CboCompProv3.SelectedItem = compP3Prev > 0 ? proveedores.FirstOrDefault(p => p.Id == compP3Prev) : null;
+            }
+            finally
+            {
+                _cargandoDetalleComparativa = prevCargandoComp;
+            }
 
             // Almacén POS (Salida de Material y Préstamo de Herramienta - en blanco por defecto)
             int salDepPrev = (CboSalDepartamento.SelectedItem as Departamento)?.Id ?? 0;
@@ -4869,11 +4884,22 @@ public partial class MainWindow : FluentWindow
                 if (TxtTituloCardComp3 != null) TxtTituloCardComp3.Text = "Proveedor 3";
                 if (CboCompProv2 != null) CboCompProv2.SelectedIndex = -1;
                 if (CboCompProv3 != null) CboCompProv3.SelectedIndex = -1;
+                if (CboCompSelectorArticuloDetalle != null)
+                {
+                    CboCompSelectorArticuloDetalle.ItemsSource = null;
+                    CboCompSelectorArticuloDetalle.SelectedIndex = -1;
+                }
                 return;
             }
 
             string famBadge = !string.IsNullOrWhiteSpace(r.Familia) ? $" | Familia: {r.Familia}" : string.Empty;
             TxtCompProdTitulo.Text = $"{r.ProductoCodigo} — {r.ProductoNombre}";
+            if (CboCompSelectorArticuloDetalle != null)
+            {
+                if (!ReferenceEquals(CboCompSelectorArticuloDetalle.ItemsSource, _renglonesComparativa))
+                    CboCompSelectorArticuloDetalle.ItemsSource = _renglonesComparativa;
+                CboCompSelectorArticuloDetalle.SelectedItem = r;
+            }
             TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")} | Vigencia: {r.VigenciaEstadoTexto}";
             TxtCompProdHistorial.Text = r.ReferenciaHistorica;
             TxtCompProdCantidad.Text = r.Cantidad.ToString("0.##", CultureInfo.InvariantCulture);
@@ -5126,10 +5152,11 @@ public partial class MainWindow : FluentWindow
                 DialogoFluent.Show(win, "Seleccione un proveedor de la lista.", "Proveedor requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-            decimal precio = ParseDecimal(txtPrecio.Text, 0m);
+            decimal precio = Math.Max(0m, ParseDecimal(txtPrecio.Text, 0m));
+            if (precio < -1m)
             if (precio <= 0)
             {
-                DialogoFluent.Show(win, "Capture un precio unitario sin IVA mayor a 0.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (precio < 0) { DialogoFluent.Show(win, "Capture un precio unitario sin IVA válido.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
                 return;
             }
 
@@ -5147,7 +5174,9 @@ public partial class MainWindow : FluentWindow
                 FechaCotizacion = DateTime.Now.ToString("yyyy-MM-dd HH:mm")
             };
             DatabaseService.GuardarProveedorExtraPartida(extra);
+            ActivarOAbrirHojaDeProveedor(provSel.Id);
             r.ProveedoresExtra = DatabaseService.ObtenerProveedoresExtraPartida(r.SolicitudPartidaId);
+            // Sincronizado con Hoja Completa
             DatabaseService.GuardarCotizacionPartida(r);
             win.DialogResult = true;
         };
@@ -5166,6 +5195,27 @@ public partial class MainWindow : FluentWindow
 
     private void BtnElegirProveedorExtraGanador_Click(object sender, RoutedEventArgs e)
     {
+        if (DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
+        {
+            var exSel = (sender as FrameworkElement)?.DataContext as CotizacionProveedorExtra
+                        ?? DgProveedoresExtraComp?.SelectedItem as CotizacionProveedorExtra
+                        ?? (r.ProveedoresExtra.Count == 1 ? r.ProveedoresExtra[0] : null);
+            if (exSel == null)
+            {
+                DialogoFluent.Show(this, "Seleccione primero una fila en la tabla de Proveedores Adicionales (Opción 4+).", "Seleccione proveedor extra", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (exSel.PrecioSinIva <= 0)
+            {
+                DialogoFluent.Show(this, $"Capture primero un precio mayor a $0.00 para {Proveedor.ExtraerNombreComercialCorto(exSel.ProveedorNombre)}.", "Precio requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            ElegirOpcionGanadoraProductoActual(exSel.NumeroOpcion);
+            return;
+        }
+    }
+    private void _LegacyElegirExtra(object sender)
+    {
         if (sender is FrameworkElement { DataContext: CotizacionProveedorExtra extra } &&
             DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
         {
@@ -5175,11 +5225,34 @@ public partial class MainWindow : FluentWindow
 
     private void BtnEliminarProveedorExtra_Click(object sender, RoutedEventArgs e)
     {
+        if (DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
+        {
+            var exSel = (sender as FrameworkElement)?.DataContext as CotizacionProveedorExtra
+                        ?? DgProveedoresExtraComp?.SelectedItem as CotizacionProveedorExtra
+                        ?? (r.ProveedoresExtra.Count == 1 ? r.ProveedoresExtra[0] : null);
+            if (exSel == null)
+            {
+                DialogoFluent.Show(this, "Seleccione primero una fila en la tabla de Proveedores Adicionales (Opción 4+) para quitarla.", "Seleccione proveedor extra", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            DatabaseService.EliminarProveedorExtraPartida(exSel.Id);
+            r.ProveedoresExtra = DatabaseService.ObtenerProveedoresExtraPartida(r.SolicitudPartidaId);
+            if (r.ProveedorGanadorIndice == exSel.NumeroOpcion)
+                r.ProveedorGanadorIndice = 0;
+            DatabaseService.GuardarCotizacionPartida(r);
+            CargarProductoEnTarjetasComparativa(r);
+            RecalcularTotalesComparativa();
+            return;
+        }
+    }
+    private void _LegacyEliminarExtra(object sender)
+    {
         if (sender is FrameworkElement { DataContext: CotizacionProveedorExtra extra } &&
             DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
         {
             DatabaseService.EliminarProveedorExtraPartida(extra.Id);
             r.ProveedoresExtra = DatabaseService.ObtenerProveedoresExtraPartida(r.SolicitudPartidaId);
+            // Sincronizado con Hoja Completa
             if (r.ProveedorGanadorIndice == extra.NumeroOpcion)
                 r.ProveedorGanadorIndice = 0;
             DatabaseService.GuardarCotizacionPartida(r);
@@ -5476,6 +5549,13 @@ public partial class MainWindow : FluentWindow
     }
 
     private void CboCompProveedores_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa) return;
+        SincronizarRenglonActualDesdeTarjetas();
+        if (sender is ComboBox { SelectedItem: Proveedor pSel } && pSel.Id > 0)
+            ActivarOAbrirHojaDeProveedor(pSel.Id);
+    }
+    private void _LegacyCboProv()
     {
         if (!IsLoaded || _cargandoDetalleComparativa) return;
         SincronizarRenglonActualDesdeTarjetas();

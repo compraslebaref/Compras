@@ -1720,6 +1720,8 @@
                                                                 <ui:Button x:Name="BtnHojaSlot1" Content="Proveedor 1" Appearance="Primary" FontSize="11.5" Padding="10,4" Margin="0,2,6,2" Click="BtnHojaSlot1_Click" />
                                                                 <ui:Button x:Name="BtnHojaSlot2" Content="Proveedor 2" FontSize="11.5" Padding="10,4" Margin="0,2,6,2" Click="BtnHojaSlot2_Click" />
                                                                 <ui:Button x:Name="BtnHojaSlot3" Content="Proveedor 3" FontSize="11.5" Padding="10,4" Margin="0,2,6,2" Click="BtnHojaSlot3_Click" />
+                                                                <WrapPanel x:Name="WpBotonesSlotsExtraHoja" Orientation="Horizontal" VerticalAlignment="Center" />
+                                                                <ui:Button x:Name="BtnHojaAgregarSlotProveedor" Content="+ Añadir Proveedor" FontSize="11" Padding="8,4" Margin="0,2,6,2" ToolTip="Agregar otra columna / hoja de proveedor concursante a esta comparativa" Click="BtnHojaAgregarSlotProveedor_Click" />
                                                             </WrapPanel>
                                                         </DockPanel>
 
@@ -1779,7 +1781,8 @@
                                                           AutoGenerateColumns="False"
                                                           CanUserAddRows="False"
                                                           SelectionMode="Single"
-                                                          SelectionUnit="FullRow">
+                                                          SelectionUnit="FullRow"
+                                                          SelectionChanged="DgHojaCotizacionProveedor_SelectionChanged">
                                                     <DataGrid.Columns>
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="82" IsReadOnly="True" FontWeight="SemiBold" />
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Artículo / Descripción" Binding="{Binding ProductoNombre}" Width="*" MinWidth="170" IsReadOnly="True" />
@@ -1823,6 +1826,7 @@
                                                 <DataGrid x:Name="DgMatrizComparativaRapida"
                                                           AutoGenerateColumns="False"
                                                           CanUserAddRows="False"
+                                                          SelectionChanged="DgMatrizComparativaRapida_SelectionChanged"
                                                           CellEditEnding="DgMatrizComparativaRapida_CellEditEnding">
                                                     <DataGrid.Columns>
                                                         <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Código" Binding="{Binding ProductoCodigo}" Width="80" IsReadOnly="True" FontWeight="SemiBold" />
@@ -1861,11 +1865,17 @@
                                     <Border DockPanel.Dock="Top" Padding="12" CornerRadius="4" Margin="0,0,0,10" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                                         <StackPanel>
                                             <!-- Fila 1: Título y Subtítulo del Producto (Con ajuste de línea completo para no empujar ningún botón) -->
-                                            <TextBlock x:Name="TxtCompProdTitulo"
+                                            <DockPanel Margin="0,0,0,2">
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                                    <TextBlock Text="Artículo:" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.85" />
+                                                    <ComboBox x:Name="CboCompSelectorArticuloDetalle" DisplayMemberPath="EtiquetaSelectorDetalle" MinWidth="250" MaxWidth="420" SelectionChanged="CboCompSelectorArticuloDetalle_SelectionChanged" ToolTip="Cambiar rápidamente a otro artículo de la solicitud" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtCompProdTitulo"
                                                        Text="Seleccione un artículo en el paso 1"
                                                        FontSize="15"
                                                        FontWeight="Bold"
                                                        TextWrapping="Wrap" />
+                                            </DockPanel>
                                             <TextBlock x:Name="TxtCompProdSubtitulo"
                                                        Text="Empieza con 1 opción (mejor histórico o en blanco). Use '+ Añadir Proveedor Concursante' para comparar más proveedores."
                                                        FontSize="11.5"
@@ -2161,15 +2171,16 @@
                                                         </StackPanel>
                                                         <TextBlock Text="Proveedores Concursantes Adicionales (Opción 4+)" FontWeight="Bold" FontSize="12.5" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                     </DockPanel>
-                                                    <DataGrid x:Name="DgProveedoresExtraComp" AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="150">
+                                                    <DataGrid x:Name="DgProveedoresExtraComp" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="False" MaxHeight="165" CellEditEnding="DgProveedoresExtraComp_CellEditEnding">
                                                         <DataGrid.Columns>
-                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Opción" Binding="{Binding NumeroOpcion}" Width="75" />
-                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" />
-                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="P.U. s/IVA" Binding="{Binding PrecioSinIva, StringFormat={}{0:C2}}" Width="100" />
-                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="P.U. c/IVA" Binding="{Binding PrecioConIva, StringFormat={}{0:C2}}" Width="100" />
-                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Entrega" Binding="{Binding DiasEntrega, StringFormat={}{0}d}" Width="80" />
-                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Envío" Binding="{Binding FleteConIva, StringFormat={}{0:C2}}" Width="80" />
-                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Notas" Binding="{Binding NotasCotizacion}" Width="120" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Opción" Binding="{Binding NumeroOpcion}" Width="65" IsReadOnly="True" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="Proveedor" Binding="{Binding ProveedorNombre}" Width="*" IsReadOnly="True" FontWeight="SemiBold" />
+                                                            <DataGridTextColumn Header="P.U. s/IVA" Binding="{Binding PrecioSinIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="95" FontWeight="Bold" />
+                                                            <DataGridTextColumn ElementStyle="{StaticResource CeldaRecortableStyle}" Header="P.U. c/IVA" Binding="{Binding PrecioConIva, StringFormat={}{0:C2}}" Width="95" IsReadOnly="True" />
+                                                            <DataGridTextColumn Header="Entrega (d)" Binding="{Binding DiasEntrega, UpdateSourceTrigger=LostFocus}" Width="78" />
+                                                            <DataGridTextColumn Header="Vigencia (d)" Binding="{Binding DiasVigencia, UpdateSourceTrigger=LostFocus}" Width="80" />
+                                                            <DataGridTextColumn Header="Envío c/IVA" Binding="{Binding FleteConIva, StringFormat={}{0:N2}, UpdateSourceTrigger=LostFocus}" Width="85" />
+                                                            <DataGridTextColumn Header="Notas / Marca" Binding="{Binding NotasCotizacion, UpdateSourceTrigger=LostFocus}" Width="130" />
                                                         </DataGrid.Columns>
                                                     </DataGrid>
                                                 </StackPanel>

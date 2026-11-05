@@ -931,28 +931,31 @@ public partial class MainWindow
             .ToList();
 
         var provs2 = _renglonesComparativa
-            .Where(r => r.Proveedor2Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar")
+            .Where(r => r.Proveedor2Id > 0 && (r.NumeroOpcionesVisibles >= 2 || r.PrecioSinIva2 > 0) && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar")
             .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var provs3 = _renglonesComparativa
-            .Where(r => r.Proveedor3Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar")
+            .Where(r => r.Proveedor3Id > 0 && (r.NumeroOpcionesVisibles >= 3 || r.PrecioSinIva3 > 0) && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar")
             .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre))
+            .Concat(_renglonesComparativa.SelectMany(r => r.ProveedoresExtra)
+                .Where(ex => ex.ProveedorId > 0 && !string.IsNullOrWhiteSpace(ex.ProveedorNombre))
+                .Select(ex => Proveedor.ExtraerNombreComercialCorto(ex.ProveedorNombre)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         ColCompTablaProv1.Header = provs1.Count == 1
-            ? provs1[0]
-            : (provs1.Count > 1 ? string.Join(" / ", provs1.Take(2)) : "Proveedor 1");
+            ? AbreviarNombreProveedorSlot(provs1[0], 20)
+            : (provs1.Count > 1 ? string.Join(" / ", provs1.Take(2).Select(p => AbreviarNombreProveedorSlot(p, 12))) : "Proveedor 1");
 
         ColCompTablaProv2.Header = provs2.Count == 1
-            ? provs2[0]
-            : (provs2.Count > 1 ? string.Join(" / ", provs2.Take(2)) : "Proveedor 2");
+            ? AbreviarNombreProveedorSlot(provs2[0], 20)
+            : (provs2.Count > 1 ? string.Join(" / ", provs2.Take(2).Select(p => AbreviarNombreProveedorSlot(p, 12))) : "Proveedor 2");
 
         ColCompTablaProv3.Header = provs3.Count == 1
-            ? provs3[0]
-            : (provs3.Count > 1 ? string.Join(" / ", provs3.Take(2)) : "Proveedor 3");
+            ? AbreviarNombreProveedorSlot(provs3[0], 20)
+            : (provs3.Count > 1 ? string.Join(" / ", provs3.Take(2).Select(p => AbreviarNombreProveedorSlot(p, 12))) + (provs3.Count > 2 ? $" +{provs3.Count - 2}" : "") : "Proveedor 3");
 
         bool mostrarCol2 = _renglonesComparativa.Any(r => r.NumeroOpcionesVisibles >= 2 || r.Proveedor2Id > 0 || r.PrecioSinIva2 > 0);
         bool mostrarCol3 = _renglonesComparativa.Any(r => r.NumeroOpcionesVisibles >= 3 || r.Proveedor3Id > 0 || r.PrecioSinIva3 > 0 || r.ProveedoresExtra.Count > 0);
@@ -1137,16 +1140,61 @@ public partial class MainWindow
         if (win.ShowDialog() == true && nuevoProvId > 0)
         {
             var provs = DatabaseService.ObtenerProveedores();
-            if (CboCompProv1 != null) CboCompProv1.ItemsSource = provs;
-            if (CboCompProv2 != null) CboCompProv2.ItemsSource = provs;
-            if (CboCompProv3 != null) CboCompProv3.ItemsSource = provs;
-            if (CboHojaProveedor != null) CboHojaProveedor.ItemsSource = provs;
-            if (DgDirProveedores != null) DgDirProveedores.ItemsSource = provs;
+            int p1Prev = (CboCompProv1?.SelectedItem as Proveedor)?.Id ?? 0;
+            int p2Prev = (CboCompProv2?.SelectedItem as Proveedor)?.Id ?? 0;
+            int p3Prev = (CboCompProv3?.SelectedItem as Proveedor)?.Id ?? 0;
+            int hojaPrev = (CboHojaProveedor?.SelectedItem as Proveedor)?.Id ?? 0;
+
+            bool prevCargando = _cargandoDetalleComparativa;
+            bool prevSincHoja = _sincronizandoHojaProveedor;
+            _cargandoDetalleComparativa = true;
+            _sincronizandoHojaProveedor = true;
+            try
+            {
+                if (CboCompProv1 != null)
+                {
+                    CboCompProv1.ItemsSource = provs;
+                    CboCompProv1.SelectedItem = p1Prev > 0 ? provs.FirstOrDefault(p => p.Id == p1Prev) : null;
+                }
+                if (CboCompProv2 != null)
+                {
+                    CboCompProv2.ItemsSource = provs;
+                    CboCompProv2.SelectedItem = p2Prev > 0 ? provs.FirstOrDefault(p => p.Id == p2Prev) : null;
+                }
+                if (CboCompProv3 != null)
+                {
+                    CboCompProv3.ItemsSource = provs;
+                    CboCompProv3.SelectedItem = p3Prev > 0 ? provs.FirstOrDefault(p => p.Id == p3Prev) : null;
+                }
+                if (CboHojaProveedor != null)
+                {
+                    CboHojaProveedor.ItemsSource = provs;
+                    CboHojaProveedor.SelectedItem = hojaPrev > 0 ? provs.FirstOrDefault(p => p.Id == hojaPrev) : null;
+                }
+                if (DgDirProveedores != null) DgDirProveedores.ItemsSource = provs;
+            }
+            finally
+            {
+                _cargandoDetalleComparativa = prevCargando;
+                _sincronizandoHojaProveedor = prevSincHoja;
+            }
 
             var nuevoProv = provs.FirstOrDefault(p => p.Id == nuevoProvId);
             if (nuevoProv != null && CboHojaProveedor != null && TcModoCapturaComparativa?.SelectedIndex == 0)
             {
-                CboHojaProveedor.SelectedItem = nuevoProv;
+                var cols = ObtenerColumnasProveedoresComparativa();
+                var colActiva = cols.FirstOrDefault(c => c.indiceColumna == _indiceSlotHojaProveedorActiva);
+                int cotActiva = colActiva.provId > 0 ? ContarCotizadosDeProveedor(colActiva.provId) : 0;
+
+                if (colActiva.provId > 0 && cotActiva > 0)
+                {
+                    // La columna actual ya tiene precios de otro proveedor: abrir el nuevo proveedor en una columna nueva (o libre)
+                    ActivarOAbrirHojaDeProveedor(nuevoProv.Id);
+                }
+                else
+                {
+                    CboHojaProveedor.SelectedItem = nuevoProv;
+                }
             }
             else if (nuevoProv != null && DgComparativa.SelectedItem is CotizacionRenglonComparativo r && !r.TieneOcGenerada)
             {
@@ -1161,6 +1209,26 @@ public partial class MainWindow
                 else if (r.NumeroOpcionesVisibles >= 3 && r.Proveedor3Id <= 0 && CboCompProv3 != null)
                 {
                     CboCompProv3.SelectedItem = nuevoProv;
+                }
+                else
+                {
+                    // Si las opciones visibles ya tienen proveedor, abrir la siguiente tarjeta o registrarlo en Hoja
+                    if (r.NumeroOpcionesVisibles < 2 && CboCompProv2 != null)
+                    {
+                        r.NumeroOpcionesVisibles = 2;
+                        ActualizarVisibilidadTarjetasComparativa(r);
+                        CboCompProv2.SelectedItem = nuevoProv;
+                    }
+                    else if (r.NumeroOpcionesVisibles < 3 && CboCompProv3 != null)
+                    {
+                        r.NumeroOpcionesVisibles = 3;
+                        ActualizarVisibilidadTarjetasComparativa(r);
+                        CboCompProv3.SelectedItem = nuevoProv;
+                    }
+                    else
+                    {
+                        ActivarOAbrirHojaDeProveedor(nuevoProv.Id);
+                    }
                 }
             }
         }
@@ -1979,12 +2047,22 @@ public partial class MainWindow
     // =========================================================================
 
     private int _indiceSlotHojaProveedorActiva = 1;
+    private int _solicitudIdHojaActual;
+    private readonly List<int> _proveedoresExtraHojaManual = new();
     private bool _sincronizandoHojaProveedor;
 
     private void RefrescarHojaProveedorYAnalisisComparativa()
     {
         if (_sincronizandoHojaProveedor)
             return;
+
+        int solIdActual = (CboCompSolicitud?.SelectedItem as Solicitud)?.Id ?? 0;
+        if (solIdActual != _solicitudIdHojaActual)
+        {
+            _solicitudIdHojaActual = solIdActual;
+            _proveedoresExtraHojaManual.Clear();
+            _indiceSlotHojaProveedorActiva = 1;
+        }
 
         _sincronizandoHojaProveedor = true;
         try
@@ -2010,26 +2088,147 @@ public partial class MainWindow
         }
     }
 
-    private (int provId, string nombreCorto) ObtenerProveedorPredominanteSlot(int slot)
+    private (int provId, string nombreCorto, string nombreCompleto) ObtenerProveedorPredominanteSlotInfo(int slot, HashSet<int>? excluirIds = null)
     {
-        var grupos = _renglonesComparativa
+        var candidatos = _renglonesComparativa
             .Select(r => slot switch
             {
-                1 => (id: r.Proveedor1Id, nom: r.Proveedor1Nombre),
-                2 => (id: r.Proveedor2Id, nom: r.Proveedor2Nombre),
-                3 => (id: r.Proveedor3Id, nom: r.Proveedor3Nombre),
-                _ => (id: 0, nom: string.Empty)
+                1 => (id: r.Proveedor1Id, nom: r.Proveedor1Nombre, conPrecio: r.PrecioSinIva1 > 0),
+                2 => (id: r.Proveedor2Id, nom: r.Proveedor2Nombre, conPrecio: r.PrecioSinIva2 > 0),
+                3 => (id: r.Proveedor3Id, nom: r.Proveedor3Nombre, conPrecio: r.PrecioSinIva3 > 0),
+                _ => (id: 0, nom: string.Empty, conPrecio: false)
             })
-            .Where(x => x.id > 0 && !string.IsNullOrWhiteSpace(x.nom) && x.nom != "Sin asignar")
+            .Where(x => x.id > 0 && !string.IsNullOrWhiteSpace(x.nom) && x.nom != "Sin asignar" && (excluirIds == null || !excluirIds.Contains(x.id)))
             .GroupBy(x => x.id)
-            .OrderByDescending(g => g.Count())
+            .OrderByDescending(g => g.Count(x => x.conPrecio))
+            .ThenByDescending(g => g.Count())
             .FirstOrDefault();
 
-        if (grupos == null)
-            return (0, $"Proveedor {slot}");
+        if (candidatos == null)
+            return (0, $"Proveedor {slot}", string.Empty);
 
-        string corto = Proveedor.ExtraerNombreComercialCorto(grupos.First().nom);
-        return (grupos.Key, string.IsNullOrWhiteSpace(corto) ? $"Proveedor {slot}" : corto);
+        string completo = candidatos.First().nom;
+        string corto = Proveedor.ExtraerNombreComercialCorto(completo);
+        return (candidatos.Key, string.IsNullOrWhiteSpace(corto) ? $"Proveedor {slot}" : corto, completo);
+    }
+
+    private (int provId, string nombreCorto) ObtenerProveedorPredominanteSlot(int slot)
+    {
+        var info = ObtenerProveedorPredominanteSlotInfo(slot);
+        return (info.provId, info.nombreCorto);
+    }
+
+    private List<(int indiceColumna, int provId, string nombreCorto, string nombreCompleto)> ObtenerColumnasProveedoresComparativa()
+    {
+        var resultado = new List<(int indiceColumna, int provId, string nombreCorto, string nombreCompleto)>();
+        var usados = new HashSet<int>();
+
+        // 1. Primeras 3 columnas base (Slots 1, 2, 3)
+        for (int slot = 1; slot <= 3; slot++)
+        {
+            var info = ObtenerProveedorPredominanteSlotInfo(slot, usados);
+            if (info.provId > 0)
+                usados.Add(info.provId);
+            resultado.Add((slot, info.provId, info.nombreCorto, info.nombreCompleto));
+        }
+
+        // 2. Cualquier proveedor adicional asignado en algún artículo (en Slot 1/2/3 individual o en ProveedoresExtra Opción 4+)
+        var adicionales = new List<(int provId, string nomCompleto)>();
+        foreach (var r in _renglonesComparativa)
+        {
+            if (r.Proveedor1Id > 0 && !usados.Contains(r.Proveedor1Id) && !string.IsNullOrWhiteSpace(r.Proveedor1Nombre) && r.Proveedor1Nombre != "Sin asignar")
+            {
+                usados.Add(r.Proveedor1Id);
+                adicionales.Add((r.Proveedor1Id, r.Proveedor1Nombre));
+            }
+            if (r.Proveedor2Id > 0 && (r.NumeroOpcionesVisibles >= 2 || r.PrecioSinIva2 > 0) && !usados.Contains(r.Proveedor2Id) && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar")
+            {
+                usados.Add(r.Proveedor2Id);
+                adicionales.Add((r.Proveedor2Id, r.Proveedor2Nombre));
+            }
+            if (r.Proveedor3Id > 0 && (r.NumeroOpcionesVisibles >= 3 || r.PrecioSinIva3 > 0) && !usados.Contains(r.Proveedor3Id) && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar")
+            {
+                usados.Add(r.Proveedor3Id);
+                adicionales.Add((r.Proveedor3Id, r.Proveedor3Nombre));
+            }
+            foreach (var ex in r.ProveedoresExtra)
+            {
+                if (ex.ProveedorId > 0 && !usados.Contains(ex.ProveedorId) && !string.IsNullOrWhiteSpace(ex.ProveedorNombre))
+                {
+                    usados.Add(ex.ProveedorId);
+                    adicionales.Add((ex.ProveedorId, ex.ProveedorNombre));
+                }
+            }
+        }
+
+        // 3. Proveedores agregados manualmente a la barra de hojas en esta sesión
+        var catProvs = CboCompProv1?.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores();
+        foreach (int idMan in _proveedoresExtraHojaManual.ToList())
+        {
+            if (idMan > 0 && !usados.Contains(idMan))
+            {
+                var pObj = catProvs.FirstOrDefault(p => p.Id == idMan);
+                if (pObj != null)
+                {
+                    usados.Add(idMan);
+                    adicionales.Add((idMan, pObj.NombreMostrar));
+                }
+            }
+        }
+
+        // Si alguno de los slots 1..3 estaba vacío (provId == 0) y hay proveedores adicionales, ocupar primero el slot vacío
+        foreach (var ad in adicionales)
+        {
+            string corto = Proveedor.ExtraerNombreComercialCorto(ad.nomCompleto);
+            if (string.IsNullOrWhiteSpace(corto)) corto = ad.nomCompleto;
+
+            int idxVacio = resultado.FindIndex(c => c.indiceColumna <= 3 && c.provId <= 0);
+            if (idxVacio >= 0)
+            {
+                int colNum = resultado[idxVacio].indiceColumna;
+                resultado[idxVacio] = (colNum, ad.provId, corto, ad.nomCompleto);
+            }
+            else
+            {
+                int sigCol = resultado.Count + 1;
+                resultado.Add((sigCol, ad.provId, corto, ad.nomCompleto));
+            }
+        }
+
+        return resultado;
+    }
+
+    private int ContarCotizadosDeProveedor(int provId)
+    {
+        if (provId <= 0) return 0;
+        return _renglonesComparativa.Count(r =>
+            (r.Proveedor1Id == provId && r.PrecioSinIva1 > 0) ||
+            (r.Proveedor2Id == provId && r.PrecioSinIva2 > 0) ||
+            (r.Proveedor3Id == provId && r.PrecioSinIva3 > 0) ||
+            r.ProveedoresExtra.Any(ex => ex.ProveedorId == provId && ex.PrecioSinIva > 0));
+    }
+
+    public void ActivarOAbrirHojaDeProveedor(int provId)
+    {
+        if (provId <= 0) return;
+
+        var cols = ObtenerColumnasProveedoresComparativa();
+        var existente = cols.FirstOrDefault(c => c.provId == provId);
+        if (existente.indiceColumna > 0)
+        {
+            _indiceSlotHojaProveedorActiva = existente.indiceColumna;
+        }
+        else
+        {
+            if (!_proveedoresExtraHojaManual.Contains(provId))
+                _proveedoresExtraHojaManual.Add(provId);
+            cols = ObtenerColumnasProveedoresComparativa();
+            var nueva = cols.FirstOrDefault(c => c.provId == provId);
+            if (nueva.indiceColumna > 0)
+                _indiceSlotHojaProveedorActiva = nueva.indiceColumna;
+        }
+
+        RefrescarHojaProveedorYAnalisisComparativa();
     }
 
     private static string AbreviarNombreProveedorSlot(string nombre, int maxLen = 20)
@@ -2061,26 +2260,48 @@ public partial class MainWindow
         if (BtnHojaSlot1 == null || BtnHojaSlot2 == null || BtnHojaSlot3 == null)
             return;
 
-        var p1 = ObtenerProveedorPredominanteSlot(1);
-        var p2 = ObtenerProveedorPredominanteSlot(2);
-        var p3 = ObtenerProveedorPredominanteSlot(3);
+        var cols = ObtenerColumnasProveedoresComparativa();
+        if (_indiceSlotHojaProveedorActiva < 1 || _indiceSlotHojaProveedorActiva > cols.Count)
+            _indiceSlotHojaProveedorActiva = 1;
 
-        int cot1 = _renglonesComparativa.Count(r => r.PrecioSinIva1 > 0);
-        int cot2 = _renglonesComparativa.Count(r => r.PrecioSinIva2 > 0);
-        int cot3 = _renglonesComparativa.Count(r => r.PrecioSinIva3 > 0);
         int tot = _renglonesComparativa.Count;
 
-        BtnHojaSlot1.Content = p1.provId > 0 ? $"1 · {AbreviarNombreProveedorSlot(p1.nombreCorto, 20)} ({cot1}/{tot})" : $"Proveedor 1 ({cot1}/{tot})";
-        BtnHojaSlot2.Content = p2.provId > 0 ? $"2 · {AbreviarNombreProveedorSlot(p2.nombreCorto, 20)} ({cot2}/{tot})" : $"Proveedor 2 ({cot2}/{tot})";
-        BtnHojaSlot3.Content = p3.provId > 0 ? $"3 · {AbreviarNombreProveedorSlot(p3.nombreCorto, 20)} ({cot3}/{tot})" : $"Proveedor 3 ({cot3}/{tot})";
+        void ConfigurarBotonSlot(Wpf.Ui.Controls.Button btn, (int indiceColumna, int provId, string nombreCorto, string nombreCompleto) col)
+        {
+            int cot = col.provId > 0 ? ContarCotizadosDeProveedor(col.provId) : 0;
+            btn.Content = col.provId > 0
+                ? $"{col.indiceColumna} · {AbreviarNombreProveedorSlot(col.nombreCorto, 20)} ({cot}/{tot})"
+                : $"Proveedor {col.indiceColumna} ({cot}/{tot})";
+            btn.ToolTip = col.provId > 0
+                ? $"Opción {col.indiceColumna}: {col.nombreCorto} ({cot} de {tot} cotizados)"
+                : $"Opción {col.indiceColumna} (Sin proveedor asignado)";
+            btn.Appearance = _indiceSlotHojaProveedorActiva == col.indiceColumna
+                ? Wpf.Ui.Controls.ControlAppearance.Primary
+                : Wpf.Ui.Controls.ControlAppearance.Secondary;
+        }
 
-        BtnHojaSlot1.ToolTip = p1.provId > 0 ? $"Opción 1: {p1.nombreCorto} ({cot1} de {tot} cotizados)" : "Opción 1 (Sin proveedor asignado)";
-        BtnHojaSlot2.ToolTip = p2.provId > 0 ? $"Opción 2: {p2.nombreCorto} ({cot2} de {tot} cotizados)" : "Opción 2 (Sin proveedor asignado)";
-        BtnHojaSlot3.ToolTip = p3.provId > 0 ? $"Opción 3: {p3.nombreCorto} ({cot3} de {tot} cotizados)" : "Opción 3 (Sin proveedor asignado)";
+        ConfigurarBotonSlot(BtnHojaSlot1, cols[0]);
+        ConfigurarBotonSlot(BtnHojaSlot2, cols[1]);
+        ConfigurarBotonSlot(BtnHojaSlot3, cols[2]);
 
-        BtnHojaSlot1.Appearance = _indiceSlotHojaProveedorActiva == 1 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
-        BtnHojaSlot2.Appearance = _indiceSlotHojaProveedorActiva == 2 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
-        BtnHojaSlot3.Appearance = _indiceSlotHojaProveedorActiva == 3 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
+        if (WpBotonesSlotsExtraHoja != null)
+        {
+            WpBotonesSlotsExtraHoja.Children.Clear();
+            for (int i = 3; i < cols.Count; i++)
+            {
+                var colExtra = cols[i];
+                var btnEx = new Wpf.Ui.Controls.Button
+                {
+                    FontSize = 11.5,
+                    Padding = new Thickness(10, 4, 10, 4),
+                    Margin = new Thickness(0, 2, 6, 2),
+                    Tag = colExtra.indiceColumna
+                };
+                ConfigurarBotonSlot(btnEx, colExtra);
+                btnEx.Click += (_, _) => CambiarSlotHojaProveedor(colExtra.indiceColumna);
+                WpBotonesSlotsExtraHoja.Children.Add(btnEx);
+            }
+        }
     }
 
     private void ConstruirHojaCotizacionProveedorActiva(IList<Proveedor> proveedores)
@@ -2088,33 +2309,48 @@ public partial class MainWindow
         if (DgHojaCotizacionProveedor == null)
             return;
 
-        int slot = Math.Clamp(_indiceSlotHojaProveedorActiva, 1, 3);
-        var pred = ObtenerProveedorPredominanteSlot(slot);
+        var cols = ObtenerColumnasProveedoresComparativa();
+        if (_indiceSlotHojaProveedorActiva < 1 || _indiceSlotHojaProveedorActiva > cols.Count)
+            _indiceSlotHojaProveedorActiva = 1;
+
+        var colActiva = cols[_indiceSlotHojaProveedorActiva - 1];
+        int slot = colActiva.indiceColumna;
+        var provObj = colActiva.provId > 0 ? proveedores.FirstOrDefault(p => p.Id == colActiva.provId) : null;
 
         if (CboHojaProveedor != null)
         {
-            CboHojaProveedor.SelectedItem = pred.provId > 0
-                ? proveedores.FirstOrDefault(p => p.Id == pred.provId)
-                : null;
+            CboHojaProveedor.SelectedItem = provObj;
         }
 
-        var primerRenglon = _renglonesComparativa.FirstOrDefault();
-        if (primerRenglon != null)
+        var filasHoja = _renglonesComparativa
+            .Select(r => new RenglonHojaCotizacionProveedor(
+                r,
+                slot,
+                AlModificarCeldaHojaProveedor,
+                colActiva.provId,
+                provObj?.NombreMostrar ?? colActiva.nombreCompleto))
+            .ToList();
+
+        if (filasHoja.Count > 0)
         {
-            int diasEnt = slot switch { 1 => primerRenglon.DiasEntrega1, 2 => primerRenglon.DiasEntrega2, 3 => primerRenglon.DiasEntrega3, _ => 3 };
-            int diasVig = slot switch { 1 => primerRenglon.DiasVigencia1, 2 => primerRenglon.DiasVigencia2, 3 => primerRenglon.DiasVigencia3, _ => 15 };
-            decimal fleteSuma = _renglonesComparativa.Sum(r => slot switch { 1 => r.FleteConIva1, 2 => r.FleteConIva2, 3 => r.FleteConIva3, _ => 0m });
+            var refFila = filasHoja.FirstOrDefault(f => f.PrecioSinIva > 0) ?? filasHoja[0];
+            int diasEnt = refFila.DiasEntrega;
+            int diasVig = refFila.DiasVigencia;
+            decimal fleteSuma = filasHoja.Sum(f => f.FleteConIva);
 
             if (TxtHojaDiasEntregaGral != null) TxtHojaDiasEntregaGral.Text = Math.Max(1, diasEnt).ToString();
             if (TxtHojaDiasVigenciaGral != null) TxtHojaDiasVigenciaGral.Text = Math.Max(1, diasVig).ToString();
             if (TxtHojaFleteGral != null) TxtHojaFleteGral.Text = fleteSuma.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        var filasHoja = _renglonesComparativa
-            .Select(r => new RenglonHojaCotizacionProveedor(r, slot, AlModificarCeldaHojaProveedor))
-            .ToList();
-
         DgHojaCotizacionProveedor.ItemsSource = filasHoja;
+        if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo rSel)
+        {
+            var filaSel = filasHoja.FirstOrDefault(f => ReferenceEquals(f.RenglonBase, rSel));
+            if (filaSel != null)
+                DgHojaCotizacionProveedor.SelectedItem = filaSel;
+        }
+
         ActualizarResumenBarraInferiorHoja(filasHoja);
     }
 
@@ -2124,25 +2360,31 @@ public partial class MainWindow
             return;
 
         var r = filaEditada.RenglonBase;
-        int slot = filaEditada.IndiceOpcion;
 
-        // Si el usuario capturó un precio en la hoja y la partida aún no tenía el proveedor asignado en este slot,
-        // asignarle automáticamente el proveedor seleccionado en el encabezado de la hoja
         if (CboHojaProveedor?.SelectedItem is Proveedor provHoja && provHoja.Id > 0)
         {
-            int idActual = slot switch { 1 => r.Proveedor1Id, 2 => r.Proveedor2Id, 3 => r.Proveedor3Id, _ => 0 };
-            if (idActual <= 0)
-            {
-                AsignarProveedorASlotEnRenglon(r, slot, provHoja);
-            }
+            filaEditada.ProveedorHojaId = provHoja.Id;
+            filaEditada.ProveedorHojaNombre = provHoja.NombreMostrar;
         }
 
-        if (r.NumeroOpcionesVisibles < slot)
-            r.NumeroOpcionesVisibles = slot;
+        int slotEfectivo = filaEditada.ObtenerSlotEfectivoLectura();
+        if (slotEfectivo == 0 && CboHojaProveedor?.SelectedItem is Proveedor provAsig && provAsig.Id > 0 && filaEditada.PrecioSinIva > 0)
+        {
+            slotEfectivo = filaEditada.AsegurarSlotParaEscritura();
+        }
+
+        if (slotEfectivo >= 1 && slotEfectivo <= 3 && r.NumeroOpcionesVisibles < slotEfectivo)
+            r.NumeroOpcionesVisibles = slotEfectivo;
 
         r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
         SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
         DatabaseService.GuardarCotizacionPartida(r);
+
+        foreach (var ex in r.ProveedoresExtra)
+        {
+            if (ex.ProveedorId > 0 && ex.SolicitudPartidaId > 0)
+                DatabaseService.GuardarProveedorExtraPartida(ex);
+        }
 
         _sincronizandoHojaProveedor = true;
         try
@@ -2242,9 +2484,11 @@ public partial class MainWindow
         decimal totalConIva = filas.Where(f => f.PrecioSinIva > 0).Sum(f => f.ImporteTotalConIva);
         int adjudicados = filas.Count(f => f.EsGanadorEnEstaOpcion);
 
+        var cols = ObtenerColumnasProveedoresComparativa();
+        var colActiva = cols.FirstOrDefault(c => c.indiceColumna == _indiceSlotHojaProveedorActiva);
         string nomProv = CboHojaProveedor?.SelectedItem is Proveedor pSel
                          ? Proveedor.ExtraerNombreComercialCorto(pSel.NombreMostrar)
-                         : ObtenerProveedorPredominanteSlot(_indiceSlotHojaProveedorActiva).nombreCorto;
+                         : (!string.IsNullOrWhiteSpace(colActiva.nombreCorto) ? colActiva.nombreCorto : $"Proveedor {_indiceSlotHojaProveedorActiva}");
 
         TxtResumenHojaProveedorActual.Text =
             $"{nomProv} · Cotizados: {cotizados}/{filas.Count} art. · Adjudicados aquí: {adjudicados} · Subtotal s/IVA: {subtotalSinIva:C2} · Envío c/IVA: {fleteConIva:C2} · Total Hoja c/IVA: {totalConIva:C2}";
@@ -2252,7 +2496,7 @@ public partial class MainWindow
 
     private static void AsignarProveedorASlotEnRenglon(CotizacionRenglonComparativo r, int slot, Proveedor prov)
     {
-        if (r.NumeroOpcionesVisibles < slot)
+        if (slot <= 3 && r.NumeroOpcionesVisibles < slot)
             r.NumeroOpcionesVisibles = slot;
 
         switch (slot)
@@ -2269,18 +2513,116 @@ public partial class MainWindow
                 r.Proveedor3Id = prov.Id;
                 r.Proveedor3Nombre = prov.NombreMostrar;
                 break;
+            default:
+                var ex = r.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot || x.ProveedorId == prov.Id);
+                if (ex != null)
+                {
+                    ex.ProveedorId = prov.Id;
+                    ex.ProveedorNombre = prov.NombreMostrar;
+                }
+                break;
         }
     }
 
     private void CambiarSlotHojaProveedor(int nuevoSlot)
     {
-        _indiceSlotHojaProveedorActiva = Math.Clamp(nuevoSlot, 1, 3);
+        var cols = ObtenerColumnasProveedoresComparativa();
+        _indiceSlotHojaProveedorActiva = Math.Clamp(nuevoSlot, 1, Math.Max(3, cols.Count));
         RefrescarHojaProveedorYAnalisisComparativa();
     }
 
     private void BtnHojaSlot1_Click(object sender, RoutedEventArgs e) => CambiarSlotHojaProveedor(1);
     private void BtnHojaSlot2_Click(object sender, RoutedEventArgs e) => CambiarSlotHojaProveedor(2);
     private void BtnHojaSlot3_Click(object sender, RoutedEventArgs e) => CambiarSlotHojaProveedor(3);
+
+    private void BtnHojaAgregarSlotProveedor_Click(object sender, RoutedEventArgs e)
+    {
+        if (_renglonesComparativa.Count == 0)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una Solicitud con artículos para añadir proveedores concursantes.", "Sin artículos", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var cols = ObtenerColumnasProveedoresComparativa();
+        var colVacia = cols.FirstOrDefault(c => c.provId <= 0);
+        if (colVacia.indiceColumna > 0)
+        {
+            _indiceSlotHojaProveedorActiva = colVacia.indiceColumna;
+            RefrescarHojaProveedorYAnalisisComparativa();
+            if (CboHojaProveedor != null)
+                CboHojaProveedor.IsDropDownOpen = true;
+            return;
+        }
+
+        // Mostrar ventana rápida para elegir qué proveedor abrir en nueva hoja o crear uno nuevo
+        var todosProvs = DatabaseService.ObtenerProveedores();
+        var usados = cols.Where(c => c.provId > 0).Select(c => c.provId).ToHashSet();
+        var disponibles = todosProvs.Where(p => !usados.Contains(p.Id)).ToList();
+
+        if (disponibles.Count == 0)
+        {
+            // Si todos los proveedores del catálogo ya están en columnas, abrir directo el alta rápida de nuevo proveedor
+            BtnNuevoProveedorRapidoComp_Click(sender, e);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = $"Añadir Proveedor {cols.Count + 1} a Hoja Completa",
+            Width = 430,
+            Height = 230,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = $"Seleccione el Proveedor Concursante #{cols.Count + 1}",
+            FontSize = 14.5,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        var cbo = new ComboBox
+        {
+            ItemsSource = disponibles,
+            DisplayMemberPath = "EtiquetaSelectorComparativa",
+            SelectedIndex = 0,
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(cbo);
+
+        var pnlBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnNuevo = new Wpf.Ui.Controls.Button { Content = "+ Crear Nuevo Proveedor", Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(10, 5, 10, 5) };
+        var btnCancelar = new System.Windows.Controls.Button { Content = "Cancelar", Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 5, 12, 5) };
+        var btnAbrir = new Wpf.Ui.Controls.Button { Content = "Abrir Hoja", Appearance = ControlAppearance.Primary, Padding = new Thickness(14, 5, 14, 5) };
+
+        bool crearNuevo = false;
+        btnNuevo.Click += (_, _) => { crearNuevo = true; win.DialogResult = true; };
+        btnCancelar.Click += (_, _) => win.DialogResult = false;
+        btnAbrir.Click += (_, _) => win.DialogResult = true;
+
+        pnlBtns.Children.Add(btnNuevo);
+        pnlBtns.Children.Add(btnCancelar);
+        pnlBtns.Children.Add(btnAbrir);
+        root.Children.Add(pnlBtns);
+        win.Content = root;
+
+        if (win.ShowDialog() == true)
+        {
+            if (crearNuevo)
+            {
+                BtnNuevoProveedorRapidoComp_Click(sender, e);
+            }
+            else if (cbo.SelectedItem is Proveedor pElegido && pElegido.Id > 0)
+            {
+                ActivarOAbrirHojaDeProveedor(pElegido.Id);
+            }
+        }
+    }
 
     private void CboHojaProveedor_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -2290,14 +2632,65 @@ public partial class MainWindow
         if (CboHojaProveedor?.SelectedItem is not Proveedor prov || prov.Id <= 0)
             return;
 
-        int slot = Math.Clamp(_indiceSlotHojaProveedorActiva, 1, 3);
+        var cols = ObtenerColumnasProveedoresComparativa();
+        var colActual = cols.FirstOrDefault(c => c.indiceColumna == _indiceSlotHojaProveedorActiva);
+        int provAnteriorId = colActual.provId;
+
+        // Si el proveedor elegido ya tiene su propia columna en otra pestaña, cambiar a esa pestaña para no duplicarlo
+        var colYaExistente = cols.FirstOrDefault(c => c.provId == prov.Id && c.indiceColumna != _indiceSlotHojaProveedorActiva);
+        if (colYaExistente.indiceColumna > 0)
+        {
+            _indiceSlotHojaProveedorActiva = colYaExistente.indiceColumna;
+            RefrescarHojaProveedorYAnalisisComparativa();
+            return;
+        }
+
+        if (provAnteriorId > 0 && _proveedoresExtraHojaManual.Contains(provAnteriorId))
+        {
+            int idx = _proveedoresExtraHojaManual.IndexOf(provAnteriorId);
+            _proveedoresExtraHojaManual[idx] = prov.Id;
+        }
+        else if (_indiceSlotHojaProveedorActiva > 3 && !_proveedoresExtraHojaManual.Contains(prov.Id))
+        {
+            _proveedoresExtraHojaManual.Add(prov.Id);
+        }
+
         foreach (var r in _renglonesComparativa)
         {
             if (r.TieneOcGenerada) continue;
-            AsignarProveedorASlotEnRenglon(r, slot, prov);
-            r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
-        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
-        DatabaseService.GuardarCotizacionPartida(r);
+
+            bool modificado = false;
+            if (provAnteriorId > 0)
+            {
+                if (r.Proveedor1Id == provAnteriorId) { r.Proveedor1Id = prov.Id; r.Proveedor1Nombre = prov.NombreMostrar; modificado = true; }
+                if (r.Proveedor2Id == provAnteriorId) { r.Proveedor2Id = prov.Id; r.Proveedor2Nombre = prov.NombreMostrar; modificado = true; }
+                if (r.Proveedor3Id == provAnteriorId) { r.Proveedor3Id = prov.Id; r.Proveedor3Nombre = prov.NombreMostrar; modificado = true; }
+                foreach (var ex in r.ProveedoresExtra.Where(x => x.ProveedorId == provAnteriorId))
+                {
+                    ex.ProveedorId = prov.Id;
+                    ex.ProveedorNombre = prov.NombreMostrar;
+                    DatabaseService.GuardarProveedorExtraPartida(ex);
+                    modificado = true;
+                }
+            }
+            else if (_indiceSlotHojaProveedorActiva <= 3)
+            {
+                int slot = _indiceSlotHojaProveedorActiva;
+                int idEnSlot = slot switch { 1 => r.Proveedor1Id, 2 => r.Proveedor2Id, 3 => r.Proveedor3Id, _ => 0 };
+                decimal prEnSlot = slot switch { 1 => r.PrecioSinIva1, 2 => r.PrecioSinIva2, 3 => r.PrecioSinIva3, _ => 0m };
+                if (idEnSlot <= 0 || prEnSlot <= 0)
+                {
+                    AsignarProveedorASlotEnRenglon(r, slot, prov);
+                    modificado = true;
+                }
+            }
+
+            if (modificado)
+            {
+                r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
+                SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+                DatabaseService.GuardarCotizacionPartida(r);
+            }
         }
 
         if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel)
@@ -2316,8 +2709,12 @@ public partial class MainWindow
             return;
         }
 
-        int slot = Math.Clamp(_indiceSlotHojaProveedorActiva, 1, 3);
+        var cols = ObtenerColumnasProveedoresComparativa();
+        var colActiva = cols.FirstOrDefault(c => c.indiceColumna == _indiceSlotHojaProveedorActiva);
         var provSel = CboHojaProveedor?.SelectedItem as Proveedor;
+        int provIdHoja = provSel?.Id ?? colActiva.provId;
+        string provNomHoja = provSel?.NombreMostrar ?? colActiva.nombreCompleto;
+
         int diasEnt = Math.Max(1, (int)ParseDecimal(TxtHojaDiasEntregaGral?.Text ?? "3", 3m));
         int diasVig = Math.Max(1, (int)ParseDecimal(TxtHojaDiasVigenciaGral?.Text ?? "15", 15m));
         decimal fleteGral = Math.Max(0m, ParseDecimal(TxtHojaFleteGral?.Text ?? "0", 0m));
@@ -2328,10 +2725,24 @@ public partial class MainWindow
         {
             if (r.TieneOcGenerada) continue;
 
-            if (provSel != null && provSel.Id > 0)
-                AsignarProveedorASlotEnRenglon(r, slot, provSel);
+            var filaHelper = new RenglonHojaCotizacionProveedor(r, _indiceSlotHojaProveedorActiva, null, provIdHoja, provNomHoja);
+            int slot = filaHelper.ObtenerSlotEfectivoLectura();
+            if (slot == 0 && _indiceSlotHojaProveedorActiva <= 3 && provSel != null && provSel.Id > 0)
+            {
+                int sPref = _indiceSlotHojaProveedorActiva;
+                int idEnS = sPref switch { 1 => r.Proveedor1Id, 2 => r.Proveedor2Id, 3 => r.Proveedor3Id, _ => 0 };
+                decimal prEnS = sPref switch { 1 => r.PrecioSinIva1, 2 => r.PrecioSinIva2, 3 => r.PrecioSinIva3, _ => 0m };
+                if (idEnS <= 0 || prEnS <= 0)
+                {
+                    AsignarProveedorASlotEnRenglon(r, sPref, provSel);
+                    slot = sPref;
+                }
+            }
 
-            bool tienePrecio = slot switch { 1 => r.PrecioSinIva1 > 0, 2 => r.PrecioSinIva2 > 0, 3 => r.PrecioSinIva3 > 0, _ => false };
+            if (slot == 0)
+                continue;
+
+            bool tienePrecio = filaHelper.PrecioSinIva > 0;
             decimal fleteRenglon = 0m;
             if (!fleteAsignado && fleteGral > 0 && (tienePrecio || ReferenceEquals(r, _renglonesComparativa[0])))
             {
@@ -2339,31 +2750,43 @@ public partial class MainWindow
                 fleteAsignado = true;
             }
 
-            switch (slot)
+            if (slot == 1)
             {
-                case 1:
-                    r.DiasEntrega1 = diasEnt;
-                    r.DiasVigencia1 = diasVig;
-                    r.FleteConIva1 = fleteRenglon;
-                    if (string.IsNullOrWhiteSpace(r.FechaCotizacion1)) r.FechaCotizacion1 = hoyStr;
-                    break;
-                case 2:
-                    r.DiasEntrega2 = diasEnt;
-                    r.DiasVigencia2 = diasVig;
-                    r.FleteConIva2 = fleteRenglon;
-                    if (string.IsNullOrWhiteSpace(r.FechaCotizacion2)) r.FechaCotizacion2 = hoyStr;
-                    break;
-                case 3:
-                    r.DiasEntrega3 = diasEnt;
-                    r.DiasVigencia3 = diasVig;
-                    r.FleteConIva3 = fleteRenglon;
-                    if (string.IsNullOrWhiteSpace(r.FechaCotizacion3)) r.FechaCotizacion3 = hoyStr;
-                    break;
+                r.DiasEntrega1 = diasEnt;
+                r.DiasVigencia1 = diasVig;
+                r.FleteConIva1 = fleteRenglon;
+                if (string.IsNullOrWhiteSpace(r.FechaCotizacion1)) r.FechaCotizacion1 = hoyStr;
+            }
+            else if (slot == 2)
+            {
+                r.DiasEntrega2 = diasEnt;
+                r.DiasVigencia2 = diasVig;
+                r.FleteConIva2 = fleteRenglon;
+                if (string.IsNullOrWhiteSpace(r.FechaCotizacion2)) r.FechaCotizacion2 = hoyStr;
+            }
+            else if (slot == 3)
+            {
+                r.DiasEntrega3 = diasEnt;
+                r.DiasVigencia3 = diasVig;
+                r.FleteConIva3 = fleteRenglon;
+                if (string.IsNullOrWhiteSpace(r.FechaCotizacion3)) r.FechaCotizacion3 = hoyStr;
+            }
+            else if (slot >= 4)
+            {
+                var ex = r.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot);
+                if (ex != null)
+                {
+                    ex.DiasEntrega = diasEnt;
+                    ex.DiasVigencia = diasVig;
+                    ex.FleteConIva = fleteRenglon;
+                    if (string.IsNullOrWhiteSpace(ex.FechaCotizacion)) ex.FechaCotizacion = hoyStr;
+                    DatabaseService.GuardarProveedorExtraPartida(ex);
+                }
             }
 
             r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
-        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
-        DatabaseService.GuardarCotizacionPartida(r);
+            SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+            DatabaseService.GuardarCotizacionPartida(r);
         }
 
         if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel)
@@ -2377,8 +2800,9 @@ public partial class MainWindow
         if (_renglonesComparativa.Count == 0)
             return;
 
-        int slot = Math.Clamp(_indiceSlotHojaProveedorActiva, 1, 3);
-        int provId = (CboHojaProveedor?.SelectedItem as Proveedor)?.Id ?? ObtenerProveedorPredominanteSlot(slot).provId;
+        var cols = ObtenerColumnasProveedoresComparativa();
+        var colActiva = cols.FirstOrDefault(c => c.indiceColumna == _indiceSlotHojaProveedorActiva);
+        int provId = (CboHojaProveedor?.SelectedItem as Proveedor)?.Id ?? colActiva.provId;
         var provObj = (CboHojaProveedor?.ItemsSource as IEnumerable<Proveedor>)?.FirstOrDefault(p => p.Id == provId);
 
         if (provId <= 0 || provObj == null)
@@ -2394,40 +2818,55 @@ public partial class MainWindow
         {
             if (r.TieneOcGenerada) continue;
 
-            AsignarProveedorASlotEnRenglon(r, slot, provObj);
             var refs = DatabaseService.ObtenerReferenciasSimilaresParaComparativa(r.ProductoId, r.ProductoNombre, r.Familia);
             var mejorDeEsteProv = refs.FirstOrDefault(x => x.ProveedorId == provId && x.PrecioSinIva > 0);
             if (mejorDeEsteProv == null)
                 continue;
 
-            switch (slot)
+            var filaHelper = new RenglonHojaCotizacionProveedor(r, _indiceSlotHojaProveedorActiva, null, provObj.Id, provObj.NombreMostrar);
+            int slot = filaHelper.AsegurarSlotParaEscritura();
+
+            if (slot == 1)
             {
-                case 1:
-                    r.PrecioSinIva1 = mejorDeEsteProv.PrecioSinIva;
-                    r.DiasEntrega1 = mejorDeEsteProv.DiasEntrega > 0 ? mejorDeEsteProv.DiasEntrega : 3;
-                    r.DiasVigencia1 = mejorDeEsteProv.DiasVigencia > 0 ? mejorDeEsteProv.DiasVigencia : 15;
-                    r.FechaCotizacion1 = !string.IsNullOrWhiteSpace(mejorDeEsteProv.FechaCotizacion) ? mejorDeEsteProv.FechaCotizacion : hoyStr;
-                    r.NotasCotizacion1 = mejorDeEsteProv.ReferenciaOrigen;
-                    break;
-                case 2:
-                    r.PrecioSinIva2 = mejorDeEsteProv.PrecioSinIva;
-                    r.DiasEntrega2 = mejorDeEsteProv.DiasEntrega > 0 ? mejorDeEsteProv.DiasEntrega : 3;
-                    r.DiasVigencia2 = mejorDeEsteProv.DiasVigencia > 0 ? mejorDeEsteProv.DiasVigencia : 15;
-                    r.FechaCotizacion2 = !string.IsNullOrWhiteSpace(mejorDeEsteProv.FechaCotizacion) ? mejorDeEsteProv.FechaCotizacion : hoyStr;
-                    r.NotasCotizacion2 = mejorDeEsteProv.ReferenciaOrigen;
-                    break;
-                case 3:
-                    r.PrecioSinIva3 = mejorDeEsteProv.PrecioSinIva;
-                    r.DiasEntrega3 = mejorDeEsteProv.DiasEntrega > 0 ? mejorDeEsteProv.DiasEntrega : 3;
-                    r.DiasVigencia3 = mejorDeEsteProv.DiasVigencia > 0 ? mejorDeEsteProv.DiasVigencia : 15;
-                    r.FechaCotizacion3 = !string.IsNullOrWhiteSpace(mejorDeEsteProv.FechaCotizacion) ? mejorDeEsteProv.FechaCotizacion : hoyStr;
-                    r.NotasCotizacion3 = mejorDeEsteProv.ReferenciaOrigen;
-                    break;
+                r.PrecioSinIva1 = mejorDeEsteProv.PrecioSinIva;
+                r.DiasEntrega1 = mejorDeEsteProv.DiasEntrega > 0 ? mejorDeEsteProv.DiasEntrega : 3;
+                r.DiasVigencia1 = mejorDeEsteProv.DiasVigencia > 0 ? mejorDeEsteProv.DiasVigencia : 15;
+                r.FechaCotizacion1 = !string.IsNullOrWhiteSpace(mejorDeEsteProv.FechaCotizacion) ? mejorDeEsteProv.FechaCotizacion : hoyStr;
+                r.NotasCotizacion1 = mejorDeEsteProv.ReferenciaOrigen;
+            }
+            else if (slot == 2)
+            {
+                r.PrecioSinIva2 = mejorDeEsteProv.PrecioSinIva;
+                r.DiasEntrega2 = mejorDeEsteProv.DiasEntrega > 0 ? mejorDeEsteProv.DiasEntrega : 3;
+                r.DiasVigencia2 = mejorDeEsteProv.DiasVigencia > 0 ? mejorDeEsteProv.DiasVigencia : 15;
+                r.FechaCotizacion2 = !string.IsNullOrWhiteSpace(mejorDeEsteProv.FechaCotizacion) ? mejorDeEsteProv.FechaCotizacion : hoyStr;
+                r.NotasCotizacion2 = mejorDeEsteProv.ReferenciaOrigen;
+            }
+            else if (slot == 3)
+            {
+                r.PrecioSinIva3 = mejorDeEsteProv.PrecioSinIva;
+                r.DiasEntrega3 = mejorDeEsteProv.DiasEntrega > 0 ? mejorDeEsteProv.DiasEntrega : 3;
+                r.DiasVigencia3 = mejorDeEsteProv.DiasVigencia > 0 ? mejorDeEsteProv.DiasVigencia : 15;
+                r.FechaCotizacion3 = !string.IsNullOrWhiteSpace(mejorDeEsteProv.FechaCotizacion) ? mejorDeEsteProv.FechaCotizacion : hoyStr;
+                r.NotasCotizacion3 = mejorDeEsteProv.ReferenciaOrigen;
+            }
+            else if (slot >= 4)
+            {
+                var ex = r.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot);
+                if (ex != null)
+                {
+                    ex.PrecioSinIva = mejorDeEsteProv.PrecioSinIva;
+                    ex.DiasEntrega = mejorDeEsteProv.DiasEntrega > 0 ? mejorDeEsteProv.DiasEntrega : 3;
+                    ex.DiasVigencia = mejorDeEsteProv.DiasVigencia > 0 ? mejorDeEsteProv.DiasVigencia : 15;
+                    ex.FechaCotizacion = !string.IsNullOrWhiteSpace(mejorDeEsteProv.FechaCotizacion) ? mejorDeEsteProv.FechaCotizacion : hoyStr;
+                    ex.NotasCotizacion = mejorDeEsteProv.ReferenciaOrigen;
+                    DatabaseService.GuardarProveedorExtraPartida(ex);
+                }
             }
 
             r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
-        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
-        DatabaseService.GuardarCotizacionPartida(r);
+            SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+            DatabaseService.GuardarCotizacionPartida(r);
             cargados++;
         }
 
@@ -2457,21 +2896,24 @@ public partial class MainWindow
         if (_renglonesComparativa.Count == 0)
             return;
 
-        int slot = Math.Clamp(_indiceSlotHojaProveedorActiva, 1, 3);
+        var cols = ObtenerColumnasProveedoresComparativa();
+        var colActiva = cols.FirstOrDefault(c => c.indiceColumna == _indiceSlotHojaProveedorActiva);
+        int provIdHoja = (CboHojaProveedor?.SelectedItem as Proveedor)?.Id ?? colActiva.provId;
         int adjudicados = 0;
 
         foreach (var r in _renglonesComparativa)
         {
             if (r.TieneOcGenerada) continue;
-            int provId = slot switch { 1 => r.Proveedor1Id, 2 => r.Proveedor2Id, 3 => r.Proveedor3Id, _ => 0 };
-            decimal precio = slot switch { 1 => r.PrecioSinIva1, 2 => r.PrecioSinIva2, 3 => r.PrecioSinIva3, _ => 0m };
+            var filaHelper = new RenglonHojaCotizacionProveedor(r, _indiceSlotHojaProveedorActiva, null, provIdHoja, colActiva.nombreCompleto);
+            int slotEfectivo = filaHelper.ObtenerSlotEfectivoLectura();
+            decimal precio = filaHelper.PrecioSinIva;
 
-            if (provId > 0 && precio > 0)
+            if (slotEfectivo > 0 && precio > 0)
             {
-                r.ProveedorGanadorIndice = slot;
+                r.ProveedorGanadorIndice = slotEfectivo;
                 r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
-        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
-        DatabaseService.GuardarCotizacionPartida(r);
+                SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+                DatabaseService.GuardarCotizacionPartida(r);
                 adjudicados++;
             }
         }
@@ -2486,6 +2928,68 @@ public partial class MainWindow
             CargarProductoEnTarjetasComparativa(sel);
 
         RecalcularTotalesComparativa();
+    }
+
+    private void DgHojaCotizacionProveedor_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _sincronizandoHojaProveedor || _cargandoDetalleComparativa)
+            return;
+
+        if (DgHojaCotizacionProveedor?.SelectedItem is RenglonHojaCotizacionProveedor fila &&
+            DgComparativa != null &&
+            !ReferenceEquals(DgComparativa.SelectedItem, fila.RenglonBase))
+        {
+            DgComparativa.SelectedItem = fila.RenglonBase;
+        }
+    }
+
+    private void DgMatrizComparativaRapida_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _sincronizandoHojaProveedor || _cargandoDetalleComparativa)
+            return;
+
+        if (DgMatrizComparativaRapida?.SelectedItem is CotizacionRenglonComparativo r &&
+            DgComparativa != null &&
+            !ReferenceEquals(DgComparativa.SelectedItem, r))
+        {
+            DgComparativa.SelectedItem = r;
+        }
+    }
+
+    private void CboCompSelectorArticuloDetalle_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _cargandoDetalleComparativa || _sincronizandoHojaProveedor)
+            return;
+
+        if (CboCompSelectorArticuloDetalle?.SelectedItem is CotizacionRenglonComparativo r &&
+            DgComparativa != null &&
+            !ReferenceEquals(DgComparativa.SelectedItem, r))
+        {
+            DgComparativa.SelectedItem = r;
+        }
+    }
+
+    private void DgProveedoresExtraComp_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (e.Row.Item is not CotizacionProveedorExtra ex ||
+                DgComparativa?.SelectedItem is not CotizacionRenglonComparativo r ||
+                r.TieneOcGenerada)
+                return;
+
+            ex.PrecioSinIva = Math.Max(0m, Math.Round(ex.PrecioSinIva, 2));
+            ex.FleteConIva = Math.Max(0m, Math.Round(ex.FleteConIva, 2));
+            ex.DiasEntrega = Math.Max(1, ex.DiasEntrega);
+            ex.DiasVigencia = Math.Max(1, ex.DiasVigencia);
+            if (ex.PrecioSinIva > 0 && string.IsNullOrWhiteSpace(ex.FechaCotizacion))
+                ex.FechaCotizacion = DateTime.Today.ToString("yyyy-MM-dd");
+
+            DatabaseService.GuardarProveedorExtraPartida(ex);
+            DatabaseService.GuardarCotizacionPartida(r);
+            CargarProductoEnTarjetasComparativa(r);
+            RecalcularTotalesComparativa();
+        }), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void TcModoCapturaComparativa_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2509,10 +3013,13 @@ public partial class MainWindow
         var p1 = ObtenerProveedorPredominanteSlot(1);
         var p2 = ObtenerProveedorPredominanteSlot(2);
         var p3 = ObtenerProveedorPredominanteSlot(3);
+        int extraCount = _renglonesComparativa.SelectMany(r => r.ProveedoresExtra).Select(x => x.ProveedorId).Where(id => id > 0).Distinct().Count();
 
         if (ColMatrizProv1 != null) ColMatrizProv1.Header = $"P.U. {AbreviarNombreProveedorSlot(p1.nombreCorto, 15)}";
         if (ColMatrizProv2 != null) ColMatrizProv2.Header = $"P.U. {AbreviarNombreProveedorSlot(p2.nombreCorto, 15)}";
-        if (ColMatrizProv3 != null) ColMatrizProv3.Header = $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 15)}";
+        if (ColMatrizProv3 != null) ColMatrizProv3.Header = extraCount > 0
+            ? $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 12)} (+{extraCount})"
+            : $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 15)}";
 
         if (!ReferenceEquals(DgMatrizComparativaRapida.ItemsSource, _renglonesComparativa))
         {
@@ -2568,8 +3075,8 @@ public partial class MainWindow
             }
 
             r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
-        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
-        DatabaseService.GuardarCotizacionPartida(r);
+            SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
+            DatabaseService.GuardarCotizacionPartida(r);
             if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel && ReferenceEquals(sel, r))
                 CargarProductoEnTarjetasComparativa(r);
 
@@ -2750,28 +3257,22 @@ public partial class MainWindow
                 ? "✓ Selección actual está en el óptimo"
                 : $"Potencial adicional: {difContraOptimo:C2}");
 
-        // 3. Tarjeta Consolidar Todo con 1 Solo Proveedor
+        // 3. Tarjeta Consolidar Todo con 1 Solo Proveedor (incluye 4to+ proveedores)
         var lineasProvUnico = new List<string>();
-        for (int slot = 1; slot <= 3; slot++)
+        foreach (var col in ObtenerColumnasProveedoresComparativa().Where(c => c.provId > 0))
         {
-            var pred = ObtenerProveedorPredominanteSlot(slot);
-            int cots = _renglonesComparativa.Count(r => slot switch
-            {
-                1 => r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0,
-                2 => r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0,
-                3 => r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0,
-                _ => false
-            });
+            int cots = ContarCotizadosDeProveedor(col.provId);
             if (cots == 0) continue;
 
-            decimal totSlot = _renglonesComparativa.Sum(r => slot switch
+            decimal totProv = _renglonesComparativa.Sum(r =>
             {
-                1 => r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0 ? r.TotalConFlete1 : 0m,
-                2 => r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0 ? r.TotalConFlete2 : 0m,
-                3 => r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0 ? r.TotalConFlete3 : 0m,
-                _ => 0m
+                if (r.Proveedor1Id == col.provId && r.PrecioSinIva1 > 0) return r.TotalConFlete1;
+                if (r.Proveedor2Id == col.provId && r.PrecioSinIva2 > 0) return r.TotalConFlete2;
+                if (r.Proveedor3Id == col.provId && r.PrecioSinIva3 > 0) return r.TotalConFlete3;
+                var ex = r.ProveedoresExtra.FirstOrDefault(x => x.ProveedorId == col.provId && x.PrecioSinIva > 0);
+                return ex != null ? Math.Round(r.Cantidad * ex.PrecioConIva + ex.FleteConIva, 2) : 0m;
             });
-            lineasProvUnico.Add($"• {pred.nombreCorto}: {totSlot:C2} ({cots}/{totalItems} art.)");
+            lineasProvUnico.Add($"• {AbreviarNombreProveedorSlot(col.nombreCorto, 18)}: {totProv:C2} ({cots}/{totalItems} art.)");
         }
         TxtKpiCompUnicoProvResumen.Text = lineasProvUnico.Count > 0
             ? string.Join("\n", lineasProvUnico)

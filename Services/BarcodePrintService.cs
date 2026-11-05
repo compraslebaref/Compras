@@ -132,56 +132,124 @@ public static class BarcodePrintService
 
     public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones, bool soloDescargar = false)
     {
-        var provsCol1 = renglones
-            .Where(r => r.Proveedor1Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor1Nombre) && r.Proveedor1Nombre != "Sin asignar")
-            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var provsCol2 = renglones
-            .Where(r => r.Proveedor2Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar")
-            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var provsCol3 = renglones
-            .Where(r => r.Proveedor3Id > 0 && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar")
-            .Select(r => Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var columnasProveedores = new List<(int slotBase, int provId, string nombreCorto)>();
+        var usados = new HashSet<int>();
 
-        string encCol1 = provsCol1.Count == 1 ? provsCol1[0] : (provsCol1.Count > 1 ? string.Join(" / ", provsCol1.Take(2)) : "Proveedor 1");
-        string encCol2 = provsCol2.Count == 1 ? provsCol2[0] : (provsCol2.Count > 1 ? string.Join(" / ", provsCol2.Take(2)) : "Proveedor 2");
-        string encCol3 = provsCol3.Count == 1 ? provsCol3[0] : (provsCol3.Count > 1 ? string.Join(" / ", provsCol3.Take(2)) : "Proveedor 3");
+        for (int slot = 1; slot <= 3; slot++)
+        {
+            var grupo = renglones
+                .Select(r => slot switch
+                {
+                    1 => (id: r.Proveedor1Id, nom: r.Proveedor1Nombre, conPrecio: r.PrecioSinIva1 > 0),
+                    2 => (id: r.Proveedor2Id, nom: r.Proveedor2Nombre, conPrecio: r.PrecioSinIva2 > 0),
+                    3 => (id: r.Proveedor3Id, nom: r.Proveedor3Nombre, conPrecio: r.PrecioSinIva3 > 0),
+                    _ => (id: 0, nom: string.Empty, conPrecio: false)
+                })
+                .Where(x => x.id > 0 && !string.IsNullOrWhiteSpace(x.nom) && x.nom != "Sin asignar" && !usados.Contains(x.id))
+                .GroupBy(x => x.id)
+                .OrderByDescending(g => g.Count(x => x.conPrecio))
+                .ThenByDescending(g => g.Count())
+                .FirstOrDefault();
+
+            if (grupo != null)
+            {
+                usados.Add(grupo.Key);
+                string nomCorto = Proveedor.ExtraerNombreComercialCorto(grupo.First().nom);
+                columnasProveedores.Add((slot, grupo.Key, string.IsNullOrWhiteSpace(nomCorto) ? $"Proveedor {slot}" : nomCorto));
+            }
+            else
+            {
+                columnasProveedores.Add((slot, 0, $"Proveedor {slot}"));
+            }
+        }
+
+        // Agregar cualquier 4to+ proveedor concursante (agregado en Detalle Individual o en ProveedoresExtra)
+        var extras = new List<(int provId, string nombreCorto)>();
+        foreach (var r in renglones)
+        {
+            if (r.Proveedor1Id > 0 && !usados.Contains(r.Proveedor1Id) && !string.IsNullOrWhiteSpace(r.Proveedor1Nombre) && r.Proveedor1Nombre != "Sin asignar")
+            {
+                usados.Add(r.Proveedor1Id);
+                extras.Add((r.Proveedor1Id, Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre)));
+            }
+            if (r.Proveedor2Id > 0 && (r.NumeroOpcionesVisibles >= 2 || r.PrecioSinIva2 > 0) && !usados.Contains(r.Proveedor2Id) && !string.IsNullOrWhiteSpace(r.Proveedor2Nombre) && r.Proveedor2Nombre != "Sin asignar")
+            {
+                usados.Add(r.Proveedor2Id);
+                extras.Add((r.Proveedor2Id, Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre)));
+            }
+            if (r.Proveedor3Id > 0 && (r.NumeroOpcionesVisibles >= 3 || r.PrecioSinIva3 > 0) && !usados.Contains(r.Proveedor3Id) && !string.IsNullOrWhiteSpace(r.Proveedor3Nombre) && r.Proveedor3Nombre != "Sin asignar")
+            {
+                usados.Add(r.Proveedor3Id);
+                extras.Add((r.Proveedor3Id, Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre)));
+            }
+            foreach (var ex in r.ProveedoresExtra)
+            {
+                if (ex.ProveedorId > 0 && !usados.Contains(ex.ProveedorId) && !string.IsNullOrWhiteSpace(ex.ProveedorNombre))
+                {
+                    usados.Add(ex.ProveedorId);
+                    extras.Add((ex.ProveedorId, Proveedor.ExtraerNombreComercialCorto(ex.ProveedorNombre)));
+                }
+            }
+        }
+
+        foreach (var ex in extras)
+        {
+            int idxVacio = columnasProveedores.FindIndex(c => c.slotBase <= 3 && c.provId <= 0);
+            if (idxVacio >= 0)
+            {
+                int sb = columnasProveedores[idxVacio].slotBase;
+                columnasProveedores[idxVacio] = (sb, ex.provId, ex.nombreCorto);
+            }
+            else
+            {
+                columnasProveedores.Add((columnasProveedores.Count + 1, ex.provId, ex.nombreCorto));
+            }
+        }
+
+        static string FormatearCeldaProveedorEnRenglon(CotizacionRenglonComparativo r, int provId)
+        {
+            if (provId <= 0)
+                return "Sin cotizar";
+
+            if (r.Proveedor1Id == provId)
+                return r.PrecioSinIva1 > 0 ? $"${r.PrecioConIva1:N2} c/u ({r.DiasEntrega1}d)" : "Sin cotizar";
+            if (r.Proveedor2Id == provId)
+                return r.PrecioSinIva2 > 0 ? $"${r.PrecioConIva2:N2} c/u ({r.DiasEntrega2}d)" : "Sin cotizar";
+            if (r.Proveedor3Id == provId)
+                return r.PrecioSinIva3 > 0 ? $"${r.PrecioConIva3:N2} c/u ({r.DiasEntrega3}d)" : "Sin cotizar";
+
+            var ex = r.ProveedoresExtra.FirstOrDefault(x => x.ProveedorId == provId);
+            if (ex != null)
+                return ex.PrecioSinIva > 0 ? $"${ex.PrecioConIva:N2} c/u ({ex.DiasEntrega}d)" : "Sin cotizar ($0.00)";
+
+            return "Sin cotizar";
+        }
 
         var filas = renglones.Select((r, idx) =>
         {
-            string c1 = r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0
-                ? (provsCol1.Count == 1 ? $"${r.PrecioConIva1:N2} c/u ({r.DiasEntrega1}d)" : $"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor1Nombre)}: ${r.PrecioConIva1:N2} c/u ({r.DiasEntrega1}d)")
-                : "Sin cotizar";
-            string c2 = r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0
-                ? (provsCol2.Count == 1 ? $"${r.PrecioConIva2:N2} c/u ({r.DiasEntrega2}d)" : $"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor2Nombre)}: ${r.PrecioConIva2:N2} c/u ({r.DiasEntrega2}d)")
-                : "Sin cotizar";
-            string c3Base = r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0
-                ? (provsCol3.Count == 1 && r.ProveedoresExtra.Count == 0 ? $"${r.PrecioConIva3:N2} c/u ({r.DiasEntrega3}d)" : $"{Proveedor.ExtraerNombreComercialCorto(r.Proveedor3Nombre)}: ${r.PrecioConIva3:N2} c/u ({r.DiasEntrega3}d)")
-                : "Sin cotizar";
-            string c3 = r.ProveedoresExtra.Count > 0
-                ? (c3Base == "Sin cotizar"
-                    ? string.Join(" | ", r.ProveedoresExtra.Select(x => $"{Proveedor.ExtraerNombreComercialCorto(x.ProveedorNombre)}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d)"))
-                    : $"{c3Base} | {string.Join(" | ", r.ProveedoresExtra.Select(x => $"{Proveedor.ExtraerNombreComercialCorto(x.ProveedorNombre)}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d)"))}")
-                : c3Base;
-
-            return new[]
+            var celdas = new List<string>
             {
                 (idx + 1).ToString(),
                 string.IsNullOrWhiteSpace(r.ProductoCodigo) ? "CONCEPTO" : r.ProductoCodigo,
                 !string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.DescripcionLibre : r.ProductoNombre,
-                $"{r.Cantidad:0.##} {r.UnidadCompra}",
-                c1,
-                c2,
-                c3,
-                r.ProveedorGanadorId > 0 ? $"{Proveedor.ExtraerNombreComercialCorto(r.ProveedorGanadorNombre)} (${r.PrecioUnitarioGanadorConIva:N2})" : "Sin adjudicar",
-                r.VigenciaEstadoTexto
+                $"{r.Cantidad:0.##} {r.UnidadCompra}"
             };
+
+            foreach (var col in columnasProveedores)
+            {
+                celdas.Add(FormatearCeldaProveedorEnRenglon(r, col.provId));
+            }
+
+            celdas.Add(r.ProveedorGanadorId > 0 ? $"{Proveedor.ExtraerNombreComercialCorto(r.ProveedorGanadorNombre)} (${r.PrecioUnitarioGanadorConIva:N2})" : "Sin adjudicar");
+            celdas.Add(r.VigenciaEstadoTexto);
+            return celdas.ToArray();
         }).ToList();
+
+        var encabezadosLista = new List<string> { "#", "Código", "Artículo / Concepto", "Cant." };
+        encabezadosLista.AddRange(columnasProveedores.Select(c => c.nombreCorto));
+        encabezadosLista.Add("Selección");
+        encabezadosLista.Add("Vigencia");
+        string[] encabezadosTablaComp = encabezadosLista.ToArray();
 
         var adjudicadosPorProv = renglones
             .Where(r => r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
@@ -296,7 +364,7 @@ public static class BarcodePrintService
             folioCodigoBarras: $"COT-{sol.Id:D4}",
             fecha: DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             metadatos: metadatos,
-            encabezadosTabla: new[] { "#", "Código", "Artículo / Concepto", "Cant.", encCol1, encCol2, encCol3, "Selección", "Vigencia" },
+            encabezadosTabla: encabezadosTablaComp,
             filasTabla: filas,
             totales: new List<(string, string)>
             {
@@ -1046,9 +1114,18 @@ public static class BarcodePrintService
         var rowGrid = new Grid { Width = AnchoContenidoCartaDip };
         for (int c = 0; c < encabezadosTabla.Length; c++)
         {
+            double starWidth = c switch
+            {
+                0 when encabezadosTabla[0] == "#" => 0.38,
+                1 when encabezadosTabla[0] == "#" && encabezadosTabla.Length >= 8 => 0.85,
+                2 when encabezadosTabla.Length >= 8 => 1.95,
+                2 => 2.4,
+                3 when encabezadosTabla.Length >= 8 && encabezadosTabla[3].StartsWith("Cant", StringComparison.OrdinalIgnoreCase) => 0.68,
+                _ => 1.0
+            };
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition
             {
-                Width = c == 2 ? new GridLength(2.4, GridUnitType.Star) : new GridLength(1, GridUnitType.Star)
+                Width = new GridLength(starWidth, GridUnitType.Star)
             });
         }
 

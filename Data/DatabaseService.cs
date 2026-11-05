@@ -3338,7 +3338,8 @@ WHERE Id = $id";
         {
             cmd.CommandText = @"
 INSERT INTO CotizacionesPartidaProveedor (SolicitudPartidaId, NumeroOpcion, ProveedorId, PrecioSinIva, DiasEntrega, FleteConIva, DiasVigencia, FechaCotizacion, NotasCotizacion)
-VALUES ($spid, $num, $pv, $pr, $de, $fl, $dv, $fc, $not)";
+VALUES ($spid, $num, $pv, $pr, $de, $fl, $dv, $fc, $not);
+SELECT last_insert_rowid();";
             cmd.Parameters.AddWithValue("$spid", extra.SolicitudPartidaId);
             cmd.Parameters.AddWithValue("$num", extra.NumeroOpcion);
         }
@@ -3349,7 +3350,10 @@ VALUES ($spid, $num, $pv, $pr, $de, $fl, $dv, $fc, $not)";
         cmd.Parameters.AddWithValue("$dv", extra.DiasVigencia > 0 ? extra.DiasVigencia : 15);
         cmd.Parameters.AddWithValue("$fc", fCot);
         cmd.Parameters.AddWithValue("$not", extra.NotasCotizacion ?? string.Empty);
-        cmd.ExecuteNonQuery();
+        if (extra.Id > 0)
+            cmd.ExecuteNonQuery();
+        else
+            extra.Id = Convert.ToInt32(cmd.ExecuteScalar());
     }
 
     public static void EliminarProveedorExtraPartida(int extraId)

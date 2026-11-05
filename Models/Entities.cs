@@ -416,8 +416,10 @@ public class CotizacionRenglonComparativo
     public decimal TotalConFlete1 => Math.Round(TotalPartidaConIva1 + FleteConIva1, 2);
     public string EstadoVigencia1 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion1) ? FechaCotizacion1 : FechaCotizacion, DiasVigencia1, true);
     public string ResumenOpcion1 => Proveedor1Id > 0 && PrecioSinIva1 > 0
-        ? $"{Proveedor1Nombre}: ${PrecioConIva1:N2} c/u ({DiasEntrega1}d · Vig.{DiasVigencia1}d)"
-        : "Sin cotizar";
+        ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor1Nombre)}: ${PrecioConIva1:N2} c/u ({DiasEntrega1}d · Vig.{DiasVigencia1}d)"
+        : (Proveedor1Id > 0 && !string.IsNullOrWhiteSpace(Proveedor1Nombre) && Proveedor1Nombre != "Sin asignar"
+            ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor1Nombre)}: Sin precio ($0.00)"
+            : "Sin cotizar");
 
     // Opción 2
     public int Proveedor2Id { get; set; }
@@ -433,8 +435,10 @@ public class CotizacionRenglonComparativo
     public decimal TotalConFlete2 => Math.Round(TotalPartidaConIva2 + FleteConIva2, 2);
     public string EstadoVigencia2 => FormatearVigencia(!string.IsNullOrWhiteSpace(FechaCotizacion2) ? FechaCotizacion2 : FechaCotizacion, DiasVigencia2, true);
     public string ResumenOpcion2 => Proveedor2Id > 0 && PrecioSinIva2 > 0
-        ? $"{Proveedor2Nombre}: ${PrecioConIva2:N2} c/u ({DiasEntrega2}d · Vig.{DiasVigencia2}d)"
-        : "Sin cotizar";
+        ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor2Nombre)}: ${PrecioConIva2:N2} c/u ({DiasEntrega2}d · Vig.{DiasVigencia2}d)"
+        : (Proveedor2Id > 0 && NumeroOpcionesVisibles >= 2 && !string.IsNullOrWhiteSpace(Proveedor2Nombre) && Proveedor2Nombre != "Sin asignar"
+            ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor2Nombre)}: Sin precio ($0.00)"
+            : "Sin cotizar");
 
     // Opción 3
     public int Proveedor3Id { get; set; }
@@ -454,11 +458,16 @@ public class CotizacionRenglonComparativo
         get
         {
             string baseOp3 = Proveedor3Id > 0 && PrecioSinIva3 > 0
-                ? $"{Proveedor3Nombre}: ${PrecioConIva3:N2} c/u ({DiasEntrega3}d · Vig.{DiasVigencia3}d)"
-                : "Sin cotizar";
+                ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor3Nombre)}: ${PrecioConIva3:N2} c/u ({DiasEntrega3}d · Vig.{DiasVigencia3}d)"
+                : (Proveedor3Id > 0 && NumeroOpcionesVisibles >= 3 && !string.IsNullOrWhiteSpace(Proveedor3Nombre) && Proveedor3Nombre != "Sin asignar"
+                    ? $"{Proveedor.ExtraerNombreComercialCorto(Proveedor3Nombre)}: Sin precio ($0.00)"
+                    : "Sin cotizar");
             if (ProveedoresExtra.Count == 0)
                 return baseOp3;
-            string extras = string.Join(" | ", ProveedoresExtra.Select(x => $"Op.{x.NumeroOpcion} {x.ProveedorNombre}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d · Vig.{x.DiasVigencia}d)"));
+            string extras = string.Join(" | ", ProveedoresExtra.Select(x =>
+                x.PrecioSinIva > 0
+                    ? $"Op.{x.NumeroOpcion} {Proveedor.ExtraerNombreComercialCorto(x.ProveedorNombre)}: ${x.PrecioConIva:N2} ({x.DiasEntrega}d · Vig.{x.DiasVigencia}d)"
+                    : $"Op.{x.NumeroOpcion} {Proveedor.ExtraerNombreComercialCorto(x.ProveedorNombre)}: Sin precio ($0.00)"));
             return baseOp3 == "Sin cotizar" ? extras : $"{baseOp3} | {extras}";
         }
     }
@@ -539,14 +548,16 @@ public class CotizacionRenglonComparativo
 
     public decimal TotalGanadorConIva => Math.Round(Cantidad * PrecioUnitarioGanadorSinIva * 1.16m, 2);
 
+    public string EtiquetaSelectorDetalle => $"{(string.IsNullOrWhiteSpace(ProductoCodigo) ? "CONCEPTO" : ProductoCodigo)} — {ProductoNombre} ({Cantidad:0.##} {UnidadCompra})";
+
     public string EstadoDecisionTexto
     {
         get
         {
             if (TieneOcGenerada)
-                return $"OC: {OrdenCompraFolio} ({ProveedorGanadorNombre})";
+                return $"OC: {OrdenCompraFolio} ({Proveedor.ExtraerNombreComercialCorto(ProveedorGanadorNombre)})";
             if (ProveedorGanadorIndice >= 1 && ProveedorGanadorId > 0)
-                return $"★ {ProveedorGanadorNombre}";
+                return $"★ {Proveedor.ExtraerNombreComercialCorto(ProveedorGanadorNombre)}";
             return "Pendiente de elegir";
         }
     }
@@ -1249,14 +1260,119 @@ public class NotificacionCheckpoint
 public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 {
     public CotizacionRenglonComparativo RenglonBase { get; }
-    public int IndiceOpcion { get; } // 1, 2 o 3
+    public int IndiceOpcion { get; } // 1, 2, 3 o 4+
+    public int ProveedorHojaId { get; set; }
+    public string ProveedorHojaNombre { get; set; } = string.Empty;
     public Action<RenglonHojaCotizacionProveedor>? AlModificar { get; set; }
 
-    public RenglonHojaCotizacionProveedor(CotizacionRenglonComparativo baseRow, int indiceOpcion, Action<RenglonHojaCotizacionProveedor>? onModify = null)
+    public RenglonHojaCotizacionProveedor(CotizacionRenglonComparativo baseRow, int indiceOpcion, Action<RenglonHojaCotizacionProveedor>? onModify = null, int proveedorHojaId = 0, string proveedorHojaNombre = "")
     {
         RenglonBase = baseRow;
-        IndiceOpcion = Math.Clamp(indiceOpcion, 1, 3);
+        IndiceOpcion = Math.Max(1, indiceOpcion);
+        ProveedorHojaId = proveedorHojaId;
+        ProveedorHojaNombre = proveedorHojaNombre ?? string.Empty;
         AlModificar = onModify;
+    }
+
+    public int ObtenerSlotEfectivoLectura()
+    {
+        if (ProveedorHojaId > 0)
+        {
+            if (RenglonBase.Proveedor1Id == ProveedorHojaId) return 1;
+            if (RenglonBase.Proveedor2Id == ProveedorHojaId) return 2;
+            if (RenglonBase.Proveedor3Id == ProveedorHojaId) return 3;
+            var ex = RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.ProveedorId == ProveedorHojaId);
+            if (ex != null) return ex.NumeroOpcion;
+            return 0;
+        }
+
+        if (IndiceOpcion == 1 && RenglonBase.Proveedor1Id <= 0) return 1;
+        if (IndiceOpcion == 2 && RenglonBase.Proveedor2Id <= 0) return 2;
+        if (IndiceOpcion == 3 && RenglonBase.Proveedor3Id <= 0) return 3;
+        return 0;
+    }
+
+    public int AsegurarSlotParaEscritura()
+    {
+        int existente = ObtenerSlotEfectivoLectura();
+        if (existente > 0)
+        {
+            if (existente <= 3 && RenglonBase.NumeroOpcionesVisibles < existente)
+                RenglonBase.NumeroOpcionesVisibles = existente;
+            return existente;
+        }
+
+        string nomProv = string.IsNullOrWhiteSpace(ProveedorHojaNombre) ? "Sin asignar" : ProveedorHojaNombre;
+
+        if (ProveedorHojaId > 0)
+        {
+            // 1. Preferir el slot de esta columna si está libre o sin precio
+            if (IndiceOpcion == 1 && (RenglonBase.Proveedor1Id <= 0 || RenglonBase.PrecioSinIva1 <= 0))
+            {
+                RenglonBase.Proveedor1Id = ProveedorHojaId;
+                RenglonBase.Proveedor1Nombre = nomProv;
+                return 1;
+            }
+            if (IndiceOpcion == 2 && (RenglonBase.Proveedor2Id <= 0 || RenglonBase.PrecioSinIva2 <= 0))
+            {
+                RenglonBase.Proveedor2Id = ProveedorHojaId;
+                RenglonBase.Proveedor2Nombre = nomProv;
+                if (RenglonBase.NumeroOpcionesVisibles < 2) RenglonBase.NumeroOpcionesVisibles = 2;
+                return 2;
+            }
+            if (IndiceOpcion == 3 && (RenglonBase.Proveedor3Id <= 0 || RenglonBase.PrecioSinIva3 <= 0))
+            {
+                RenglonBase.Proveedor3Id = ProveedorHojaId;
+                RenglonBase.Proveedor3Nombre = nomProv;
+                if (RenglonBase.NumeroOpcionesVisibles < 3) RenglonBase.NumeroOpcionesVisibles = 3;
+                return 3;
+            }
+
+            // 2. Si el slot preferido ya tiene precio de otro proveedor (o es slot 4+), buscar cualquier slot 1..3 vacío o sin precio
+            if (RenglonBase.Proveedor1Id <= 0 || RenglonBase.PrecioSinIva1 <= 0)
+            {
+                RenglonBase.Proveedor1Id = ProveedorHojaId;
+                RenglonBase.Proveedor1Nombre = nomProv;
+                return 1;
+            }
+            if (RenglonBase.Proveedor2Id <= 0 || RenglonBase.PrecioSinIva2 <= 0)
+            {
+                RenglonBase.Proveedor2Id = ProveedorHojaId;
+                RenglonBase.Proveedor2Nombre = nomProv;
+                if (RenglonBase.NumeroOpcionesVisibles < 2) RenglonBase.NumeroOpcionesVisibles = 2;
+                return 2;
+            }
+            if (RenglonBase.Proveedor3Id <= 0 || RenglonBase.PrecioSinIva3 <= 0)
+            {
+                RenglonBase.Proveedor3Id = ProveedorHojaId;
+                RenglonBase.Proveedor3Nombre = nomProv;
+                if (RenglonBase.NumeroOpcionesVisibles < 3) RenglonBase.NumeroOpcionesVisibles = 3;
+                return 3;
+            }
+
+            // 3. Si los 3 slots principales ya tienen cotizaciones activas de otros proveedores, crear CotizacionProveedorExtra (Opción 4+)
+            int numOp = RenglonBase.ProveedoresExtra.Count > 0
+                ? Math.Max(4, RenglonBase.ProveedoresExtra.Max(x => x.NumeroOpcion) + 1)
+                : 4;
+            var nuevoEx = new CotizacionProveedorExtra
+            {
+                SolicitudPartidaId = RenglonBase.SolicitudPartidaId,
+                NumeroOpcion = numOp,
+                ProveedorId = ProveedorHojaId,
+                ProveedorNombre = nomProv,
+                DiasEntrega = 2,
+                DiasVigencia = 15,
+                FechaCotizacion = DateTime.Today.ToString("yyyy-MM-dd")
+            };
+            RenglonBase.ProveedoresExtra.Add(nuevoEx);
+            if (RenglonBase.NumeroOpcionesVisibles < 3) RenglonBase.NumeroOpcionesVisibles = 3;
+            return numOp;
+        }
+
+        int slotFallback = Math.Clamp(IndiceOpcion, 1, 3);
+        if (RenglonBase.NumeroOpcionesVisibles < slotFallback)
+            RenglonBase.NumeroOpcionesVisibles = slotFallback;
+        return slotFallback;
     }
 
     public int SolicitudPartidaId => RenglonBase.SolicitudPartidaId;
@@ -1287,30 +1403,46 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 
     public decimal PrecioSinIva
     {
-        get => IndiceOpcion switch
+        get
         {
-            1 => RenglonBase.PrecioSinIva1,
-            2 => RenglonBase.PrecioSinIva2,
-            _ => RenglonBase.PrecioSinIva3
-        };
+            int slot = ObtenerSlotEfectivoLectura();
+            if (slot == 1) return RenglonBase.PrecioSinIva1;
+            if (slot == 2) return RenglonBase.PrecioSinIva2;
+            if (slot == 3) return RenglonBase.PrecioSinIva3;
+            if (slot >= 4) return RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot)?.PrecioSinIva ?? 0m;
+            return 0m;
+        }
         set
         {
             decimal val = Math.Max(0m, Math.Round(value, 2));
+            if (val <= 0m && ObtenerSlotEfectivoLectura() == 0)
+                return;
+
+            int slot = AsegurarSlotParaEscritura();
             string hoy = DateTime.Today.ToString("yyyy-MM-dd");
-            if (IndiceOpcion == 1)
+            if (slot == 1)
             {
                 RenglonBase.PrecioSinIva1 = val;
                 if (val > 0 && string.IsNullOrWhiteSpace(RenglonBase.FechaCotizacion1)) RenglonBase.FechaCotizacion1 = hoy;
             }
-            else if (IndiceOpcion == 2)
+            else if (slot == 2)
             {
                 RenglonBase.PrecioSinIva2 = val;
                 if (val > 0 && string.IsNullOrWhiteSpace(RenglonBase.FechaCotizacion2)) RenglonBase.FechaCotizacion2 = hoy;
             }
-            else
+            else if (slot == 3)
             {
                 RenglonBase.PrecioSinIva3 = val;
                 if (val > 0 && string.IsNullOrWhiteSpace(RenglonBase.FechaCotizacion3)) RenglonBase.FechaCotizacion3 = hoy;
+            }
+            else if (slot >= 4)
+            {
+                var ex = RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot);
+                if (ex != null)
+                {
+                    ex.PrecioSinIva = val;
+                    if (val > 0 && string.IsNullOrWhiteSpace(ex.FechaCotizacion)) ex.FechaCotizacion = hoy;
+                }
             }
             NotificarTodo();
             AlModificar?.Invoke(this);
@@ -1332,18 +1464,30 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 
     public decimal FleteConIva
     {
-        get => IndiceOpcion switch
+        get
         {
-            1 => RenglonBase.FleteConIva1,
-            2 => RenglonBase.FleteConIva2,
-            _ => RenglonBase.FleteConIva3
-        };
+            int slot = ObtenerSlotEfectivoLectura();
+            if (slot == 1) return RenglonBase.FleteConIva1;
+            if (slot == 2) return RenglonBase.FleteConIva2;
+            if (slot == 3) return RenglonBase.FleteConIva3;
+            if (slot >= 4) return RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot)?.FleteConIva ?? 0m;
+            return 0m;
+        }
         set
         {
             decimal val = Math.Max(0m, Math.Round(value, 2));
-            if (IndiceOpcion == 1) RenglonBase.FleteConIva1 = val;
-            else if (IndiceOpcion == 2) RenglonBase.FleteConIva2 = val;
-            else RenglonBase.FleteConIva3 = val;
+            if (val <= 0m && ObtenerSlotEfectivoLectura() == 0)
+                return;
+
+            int slot = AsegurarSlotParaEscritura();
+            if (slot == 1) RenglonBase.FleteConIva1 = val;
+            else if (slot == 2) RenglonBase.FleteConIva2 = val;
+            else if (slot == 3) RenglonBase.FleteConIva3 = val;
+            else if (slot >= 4)
+            {
+                var ex = RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot);
+                if (ex != null) ex.FleteConIva = val;
+            }
             NotificarTodo();
             AlModificar?.Invoke(this);
         }
@@ -1351,18 +1495,27 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 
     public int DiasEntrega
     {
-        get => IndiceOpcion switch
+        get
         {
-            1 => RenglonBase.DiasEntrega1,
-            2 => RenglonBase.DiasEntrega2,
-            _ => RenglonBase.DiasEntrega3
-        };
+            int slot = ObtenerSlotEfectivoLectura();
+            if (slot == 1) return RenglonBase.DiasEntrega1;
+            if (slot == 2) return RenglonBase.DiasEntrega2;
+            if (slot == 3) return RenglonBase.DiasEntrega3;
+            if (slot >= 4) return RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot)?.DiasEntrega ?? 2;
+            return 2;
+        }
         set
         {
             int val = Math.Max(1, value);
-            if (IndiceOpcion == 1) RenglonBase.DiasEntrega1 = val;
-            else if (IndiceOpcion == 2) RenglonBase.DiasEntrega2 = val;
-            else RenglonBase.DiasEntrega3 = val;
+            int slot = AsegurarSlotParaEscritura();
+            if (slot == 1) RenglonBase.DiasEntrega1 = val;
+            else if (slot == 2) RenglonBase.DiasEntrega2 = val;
+            else if (slot == 3) RenglonBase.DiasEntrega3 = val;
+            else if (slot >= 4)
+            {
+                var ex = RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot);
+                if (ex != null) ex.DiasEntrega = val;
+            }
             NotificarTodo();
             AlModificar?.Invoke(this);
         }
@@ -1370,18 +1523,31 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 
     public int DiasVigencia
     {
-        get => IndiceOpcion switch
+        get
         {
-            1 => RenglonBase.DiasVigencia1 > 0 ? RenglonBase.DiasVigencia1 : 15,
-            2 => RenglonBase.DiasVigencia2 > 0 ? RenglonBase.DiasVigencia2 : 15,
-            _ => RenglonBase.DiasVigencia3 > 0 ? RenglonBase.DiasVigencia3 : 15
-        };
+            int slot = ObtenerSlotEfectivoLectura();
+            if (slot == 1) return RenglonBase.DiasVigencia1 > 0 ? RenglonBase.DiasVigencia1 : 15;
+            if (slot == 2) return RenglonBase.DiasVigencia2 > 0 ? RenglonBase.DiasVigencia2 : 15;
+            if (slot == 3) return RenglonBase.DiasVigencia3 > 0 ? RenglonBase.DiasVigencia3 : 15;
+            if (slot >= 4)
+            {
+                int dv = RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot)?.DiasVigencia ?? 15;
+                return dv > 0 ? dv : 15;
+            }
+            return 15;
+        }
         set
         {
             int val = Math.Max(1, value);
-            if (IndiceOpcion == 1) RenglonBase.DiasVigencia1 = val;
-            else if (IndiceOpcion == 2) RenglonBase.DiasVigencia2 = val;
-            else RenglonBase.DiasVigencia3 = val;
+            int slot = AsegurarSlotParaEscritura();
+            if (slot == 1) RenglonBase.DiasVigencia1 = val;
+            else if (slot == 2) RenglonBase.DiasVigencia2 = val;
+            else if (slot == 3) RenglonBase.DiasVigencia3 = val;
+            else if (slot >= 4)
+            {
+                var ex = RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot);
+                if (ex != null) ex.DiasVigencia = val;
+            }
             NotificarTodo();
             AlModificar?.Invoke(this);
         }
@@ -1389,18 +1555,30 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 
     public string NotasCotizacion
     {
-        get => IndiceOpcion switch
+        get
         {
-            1 => RenglonBase.NotasCotizacion1,
-            2 => RenglonBase.NotasCotizacion2,
-            _ => RenglonBase.NotasCotizacion3
-        };
+            int slot = ObtenerSlotEfectivoLectura();
+            if (slot == 1) return RenglonBase.NotasCotizacion1;
+            if (slot == 2) return RenglonBase.NotasCotizacion2;
+            if (slot == 3) return RenglonBase.NotasCotizacion3;
+            if (slot >= 4) return RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot)?.NotasCotizacion ?? string.Empty;
+            return string.Empty;
+        }
         set
         {
             string val = value ?? string.Empty;
-            if (IndiceOpcion == 1) RenglonBase.NotasCotizacion1 = val;
-            else if (IndiceOpcion == 2) RenglonBase.NotasCotizacion2 = val;
-            else RenglonBase.NotasCotizacion3 = val;
+            if (string.IsNullOrWhiteSpace(val) && ObtenerSlotEfectivoLectura() == 0)
+                return;
+
+            int slot = AsegurarSlotParaEscritura();
+            if (slot == 1) RenglonBase.NotasCotizacion1 = val;
+            else if (slot == 2) RenglonBase.NotasCotizacion2 = val;
+            else if (slot == 3) RenglonBase.NotasCotizacion3 = val;
+            else if (slot >= 4)
+            {
+                var ex = RenglonBase.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == slot);
+                if (ex != null) ex.NotasCotizacion = val;
+            }
             NotificarTodo();
             AlModificar?.Invoke(this);
         }
@@ -1408,12 +1586,17 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
 
     public bool EsGanadorEnEstaOpcion
     {
-        get => RenglonBase.ProveedorGanadorIndice == IndiceOpcion;
+        get
+        {
+            int slot = ObtenerSlotEfectivoLectura();
+            return slot > 0 && RenglonBase.ProveedorGanadorIndice == slot;
+        }
         set
         {
-            if (value)
-                RenglonBase.ProveedorGanadorIndice = IndiceOpcion;
-            else if (RenglonBase.ProveedorGanadorIndice == IndiceOpcion)
+            int slot = value ? AsegurarSlotParaEscritura() : ObtenerSlotEfectivoLectura();
+            if (value && slot > 0)
+                RenglonBase.ProveedorGanadorIndice = slot;
+            else if (!value && slot > 0 && RenglonBase.ProveedorGanadorIndice == slot)
                 RenglonBase.ProveedorGanadorIndice = 0;
             NotificarTodo();
             AlModificar?.Invoke(this);
