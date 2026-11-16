@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lebaref-compras"
+version = "0.1.0"
+description = "Procesos de compras y almacén de Lebaref para ERPNext"
+
+[tool.setuptools.package-data]
+lebaref_compras = ["modules.txt", "patches.txt"]
