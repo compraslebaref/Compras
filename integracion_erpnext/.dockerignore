@@ -1,0 +1,4 @@
+.env
+pruebas/.env
+**/__pycache__/
+**/*.egg-info/

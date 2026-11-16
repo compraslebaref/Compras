@@ -1,0 +1,113 @@
+# Configuración de prueba derivada del entorno oficial frappe/frappe_docker.
+name: lebaref-pruebas
+
+x-erpnext: &erpnext
+  image: lebaref/erpnext-pruebas:16.55.0
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - logs:/home/frappe/frappe-bench/logs
+
+services:
+  db:
+    image: mariadb:11.8
+    environment:
+      MARIADB_ROOT_PASSWORD: ${LEBAREF_TEST_DB_PASSWORD:?Ejecuta el iniciador de pruebas}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --innodb-snapshot-isolation=OFF
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis-cache:
+    image: redis:6.2-alpine
+
+  redis-queue:
+    image: redis:6.2-alpine
+    volumes:
+      - queue-data:/data
+
+  preparar-sitio:
+    <<: *erpnext
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        wait-for-it -t 60 redis-cache:6379
+        wait-for-it -t 60 redis-queue:6379
+        ls -1 apps > sites/apps.txt
+        bench set-config -g db_host db
+        bench set-config -gp db_port 3306
+        bench set-config -g redis_cache redis://redis-cache:6379
+        bench set-config -g redis_queue redis://redis-queue:6379
+        bench set-config -g redis_socketio redis://redis-queue:6379
+        bench set-config -gp socketio_port 9000
+        if [ ! -f sites/lebaref-pruebas.local/site_config.json ]; then
+          bench new-site lebaref-pruebas.local --mariadb-user-host-login-scope='%' \
+            --admin-password "$$TEST_ADMIN_PASSWORD" --db-root-username root \
+            --db-root-password "$$TEST_DB_PASSWORD" --install-app erpnext --set-default
+        fi
+        bench --site lebaref-pruebas.local install-app lebaref_compras
+        bench --site lebaref-pruebas.local migrate
+    environment:
+      TEST_ADMIN_PASSWORD: ${LEBAREF_TEST_ADMIN_PASSWORD:?Ejecuta el iniciador de pruebas}
+      TEST_DB_PASSWORD: ${LEBAREF_TEST_DB_PASSWORD:?Ejecuta el iniciador de pruebas}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+
+  backend:
+    <<: *erpnext
+    build:
+      context: ..
+      dockerfile: pruebas/Dockerfile
+    depends_on:
+      preparar-sitio:
+        condition: service_completed_successfully
+
+  websocket:
+    <<: *erpnext
+    command: [node, apps/frappe/socketio.js]
+    depends_on:
+      preparar-sitio:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *erpnext
+    command: [bench, worker, --queue, "short,default,long"]
+    depends_on:
+      preparar-sitio:
+        condition: service_completed_successfully
+
+  frontend:
+    <<: *erpnext
+    command: [nginx-entrypoint.sh]
+    environment:
+      BACKEND: backend:8000
+      SOCKETIO: websocket:9000
+      FRAPPE_SITE_NAME_HEADER: lebaref-pruebas.local
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: "120"
+      CLIENT_MAX_BODY_SIZE: 50m
+    ports:
+      - "127.0.0.1:8186:8080"
+    depends_on:
+      - backend
+      - websocket
+
+volumes:
+  sites:
+  logs:
+  db-data:
+  queue-data:

@@ -31,3 +31,32 @@ la solicitud, la comparativa y las órdenes por proveedor. Desde una segunda
 estación autorizada se deberá poder registrar una recepción parcial, la entrega
 a obra, el regreso de sobrante y el CFDI sin duplicarlo. Los movimientos se
 deberán consultar desde el folio de origen y cuadrar con el inventario.
+
+## Levantar el entorno local de pruebas
+
+Necesitas Docker Compose con un motor de contenedores Linux en ejecución y
+PowerShell. Desde esta carpeta ejecuta:
+
+```powershell
+.\pruebas\Entorno-Pruebas.ps1
+```
+
+Entra en http://127.0.0.1:8186 con el usuario `Administrator` y la contraseña
+`LEBAREF_TEST_ADMIN_PASSWORD` que el iniciador genera en `pruebas/.env`.
+En el asistente inicial crea una empresa ficticia, por ejemplo **Lebaref
+Pruebas**, con México y MXN. El acceso por navegador es para verificar el
+servidor de pruebas en esta PC. La interfaz para los auxiliares será el
+cliente de Windows.
+
+```powershell
+.\pruebas\Entorno-Pruebas.ps1 Ejemplo
+```
+
+Abre en ERPNext el folio que devuelve el comando. La solicitud debe estar en
+borrador y mostrar un cable en Eléctrico y un filtro en HVAC. Si ya existe el
+borrador del ejemplo, el comando comprueba que conserva las partidas y
+devuelve su folio. No se importan compras, inventario ni CFDI reales.
+
+Usa las acciones `Estado` y `Detener` para consultar o detener el entorno.
+Al detenerlo se conservan la base de datos y las credenciales para reanudar
+la prueba.
