@@ -12,7 +12,7 @@ o desde su segmento de red dedicado.
 El primer ajuste agrega la partida de obra a cada renglón de una solicitud de
 material. La obra se representa con el proyecto estándar de ERPNext por renglón.
 El campo es opcional para admitir solicitudes sin partidas, como en Lebaref.
-Los documentos relacionados deberán conservar la referencia al renglón de origen.
+Al guardar una petición de cotización, cotización de proveedor, orden de compra o recepción creada desde un documento relacionado, el sistema recupera la obra y la partida desde el renglón de origen. Usa las acciones de creación de ERPNext para conservar los vínculos. En una recepción parcial, el saldo por recibir se sigue controlando en la orden.
 
 Para probar este ajuste en un bench de desarrollo con ERPNext 16 instalado,
 agrega esta carpeta como aplicación local:
