@@ -1,4 +1,7 @@
 import frappe
+from frappe.core.doctype.custom_docperm.custom_docperm import update_custom_docperm
+from frappe.core.doctype.doctype.doctype import validate_permissions_for_doctype
+from frappe.permissions import setup_custom_perms
 from frappe.translate import set_default_language
 
 
@@ -12,8 +15,9 @@ SHORTCUTS = (
 )
 
 PROFILES = {
-    "Lebaref Auxiliar de Compras": "Purchase User",
-    "Lebaref Auxiliar de Almacén": "Stock User",
+    "Lebaref Auxiliar de Compras": ("Purchase User",),
+    "Lebaref Auxiliar de Almacén": ("Stock User",),
+    "Lebaref Responsable de Compras": ("Purchase User", "Purchase Manager"),
 }
 
 
@@ -29,11 +33,23 @@ def configurar():
     if frappe.db.get_value("User", "Administrator", "language") != "es":
         frappe.get_doc("User", "Administrator").db_set("language", "es")
 
-    for name, role in PROFILES.items():
+    for name, roles in PROFILES.items():
         if not frappe.db.exists("Role Profile", name):
             frappe.get_doc(
-                {"doctype": "Role Profile", "role_profile": name, "roles": [{"role": role}]}
+                {
+                    "doctype": "Role Profile",
+                    "role_profile": name,
+                    "roles": [{"role": role} for role in roles],
+                }
             ).insert()
+        else:
+            profile = frappe.get_doc("Role Profile", name)
+            assigned = {row.role for row in profile.roles}
+            missing = [role for role in roles if role not in assigned]
+            if missing:
+                for role in missing:
+                    profile.append("roles", {"role": role})
+                profile.save()
 
     if not frappe.db.exists("Workspace", "Lebaref"):
         frappe.get_doc(
@@ -60,5 +76,31 @@ def configurar():
                 ),
             }
         ).insert()
+    _configurar_permisos_compras()
     frappe.clear_cache()
     return {"idioma": settings.language, "espacio": "Lebaref", "perfiles": list(PROFILES)}
+
+def _configurar_permisos_compras():
+    changes = {
+        "Request for Quotation": {"submit": 1},
+        "Purchase Order": {"submit": 0, "cancel": 0, "amend": 0},
+        "Purchase Receipt": {
+            "create": 0,
+            "write": 0,
+            "submit": 0,
+            "cancel": 0,
+            "amend": 0,
+            "delete": 0,
+            "import": 0,
+        },
+    }
+    for doctype, rights in changes.items():
+        setup_custom_perms(doctype)
+        filters = {"parent": doctype, "role": "Purchase User", "permlevel": 0, "if_owner": 0}
+        rule = frappe.db.get_value("Custom DocPerm", filters)
+        if not rule:
+            frappe.throw(f"No se encontró la regla base de Compras para {doctype}.")
+        current = frappe.db.get_value("Custom DocPerm", rule, list(rights), as_dict=True)
+        if any(current.get(key) != value for key, value in rights.items()):
+            update_custom_docperm(rule, rights)
+            validate_permissions_for_doctype(doctype)

@@ -92,3 +92,13 @@ Selecciona un proveedor para cada material que quieras comprar. El botón
 la obra y la partida. Para cada proveedor se utiliza una sola cotización,
 de modo que la orden conserve sus condiciones comerciales. Los renglones con
 una orden activa quedan fuera de nuevas adjudicaciones.
+
+## Permisos de compras y recepción
+
+La acción `Configurar` aplica los perfiles de prueba. El auxiliar de Compras
+envía solicitudes y peticiones de cotización, registra ofertas y genera
+órdenes en borrador. El responsable de Compras puede enviar la orden para
+autorizarla. El auxiliar de Almacén puede consultar la orden y enviar una
+recepción. El rol estándar de Compras conserva la consulta de recepciones.
+Los permisos se aplican también al guardar documentos por API. La creación
+de cuentas individuales se realiza en el sitio donde se van a usar.
