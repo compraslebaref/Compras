@@ -64,3 +64,18 @@ la prueba.
 Si Docker Engine está instalado dentro de una distribución WSL, añade
 `-DistribucionWSL Ubuntu` al comando, con el nombre de la distribución que
 puede ejecutar `docker compose`.
+
+## Configuración inicial de Lebaref
+
+Con la empresa ficticia creada y el entorno en ejecución, aplica la
+configuración inicial desde la carpeta de integración:
+
+```powershell
+.\pruebas\Entorno-Pruebas.ps1 Configurar
+```
+
+El comando configura español en el sitio de pruebas y en Administrator,
+crea el espacio de trabajo Lebaref y prepara los perfiles de auxiliar de
+Compras y de Almacén con los roles estándar de ERPNext. En WSL añade
+`-DistribucionWSL Ubuntu`. Los perfiles se pueden asignar a usuarios de
+pruebas cuando se definan sus responsabilidades.

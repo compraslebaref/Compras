@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet('Iniciar', 'Detener', 'Estado', 'Ejemplo')]
+    [ValidateSet('Iniciar', 'Detener', 'Estado', 'Ejemplo', 'Configurar')]
     [string]$Accion = 'Iniciar',
     [string]$DistribucionWSL
 )
@@ -83,6 +83,9 @@ switch ($Accion) {
     }
     'Detener' {
         Invoke-Compose stop
+    }
+    'Configurar' {
+        Invoke-Compose exec -T backend bench --site lebaref-pruebas.local execute lebaref_compras.configuracion_inicial.configurar
     }
     'Ejemplo' {
         Invoke-Compose exec -T backend bench --site lebaref-pruebas.local execute lebaref_compras.demo.crear_solicitud
