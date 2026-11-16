@@ -62,6 +62,14 @@ switch ($Accion) {
                 $respuesta = $null
             }
             if ($respuesta.message -eq 'pong') {
+                if ($DistribucionWSL) {
+                    $argumentos = @(
+                        '--distribution', ('"{0}"' -f $DistribucionWSL)
+                        '--cd', ('"{0}"' -f $PSScriptRoot), '--exec', 'docker'
+                        'compose', '--env-file', '.env', '-f', 'compose.yaml', 'wait', 'frontend'
+                    )
+                    Start-Process -FilePath $motor -ArgumentList $argumentos -WindowStyle Hidden
+                }
                 Write-Host "ERPNext de pruebas disponible en $url"
                 Write-Host "Usuario Administrator. Contraseña en $variables (LEBAREF_TEST_ADMIN_PASSWORD)."
                 return
