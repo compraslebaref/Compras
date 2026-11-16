@@ -1,0 +1,283 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Globalization;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Lebaref.Windows
+{
+    internal sealed class MainForm : Form
+    {
+        private static readonly Color Navy = Color.FromArgb(17, 42, 67);
+        private static readonly Color Blue = Color.FromArgb(20, 87, 133);
+        private static readonly Color Pale = Color.FromArgb(240, 246, 250);
+
+        private readonly TextBox user = new TextBox { AccessibleName = "Usuario", Width = 308, MaxLength = 140 };
+        private readonly TextBox password = new TextBox { AccessibleName = "Contraseña", Width = 308, UseSystemPasswordChar = true, MaxLength = 256 };
+        private readonly Button login = Action("Entrar");
+        private readonly Button logout = Action("Cerrar sesión");
+        private readonly Button reload = Action("Actualizar");
+        private readonly Button open = Action("Ver renglones");
+        private readonly ComboBox module = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 236, AccessibleName = "Documentos" };
+        private readonly DataGridView documents = Grid();
+        private readonly DataGridView detail = Grid();
+        private readonly Label identity = new Label { AutoSize = true, ForeColor = Color.White, Anchor = AnchorStyles.Right };
+        private readonly Label status = new Label { AutoSize = false, Dock = DockStyle.Fill, AccessibleName = "Estado", TextAlign = ContentAlignment.MiddleLeft };
+        private readonly Label selected = new Label { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        private readonly Panel loginPage = new Panel { Dock = DockStyle.Fill, BackColor = Pale };
+        private readonly TableLayoutPanel workPage = new TableLayoutPanel { Dock = DockStyle.Fill, Visible = false };
+        private ErpClient erp;
+        private bool busy;
+
+        private static readonly string[] DocTypes = { "Material Request", "Purchase Order", "Purchase Receipt" };
+        private static readonly Dictionary<string, string> StatusNames = new Dictionary<string, string>
+        {
+            { "Draft", "Borrador" }, { "Submitted", "Enviado" }, { "Pending", "Pendiente" },
+            { "Partially Ordered", "Ordenado parcialmente" }, { "Ordered", "Ordenado" },
+            { "Partially Received", "Recibido parcialmente" }, { "Received", "Recibido" },
+            { "To Receive and Bill", "Por recibir y facturar" }, { "To Receive", "Por recibir" },
+            { "To Bill", "Por facturar" }, { "Completed", "Completado" },
+            { "Cancelled", "Cancelado" }, { "Stopped", "Detenido" }, { "Closed", "Cerrado" },
+            { "Return Issued", "Devuelto" }, { "On Hold", "En espera" },
+        };
+
+        [STAThread]
+        private static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+
+        public MainForm()
+        {
+            Text = "Lebaref | Compras y Almacén";
+            ClientSize = new Size(1000, 650);
+            MinimumSize = new Size(840, 570);
+            StartPosition = FormStartPosition.CenterScreen;
+            Font = new Font("Segoe UI", 10F);
+            AutoScaleMode = AutoScaleMode.Dpi;
+
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = Color.White };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            var top = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Navy, ColumnCount = 2, Padding = new Padding(22, 0, 22, 0), Margin = Padding.Empty };
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            top.Controls.Add(new Label { Text = "Lebaref  /  Compras y Almacén", Font = new Font("Segoe UI", 17F, FontStyle.Bold), ForeColor = Color.White, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+            top.Controls.Add(identity, 1, 0);
+
+            var pages = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+            pages.Controls.Add(workPage);
+            pages.Controls.Add(loginPage);
+            status.Padding = new Padding(22, 0, 22, 0);
+            status.ForeColor = Navy;
+            layout.Controls.Add(top, 0, 0);
+            layout.Controls.Add(pages, 0, 1);
+            layout.Controls.Add(status, 0, 2);
+            Controls.Add(layout);
+            SetupLogin();
+            SetupWorkspace();
+
+            login.Click += async (sender, args) => await SignIn();
+            logout.Click += async (sender, args) => await SignOut();
+            reload.Click += async (sender, args) => await Run(LoadList);
+            open.Click += async (sender, args) => await ShowDetail();
+            documents.CellDoubleClick += async (sender, args) => { if (args.RowIndex >= 0) await ShowDetail(); };
+            module.SelectedIndexChanged += async (sender, args) => { if (erp != null) await Run(LoadList); };
+            FormClosing += (sender, args) => { if (busy) args.Cancel = true; };
+            FormClosed += (sender, args) => { if (erp != null) erp.Dispose(); };
+            AcceptButton = login;
+            status.Text = "Entorno de pruebas en esta PC.";
+        }
+
+        private void SetupLogin()
+        {
+            var centering = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 3 };
+            centering.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            centering.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            centering.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            centering.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            centering.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            centering.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            var card = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(28, 24, 28, 22), BackColor = Color.White };
+            card.Controls.Add(new Label { Text = "Iniciar sesión", AutoSize = true, Font = new Font("Segoe UI", 18F, FontStyle.Bold), ForeColor = Navy, Margin = new Padding(3, 0, 3, 14) });
+            card.Controls.Add(new Label { Text = "Usuario", AutoSize = true });
+            card.Controls.Add(user);
+            card.Controls.Add(new Label { Text = "Contraseña", AutoSize = true, Margin = new Padding(3, 10, 3, 0) });
+            card.Controls.Add(password);
+            login.Margin = new Padding(3, 16, 3, 0);
+            login.BackColor = Blue;
+            login.ForeColor = Color.White;
+            card.Controls.Add(login);
+            centering.Controls.Add(card, 1, 1);
+            loginPage.Controls.Add(centering);
+        }
+
+        private void SetupWorkspace()
+        {
+            workPage.Padding = new Padding(20, 14, 20, 0);
+            workPage.ColumnCount = 1;
+            workPage.RowCount = 4;
+            workPage.RowStyles.Add(new RowStyle(SizeType.Absolute, 47));
+            workPage.RowStyles.Add(new RowStyle(SizeType.Percent, 54));
+            workPage.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            workPage.RowStyles.Add(new RowStyle(SizeType.Percent, 46));
+
+            var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
+            module.Items.AddRange(new object[] { "Solicitudes de material", "Órdenes de compra", "Recepciones de compra" });
+            module.SelectedIndex = 0;
+            module.Margin = new Padding(0, 7, 10, 0);
+            toolbar.Controls.AddRange(new Control[] { module, reload, open, logout });
+
+            documents.AccessibleName = "Documentos de compras";
+            detail.AccessibleName = "Renglones del documento";
+            Columns(documents, "Folio", "Fecha", "Proveedor", "Estado");
+            Columns(detail, "Artículo", "Cantidad", "Unidad", "Obra", "Partida de obra");
+            selected.ForeColor = Navy;
+            workPage.Controls.Add(toolbar, 0, 0);
+            workPage.Controls.Add(documents, 0, 1);
+            workPage.Controls.Add(selected, 0, 2);
+            workPage.Controls.Add(detail, 0, 3);
+        }
+
+        private async Task SignIn()
+        {
+            var name = user.Text.Trim();
+            if (String.IsNullOrWhiteSpace(name) || password.Text.Length == 0)
+            {
+                status.Text = "Escribe tu usuario y contraseña.";
+                return;
+            }
+            await Run(async () =>
+            {
+                var client = new ErpClient();
+                try { identity.Text = await client.SignIn(name, password.Text); }
+                catch { client.Dispose(); throw; }
+                finally { password.Clear(); }
+                erp = client;
+                loginPage.Hide();
+                workPage.Show();
+                workPage.BringToFront();
+                AcceptButton = null;
+                await LoadList();
+            });
+        }
+
+        private async Task SignOut()
+        {
+            await Run(async () =>
+            {
+                try { await erp.SignOut(); }
+                finally
+                {
+                    erp.Dispose();
+                    erp = null;
+                    identity.Text = String.Empty;
+                    documents.Rows.Clear();
+                    detail.Rows.Clear();
+                    workPage.Hide();
+                    loginPage.Show();
+                    loginPage.BringToFront();
+                    AcceptButton = login;
+                    user.Focus();
+                }
+                status.Text = "Sesión cerrada.";
+            });
+        }
+
+        private async Task LoadList()
+        {
+            var doctype = DocTypes[module.SelectedIndex];
+            var isRequest = doctype == "Material Request";
+            var date = doctype == "Purchase Receipt" ? "posting_date" : "transaction_date";
+            var fields = isRequest
+                ? new[] { "name", date, "status" }
+                : new[] { "name", date, "supplier_name", "status" };
+            documents.Rows.Clear();
+            detail.Rows.Clear();
+            selected.Text = "Selecciona un documento para ver sus renglones.";
+            documents.Columns[2].Visible = !isRequest;
+            var rows = await erp.List(doctype, fields);
+            foreach (var row in rows)
+            {
+                string statusName;
+                var statusKey = ErpClient.Value(row, "status");
+                if (!StatusNames.TryGetValue(statusKey, out statusName)) statusName = statusKey;
+                DateTime parsedDate;
+                var dateValue = ErpClient.Value(row, date);
+                if (DateTime.TryParseExact(dateValue, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsedDate))
+                    dateValue = parsedDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+                documents.Rows.Add(ErpClient.Value(row, "name"), dateValue, ErpClient.Value(row, "supplier_name"), statusName);
+            }
+            status.Text = rows.Count == 0 ? "No hay documentos visibles para esta cuenta." : rows.Count + " documentos recientes.";
+        }
+
+        private async Task ShowDetail()
+        {
+            if (documents.CurrentRow == null) return;
+            var folio = Convert.ToString(documents.CurrentRow.Cells[0].Value);
+            await Run(async () =>
+            {
+                detail.Rows.Clear();
+                selected.Text = folio;
+                var doc = await erp.Detail(DocTypes[module.SelectedIndex], folio);
+                var rows = ErpClient.Rows(doc, "items");
+                foreach (var row in rows)
+                    detail.Rows.Add(ErpClient.Value(row, "item_name"), ErpClient.Value(row, "qty"), ErpClient.Value(row, "uom"),
+                        ErpClient.Value(row, "project"), ErpClient.Value(row, "custom_lebaref_partida"));
+                selected.Text = folio + "   |   " + rows.Count + " renglones";
+                status.Text = "Documento cargado.";
+            });
+        }
+
+        private async Task Run(Func<Task> action)
+        {
+            if (busy) return;
+            busy = true;
+            SetEnabled(false);
+            status.Text = "Consultando ERPNext…";
+            try { await action(); }
+            catch (ErpException error) { status.Text = error.Message; }
+            catch (TaskCanceledException) { status.Text = "ERPNext tardó demasiado. Inténtalo otra vez."; }
+            catch (HttpRequestException) { status.Text = "No se pudo conectar al servidor local. Inicia ERPNext de pruebas."; }
+            catch (Exception) { status.Text = "No se pudo leer la respuesta de ERPNext. Inténtalo otra vez."; }
+            finally { busy = false; SetEnabled(true); }
+        }
+
+        private void SetEnabled(bool enabled)
+        {
+            UseWaitCursor = !enabled;
+            user.Enabled = password.Enabled = login.Enabled = enabled;
+            module.Enabled = documents.Enabled = reload.Enabled = open.Enabled = logout.Enabled = enabled;
+        }
+
+        private static Button Action(string label)
+        {
+            return new Button { Text = label, AutoSize = true, Height = 36, FlatStyle = FlatStyle.Flat,
+                Padding = new Padding(9, 0, 9, 0), BackColor = Color.White, ForeColor = Navy };
+        }
+
+        private static DataGridView Grid()
+        {
+            return new DataGridView {
+                Dock = DockStyle.Fill, BackgroundColor = Color.White, BorderStyle = BorderStyle.FixedSingle,
+                ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false, RowHeadersVisible = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, MultiSelect = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                RowTemplate = { Height = 32 },
+                AlternatingRowsDefaultCellStyle = { BackColor = Pale }
+            };
+        }
+
+        private static void Columns(DataGridView grid, params string[] headers)
+        {
+            foreach (var header in headers)
+                grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, SortMode = DataGridViewColumnSortMode.NotSortable });
+        }
+    }
+}
