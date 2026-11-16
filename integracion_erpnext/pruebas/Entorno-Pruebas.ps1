@@ -1,20 +1,33 @@
 ﻿param(
     [ValidateSet('Iniciar', 'Detener', 'Estado', 'Ejemplo')]
-    [string]$Accion = 'Iniciar'
+    [string]$Accion = 'Iniciar',
+    [string]$DistribucionWSL
 )
 
 $ErrorActionPreference = 'Stop'
-$docker = Get-Command docker -CommandType Application -ErrorAction SilentlyContinue
-if (-not $docker) {
-    throw 'Instala Docker con contenedores Linux y vuelve a ejecutar este archivo.'
+if ($DistribucionWSL) {
+    $motor = 'wsl.exe'
+    $opcionesMotor = @('--distribution', $DistribucionWSL, '--cd', $PSScriptRoot, '--exec', 'docker')
+} else {
+    $docker = Get-Command docker -CommandType Application -ErrorAction SilentlyContinue
+    if (-not $docker) {
+        throw 'Instala Docker con contenedores Linux y vuelve a ejecutar este archivo.'
+    }
+    $motor = $docker.Source
+    $opcionesMotor = @()
 }
 
-$engine = & $docker.Source info --format '{{.OSType}}'
-if ($LASTEXITCODE -ne 0 -or $engine -ne 'linux') {
+function Invoke-Docker {
+    & $motor @opcionesMotor @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker devolvió el código $LASTEXITCODE."
+    }
+}
+
+$engine = Invoke-Docker info --format '{{.OSType}}'
+if ($engine -ne 'linux') {
     throw 'Inicia el motor de Docker en modo de contenedores Linux.'
 }
-
-$archivo = Join-Path $PSScriptRoot 'compose.yaml'
 $variables = Join-Path $PSScriptRoot '.env'
 if (-not (Test-Path -LiteralPath $variables)) {
     if ($Accion -ne 'Iniciar') {
@@ -28,9 +41,11 @@ if (-not (Test-Path -LiteralPath $variables)) {
 }
 
 function Invoke-Compose {
-    & $docker.Source compose --env-file $variables -f $archivo @args
-    if ($LASTEXITCODE -ne 0) {
-        throw "Docker Compose devolvió el código $LASTEXITCODE."
+    Push-Location -LiteralPath $PSScriptRoot
+    try {
+        Invoke-Docker compose --env-file .env -f compose.yaml @args
+    } finally {
+        Pop-Location
     }
 }
 

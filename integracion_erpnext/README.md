@@ -60,3 +60,7 @@ devuelve su folio. No se importan compras, inventario ni CFDI reales.
 Usa las acciones `Estado` y `Detener` para consultar o detener el entorno.
 Al detenerlo se conservan la base de datos y las credenciales para reanudar
 la prueba.
+
+Si Docker Engine está instalado dentro de una distribución WSL, añade
+`-DistribucionWSL Ubuntu` al comando, con el nombre de la distribución que
+puede ejecutar `docker compose`.
