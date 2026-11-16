@@ -15,3 +15,5 @@ doc_events = {
         "Purchase Receipt",
     )
 }
+
+doctype_js = {"Material Request": "public/js/material_request.js"}

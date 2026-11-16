@@ -8,4 +8,4 @@ version = "0.1.0"
 description = "Procesos de compras y almacén de Lebaref para ERPNext"
 
 [tool.setuptools.package-data]
-lebaref_compras = ["modules.txt", "patches.txt"]
+lebaref_compras = ["modules.txt", "patches.txt", "public/js/*.js"]

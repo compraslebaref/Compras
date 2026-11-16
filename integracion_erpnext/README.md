@@ -79,3 +79,16 @@ crea el espacio de trabajo Lebaref y prepara los perfiles de auxiliar de
 Compras y de Almacén con los roles estándar de ERPNext. En WSL añade
 `-DistribucionWSL Ubuntu`. Los perfiles se pueden asignar a usuarios de
 pruebas cuando se definan sus responsabilidades.
+
+## Comparativa Lebaref
+
+Abre una solicitud de compra enviada y selecciona **Comparativa Lebaref**.
+La pantalla muestra las cotizaciones de proveedor enviadas, vigentes y
+vinculadas al renglón por la cantidad solicitada. El precio unitario se muestra
+en la unidad de la solicitud y en la moneda de la cotización.
+
+Selecciona un proveedor para cada material que quieras comprar. El botón
+**Generar órdenes en borrador** agrupa los materiales por proveedor y conserva
+la obra y la partida. Para cada proveedor se utiliza una sola cotización,
+de modo que la orden conserve sus condiciones comerciales. Los renglones con
+una orden activa quedan fuera de nuevas adjudicaciones.
