@@ -105,7 +105,7 @@ de cuentas individuales se realiza en el sitio donde se van a usar.
 
 ## Cliente Windows de pruebas
 
-El cliente es una aplicación nativa de consulta en español. Usa las mismas
+El cliente es una aplicación nativa en español. Usa las mismas
 cuentas de ERPNext y muestra las últimas 100 solicitudes de compra, órdenes
 o recepciones que el usuario pueda consultar. Abre un documento para ver
 sus renglones, cantidades, obra y partida.
@@ -117,5 +117,8 @@ Esta versión se conecta al servidor de pruebas de la misma PC en
 .\cliente_windows\Compilar.ps1
 ```
 
-Las operaciones de captura, adjudicación, autorización y recepción se
+Desde una solicitud enviada, abre **Comparativa**, selecciona un renglón y
+elige una oferta. Cuando termines, genera las órdenes en borrador. ERPNext
+agrupa por proveedor y aplica los permisos de cada usuario. La captura
+de solicitudes, la autorización y el registro de recepciones se
 realizan en ERPNext durante esta etapa del piloto.

@@ -63,6 +63,27 @@ namespace Lebaref.Windows
             return (Dictionary<string, object>)reply["data"];
         }
 
+        public async Task<Dictionary<string, object>> Compare(string folio)
+        {
+            var reply = await Read(await http.GetAsync(
+                "api/method/lebaref_compras.comparativa.consultar?solicitud=" + Uri.EscapeDataString(folio)));
+            return (Dictionary<string, object>)reply["message"];
+        }
+
+        public async Task<IList<Dictionary<string, object>>> CreateDraftOrders(
+            string folio, IDictionary<string, string> selection)
+        {
+            using (var fields = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                { "solicitud", folio }, { "seleccion", json.Serialize(selection) }
+            }))
+            {
+                var reply = await Read(await http.PostAsync(
+                    "api/method/lebaref_compras.comparativa.generar_ordenes", fields));
+                return Rows(reply, "message");
+            }
+        }
+
         public async Task SignOut()
         {
             using (var content = new FormUrlEncodedContent(new Dictionary<string, string>()))
@@ -80,10 +101,28 @@ namespace Lebaref.Windows
                     case 404: throw new ErpException("ERPNext no encontró el documento solicitado.");
                     case 429: throw new ErpException("Demasiados intentos. Espera un momento y vuelve a intentarlo.");
                 }
+                if ((int)response.StatusCode == 417)
+                    throw new ErpException(await ValidationMessage(response));
                 if (!response.IsSuccessStatusCode)
                     throw new ErpException("ERPNext devolvió el código " + (int)response.StatusCode + ".");
                 return json.Deserialize<Dictionary<string, object>>(await response.Content.ReadAsStringAsync());
             }
+        }
+
+        private async Task<string> ValidationMessage(HttpResponseMessage response)
+        {
+            const string fallback = "ERPNext rechazó la operación. Actualiza los datos y revisa la selección.";
+            try
+            {
+                var payload = json.Deserialize<Dictionary<string, object>>(await response.Content.ReadAsStringAsync());
+                var messages = json.Deserialize<string[]>(Value(payload, "_server_messages"));
+                if (messages == null || messages.Length == 0) return fallback;
+                var message = Value(json.Deserialize<Dictionary<string, object>>(messages.Last()), "message");
+                var plain = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(message, "<[^>]*>", ""));
+                return String.IsNullOrWhiteSpace(plain) ? fallback : plain.Substring(0, Math.Min(plain.Length, 375));
+            }
+            catch (ArgumentException) { return fallback; }
+            catch (InvalidOperationException) { return fallback; }
         }
 
         public static IList<Dictionary<string, object>> Rows(Dictionary<string, object> document, string key)

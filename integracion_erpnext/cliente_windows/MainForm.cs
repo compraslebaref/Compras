@@ -20,6 +20,7 @@ namespace Lebaref.Windows
         private readonly Button logout = Action("Cerrar sesión");
         private readonly Button reload = Action("Actualizar");
         private readonly Button open = Action("Ver renglones");
+        private readonly Button compare = Action("Comparativa");
         private readonly ComboBox module = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 236, AccessibleName = "Documentos" };
         private readonly DataGridView documents = Grid();
         private readonly DataGridView detail = Grid();
@@ -86,6 +87,7 @@ namespace Lebaref.Windows
             logout.Click += async (sender, args) => await SignOut();
             reload.Click += async (sender, args) => await Run(LoadList);
             open.Click += async (sender, args) => await ShowDetail();
+            compare.Click += async (sender, args) => await ShowComparison();
             documents.CellDoubleClick += async (sender, args) => { if (args.RowIndex >= 0) await ShowDetail(); };
             module.SelectedIndexChanged += async (sender, args) => { if (erp != null) await Run(LoadList); };
             FormClosing += (sender, args) => { if (busy) args.Cancel = true; };
@@ -131,7 +133,7 @@ namespace Lebaref.Windows
             module.Items.AddRange(new object[] { "Solicitudes de material", "Órdenes de compra", "Recepciones de compra" });
             module.SelectedIndex = 0;
             module.Margin = new Padding(0, 7, 10, 0);
-            toolbar.Controls.AddRange(new Control[] { module, reload, open, logout });
+            toolbar.Controls.AddRange(new Control[] { module, reload, open, compare, logout });
 
             documents.AccessibleName = "Documentos de compras";
             detail.AccessibleName = "Renglones del documento";
@@ -193,6 +195,7 @@ namespace Lebaref.Windows
         {
             var doctype = DocTypes[module.SelectedIndex];
             var isRequest = doctype == "Material Request";
+            compare.Visible = isRequest;
             var date = doctype == "Purchase Receipt" ? "posting_date" : "transaction_date";
             var fields = isRequest
                 ? new[] { "name", date, "status" }
@@ -234,6 +237,29 @@ namespace Lebaref.Windows
             });
         }
 
+        private async Task ShowComparison()
+        {
+            if (documents.CurrentRow == null || module.SelectedIndex != 0) return;
+            var folio = Convert.ToString(documents.CurrentRow.Cells[0].Value);
+            await Run(async () =>
+            {
+                var data = await erp.Compare(folio);
+                using (var dialog = new ComparisonForm(erp, folio, data))
+                {
+                    dialog.ShowDialog(this);
+                    if (dialog.Orders == null)
+                    {
+                        status.Text = "Comparativa cerrada.";
+                        return;
+                    }
+                    module.SelectedIndex = 1;
+                    await LoadList();
+                    status.Text = "Órdenes en borrador: " + String.Join(", ",
+                        System.Linq.Enumerable.Select(dialog.Orders, row => ErpClient.Value(row, "folio")));
+                }
+            });
+        }
+
         private async Task Run(Func<Task> action)
         {
             if (busy) return;
@@ -252,16 +278,16 @@ namespace Lebaref.Windows
         {
             UseWaitCursor = !enabled;
             user.Enabled = password.Enabled = login.Enabled = enabled;
-            module.Enabled = documents.Enabled = reload.Enabled = open.Enabled = logout.Enabled = enabled;
+            module.Enabled = documents.Enabled = reload.Enabled = open.Enabled = compare.Enabled = logout.Enabled = enabled;
         }
 
-        private static Button Action(string label)
+        internal static Button Action(string label)
         {
             return new Button { Text = label, AutoSize = true, Height = 36, FlatStyle = FlatStyle.Flat,
                 Padding = new Padding(9, 0, 9, 0), BackColor = Color.White, ForeColor = Navy };
         }
 
-        private static DataGridView Grid()
+        internal static DataGridView Grid()
         {
             return new DataGridView {
                 Dock = DockStyle.Fill, BackgroundColor = Color.White, BorderStyle = BorderStyle.FixedSingle,
@@ -274,7 +300,7 @@ namespace Lebaref.Windows
             };
         }
 
-        private static void Columns(DataGridView grid, params string[] headers)
+        internal static void Columns(DataGridView grid, params string[] headers)
         {
             foreach (var header in headers)
                 grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, SortMode = DataGridViewColumnSortMode.NotSortable });
