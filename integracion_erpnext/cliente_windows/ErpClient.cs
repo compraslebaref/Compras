@@ -15,6 +15,14 @@ namespace Lebaref.Windows
 
         public ErpClient()
         {
+            var endpoint = "http://127.0.0.1:8186/";
+            var settings = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lebaref-servidor.txt");
+            if (System.IO.File.Exists(settings)) endpoint = System.IO.File.ReadAllText(settings).Trim();
+            Uri address;
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out address)
+                || (address.Scheme != "https" && !(address.Scheme == "http" && address.IsLoopback))
+                || address.UserInfo.Length > 0 || address.Query.Length > 0 || address.Fragment.Length > 0 || address.AbsolutePath != "/")
+                throw new ErpException("Configura una dirección HTTPS de la oficina o HTTP de esta PC en lebaref-servidor.txt.");
             var handler = new HttpClientHandler
             {
                 CookieContainer = new CookieContainer(),
@@ -23,7 +31,7 @@ namespace Lebaref.Windows
             };
             http = new HttpClient(handler)
             {
-                BaseAddress = new Uri("http://127.0.0.1:8186/"),
+                BaseAddress = address,
                 Timeout = TimeSpan.FromSeconds(15)
             };
         }
@@ -90,6 +98,24 @@ namespace Lebaref.Windows
                 await Read(await http.PostAsync("api/method/logout", content));
         }
 
+        public async Task<Dictionary<string, object>> Schema(string action, string folio)
+        {
+            var reply = await Read(await http.GetAsync("api/method/lebaref_compras.operaciones.esquema?accion="
+                + Uri.EscapeDataString(action) + "&folio=" + Uri.EscapeDataString(folio)));
+            return (Dictionary<string, object>)reply["message"];
+        }
+
+        public async Task<Dictionary<string, object>> Execute(string action, string folio, string token, Dictionary<string, object> data)
+        {
+            using (var fields = new FormUrlEncodedContent(new Dictionary<string, string> {
+                { "accion", action }, { "folio", folio }, { "operacion", token }, { "datos", json.Serialize(data) }
+            }))
+            {
+                var reply = await Read(await http.PostAsync("api/method/lebaref_compras.operaciones.ejecutar", fields));
+                return (Dictionary<string, object>)reply["message"];
+            }
+        }
+
         private async Task<Dictionary<string, object>> Read(HttpResponseMessage response)
         {
             using (response)
@@ -97,7 +123,7 @@ namespace Lebaref.Windows
                 switch ((int)response.StatusCode)
                 {
                     case 401: throw new ErpException("Revisa el usuario y la contraseña o vuelve a iniciar sesión.");
-                    case 403: throw new ErpException("La cuenta no tiene permiso para consultar esta información.");
+                    case 403: throw new ErpException("La cuenta no tiene permiso para esta operación.");
                     case 404: throw new ErpException("ERPNext no encontró el documento solicitado.");
                     case 429: throw new ErpException("Demasiados intentos. Espera un momento y vuelve a intentarlo.");
                 }

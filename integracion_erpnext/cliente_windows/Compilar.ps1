@@ -11,6 +11,9 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Destino) | Out-Nu
 
 & $csc /nologo /codepage:65001 /target:winexe /platform:anycpu "/out:$Destino" `
     "/reference:$framework\System.Net.Http.dll" "/reference:$framework\System.Web.Extensions.dll" `
-    (Join-Path $PSScriptRoot 'ErpClient.cs') (Join-Path $PSScriptRoot 'MainForm.cs') (Join-Path $PSScriptRoot 'ComparisonForm.cs')
+    (Join-Path $PSScriptRoot 'ErpClient.cs') (Join-Path $PSScriptRoot 'MainForm.cs') (Join-Path $PSScriptRoot 'ComparisonForm.cs') (Join-Path $PSScriptRoot 'OperationForm.cs')
 if ($LASTEXITCODE -ne 0) { throw "El compilador devolvió el código $LASTEXITCODE." }
 Write-Host "Ejecutable creado en $Destino"
+$launcher = Join-Path (Split-Path -Parent $Destino) 'Iniciar-Lebaref.exe'
+& $csc /nologo /codepage:65001 /target:winexe /platform:anycpu "/out:$launcher" "/reference:$framework\System.Net.Http.dll" (Join-Path $PSScriptRoot 'Launcher.cs')
+if ($LASTEXITCODE -ne 0) { throw "No se pudo compilar el iniciador." }

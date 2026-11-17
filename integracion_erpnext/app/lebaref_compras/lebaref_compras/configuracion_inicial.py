@@ -77,6 +77,7 @@ def configurar():
             }
         ).insert()
     _configurar_permisos_compras()
+    _configurar_catalogos()
     frappe.clear_cache()
     return {"idioma": settings.language, "espacio": "Lebaref", "perfiles": list(PROFILES)}
 
@@ -104,3 +105,16 @@ def _configurar_permisos_compras():
         if any(current.get(key) != value for key, value in rights.items()):
             update_custom_docperm(rule, rights)
             validate_permissions_for_doctype(doctype)
+
+
+def _configurar_catalogos():
+    for doctype in ("Item", "Supplier", "Project", "Warehouse", "UOM"):
+        setup_custom_perms(doctype)
+        filters = {"parent": doctype, "role": "Purchase Manager", "permlevel": 0, "if_owner": 0}
+        rule = frappe.db.get_value("Custom DocPerm", filters)
+        rights = {"read": 1, "select": 1} if doctype == "UOM" else {"read": 1, "create": 1, "write": 1, "select": 1}
+        if rule:
+            update_custom_docperm(rule, rights)
+        else:
+            frappe.get_doc({"doctype": "Custom DocPerm", "parenttype": "DocType", "parentfield": "permissions", **filters, **rights}).insert()
+        validate_permissions_for_doctype(doctype)

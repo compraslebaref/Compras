@@ -31,4 +31,49 @@ def configure_purchase_fields():
             "insert_after": "custom_lebaref_partida",
         }
     )
+    for doctype in ("Material Request", "Request for Quotation", "Supplier Quotation", "Purchase Receipt", "Stock Entry", "Item", "Supplier", "Project", "Warehouse"):
+        fields[doctype] = [
+            {"fieldname": "custom_lebaref_operacion", "label": "Operación Windows", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
+            {"fieldname": "custom_lebaref_huella", "label": "Huella de operación", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
+        ]
+    fields["Stock Entry"].append({"fieldname": "custom_lebaref_origen", "label": "Entrega de origen", "fieldtype": "Link", "options": "Stock Entry", "read_only": 1, "no_copy": 1})
+    fields["Stock Entry Detail"] = [
+        {"fieldname": "custom_lebaref_partida", "label": "Partida de obra", "fieldtype": "Data"},
+        {"fieldname": "custom_lebaref_renglon", "label": "Renglón de entrega", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
+    ]
     create_custom_fields(fields)
+    configure_cfdi()
+
+
+def configure_cfdi():
+    import frappe
+    if frappe.db.exists("DocType", "Lebaref CFDI"):
+        doc = frappe.get_doc("DocType", "Lebaref CFDI")
+        for rule in doc.permissions:
+            for key in ("write", "delete", "submit", "cancel", "amend", "import"):
+                rule.set(key, 0)
+            rule.create = int(rule.role in ("Purchase User", "Purchase Manager", "System Manager"))
+        doc.save()
+        return
+    frappe.get_doc({
+        "doctype": "DocType", "name": "Lebaref CFDI", "module": "Lebaref Compras", "custom": 1,
+        "autoname": "field:uuid", "track_changes": 1,
+        "fields": [
+            {"fieldname": name, "label": label, "fieldtype": kind, **extra}
+            for name, label, kind, extra in (
+                ("uuid", "UUID", "Data", {"reqd": 1, "unique": 1}),
+                ("recepcion", "Recepción", "Link", {"options": "Purchase Receipt", "reqd": 1}),
+                ("proveedor", "Proveedor", "Link", {"options": "Supplier"}),
+                ("rfc_emisor", "RFC emisor", "Data", {}),
+                ("rfc_receptor", "RFC receptor", "Data", {}),
+                ("moneda", "Moneda", "Data", {}),
+                ("total", "Total XML", "Currency", {"options": "moneda"}),
+                ("xml", "XML privado", "Attach", {}),
+                ("huella", "SHA256", "Data", {"hidden": 1}),
+            )
+        ],
+        "permissions": [
+            {"role": role, "read": 1, "create": int(role != "Stock User"), "write": 0, "delete": 0, "submit": 0, "cancel": 0, "amend": 0, "import": 0}
+            for role in ("Purchase User", "Purchase Manager", "Stock User", "System Manager")
+        ],
+    }).insert()

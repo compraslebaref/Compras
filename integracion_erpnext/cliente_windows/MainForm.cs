@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Net.Http;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -21,6 +22,9 @@ namespace Lebaref.Windows
         private readonly Button reload = Action("Actualizar");
         private readonly Button open = Action("Ver renglones");
         private readonly Button compare = Action("Comparativa");
+        private readonly ComboBox operation = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 245, AccessibleName = "Operación" };
+        private readonly Button execute = Action("Abrir operación");
+        private readonly Button export = Action("Exportar CSV");
         private readonly ComboBox module = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 236, AccessibleName = "Documentos" };
         private readonly DataGridView documents = Grid();
         private readonly DataGridView detail = Grid();
@@ -32,7 +36,10 @@ namespace Lebaref.Windows
         private ErpClient erp;
         private bool busy;
 
-        private static readonly string[] DocTypes = { "Material Request", "Purchase Order", "Purchase Receipt" };
+        private static readonly string[] DocTypes = { "Material Request", "Purchase Order", "Purchase Receipt", "Request for Quotation", "Supplier Quotation", "Stock Entry", "Bin", "Supplier", "Item", "Project", "Warehouse", "Lebaref CFDI" };
+        private static readonly string[] Actions = { "solicitud", "peticion", "oferta", "autorizar", "recibir", "entregar", "devolver", "cfdi", "articulo", "proveedor", "obra", "almacen" };
+        private static readonly string[] ActionLabels = { "Nueva solicitud de material", "Pedir cotización de la solicitud", "Registrar oferta de la petición", "Autorizar orden seleccionada", "Recibir orden seleccionada", "Entregar materiales a obra", "Devolver sobrante de entrega", "Archivar CFDI de recepción", "Nuevo artículo", "Nuevo proveedor", "Nueva obra", "Nuevo almacén" };
+        private static readonly int[] SourceModule = { -1, 0, 3, 1, 1, -1, 5, 2, -1, -1, -1, -1 };
         private static readonly Dictionary<string, string> StatusNames = new Dictionary<string, string>
         {
             { "Draft", "Borrador" }, { "Submitted", "Enviado" }, { "Pending", "Pendiente" },
@@ -88,6 +95,8 @@ namespace Lebaref.Windows
             reload.Click += async (sender, args) => await Run(LoadList);
             open.Click += async (sender, args) => await ShowDetail();
             compare.Click += async (sender, args) => await ShowComparison();
+            execute.Click += async (sender, args) => await ShowOperation();
+            export.Click += (sender, args) => ExportList();
             documents.CellDoubleClick += async (sender, args) => { if (args.RowIndex >= 0) await ShowDetail(); };
             module.SelectedIndexChanged += async (sender, args) => { if (erp != null) await Run(LoadList); };
             FormClosing += (sender, args) => { if (busy) args.Cancel = true; };
@@ -124,16 +133,20 @@ namespace Lebaref.Windows
             workPage.Padding = new Padding(20, 14, 20, 0);
             workPage.ColumnCount = 1;
             workPage.RowCount = 4;
-            workPage.RowStyles.Add(new RowStyle(SizeType.Absolute, 47));
+            workPage.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
             workPage.RowStyles.Add(new RowStyle(SizeType.Percent, 54));
             workPage.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             workPage.RowStyles.Add(new RowStyle(SizeType.Percent, 46));
 
-            var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
-            module.Items.AddRange(new object[] { "Solicitudes de material", "Órdenes de compra", "Recepciones de compra" });
+            var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Margin = Padding.Empty, AutoScroll = true };
+            module.Items.AddRange(new object[] { "Solicitudes de material", "Órdenes de compra", "Recepciones de compra", "Peticiones de cotización", "Ofertas de proveedores", "Movimientos de almacén", "Existencias", "Proveedores", "Artículos", "Obras", "Almacenes", "CFDI archivados" });
             module.SelectedIndex = 0;
             module.Margin = new Padding(0, 7, 10, 0);
             toolbar.Controls.AddRange(new Control[] { module, reload, open, compare, logout });
+            toolbar.SetFlowBreak(logout, true);
+            operation.Items.AddRange(ActionLabels); operation.SelectedIndex = 0;
+            operation.Margin = new Padding(0, 7, 10, 0);
+            toolbar.Controls.AddRange(new Control[] { operation, execute, export });
 
             documents.AccessibleName = "Documentos de compras";
             detail.AccessibleName = "Renglones del documento";
@@ -196,19 +209,24 @@ namespace Lebaref.Windows
             var doctype = DocTypes[module.SelectedIndex];
             var isRequest = doctype == "Material Request";
             compare.Visible = isRequest;
+            if (module.SelectedIndex >= 6) { await LoadCatalog(doctype); return; }
             var date = doctype == "Purchase Receipt" ? "posting_date" : "transaction_date";
-            var fields = isRequest
+            if (doctype == "Stock Entry") date = "posting_date";
+            bool noSupplier = isRequest || doctype == "Request for Quotation" || doctype == "Stock Entry";
+            var fields = noSupplier
                 ? new[] { "name", date, "status" }
                 : new[] { "name", date, "supplier_name", "status" };
+            if (doctype == "Stock Entry") fields = new[] { "name", date, "stock_entry_type", "docstatus" };
+            documents.Columns.Clear(); Columns(documents, "Folio", "Fecha", "Proveedor", "Estado");
             documents.Rows.Clear();
             detail.Rows.Clear();
             selected.Text = "Selecciona un documento para ver sus renglones.";
-            documents.Columns[2].Visible = !isRequest;
+            documents.Columns[2].Visible = !noSupplier;
             var rows = await erp.List(doctype, fields);
             foreach (var row in rows)
             {
                 string statusName;
-                var statusKey = ErpClient.Value(row, "status");
+                var statusKey = doctype == "Stock Entry" ? (ErpClient.Value(row, "docstatus") == "1" ? "Submitted" : (ErpClient.Value(row, "docstatus") == "2" ? "Cancelled" : "Draft")) : ErpClient.Value(row, "status");
                 if (!StatusNames.TryGetValue(statusKey, out statusName)) statusName = statusKey;
                 DateTime parsedDate;
                 var dateValue = ErpClient.Value(row, date);
@@ -222,6 +240,7 @@ namespace Lebaref.Windows
         private async Task ShowDetail()
         {
             if (documents.CurrentRow == null) return;
+            if (module.SelectedIndex >= 6) { status.Text = "Los datos del catálogo se muestran en la tabla. Puedes exportarlos."; return; }
             var folio = Convert.ToString(documents.CurrentRow.Cells[0].Value);
             await Run(async () =>
             {
@@ -231,10 +250,69 @@ namespace Lebaref.Windows
                 var rows = ErpClient.Rows(doc, "items");
                 foreach (var row in rows)
                     detail.Rows.Add(ErpClient.Value(row, "item_name"), ErpClient.Value(row, "qty"), ErpClient.Value(row, "uom"),
-                        ErpClient.Value(row, "project"), ErpClient.Value(row, "custom_lebaref_partida"));
+                        !String.IsNullOrEmpty(ErpClient.Value(row, "project")) ? ErpClient.Value(row, "project") : (!String.IsNullOrEmpty(ErpClient.Value(row, "custom_lebaref_obra")) ? ErpClient.Value(row, "custom_lebaref_obra") : ErpClient.Value(doc, "project")), ErpClient.Value(row, "custom_lebaref_partida"));
                 selected.Text = folio + "   |   " + rows.Count + " renglones";
                 status.Text = "Documento cargado.";
             });
+        }
+
+        private async Task LoadCatalog(string doctype)
+        {
+            string[] fields, labels;
+            switch (doctype)
+            {
+                case "Bin": fields = new[] { "item_code", "warehouse", "actual_qty", "reserved_qty", "ordered_qty" }; labels = new[] { "Artículo", "Almacén", "Existencia", "Reservado", "Por recibir" }; break;
+                case "Supplier": fields = new[] { "name", "supplier_name", "tax_id" }; labels = new[] { "Código", "Proveedor", "RFC" }; break;
+                case "Item": fields = new[] { "name", "item_name", "stock_uom", "is_stock_item" }; labels = new[] { "Código", "Artículo", "Unidad", "Control de inventario" }; break;
+                case "Project": fields = new[] { "name", "project_name", "status" }; labels = new[] { "Código", "Obra", "Estado" }; break;
+                case "Warehouse": fields = new[] { "name", "company", "is_group" }; labels = new[] { "Almacén", "Empresa", "Es agrupador" }; break;
+                default: fields = new[] { "name", "recepcion", "proveedor", "moneda", "total" }; labels = new[] { "UUID", "Recepción", "Proveedor", "Moneda", "Total XML" }; break;
+            }
+            documents.Rows.Clear(); documents.Columns.Clear(); detail.Rows.Clear(); Columns(documents, labels);
+            selected.Text = "Catálogo / consulta";
+            var rows = await erp.List(doctype, fields);
+            foreach (var row in rows) documents.Rows.Add(System.Linq.Enumerable.Select(fields, f => (object)ErpClient.Value(row, f)).ToArray());
+            status.Text = rows.Count + " registros recientes (máximo 100 por consulta).";
+        }
+
+        private async Task ShowOperation()
+        {
+            int index = operation.SelectedIndex;
+            int source = SourceModule[index];
+            if (source >= 0 && (module.SelectedIndex != source || documents.CurrentRow == null))
+            {
+                status.Text = "Selecciona primero un documento en «" + module.Items[source] + "»."; return;
+            }
+            string folio = source < 0 ? "" : Convert.ToString(documents.CurrentRow.Cells[0].Value);
+            await Run(async () => {
+                var schema = await erp.Schema(Actions[index], folio);
+                using (var dialog = new OperationForm(erp, Actions[index], folio, ActionLabels[index], schema))
+                {
+                    dialog.ShowDialog(this);
+                    if (dialog.Result == null) { status.Text = "Operación cerrada."; return; }
+                    int target = Array.IndexOf(DocTypes, ErpClient.Value(dialog.Result, "tipo"));
+                    if (target >= 0) module.SelectedIndex = target;
+                    await LoadList();
+                    status.Text = "Guardado en ERPNext: " + ErpClient.Value(dialog.Result, "folio");
+                }
+            });
+        }
+
+        private void ExportList()
+        {
+            using (var picker = new SaveFileDialog { Filter = "CSV (*.csv)|*.csv", FileName = "Lebaref-consulta.csv" })
+            {
+                if (picker.ShowDialog(this) != DialogResult.OK) return;
+                try {
+                    var lines = new System.Collections.Generic.List<string>();
+                    var cols = System.Linq.Enumerable.Where(System.Linq.Enumerable.Cast<DataGridViewColumn>(documents.Columns), c => c.Visible);
+                    Func<string, string> csv = value => "\"" + ((value.StartsWith("=") || value.StartsWith("+") || value.StartsWith("-") || value.StartsWith("@") || value.StartsWith("\t") || value.StartsWith("\r")) ? "'" : "") + value.Replace("\"", "\"\"") + "\"";
+                    lines.Add(String.Join(",", System.Linq.Enumerable.Select(cols, c => csv(c.HeaderText))));
+                    foreach (DataGridViewRow row in documents.Rows) lines.Add(String.Join(",", System.Linq.Enumerable.Select(cols, c => csv(Convert.ToString(row.Cells[c.Index].Value)))));
+                    System.IO.File.WriteAllLines(picker.FileName, lines, new System.Text.UTF8Encoding(true));
+                    status.Text = "Consulta exportada (solo los registros mostrados).";
+                } catch (Exception error) { status.Text = "No se pudo guardar: " + error.Message; }
+            }
         }
 
         private async Task ShowComparison()
@@ -279,6 +357,7 @@ namespace Lebaref.Windows
             UseWaitCursor = !enabled;
             user.Enabled = password.Enabled = login.Enabled = enabled;
             module.Enabled = documents.Enabled = reload.Enabled = open.Enabled = compare.Enabled = logout.Enabled = enabled;
+            operation.Enabled = execute.Enabled = export.Enabled = enabled;
         }
 
         internal static Button Action(string label)

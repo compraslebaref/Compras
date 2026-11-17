@@ -7,7 +7,13 @@ Cada auxiliar usará su propia cuenta. Para limitar el acceso a estaciones
 autorizadas, el servidor deberá aceptar conexiones solo desde esas estaciones
 o desde su segmento de red dedicado.
 
-## Primera entrega
+## Integración operativa de pruebas
+
+Consulta [ENTREGA.md](ENTREGA.md) para el alcance verificado, pasos de uso,
+permisos, respaldo y condiciones para instalar en la oficina. El flujo central
+se realiza desde Windows: catálogos, solicitud, petición, oferta, comparativa,
+orden, autorización, recepción parcial, entrega a obra, retorno y archivo XML.
+Esta entrega no equivale a migrar todas las funciones del programa SQLite.
 
 El primer ajuste agrega la partida de obra a cada renglón de una solicitud de
 material. La obra se representa con el proyecto estándar de ERPNext por renglón.
@@ -26,11 +32,10 @@ Crea una solicitud de tipo Purchase y captura dos artículos del mismo proyecto,
 uno en Eléctrico y otro en HVAC. Guarda, vuelve a abrir la solicitud y comprueba
 que cada renglón mantiene la partida. Repite con una solicitud sin partida.
 
-La versión operativa estará lista cuando una estación autorizada pueda completar
-la solicitud, la comparativa y las órdenes por proveedor. Desde una segunda
-estación autorizada se deberá poder registrar una recepción parcial, la entrega
-a obra, el regreso de sobrante y el CFDI sin duplicarlo. Los movimientos se
-deberán consultar desde el folio de origen y cuadrar con el inventario.
+El recorrido se verificó en esta PC con las tres cuentas de prueba. Falta
+validar el despliegue real en las estaciones de la oficina y cargar los datos
+maestros reales. Los movimientos de entrega se representan como transferencias
+entre almacenes; no se confunden con el consumo de material en obra.
 
 ## Levantar el entorno local de pruebas
 
@@ -121,4 +126,6 @@ Desde una solicitud enviada, abre **Comparativa**, selecciona un renglón y
 elige una oferta. Cuando termines, genera las órdenes en borrador. ERPNext
 agrupa por proveedor y aplica los permisos de cada usuario. La captura
 de solicitudes, la autorización y el registro de recepciones se
-realizan en ERPNext durante esta etapa del piloto.
+realizan desde el menú de operaciones del cliente Windows. El responsable
+mantiene los catálogos. Almacén registra entregas y devoluciones. Compras
+archiva CFDI 4.0 con UUID contra una recepción.

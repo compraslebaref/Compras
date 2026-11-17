@@ -17,3 +17,4 @@ doc_events = {
 }
 
 doctype_js = {"Material Request": "public/js/material_request.js"}
+doc_events["Lebaref CFDI"] = {"validate": "lebaref_compras.operaciones.validar_archivo"}
