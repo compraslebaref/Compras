@@ -43,6 +43,8 @@ def configure_purchase_fields():
     ]
     create_custom_fields(fields)
     configure_cfdi()
+    from lebaref_compras.equipos_setup import configurar
+    configurar()
 
 
 def configure_cfdi():

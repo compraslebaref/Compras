@@ -20,7 +20,7 @@ namespace Lebaref.Windows
         private readonly Button login = Action("Entrar");
         private readonly Button logout = Action("Cerrar sesión");
         private readonly Button reload = Action("Actualizar");
-        private readonly Button open = Action("Ver renglones");
+        private readonly Button open = Action("Ver detalle");
         private readonly Button compare = Action("Comparativa");
         private readonly ComboBox operation = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 245, AccessibleName = "Operación" };
         private readonly Button execute = Action("Abrir operación");
@@ -36,10 +36,10 @@ namespace Lebaref.Windows
         private ErpClient erp;
         private bool busy;
 
-        private static readonly string[] DocTypes = { "Material Request", "Purchase Order", "Purchase Receipt", "Request for Quotation", "Supplier Quotation", "Stock Entry", "Bin", "Supplier", "Item", "Project", "Warehouse", "Lebaref CFDI" };
-        private static readonly string[] Actions = { "solicitud", "peticion", "oferta", "autorizar", "recibir", "entregar", "devolver", "cfdi", "articulo", "proveedor", "obra", "almacen" };
-        private static readonly string[] ActionLabels = { "Nueva solicitud de material", "Pedir cotización de la solicitud", "Registrar oferta de la petición", "Autorizar orden seleccionada", "Recibir orden seleccionada", "Entregar materiales a obra", "Devolver sobrante de entrega", "Archivar CFDI de recepción", "Nuevo artículo", "Nuevo proveedor", "Nueva obra", "Nuevo almacén" };
-        private static readonly int[] SourceModule = { -1, 0, 3, 1, 1, -1, 5, 2, -1, -1, -1, -1 };
+        private static readonly string[] DocTypes = { "Material Request", "Purchase Order", "Purchase Receipt", "Request for Quotation", "Supplier Quotation", "Stock Entry", "Bin", "Supplier", "Item", "Project", "Warehouse", "Lebaref CFDI", "Lebaref Herramienta", "Lebaref Prestamo", "Lebaref Retorno", "Lebaref Vehiculo", "Lebaref Gasto Vehiculo", "Lebaref Revision Vehiculo", "Lebaref Estado Herramienta", "Lebaref Estado Vehiculo" };
+        private static readonly string[] Actions = { "solicitud", "peticion", "oferta", "autorizar", "recibir", "entregar", "devolver", "cfdi", "articulo", "proveedor", "obra", "almacen", "herramienta", "prestamo", "retorno_herramienta", "estado_herramienta", "vehiculo", "gasto_vehiculo", "revision_vehiculo", "estado_vehiculo" };
+        private static readonly string[] ActionLabels = { "Nueva solicitud de material", "Pedir cotización de la solicitud", "Registrar oferta de la petición", "Autorizar orden seleccionada", "Recibir orden seleccionada", "Entregar materiales a obra", "Devolver sobrante de entrega", "Archivar CFDI de recepción", "Nuevo artículo", "Nuevo proveedor", "Nueva obra", "Nuevo almacén", "Nueva herramienta individual", "Nuevo préstamo de herramientas", "Retornar herramientas del préstamo", "Cambiar estado de herramienta", "Nuevo vehículo", "Registrar gasto del vehículo", "Revisar vehículo", "Estado / seguro del vehículo" };
+        private static readonly int[] SourceModule = { -1, 0, 3, 1, 1, -1, 5, 2, -1, -1, -1, -1, -1, -1, 13, 12, -1, 15, 15, 15 };
         private static readonly Dictionary<string, string> StatusNames = new Dictionary<string, string>
         {
             { "Draft", "Borrador" }, { "Submitted", "Enviado" }, { "Pending", "Pendiente" },
@@ -139,7 +139,7 @@ namespace Lebaref.Windows
             workPage.RowStyles.Add(new RowStyle(SizeType.Percent, 46));
 
             var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Margin = Padding.Empty, AutoScroll = true };
-            module.Items.AddRange(new object[] { "Solicitudes de material", "Órdenes de compra", "Recepciones de compra", "Peticiones de cotización", "Ofertas de proveedores", "Movimientos de almacén", "Existencias", "Proveedores", "Artículos", "Obras", "Almacenes", "CFDI archivados" });
+            module.Items.AddRange(new object[] { "Solicitudes de material", "Órdenes de compra", "Recepciones de compra", "Peticiones de cotización", "Ofertas de proveedores", "Movimientos de almacén", "Existencias", "Proveedores", "Artículos", "Obras", "Almacenes", "CFDI archivados", "Herramientas individuales", "Préstamos de herramientas", "Retornos de herramientas", "Flotilla", "Gastos de vehículos", "Revisiones de vehículos", "Historial de herramientas", "Historial de vehículos" });
             module.SelectedIndex = 0;
             module.Margin = new Padding(0, 7, 10, 0);
             toolbar.Controls.AddRange(new Control[] { module, reload, open, compare, logout });
@@ -240,11 +240,24 @@ namespace Lebaref.Windows
         private async Task ShowDetail()
         {
             if (documents.CurrentRow == null) return;
+            if (module.SelectedIndex >= 12)
+            {
+                var name = Convert.ToString(documents.CurrentRow.Cells[0].Value);
+                await Run(async () => {
+                    var result = await erp.EquipmentDetail(DocTypes[module.SelectedIndex], name);
+                    detail.Rows.Clear(); detail.Columns.Clear(); Columns(detail, "Dato / evento", "Valor / estado", "Detalle");
+                    foreach (var row in ErpClient.Rows(result, "rows")) detail.Rows.Add(ErpClient.Value(row, "campo"), ErpClient.Value(row, "valor"), ErpClient.Value(row, "detalle"));
+                    selected.Text = name + " | Detalle e historial";
+                    status.Text = "Historial consultado.";
+                });
+                return;
+            }
             if (module.SelectedIndex >= 6) { status.Text = "Los datos del catálogo se muestran en la tabla. Puedes exportarlos."; return; }
             var folio = Convert.ToString(documents.CurrentRow.Cells[0].Value);
             await Run(async () =>
             {
                 detail.Rows.Clear();
+                detail.Columns.Clear(); Columns(detail, "Artículo", "Cantidad", "Unidad", "Obra", "Partida de obra");
                 selected.Text = folio;
                 var doc = await erp.Detail(DocTypes[module.SelectedIndex], folio);
                 var rows = ErpClient.Rows(doc, "items");
@@ -266,6 +279,14 @@ namespace Lebaref.Windows
                 case "Item": fields = new[] { "name", "item_name", "stock_uom", "is_stock_item" }; labels = new[] { "Código", "Artículo", "Unidad", "Control de inventario" }; break;
                 case "Project": fields = new[] { "name", "project_name", "status" }; labels = new[] { "Código", "Obra", "Estado" }; break;
                 case "Warehouse": fields = new[] { "name", "company", "is_group" }; labels = new[] { "Almacén", "Empresa", "Es agrupador" }; break;
+                case "Lebaref Herramienta": fields = new[] { "name", "articulo", "estado", "responsable", "obra", "prestamo" }; labels = new[] { "Código", "Artículo", "Estado", "Responsable", "Obra", "Préstamo" }; break;
+                case "Lebaref Prestamo": fields = new[] { "name", "fecha", "responsable", "obra", "compromiso", "estado" }; labels = new[] { "Folio", "Salida", "Responsable", "Obra", "Compromiso", "Estado" }; break;
+                case "Lebaref Retorno": fields = new[] { "name", "prestamo", "fecha", "recibe" }; labels = new[] { "Folio", "Préstamo", "Fecha", "Recibe" }; break;
+                case "Lebaref Vehiculo": fields = new[] { "name", "placas", "responsable", "km_actual", "proximo_servicio", "seguro", "estado" }; labels = new[] { "Código", "Placas", "Responsable", "Kilometraje", "Servicio (km)", "Seguro hasta", "Estado" }; break;
+                case "Lebaref Gasto Vehiculo": fields = new[] { "name", "vehiculo", "fecha", "tipo", "monto", "moneda", "referencia" }; labels = new[] { "Folio", "Vehículo", "Fecha", "Tipo", "Importe", "Moneda", "Referencia" }; break;
+                case "Lebaref Revision Vehiculo": fields = new[] { "name", "vehiculo", "fecha", "inspector", "km" }; labels = new[] { "Folio", "Vehículo", "Fecha", "Inspector", "Kilometraje" }; break;
+                case "Lebaref Estado Herramienta": fields = new[] { "name", "herramienta", "fecha", "estado_anterior", "estado", "motivo" }; labels = new[] { "Folio", "Herramienta", "Fecha", "Anterior", "Nuevo estado", "Motivo" }; break;
+                case "Lebaref Estado Vehiculo": fields = new[] { "name", "vehiculo", "fecha", "estado_anterior", "estado", "motivo" }; labels = new[] { "Folio", "Vehículo", "Fecha", "Anterior", "Nuevo estado", "Motivo" }; break;
                 default: fields = new[] { "name", "recepcion", "proveedor", "moneda", "total" }; labels = new[] { "UUID", "Recepción", "Proveedor", "Moneda", "Total XML" }; break;
             }
             documents.Rows.Clear(); documents.Columns.Clear(); detail.Rows.Clear(); Columns(documents, labels);

@@ -54,6 +54,9 @@ def columna(name, label, editable=True, choices=None):
 
 @frappe.whitelist(methods=["GET"])
 def esquema(accion, folio=""):
+    from lebaref_compras import equipos
+    if accion in equipos.TARGETS:
+        return equipos.esquema(accion, folio)
     permiso(accion)
     doc = origen(accion, folio)
     fields, columns, rows = [], [], []
@@ -140,6 +143,9 @@ def devoluciones(doc):
 
 @frappe.whitelist(methods=["POST"])
 def ejecutar(accion, datos, operacion, folio=""):
+    from lebaref_compras import equipos
+    if accion in equipos.TARGETS:
+        return equipos.ejecutar(accion, datos, operacion, folio)
     permiso(accion)
     data = frappe.parse_json(datos)
     if not isinstance(data, dict):

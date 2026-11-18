@@ -105,6 +105,13 @@ namespace Lebaref.Windows
             return (Dictionary<string, object>)reply["message"];
         }
 
+        public async Task<Dictionary<string, object>> EquipmentDetail(string type, string folio)
+        {
+            var reply = await Read(await http.GetAsync("api/method/lebaref_compras.equipos.detalle?tipo="
+                + Uri.EscapeDataString(type) + "&folio=" + Uri.EscapeDataString(folio)));
+            return (Dictionary<string, object>)reply["message"];
+        }
+
         public async Task<Dictionary<string, object>> Execute(string action, string folio, string token, Dictionary<string, object> data)
         {
             using (var fields = new FormUrlEncodedContent(new Dictionary<string, string> {

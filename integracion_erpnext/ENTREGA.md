@@ -1,6 +1,6 @@
 # Lebaref + ERPNext: entrega integrada para pruebas
 
-Fecha: 16 de noviembre de 2026. Rama: `integracion/erpnext`.
+Actualización: 17 de noviembre de 2026. Rama: `integracion/erpnext`.
 
 ## Resultado
 
@@ -24,6 +24,11 @@ No se importó ni modificó la base SQLite original.
 | Consulta | Solicitudes, órdenes, recepciones, peticiones, ofertas, movimientos, existencias, catálogos y CFDI |
 | Exportación | CSV de los registros mostrados; neutraliza fórmulas en celdas de texto |
 | Conexión interrumpida | Identificador por operación y reintento de la misma captura sin duplicar movimientos |
+| Herramientas | Fichas individuales, préstamos por responsable/obra, retorno parcial, incidencias y recuperación por responsable |
+| Flotilla | Vehículos, gastos de combustible/mantenimiento, revisiones, estado, seguro e historial |
+
+El uso de estos nuevos módulos y los ejemplos disponibles están en
+[HERRAMIENTAS-FLOTILLA.md](HERRAMIENTAS-FLOTILLA.md).
 
 ## Cómo abrirlo en esta PC
 
@@ -94,12 +99,14 @@ MAT-MR-2026-00005, que puede haber sido modificada por el usuario.
 - El XML se archiva; no valida sello/estado SAT, no concilia conceptos o importes,
   no genera factura contable ni contabiliza impuestos. No se inventa IVA.
   Actualmente cada UUID se vincula a una recepción, no a varias.
-- Flotilla, préstamos/series de herramientas, kits, correo entrante, automatizaciones
-  de correo, cuadros de análisis avanzados, fotos y códigos de barras del sistema
-  anterior no se migraron a esta interfaz. El sistema anterior sigue separado.
+- Herramientas y flotilla ya tienen control operativo en esta interfaz. Faltan
+  kits, costos/garantías de herramientas, integración contable de activos,
+  correo entrante, automatizaciones de correo, cuadros de análisis avanzados,
+  fotos y códigos de barras del sistema anterior. El histórico original sigue separado.
 - No se migraron proveedores, saldos, compras, CFDI ni documentos reales.
 - No se ha probado concurrencia desde dos estaciones físicas ni cortes reales
-  de energía. Las pruebas de reintento usan el mismo identificador de operación.
+  de energía. Sí se probaron dos sesiones HTTP simultáneas para préstamos,
+  incluyendo seis rondas de competencia por la misma herramienta.
 - ERPNext mantiene sus validaciones de inventario. Los artículos con series,
   lotes o inspección obligatoria necesitan su flujo especializado en ERPNext.
 
