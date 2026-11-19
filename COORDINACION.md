@@ -24,8 +24,8 @@
 
 | Prioridad | ID Matriz | Tarea en ERPNext (`lebaref_compras`) | Estado |
 |---|---|---|---|
-| 1 | `COM-04` / `COM-07` | **Impuestos (IVA 16% / exento), flete y condiciones/programación de pago** en `Supplier Quotation` y `Purchase Order` usando plantillas estándar de ERPNext (caso: neto `400` + IVA `64` = `464`). | `SIGUIENTE PARA CODEX` |
-| 2 | `SOL-03` / `SOL-05` | **Anexos vinculados a solicitud origen y ruta de surtido desde stock** (`Stock Entry` tipo transferencia/salida ligada a `Material Request`) + conversión posterior de concepto libre a `Item` inventariable (`CAT-04`). | `PENDIENTE CODEX` |
+| 1 | `COM-04` / `COM-07` | **Impuestos (IVA 16% / exento), flete y condiciones/programación de pago** en `Supplier Quotation` y `Purchase Order` usando plantillas estándar de ERPNext (caso: neto `400` + IVA `64` = `464`). | `BACKEND VERIFICADO (21d7e85)` · Plantillas por empresa y guías de Desk pendientes |
+| 2 | `SOL-03` / `SOL-05` / `CAT-04` | **Anexos vinculados a solicitud origen y ruta de surtido desde stock** (`Stock Entry` tipo transferencia/salida ligada a `Material Request`) + conversión posterior de concepto libre a `Item` inventariable. | `BACKEND VERIFICADO (0797f43)` · Guías de Desk pendientes |
 | 3 | `ALM-02`..`ALM-08` | **Variantes de almacén en ERPNext:** entrada por regularizar, recepción directa a obra/servicio, sustitución autorizada al recibir, distinción clara *Resguardo en Obra* (`Material Transfer`) vs. *Consumo Real* (`Material Issue`) y ajuste/merma (`Stock Reconciliation`). | `PENDIENTE CODEX` |
 | 4 | `XML-02`..`XML-04` | **CFDI 4.0 y compras con nota/ticket:** lectura de conceptos/importes del XML contra `Purchase Receipt` / `Purchase Order` (o vínculo con `Purchase Invoice`) y registro auditable de nota sin CFDI. | `PENDIENTE CODEX` |
 
@@ -41,6 +41,10 @@
 ---
 
 ## Bitácora de Entregas Entre Agentes (Más reciente arriba)
+
+- **2026-11-19 — Codex, SOL-03 / SOL-05 / CAT-04 (`0797f43`).** Verificados el anexo en borrador, la conversión a SKU antes de dependencias activas, la salida parcial y el traslado vinculado a solicitud. Conectar las acciones de [§8 del contrato](integracion_erpnext/CONTRATO-API.md#8-anexos-enmiendas-y-surtido-de-solicitudes-sol-03--sol-05--cat-04) en los botones de Desk. La reserva previa de existencias queda pendiente.
+- **2026-11-19 — Codex, COM-04 / COM-07 (`21d7e85`).** Verificados IVA 16 %, exento, flete y programación, incluida la creación nativa de orden. `hooks.py` añade un evento `before_validate` para heredar los datos de pago. Configurar las plantillas por empresa y consumir [§7 del contrato](integracion_erpnext/CONTRATO-API.md#7-impuestos-flete-y-programación-de-pago-com-04--com-07) en la oferta y comparativa guiadas.
+- **2026-11-19 — Codex, validación (`0764f07`).** Migración y las tres suites superadas en `lebaref-pruebas.local` con `Validar.ps1 -ImagenBackend lebaref/erpnext-codex:bloque1`. El procedimiento usa contenedores temporales y conserva el contenedor compartido de Desk. [Reproducir](integracion_erpnext/auditoria/REPRODUCIR.md)
 
 - **2026-11-19 — Alineación Definitiva a ERPNext Directo (Usuario + Antigravity + Codex):** Confirmado por Oscar usar **ERPNext 16 directo (procesos + interfaz nativa Frappe Desk)** amoldado con `lebaref_compras` para salir rápido y sólido a producción en la empresa. Integrados `1371366` (`CAT-02`), `00f2a90` (`CAT-03`) y `daf8a9f` (`SOL-02`) en `integracion/erpnext`.
 - **2026-11-19 — Codex, SOL-02 (`daf8a9f`), CAT-03 (`00f2a90`), CAT-02 (`1371366`), COM-02 (`96f8082`):** Entregados y verificados en backend y documentados en [`CONTRATO-API.md`](integracion_erpnext/CONTRATO-API.md).
