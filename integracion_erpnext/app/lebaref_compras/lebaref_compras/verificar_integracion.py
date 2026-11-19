@@ -6,6 +6,60 @@ from lebaref_compras.operaciones import esquema, ejecutar
 from lebaref_compras.comparativa import consultar, generar_ordenes
 
 
+def _verificar_ofertas_parciales(data, item_code, supplier, second_supplier):
+    request_data = dict(data, rows=[*data["rows"], dict(data["rows"][0], item_code=item_code)])
+    request = ejecutar("solicitud", request_data, str(uuid.uuid4()))["folio"]
+    rfq = ejecutar("peticion", {"suppliers": f"{supplier}\n{second_supplier}"}, str(uuid.uuid4()), request)["folio"]
+    first, second = esquema("oferta", rfq)["rows"]
+    assert first["item_code"] != second["item_code"]
+
+    offer = {"supplier": supplier, "valid_till": add_days(today(), 10)}
+    priced = dict(first, rate="100", lead_time_days="2")
+    for invalid_rows, message in (
+        ([first, dict(second, rate=" ")], "Captura al menos un precio unitario mayor que cero."),
+        ([priced, first], "El renglón no pertenece a la petición o está repetido."),
+        ([priced, dict(second, id="otro-renglon")], "El renglón no pertenece a la petición o está repetido."),
+        ([priced, dict(second, rate="-1")], "La cantidad o precio debe ser positivo."),
+    ):
+        try:
+            ejecutar("oferta", dict(offer, rows=invalid_rows), str(uuid.uuid4()), rfq)
+        except frappe.ValidationError as error:
+            assert str(error) == message
+        else:
+            raise AssertionError("Se aceptó una oferta parcial inválida")
+
+    token = str(uuid.uuid4())
+    first_offer = dict(offer, rows=[priced])
+    quote = ejecutar("oferta", first_offer, token, rfq)["folio"]
+    assert ejecutar("oferta", first_offer, token, rfq) == {
+        "folio": quote, "tipo": "Supplier Quotation", "repetida": True
+    }
+    assert [r.request_for_quotation_item for r in frappe.get_doc("Supplier Quotation", quote).items] == [first["id"]]
+
+    by_code = {r["codigo"]: r for r in consultar(request)["renglones"]}
+    assert [opt["cotizacion"] for opt in by_code[first["item_code"]]["opciones"]] == [quote]
+    assert by_code[second["item_code"]]["opciones"] == []
+
+    second_offer = dict(offer, supplier=second_supplier, rows=[first, dict(second, rate=125)])
+    second_quote = ejecutar("oferta", second_offer, str(uuid.uuid4()), rfq)["folio"]
+    assert [r.request_for_quotation_item for r in frappe.get_doc("Supplier Quotation", second_quote).items] == [second["id"]]
+    renglones = consultar(request)["renglones"]
+    by_code = {r["codigo"]: r for r in renglones}
+    assert [opt["cotizacion"] for opt in by_code[first["item_code"]]["opciones"]] == [quote]
+    assert [opt["cotizacion"] for opt in by_code[second["item_code"]]["opciones"]] == [second_quote]
+    orders = generar_ordenes(request, {r["id"]: r["opciones"][0]["id"] for r in renglones})
+    assert len(orders) == 2
+    actual = {}
+    for order in orders:
+        doc = frappe.get_doc("Purchase Order", order["folio"])
+        assert doc.docstatus == 0 and len(doc.items) == 1
+        actual[doc.supplier] = (doc.items[0].item_code, doc.items[0].supplier_quotation)
+    assert actual == {
+        supplier: (first["item_code"], quote),
+        second_supplier: (second["item_code"], second_quote),
+    }
+
+
 def verificar():
     if frappe.local.site != "lebaref-pruebas.local":
         raise RuntimeError("Solo se permite en el entorno de pruebas.")
@@ -32,6 +86,7 @@ def verificar():
         results.append("Alta de artículo/obra por responsable; auxiliares sin alta de catálogo ni archivo CFDI desde Almacén")
         frappe.set_user("Administrator")
         supplier = frappe.get_doc(dict(doctype="Supplier", supplier_name="Prueba integral " + str(uuid.uuid4())[:8], supplier_group=frappe.db.get_value("Supplier Group", {"is_group": 0}), supplier_type="Company", tax_id="AAA010101AAA")).insert()
+        second_supplier = frappe.get_doc(dict(doctype="Supplier", supplier_name="Prueba parcial " + str(uuid.uuid4())[:8], supplier_group=supplier.supplier_group, supplier_type="Company")).insert()
         warehouse = frappe.get_doc(dict(doctype="Warehouse", warehouse_name="Obra prueba " + str(uuid.uuid4())[:8], company=company)).insert()
         frappe.db.set_value("Company", company, "tax_id", "BBB010101BBB")
         frappe.set_user("compras@lebaref.test")
@@ -48,6 +103,8 @@ def verificar():
         comparison = consultar(request)
         order = generar_ordenes(request, {r["id"]: r["opciones"][0]["id"] for r in comparison["renglones"]})[0]["folio"]
         results.append("Petición → oferta → comparativa → orden en borrador")
+        _verificar_ofertas_parciales(data, item["folio"], supplier.name, second_supplier.name)
+        results.append("Ofertas parciales, exclusión de renglones sin precio y adjudicación a dos proveedores")
         denied = False
         try:
             ejecutar("autorizar", {"confirmar": "AUTORIZAR"}, str(uuid.uuid4()), order)

@@ -182,17 +182,17 @@
   {
     "id": "COM-02",
     "capacidad": "Proveedor cotiza solo algunos renglones",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Captura y adjudicación por renglón/proveedor.",
-    "integracion": "API exige cotizar todos los renglones y precios positivos.",
-    "evidencia": "Sondeo real rechazó 1 de 2 renglones.",
-    "criterio_cierre": "Aceptar una oferta de solo 1 de 2 artículos y adjudicar el otro a otro proveedor.",
+    "integracion": "La API guarda los renglones con precio positivo y permite adjudicarlos por proveedor. Pendiente conectar la captura y la presentación en Windows.",
+    "evidencia": "Validar.ps1 en lebaref-pruebas.local: una oferta por renglón, comparativa sin opción para el renglón omitido y dos órdenes en borrador para proveedores distintos.",
+    "criterio_cierre": "Verificar en Windows la captura, la comparativa y la impresión de dos ofertas parciales adjudicadas a proveedores distintos.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 3864
     },
-    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+    "fuente_integracion": "../app/lebaref_compras/lebaref_compras/verificar_integracion.py"
   },
   {
     "id": "COM-03",

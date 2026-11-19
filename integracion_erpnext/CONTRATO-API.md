@@ -46,7 +46,7 @@
     ```
 - **`POST /api/method/lebaref_compras.operaciones.ejecutar`**
   - Form params: `accion`, `folio` (vacío si no aplica), `operacion` (UUID), `datos` (JSON con `{"<campo>": "...", "rows": [...]}`).
-  - Respuesta `message`: `{"folio": "<nombre-doc>", "tipo": "<DocType>", "repetida": false}`.
+  - Respuesta `message` en la primera creación: `{"folio": "<nombre-doc>", "tipo": "<DocType>"}`. En un reintento idéntico, incluye `"repetida": true`.
 
 ### 2.3 Comparativa de Cotizaciones (`lebaref_compras.comparativa`)
 - **`GET /api/method/lebaref_compras.comparativa.consultar?solicitud=<MAT-MR-xxxx>`**
@@ -88,10 +88,62 @@
 
 ---
 
-## 3. Cambios de Contrato Planificados (Bloque 1 — por especificar al implementar)
+## 3. Ofertas parciales (`COM-02`)
 
-- **`[COM-02]` Ofertas parciales en `accion="oferta"`:**
-  - Permitir omitir renglones no cotizados por un proveedor (ej. `rate = 0` o bandera `cotizado = false` filtrando los ítems del `Supplier Quotation` siempre que al menos 1 renglón tenga `rate > 0`).
+- `esquema?accion=oferta&folio=PUR-RFQ-2026-00001` sigue devolviendo todos los renglones de la petición con `rate: 0`. El campo `id` identifica un **Request for Quotation Item**.
+- En `ejecutar`, envía `accion=oferta`, `folio=PUR-RFQ-2026-00001`, `operacion=7b14cd06-e977-4c3e-8d81-f474fa143712` y el parámetro `datos` con este JSON. Para un renglón sin cotizar, puedes omitirlo de `rows` o enviar el `id` con un precio cero, vacío, nulo o sin `rate`. Se guardan únicamente los renglones con precio positivo, con su cantidad y referencias de ERPNext. `lead_time_days` se valida para los renglones cotizados y vale cero si se omite.
+
+  ```json
+  {
+    "supplier": "Proveedor A",
+    "valid_till": "2026-12-15",
+    "rows": [
+      {"id": "rfq-item-a", "rate": "100.00", "lead_time_days": "2"},
+      {"id": "rfq-item-b", "rate": 0}
+    ]
+  }
+  ```
+
+- Respuesta HTTP de creación. Un reintento idéntico devuelve el mismo folio y agrega `"repetida": true` dentro de `message`.
+
+  ```json
+  {"message": {"folio": "PUR-SQTN-2026-00001", "tipo": "Supplier Quotation"}}
+  ```
+
+- HTTP `417` para un proveedor no invitado, referencias ajenas o duplicadas (incluidos renglones con precio cero), precios negativos, no finitos o no numéricos, o una oferta sin al menos un precio positivo.
+- `comparativa.consultar` devuelve todos los renglones de la solicitud. Si un proveedor no cotizó uno, queda ausente de su lista de `opciones`. Cuando ningún proveedor tiene una oferta vigente admisible para ese renglón, el resultado es `"opciones": []`, como en el segundo renglón de este ejemplo.
+
+  ```json
+  {
+    "message": {
+      "puede_generar": true,
+      "renglones": [
+        {
+          "id": "mr-item-a", "articulo": "Tornillo", "codigo": "TOR-01",
+          "partida": "Materiales", "obra": "PROJ-0001", "cantidad": 4.0,
+          "unidad": "Nos", "ordenado": false,
+          "opciones": [
+            {"id": "sq-item-a", "cotizacion": "PUR-SQTN-2026-00001", "proveedor": "Proveedor A", "precio": 100.0, "moneda": "MXN", "entrega": 2}
+          ]
+        },
+        {
+          "id": "mr-item-b", "articulo": "Tuerca", "codigo": "TUE-01",
+          "partida": "Materiales", "obra": "PROJ-0001", "cantidad": 4.0,
+          "unidad": "Nos", "ordenado": false, "opciones": []
+        }
+      ]
+    }
+  }
+  ```
+
+- `comparativa.generar_ordenes` conserva el formato de la sección 2.3. Por ejemplo, envía `solicitud=MAT-MR-2026-00001` y `seleccion={"mr-item-a":"sq-item-a","mr-item-b":"sq-item-b"}` cuando el proveedor B ya cotizó el segundo renglón. Cada valor identifica un **Supplier Quotation Item** asociado a la clave de solicitud. La respuesta son dos órdenes en borrador, una por proveedor.
+
+  ```json
+  {"message": [{"folio": "PUR-ORD-2026-00001", "proveedor": "Proveedor A"}, {"folio": "PUR-ORD-2026-00002", "proveedor": "Proveedor B"}]}
+  ```
+
+## 4. Cambios de Contrato Planificados (Bloque 1)
+
 - **`[CAT-02]` Unidades y factores de conversión:**
   - En `articulo`: admitir unidad de compra y `conversion_factor` hacia `stock_uom`.
   - En `solicitud`, `oferta` y `recibir`: devolver y aceptar explícitamente `uom` y `conversion_factor` para evitar ambigüedad visual entre cajas/rollos y piezas.

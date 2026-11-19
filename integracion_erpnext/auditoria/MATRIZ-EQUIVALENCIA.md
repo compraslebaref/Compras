@@ -2,7 +2,7 @@
 
 Fecha: 19 de noviembre de 2026. Capacidades agrupadas del código inspeccionado; no es un porcentaje de avance del producto.
 
-Total: 55 capacidades. Parcial: 16; Verificado acotado: 8; No integrado: 24; Cambio de comportamiento: 4; Sin verificar: 3.
+Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cambio de comportamiento: 4; Sin verificar: 3.
 
 **Verificado acotado:** el caso descrito pasó; no certifica variantes no ensayadas. **Parcial:** existe una parte pero faltan datos, acciones o pruebas. **No integrado:** no está disponible como flujo equivalente en el cliente entregado, aunque ERPNext tenga piezas estándar. **Cambio de comportamiento:** requiere homologar reglas/experiencia; no es necesariamente un error. **Sin verificar:** no hay evidencia suficiente.
 
@@ -130,13 +130,13 @@ Total: 55 capacidades. Parcial: 16; Verificado acotado: 8; No integrado: 24; Cam
 
 ## COM-02 · Proveedor cotiza solo algunos renglones
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Captura y adjudicación por renglón/proveedor.
-- Integración: API exige cotizar todos los renglones y precios positivos.
-- Evidencia: Sondeo real rechazó 1 de 2 renglones.
-- Criterio para cerrar: Aceptar una oferta de solo 1 de 2 artículos y adjudicar el otro a otro proveedor.
-- Fuentes: [original L3864](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:3864) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: La API guarda los renglones con precio positivo y permite adjudicarlos por proveedor. Pendiente conectar la captura y la presentación en Windows.
+- Evidencia: Validar.ps1 en lebaref-pruebas.local: una oferta por renglón, comparativa sin opción para el renglón omitido y dos órdenes en borrador para proveedores distintos.
+- Criterio para cerrar: Verificar en Windows la captura, la comparativa y la impresión de dos ofertas parciales adjudicadas a proveedores distintos.
+- Fuentes: [original L3864](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:3864) · [suite integral](../app/lebaref_compras/lebaref_compras/verificar_integracion.py)
 
 ## COM-03 · Comparativa y órdenes por proveedor
 

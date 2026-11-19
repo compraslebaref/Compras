@@ -50,7 +50,7 @@ def _cotizaciones(request):
             continue
         for item in quote.items:
             origin = rows.get(item.material_request_item)
-            if not origin or origin.item_code != item.item_code or not item.conversion_factor:
+            if not origin or origin.item_code != item.item_code or not item.conversion_factor or flt(item.rate) <= 0:
                 continue
             precision = origin.precision("stock_qty")
             if flt(item.stock_qty, precision) != flt(origin.stock_qty, precision):
