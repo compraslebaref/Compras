@@ -20,7 +20,7 @@ namespace SistemaComprasAlmacen.Services;
 /// </summary>
 public static class GoogleSheetsProveedoresService
 {
-    public const string DefaultSpreadsheetId = "1SDPwkexUf2IvIAGniwjtfqH2m8dv2KshrSMsJ9_EiM4";
+    public const string DefaultSpreadsheetId = "1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I";
     private const string ConfigKeySheetId = "GoogleSheets_ProveedoresId";
     private const string ConfigKeyWebAppUrl = "GoogleSheets_ProveedoresWebAppUrl";
 
