@@ -85,11 +85,12 @@ public static class BarcodePrintService
 
     public static void MostrarVistaPreviaEImprimirSolicitud(Window owner, Solicitud sol, bool soloDescargar = false)
     {
-        var filas = sol.Partidas.Select((p, idx) => new[]
+        var articulos = sol.UsaPartidas ? sol.Partidas.OrderBy(p => p.NombrePartida, StringComparer.OrdinalIgnoreCase).ToList() : sol.Partidas;
+        var filas = articulos.Select((p, idx) => new[]
         {
             (idx + 1).ToString(),
             string.IsNullOrWhiteSpace(p.ProductoCodigo) ? "CONCEPTO" : p.ProductoCodigo,
-            p.ProductoNombre,
+            sol.UsaPartidas ? $"{p.EncabezadoPartida} · {p.ProductoNombre}" : p.ProductoNombre,
             $"{p.CantidadSolicitada:0.##}",
             p.UnidadCompra,
             string.IsNullOrWhiteSpace(p.NotasPartida) ? "-" : p.NotasPartida
@@ -114,7 +115,7 @@ public static class BarcodePrintService
             filasTabla: filas,
             totales: new List<(string, string)>
             {
-                ("Total Partidas:", sol.Partidas.Count.ToString()),
+                ("Total Artículos:", sol.Partidas.Count.ToString()),
                 ("Total Unidades:", $"{sol.TotalArticulos:0.##}")
             },
             notas: sol.Notas,
@@ -283,6 +284,113 @@ public static class BarcodePrintService
 
     public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones, bool soloDescargar = false)
     {
+        var hoja = ConstruirHojaComparativa(sol, renglones);
+
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"Comparativa_{sol.Folio}", hoja);
+            return;
+        }
+
+        AbrirVentanaVistaPreviaCarta(owner, $"Comparativa {sol.Folio}", hoja);
+    }
+
+    /// <summary>Genera el PDF (tamaño carta) de un documento en memoria, para adjuntarlo a un correo.</summary>
+    public static byte[] GenerarPdfBytes(FrameworkElement contenidoHojaCarta)
+    {
+        string tmp = Path.Combine(Path.GetTempPath(), $"doc_{Guid.NewGuid():N}.pdf");
+        try
+        {
+            ExportarDocumentoComoPdf(tmp, contenidoHojaCarta);
+            return File.ReadAllBytes(tmp);
+        }
+        finally
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+        }
+    }
+
+    /// <summary>Convierte las tablas del documento (misma información que el PDF) en HTML para el cuerpo de un correo.</summary>
+    public static string GenerarHtmlTablasDocumento(FrameworkElement contenidoHojaCarta)
+    {
+        if (contenidoHojaCarta.Tag is not DatosExportablesDocumento datos)
+            return string.Empty;
+
+        static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
+
+        var sb = new StringBuilder();
+        const string th = "style='background:#0F172A;color:#FFFFFF;padding:6px 8px;font-size:12px;text-align:left;border:1px solid #CBD5E1;'";
+        const string td = "style='padding:5px 8px;font-size:12px;border:1px solid #E2E8F0;vertical-align:top;'";
+        const string tdTot = "style='padding:6px 8px;font-size:12px;border:1px solid #CBD5E1;background:#F1F5F9;font-weight:bold;'";
+
+        sb.Append("<div style='font-family:Segoe UI,Arial,sans-serif;color:#1E293B;'>");
+        sb.Append($"<div style='font-size:16px;font-weight:700;margin-bottom:2px;'>{H(datos.TituloDocumento)}</div>");
+        sb.Append($"<div style='font-size:12px;color:#64748B;margin-bottom:10px;'>Folio {H(datos.Folio)} · {H(datos.Fecha)}</div>");
+
+        if (datos.Metadatos.Count > 0)
+        {
+            sb.Append("<table style='border-collapse:collapse;margin-bottom:12px;'>");
+            foreach (var (etiq, val) in datos.Metadatos)
+                sb.Append($"<tr><td style='padding:2px 10px 2px 0;font-size:12px;color:#64748B;'>{H(etiq)}</td><td style='padding:2px 0;font-size:12px;font-weight:600;'>{H(val)}</td></tr>");
+            sb.Append("</table>");
+        }
+
+        if (datos.EncabezadosTabla.Length > 0)
+        {
+            sb.Append("<table style='border-collapse:collapse;width:100%;margin-bottom:14px;'><tr>");
+            foreach (var h in datos.EncabezadosTabla) sb.Append($"<th {th}>{H(h)}</th>");
+            sb.Append("</tr>");
+            int i = 0;
+            foreach (var fila in datos.FilasTabla)
+            {
+                string bg = i++ % 2 == 0 ? "#FFFFFF" : "#F8FAFC";
+                sb.Append($"<tr style='background:{bg};'>");
+                foreach (var c in fila)
+                {
+                    string celda = H(c);
+                    if (c != null && c.StartsWith("Sin cotizar", StringComparison.OrdinalIgnoreCase))
+                        celda = $"<span style='color:#94A3B8;'>{celda}</span>";
+                    sb.Append($"<td {td}>{celda}</td>");
+                }
+                sb.Append("</tr>");
+            }
+            sb.Append("</table>");
+        }
+
+        if (datos.EncabezadosTablaSecundaria.Length > 0 && datos.FilasTablaSecundaria.Count > 0)
+        {
+            if (!string.IsNullOrWhiteSpace(datos.TituloTablaSecundaria))
+                sb.Append($"<div style='font-size:13px;font-weight:700;margin:6px 0 4px 0;'>{H(datos.TituloTablaSecundaria)}</div>");
+            sb.Append("<table style='border-collapse:collapse;width:100%;margin-bottom:12px;'><tr>");
+            foreach (var h in datos.EncabezadosTablaSecundaria) sb.Append($"<th {th}>{H(h)}</th>");
+            sb.Append("</tr>");
+            foreach (var fila in datos.FilasTablaSecundaria)
+            {
+                bool esTotal = fila.Length > 0 && fila[0] == "TOT";
+                sb.Append("<tr>");
+                foreach (var c in fila) sb.Append($"<td {(esTotal ? tdTot : td)}>{H(c)}</td>");
+                sb.Append("</tr>");
+            }
+            sb.Append("</table>");
+        }
+
+        if (datos.Totales.Count > 0)
+        {
+            sb.Append("<table style='border-collapse:collapse;margin-bottom:8px;'>");
+            foreach (var (etiq, val) in datos.Totales)
+                sb.Append($"<tr><td style='padding:2px 12px 2px 0;font-size:12.5px;color:#475569;'>{H(etiq)}</td><td style='padding:2px 0;font-size:12.5px;font-weight:700;'>{H(val)}</td></tr>");
+            sb.Append("</table>");
+        }
+
+        if (!string.IsNullOrWhiteSpace(datos.Notas))
+            sb.Append($"<div style='font-size:12px;color:#475569;margin-top:6px;'><b>Observaciones:</b> {H(datos.Notas)}</div>");
+
+        sb.Append("</div>");
+        return sb.ToString();
+    }
+
+    public static FrameworkElement ConstruirHojaComparativa(Solicitud sol, List<CotizacionRenglonComparativo> renglones)
+    {
         var columnasProveedores = new List<(int slotBase, int provId, string nombreCorto)>();
         var usados = new HashSet<int>();
 
@@ -357,6 +465,22 @@ public static class BarcodePrintService
             }
         }
 
+        // Mostrar solo los proveedores realmente registrados en la solicitud (sin columnas "Proveedor 3" vacías).
+        // Se omiten columnas sin proveedor asignado y proveedores que no cotizaron ningún artículo.
+        static bool ProveedorTienePrecioEnRenglon(CotizacionRenglonComparativo r, int provId) =>
+            (r.Proveedor1Id == provId && r.PrecioSinIva1 > 0) ||
+            (r.Proveedor2Id == provId && r.PrecioSinIva2 > 0) ||
+            (r.Proveedor3Id == provId && r.PrecioSinIva3 > 0) ||
+            r.ProveedoresExtra.Any(x => x.ProveedorId == provId && x.PrecioSinIva > 0);
+
+        var columnasConPrecio = columnasProveedores
+            .Where(c => c.provId > 0 && renglones.Any(r => ProveedorTienePrecioEnRenglon(r, c.provId)))
+            .ToList();
+        // Si aún no hay precios capturados, mostrar al menos los proveedores asignados
+        columnasProveedores = columnasConPrecio.Count > 0
+            ? columnasConPrecio
+            : columnasProveedores.Where(c => c.provId > 0).ToList();
+
         static string FormatearCeldaProveedorEnRenglon(CotizacionRenglonComparativo r, int provId)
         {
             if (provId <= 0)
@@ -401,6 +525,83 @@ public static class BarcodePrintService
         encabezadosLista.Add("Selección");
 
         string[] encabezadosTablaComp = encabezadosLista.ToArray();
+
+        List<TablaPartidaImpresion>? tablasPartidas = null;
+        if (sol.UsaPartidas)
+        {
+            tablasPartidas = renglones
+                .GroupBy(r => r.NombrePartida.Trim(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase)
+                .Select(grupo =>
+                {
+                    var proveedores = columnasProveedores
+                        .Where(c => grupo.Any(r => ProveedorTienePrecioEnRenglon(r, c.provId))).ToList();
+                    var encabezados = new[] { "#", "Concepto", "Cantidad" }
+                        .Concat(proveedores.Select(p => p.nombreCorto)).Append("Selección").ToArray();
+                    var articulos = grupo.Select((r, indice) => new[]
+                    {
+                        (indice + 1).ToString(),
+                        string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.ProductoNombre : r.DescripcionLibre,
+                        $"{r.Cantidad:0.##} {r.UnidadCompra}"
+                    }.Concat(proveedores.Select(p => ProveedorTienePrecioEnRenglon(r, p.provId)
+                        ? FormatearCeldaProveedorEnRenglon(r, p.provId) : "—"))
+                     .Append(r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0
+                        ? Proveedor.ExtraerNombreComercialCorto(r.ProveedorGanadorNombre)
+                        : proveedores.Any(p => ProveedorTienePrecioEnRenglon(r, p.provId)) ? "Sin adjudicar" : "Sin cotizar")
+                     .ToList()).ToList();
+                    return new TablaPartidaImpresion(string.IsNullOrWhiteSpace(grupo.Key) ? "Sin partida asignada" : grupo.Key,
+                        encabezados, articulos.Select(a => a.ToArray()).ToList());
+                }).ToList();
+        }
+
+        if (sol.UsaPartidas || columnasProveedores.Count > 3)
+        {
+            encabezadosTablaComp = sol.UsaPartidas
+                ? new[] { "Partida", "Artículo / Concepto", "Cant.", "Proveedor", "P.U. c/IVA", "Entrega", "Decisión" }
+                : new[] { "Artículo / Concepto", "Cant.", "Proveedor", "P.U. c/IVA", "Entrega", "Decisión" };
+            filas = new List<string[]>();
+
+            var partidas = renglones
+                .GroupBy(r => sol.UsaPartidas ? r.NombrePartida.Trim() : string.Empty, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase);
+            foreach (var partida in partidas)
+            {
+                string nombrePartida = string.IsNullOrWhiteSpace(partida.Key) ? "Sin partida asignada" : partida.Key;
+                foreach (var r in partida)
+                {
+                    string descripcion = string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.ProductoNombre : r.DescripcionLibre;
+                    string articulo = string.IsNullOrWhiteSpace(r.ProductoCodigo) || r.ProductoCodigo == "CONCEPTO"
+                        ? descripcion : $"{r.ProductoCodigo} · {descripcion}";
+                    string cantidad = $"{r.Cantidad:0.##} {r.UnidadCompra}";
+                    var ofertas = new List<(int Opcion, int Id, string Nombre, decimal Precio, int Entrega)>
+                    {
+                        (1, r.Proveedor1Id, r.Proveedor1Nombre, r.PrecioConIva1, r.DiasEntrega1),
+                        (2, r.Proveedor2Id, r.Proveedor2Nombre, r.PrecioConIva2, r.DiasEntrega2),
+                        (3, r.Proveedor3Id, r.Proveedor3Nombre, r.PrecioConIva3, r.DiasEntrega3)
+                    };
+                    ofertas.AddRange(r.ProveedoresExtra.Select(ex =>
+                        (ex.NumeroOpcion, ex.ProveedorId, ex.ProveedorNombre, ex.PrecioConIva, ex.DiasEntrega)));
+                    var cotizadas = ofertas.Where(o => o.Id > 0 && o.Precio > 0)
+                        .OrderBy(o => o.Precio).ThenBy(o => o.Nombre, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+                    void AgregarFila(string proveedor, string precio, string entrega, string decision)
+                    {
+                        var detalle = new[] { articulo, cantidad, proveedor, precio, entrega, decision };
+                        filas.Add(sol.UsaPartidas ? new[] { nombrePartida }.Concat(detalle).ToArray() : detalle);
+                    }
+
+                    if (cotizadas.Count == 0)
+                        AgregarFila("Sin cotizar", "—", "—", "Sin adjudicar");
+                    foreach (var oferta in cotizadas)
+                    {
+                        string decision = oferta.Opcion == r.ProveedorGanadorIndice
+                            ? (r.TieneOcGenerada ? r.OrdenCompraFolio : "Adjudicada") : string.Empty;
+                        AgregarFila(Proveedor.ExtraerNombreComercialCorto(oferta.Nombre),
+                            $"${oferta.Precio:N2}", $"{oferta.Entrega} d", decision);
+                    }
+                }
+            }
+        }
 
         var adjudicadosPorProv = renglones
             .Where(r => r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
@@ -519,7 +720,7 @@ public static class BarcodePrintService
             filasTabla: filas,
             totales: new List<(string, string)>
             {
-                ("Partidas Analizadas:", renglones.Count.ToString()),
+                ("Artículos analizados:", renglones.Count.ToString()),
                 ("Proveedores Adjudicados:", adjudicadosPorProv.Count.ToString()),
                 ("Total Adjudicado c/IVA:", $"${totalEstimadoConIva:N2}")
             },
@@ -529,15 +730,10 @@ public static class BarcodePrintService
             firmaDerecha: "Vo.Bo.: Dirección General",
             tituloTablaSecundaria: "TABLA FINAL DE TOTALES POR PROVEEDOR ADJUDICADO",
             encabezadosTablaSecundaria: encTablaFinal,
-            filasTablaSecundaria: filasTablaFinal);
+            filasTablaSecundaria: filasTablaFinal,
+            tablasPartidas: tablasPartidas);
 
-        if (soloDescargar)
-        {
-            GuardarDocumentoEnArchivo(owner, $"Comparativa_{sol.Folio}", hoja);
-            return;
-        }
-
-        AbrirVentanaVistaPreviaCarta(owner, $"Comparativa {sol.Folio}", hoja);
+        return hoja;
     }
 
     public static void MostrarVistaPreviaEImprimirOrdenCompra(Window owner, OrdenCompra oc, bool soloDescargar = false)
@@ -932,6 +1128,97 @@ public static class BarcodePrintService
         AbrirVentanaVistaPreviaCarta(owner, tieneDevolucion ? $"Vale de Devolución de Herramienta {pre.Folio}" : $"Vale de Préstamo {pre.Folio}", hoja);
     }
 
+    public static void MostrarVistaPreviaEImprimirRevisionSemanalVehiculo(
+        Window owner,
+        VehiculoFlotilla veh,
+        RevisionSemanalVehiculo? rev = null,
+        bool soloDescargar = false)
+    {
+        string folio = rev != null && !string.IsNullOrWhiteSpace(rev.FolioRevision) ? rev.FolioRevision : veh.CodigoVehiculo;
+        string fecha = rev != null && !string.IsNullOrWhiteSpace(rev.Fecha) ? rev.Fecha : DateTime.Today.ToString("yyyy-MM-dd");
+        string responsable = rev != null && !string.IsNullOrWhiteSpace(rev.ResponsableInspector) ? rev.ResponsableInspector : veh.ResponsableHabitual;
+        int kmActual = rev != null && rev.KilometrajeRegistrado > 0 ? rev.KilometrajeRegistrado : veh.KilometrajeActual;
+        string nivelComb = rev != null && !string.IsNullOrWhiteSpace(rev.NivelCombustible) ? rev.NivelCombustible : "3/4 Tanque";
+
+        string estLlantas = rev?.EstadoLlantas ?? "OK";
+        string estFluidos = rev?.EstadoNivelesFluidos ?? "OK";
+        string estFrenos = rev?.EstadoFrenosLuces ?? "OK";
+        string estCarroceria = rev?.EstadoCarroceriaLimpieza ?? "OK";
+
+        var filasChecklist = new List<string[]>
+        {
+            new[] { "1", "Odómetro y Nivel de Combustible", $"Lectura actual: {kmActual:N0} km | Nivel tanque: {nivelComb}", "Verificado", "Registrar kilometraje real en tablero" },
+            new[] { "2", "Neumáticos y Llanta de Refacción", "Presión adecuada (35-40 PSI), dibujo, birlos, gato y llave de cruz", estLlantas, estLlantas == "OK" ? "Condición óptima de rodaje" : "Revisar presión o desgaste" },
+            new[] { "3", "Niveles de Fluidos de Motor", "Aceite de motor, anticongelante, líquido de frenos, dirección y limpiaparabrisas", estFluidos, estFluidos == "OK" ? "Niveles dentro de rango" : "Rellenar o programar revisión" },
+            new[] { "4", "Sistema de Frenos, Luces y Batería", "Freno de pedal y mano, faros, intermitentes, stop, reversa y claxon", estFrenos, estFrenos == "OK" ? "Operación segura" : "Atender antes de salir a ruta" },
+            new[] { "5", "Carrocería, Cristales y Limpieza", "Parabrisas, espejos laterales, caja/batea, extintor y tarjeta de circulación", estCarroceria, estCarroceria == "OK" ? "Sin golpes nuevos / Limpia" : "Ver detalle en observaciones" },
+            new[] { "6", "Programación de Mantenimiento Preventivo", $"Intervalo configurado: cada {veh.IntervaloEfectivoKm:N0} km | Meta: {veh.MetaServicioCalculadaKm:N0} km", veh.RequiereServicioPronto ? "PRÓXIMO / ATENDER" : "AL DÍA", $"Estimación próximo servicio: {veh.EstimacionProximoServicioFechaTexto}" }
+        };
+
+        var filasGastosRecientes = veh.HistorialGastos
+            .Take(8)
+            .Select(g => new[]
+            {
+                g.Fecha,
+                g.TipoGasto,
+                $"{g.KilometrajeRegistro:N0} km",
+                g.LitrosCargados > 0 ? $"{g.LitrosCargados:0.##} L (@ ${g.PrecioPorLitro:0.00})" : "-",
+                string.IsNullOrWhiteSpace(g.ProveedorTaller) ? "-" : g.ProveedorTaller,
+                $"{g.MontoConIva:C2}"
+            }).ToList();
+
+        if (filasGastosRecientes.Count == 0)
+        {
+            filasGastosRecientes.Add(new[] { fecha, "Sin cargos recientes", $"{kmActual:N0} km", "-", "-", "$0.00" });
+        }
+
+        var metadatos = new List<(string etiq, string val)>
+        {
+            ("Unidad / Placas:", $"{veh.CodigoVehiculo} — {veh.MarcaModelo} (Modelo {veh.Anio}) | Placas: {veh.Placas}"),
+            ("Conductor / Inspector:", string.IsNullOrWhiteSpace(responsable) ? "Por asignar" : responsable),
+            ("Odómetro y Combustible:", $"Actual: {kmActual:N0} km (Recorridos periodo: {veh.KilometrosRecorridosPeriodo:N0} km) | Tanque: {nivelComb} ({veh.TipoCombustible})"),
+            ("Mantenimiento Preventivo:", $"Cada {veh.IntervaloEfectivoKm:N0} km | Próximo a los {veh.MetaServicioCalculadaKm:N0} km | Fecha estimada: {veh.EstimacionProximoServicioFechaTexto}"),
+            ("Indicadores CPK y Seguro:", $"CPK: {veh.CostoPorKilometroTexto} | Rendimiento: {veh.RendimientoTexto} | Vigencia Seguro: {(string.IsNullOrWhiteSpace(veh.VigenciaSeguro) ? "Por registrar" : veh.VigenciaSeguro)}")
+        };
+
+        var totales = new List<(string, string)>
+        {
+            ("Odómetro Registrado:", $"{kmActual:N0} km"),
+            ("Próximo Servicio:", $"{veh.MetaServicioCalculadaKm:N0} km"),
+            ("Gasto Acumulado:", $"{veh.GastoTotalAcumulado:C2}"),
+            ("Costo por Km (CPK):", veh.CostoPorKilometroTexto)
+        };
+
+        string obsTexto = rev != null && !string.IsNullOrWhiteSpace(rev.Observaciones)
+            ? rev.Observaciones
+            : (string.IsNullOrWhiteSpace(veh.Notas) ? "Formato semanal de inspección física y control de odómetro de flotilla." : veh.Notas);
+
+        var hoja = ConstruirHojaCartaDocumento(
+            tituloDocumento: "BITÁCORA Y CHECK-LIST SEMANAL DE ESTADO DE CAMIONETA",
+            subtitulo: "Lebaref | Control de Flotilla Vehicular, Odómetro, Rendimiento y Mantenimiento Preventivo",
+            folioCodigoBarras: folio,
+            fecha: fecha,
+            metadatos: metadatos,
+            encabezadosTabla: new[] { "#", "Rubro de Inspección Semanal", "Puntos Revisados", "Estado", "Diagnóstico / Acción" },
+            filasTabla: filasChecklist,
+            totales: totales,
+            notas: obsTexto,
+            firmaIzquierda: $"Conductor / Responsable: {(string.IsNullOrWhiteSpace(responsable) ? "____________________" : responsable)}",
+            firmaCentro: "Revisión Operativa / Almacén",
+            firmaDerecha: "Vo.Bo. Administración / Flotilla",
+            tituloTablaSecundaria: "HISTORIAL RECIENTE DE CARGAS DE COMBUSTIBLE Y SERVICIOS DE LA UNIDAD",
+            encabezadosTablaSecundaria: new[] { "Fecha", "Tipo de Cargo", "Odómetro", "Litros / Precio", "Estación / Taller", "Importe c/IVA" },
+            filasTablaSecundaria: filasGastosRecientes);
+
+        if (soloDescargar)
+        {
+            GuardarDocumentoEnArchivo(owner, $"ChecklistSemanal_{veh.CodigoVehiculo}_{fecha}", hoja);
+            return;
+        }
+
+        AbrirVentanaVistaPreviaCarta(owner, $"Check-list Semanal {veh.CodigoVehiculo} ({folio})", hoja);
+    }
+
     // Dimensiones estándar fijas de Hoja Tamaño Carta (US Letter: 8.5" x 11.0" a 96 DPI)
     public const double AnchoHojaCartaDip = 816.0;
     public const double AltoHojaCartaDip = 1056.0;
@@ -1267,6 +1554,21 @@ public static class BarcodePrintService
         {
             double starWidth = c switch
             {
+                _ when encabezadosTabla.Length >= 4 && encabezadosTabla[1] == "Concepto" && encabezadosTabla[2] == "Cantidad" => c switch
+                {
+                    0 => 0.38,
+                    1 => 3.0,
+                    2 => 0.9,
+                    _ => 1.2
+                },
+                _ when encabezadosTabla[0] is "Partida" or "Artículo / Concepto" => encabezadosTabla[c] switch
+                {
+                    "Partida" => 1.45,
+                    "Artículo / Concepto" => 2.6,
+                    "Cant." or "Entrega" => 0.75,
+                    "Proveedor" => 1.55,
+                    _ => 1.0
+                },
                 0 when encabezadosTabla[0] == "#" => 0.38,
                 1 when encabezadosTabla[0] == "#" && encabezadosTabla.Length >= 7 => 0.85,
                 2 when encabezadosTabla.Length >= 7 => 2.05,
@@ -1498,6 +1800,21 @@ public static class BarcodePrintService
         return bloque;
     }
 
+    private sealed record TablaPartidaImpresion(string Nombre, string[] Encabezados, List<string[]> Filas);
+
+    private static StackPanel CrearCabeceraPartida(TablaPartidaImpresion tabla)
+    {
+        var cabecera = new StackPanel { Margin = new Thickness(0, 7, 0, 0) };
+        cabecera.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+            Padding = new Thickness(7, 5, 7, 5),
+            Child = new TextBlock { Text = tabla.Nombre, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap }
+        });
+        cabecera.Children.Add(CrearFilaTablaDocumento(tabla.Encabezados, tabla.Encabezados, true, 0));
+        return cabecera;
+    }
+
     private static FrameworkElement ConstruirHojaCartaDocumento(
         string tituloDocumento,
         string subtitulo,
@@ -1514,7 +1831,8 @@ public static class BarcodePrintService
         string? clausulaLegal = null,
         string? tituloTablaSecundaria = null,
         string[]? encabezadosTablaSecundaria = null,
-        List<string[]>? filasTablaSecundaria = null)
+        List<string[]>? filasTablaSecundaria = null,
+        List<TablaPartidaImpresion>? tablasPartidas = null)
     {
         const double altoPiePagina = 26.0;
         double altoDisponiblePorHoja = AltoContenidoUtilCartaDip - altoPiePagina; // 974 DIPs útiles por hoja
@@ -1533,10 +1851,15 @@ public static class BarcodePrintService
         double altoBloqueCierre = MedirAltoElementoCarta(bloqueCierre);
 
         // Pre-medimos cada fila de datos para paginar sin cortar ninguna fila a la mitad
-        var altosFilas = new double[filasTabla.Count];
-        for (int i = 0; i < filasTabla.Count; i++)
+        var filasImpresas = tablasPartidas?.SelectMany(t => t.Filas.Select((fila, indice) =>
+            (tabla: (TablaPartidaImpresion?)t, fila, indice))).ToList()
+            ?? filasTabla.Select((fila, indice) => (tabla: (TablaPartidaImpresion?)null, fila, indice)).ToList();
+        var altosCabeceras = tablasPartidas?.ToDictionary(t => t, t => MedirAltoElementoCarta(CrearCabeceraPartida(t)));
+        var altosFilas = new double[filasImpresas.Count];
+        for (int i = 0; i < filasImpresas.Count; i++)
         {
-            var filaVisual = CrearFilaTablaDocumento(encabezadosTabla, filasTabla[i], false, i);
+            var (tabla, fila, indice) = filasImpresas[i];
+            var filaVisual = CrearFilaTablaDocumento(tabla?.Encabezados ?? encabezadosTabla, fila, false, indice);
             altosFilas[i] = MedirAltoElementoCarta(filaVisual);
         }
 
@@ -1546,22 +1869,26 @@ public static class BarcodePrintService
         int filaActual = 0;
         bool esPrimeraPagina = true;
 
-        if (filasTabla.Count == 0)
+        if (filasImpresas.Count == 0)
         {
             definicionPaginas.Add((false, new List<int>(), true));
         }
         else
         {
-            while (filaActual < filasTabla.Count)
+            while (filaActual < filasImpresas.Count)
             {
                 double altoEnc = esPrimeraPagina ? altoEncabezadoP1 : altoEncabezadoCont;
-                double presupuestoTabla = altoDisponiblePorHoja - altoEnc - altoCabeceraTabla - 8.0;
+                double altoCabeceraGeneral = tablasPartidas == null ? altoCabeceraTabla : 0;
+                double presupuestoTabla = altoDisponiblePorHoja - altoEnc - altoCabeceraGeneral - 8.0;
                 var filasDeEstaPagina = new List<int>();
                 double acumuladoFilas = 0;
 
-                while (filaActual < filasTabla.Count)
+                while (filaActual < filasImpresas.Count)
                 {
                     double altoFila = altosFilas[filaActual];
+                    var tabla = filasImpresas[filaActual].tabla;
+                    if (tabla != null && (filasDeEstaPagina.Count == 0 || filasImpresas[filaActual].indice == 0))
+                        altoFila += altosCabeceras![tabla];
                     if (filasDeEstaPagina.Count > 0 && acumuladoFilas + altoFila > presupuestoTabla)
                     {
                         break;
@@ -1571,12 +1898,12 @@ public static class BarcodePrintService
                     filaActual++;
                 }
 
-                bool esUltimaTandaDeFilas = filaActual >= filasTabla.Count;
+                bool esUltimaTandaDeFilas = filaActual >= filasImpresas.Count;
                 bool cabeCierreEnEstaHoja = false;
 
                 if (esUltimaTandaDeFilas)
                 {
-                    double espacioRestante = altoDisponiblePorHoja - altoEnc - altoCabeceraTabla - acumuladoFilas - 8.0;
+                    double espacioRestante = presupuestoTabla - acumuladoFilas;
                     cabeCierreEnEstaHoja = espacioRestante >= altoBloqueCierre;
                 }
 
@@ -1635,11 +1962,17 @@ public static class BarcodePrintService
             if (def.indicesFilas.Count > 0 || pIndex == 0)
             {
                 var tablaPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-                tablaPanel.Children.Add(CrearFilaTablaDocumento(encabezadosTabla, encabezadosTabla, true, 0));
+                if (tablasPartidas == null || filasImpresas.Count == 0)
+                    tablaPanel.Children.Add(CrearFilaTablaDocumento(encabezadosTabla, encabezadosTabla, true, 0));
 
+                TablaPartidaImpresion? tablaAnterior = null;
                 foreach (int idxFila in def.indicesFilas)
                 {
-                    tablaPanel.Children.Add(CrearFilaTablaDocumento(encabezadosTabla, filasTabla[idxFila], false, idxFila));
+                    var (tabla, fila, indice) = filasImpresas[idxFila];
+                    if (tabla != null && !ReferenceEquals(tabla, tablaAnterior))
+                        tablaPanel.Children.Add(CrearCabeceraPartida(tabla));
+                    tablaPanel.Children.Add(CrearFilaTablaDocumento(tabla?.Encabezados ?? encabezadosTabla, fila, false, indice));
+                    tablaAnterior = tabla;
                 }
 
                 if (!def.incluyeCierre && pIndex < totalPaginas - 1)

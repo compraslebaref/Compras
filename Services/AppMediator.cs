@@ -18,7 +18,8 @@ public enum ModuloSistema
     AlmacenPos = 5,
     FacturasXml = 6,
     Analisis = 7,
-    Directorios = 8
+    Directorios = 8,
+    Flotilla = 9
 }
 
 // ==================== MENSAJES Y EVENTOS DEL PATRÓN MEDIATOR ====================
