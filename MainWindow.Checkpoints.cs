@@ -145,298 +145,12 @@ public partial class MainWindow
             : "Compras";
 
         DatabaseService.GuardarRolOperativoActivo(_rolOperativoActual);
-
-        bool esAlmacen = EsModoAlmacen;
-        var visPrecios = esAlmacen ? Visibility.Collapsed : Visibility.Visible;
-
-        // Actualizar recurso dinámico global para ocultar/mostrar costos en tarjetas y paneles
-        Application.Current.Resources["VisibilidadPreciosPerfil"] = visPrecios;
-
-        if (BtnRolOperativo != null)
-        {
-            var usrActivo = DatabaseService.ObtenerUsuarioActivo();
-            BtnRolOperativo.Content = $"{usrActivo.Nombre} · {_rolOperativoActual}";
-            BtnRolOperativo.ToolTip = $"Usuario en sesión: {usrActivo.Nombre} ({usrActivo.Puesto}) | Vista: {_rolOperativoActual}. Clic para cambiar de usuario, perfil o consultar la Bitácora Nominal.";
-            BtnRolOperativo.Appearance = esAlmacen ? ControlAppearance.Secondary : ControlAppearance.Primary;
-        }
-
-        // Columnas de precios en DataGrids (no participan en el árbol visual directo de DynamicResource)
-        if (ColDashboardOcTotal != null) ColDashboardOcTotal.Visibility = visPrecios;
-        if (ColOrdenesTotal != null) ColOrdenesTotal.Visibility = visPrecios;
-
-        // Menús superiores y navegación lateral según perfil
-        if (MenuComprasTop != null) MenuComprasTop.Visibility = visPrecios;
-        if (MenuReportesTop != null) MenuReportesTop.Visibility = visPrecios;
-
-        if (NavComparativa != null) NavComparativa.Visibility = visPrecios;
-        if (NavFacturasXml != null) NavFacturasXml.Visibility = visPrecios;
-        if (NavAnalisis != null) NavAnalisis.Visibility = visPrecios;
-
-        if (NavOrdenes != null && !_sidebarColapsado)
-            NavOrdenes.Content = esAlmacen ? "Recepción OC" : "Órdenes de Compra";
-
-        // Ajustar KPI Grid en Inicio (4 KPIs en Almacén, 5 en Compras)
-        if (UgKpisInicio != null && ActualWidth >= 1100)
-            UgKpisInicio.Columns = esAlmacen ? 4 : 5;
-
-        // Si estaba en una pestaña exclusiva de Compras (Comparativa=3, Facturas=6, Análisis=7), redirigir a Inicio
-        if (navegarSiPestanaOculta && esAlmacen && MainTabControl != null)
-        {
-            int idx = MainTabControl.SelectedIndex;
-            if (idx is 3 or 6 or 7)
-                CambiarSeccion(0);
-        }
-
-        // Refrescar ficha de producto si hay uno cargado para ocultar/mostrar costos
-        if (_productoEnFicha != null)
-            ActualizarFichaProducto(_productoEnFicha);
-
-        ActualizarBadgeNotificacionesCheckpoints();
+        AplicarPermisosSesionActual(navegarSiPestanaOculta);
     }
 
     private void BtnRolOperativo_Click(object sender, RoutedEventArgs e)
     {
-        var win = new Window
-        {
-            Title = "Usuario Activo, Rol Operativo y Bitácora Nominal",
-            Width = 580,
-            Height = 560,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = this,
-            ResizeMode = ResizeMode.NoResize,
-            Background = Tk("ControlFillColorDefaultBrush"),
-            Foreground = Tk("TextFillColorPrimaryBrush")
-        };
-
-        var root = new StackPanel { Margin = new Thickness(18) };
-
-        var headerDock = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var btnBitacora = new Wpf.Ui.Controls.Button
-        {
-            Content = "Ver Bitácora por Usuario",
-            FontSize = 11.5,
-            Padding = new Thickness(10, 4, 10, 4),
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        DockPanel.SetDock(btnBitacora, Dock.Right);
-        headerDock.Children.Add(btnBitacora);
-        headerDock.Children.Add(new TextBlock
-        {
-            Text = "Sesión Nominal y Vista Operativa",
-            FontSize = 16,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-        root.Children.Add(headerDock);
-
-        root.Children.Add(new TextBlock
-        {
-            Text = "Seleccione qué persona está operando el sistema hoy. Cada movimiento (Solicitudes, OC, Recepciones, Salidas, Ajustes y Avisos) quedará registrado a su nombre en la bitácora nominal.",
-            FontSize = 11.5,
-            Foreground = Tk("TextFillColorSecondaryBrush"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10)
-        });
-
-        // Selector de Usuario Nominal + Alta rápida
-        var bdrUser = new Border
-        {
-            Padding = new Thickness(12, 10, 12, 10),
-            CornerRadius = new CornerRadius(6),
-            Background = Tk("SubtleFillColorSecondaryBrush"),
-            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 0, 12)
-        };
-        var spUser = new StackPanel();
-        spUser.Children.Add(new TextBlock { Text = "Usuario Nominal Activo:", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-        var gridUser = new Grid();
-        gridUser.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        gridUser.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var cboUsuario = new ComboBox { Margin = new Thickness(0, 0, 8, 0) };
-        var btnNuevoUsuario = new Wpf.Ui.Controls.Button { Content = "+ Nuevo Usuario", FontSize = 11.5, Padding = new Thickness(10, 5, 10, 5) };
-        Grid.SetColumn(cboUsuario, 0);
-        Grid.SetColumn(btnNuevoUsuario, 1);
-        gridUser.Children.Add(cboUsuario);
-        gridUser.Children.Add(btnNuevoUsuario);
-        spUser.Children.Add(gridUser);
-
-        var pnlAltaRapida = new Border
-        {
-            Visibility = Visibility.Collapsed,
-            Margin = new Thickness(0, 8, 0, 0),
-            Padding = new Thickness(8),
-            CornerRadius = new CornerRadius(5),
-            Background = Tk("ControlFillColorDefaultBrush"),
-            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1)
-        };
-        var gridAlta = new Grid();
-        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
-        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var txtNuevoNom = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Nombre (ej. Juan Pérez)", Margin = new Thickness(0, 0, 6, 0) };
-        var txtNuevoPuesto = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Puesto / Área", Margin = new Thickness(0, 0, 6, 0) };
-        var cboNuevoRol = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
-        cboNuevoRol.Items.Add("Compras");
-        cboNuevoRol.Items.Add("Almacén");
-        cboNuevoRol.Items.Add("Solicitante");
-        cboNuevoRol.Items.Add("Dirección");
-        cboNuevoRol.SelectedIndex = 0;
-        var btnGuardarUsr = new Wpf.Ui.Controls.Button { Content = "Guardar", Appearance = ControlAppearance.Primary, Padding = new Thickness(10, 4, 10, 4) };
-        Grid.SetColumn(txtNuevoNom, 0);
-        Grid.SetColumn(txtNuevoPuesto, 1);
-        Grid.SetColumn(cboNuevoRol, 2);
-        Grid.SetColumn(btnGuardarUsr, 3);
-        gridAlta.Children.Add(txtNuevoNom);
-        gridAlta.Children.Add(txtNuevoPuesto);
-        gridAlta.Children.Add(cboNuevoRol);
-        gridAlta.Children.Add(btnGuardarUsr);
-        pnlAltaRapida.Child = gridAlta;
-        spUser.Children.Add(pnlAltaRapida);
-        bdrUser.Child = spUser;
-        root.Children.Add(bdrUser);
-
-        var rbCompras = new RadioButton
-        {
-            IsChecked = !EsModoAlmacen,
-            Margin = new Thickness(0, 0, 0, 8),
-            Content = new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock { Text = "Vista Compras (Abastecimiento, Cotizaciones, OC y Facturas XML)", FontWeight = FontWeights.SemiBold, FontSize = 12.5 },
-                    new TextBlock
-                    {
-                        Text = "Aprueba solicitudes, cotiza en Comparativa, emite OC, registra Recepción Directa a Obra y sube Facturas XML. Visibilidad total de costos.",
-                        FontSize = 11,
-                        Foreground = Tk("TextFillColorSecondaryBrush"),
-                        TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 490
-                    }
-                }
-            }
-        };
-
-        var rbAlmacen = new RadioButton
-        {
-            IsChecked = EsModoAlmacen,
-            Margin = new Thickness(0, 0, 0, 12),
-            Content = new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock { Text = "Vista Almacén (Recepción, Bodega, Salidas, Sobrantes y Herramientas)", FontWeight = FontWeights.SemiBold, FontSize = 12.5 },
-                    new TextBlock
-                    {
-                        Text = "Recibe mercancía, ubica en anaqueles (A–F), despacha Salidas (SAL), reingresa Sobrantes de Obra, registra Ajustes/Merma (AJU) y controla Préstamos (PRE). Sin costos visibles.",
-                        FontSize = 11,
-                        Foreground = Tk("TextFillColorSecondaryBrush"),
-                        TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 490
-                    }
-                }
-            }
-        };
-
-        void RecargarUsuariosCombo(int? seleccionarId = null)
-        {
-            var lista = DatabaseService.ObtenerUsuariosSistema(soloActivos: true);
-            cboUsuario.ItemsSource = lista;
-            int idTarget = seleccionarId ?? DatabaseService.ObtenerUsuarioActivo().Id;
-            cboUsuario.SelectedItem = lista.FirstOrDefault(u => u.Id == idTarget) ?? lista.FirstOrDefault();
-        }
-        RecargarUsuariosCombo();
-
-        cboUsuario.SelectionChanged += (_, _) =>
-        {
-            if (cboUsuario.SelectedItem is UsuarioSistema uSel)
-            {
-                if (string.Equals(uSel.RolPredeterminado, "Almacén", StringComparison.OrdinalIgnoreCase))
-                    rbAlmacen.IsChecked = true;
-                else if (string.Equals(uSel.RolPredeterminado, "Compras", StringComparison.OrdinalIgnoreCase))
-                    rbCompras.IsChecked = true;
-            }
-        };
-
-        btnNuevoUsuario.Click += (_, _) =>
-        {
-            pnlAltaRapida.Visibility = pnlAltaRapida.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-            if (pnlAltaRapida.Visibility == Visibility.Visible) txtNuevoNom.Focus();
-        };
-
-        btnGuardarUsr.Click += (_, _) =>
-        {
-            string nom = txtNuevoNom.Text?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(nom))
-            {
-                DialogoFluent.Show(win, "Escriba el nombre del usuario.", "Nombre requerido", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            string rolPred = cboNuevoRol.SelectedItem?.ToString() ?? "Compras";
-            string puesto = string.IsNullOrWhiteSpace(txtNuevoPuesto.Text) ? rolPred : txtNuevoPuesto.Text.Trim();
-            int nuevoId = DatabaseService.GuardarUsuarioSistema(new UsuarioSistema
-            {
-                Username = nom.ToLowerInvariant().Replace(" ", "."),
-                NombreCompleto = nom,
-                Rol = rolPred,
-                Puesto = puesto,
-                Activo = true
-            });
-            txtNuevoNom.Clear();
-            txtNuevoPuesto.Clear();
-            pnlAltaRapida.Visibility = Visibility.Collapsed;
-            RecargarUsuariosCombo(nuevoId);
-        };
-
-        btnBitacora.Click += (_, _) => MostrarModalBitacoraUsuarios(win);
-
-        root.Children.Add(rbCompras);
-        root.Children.Add(rbAlmacen);
-
-        var bdrFuturos = new Border
-        {
-            Padding = new Thickness(12, 8, 12, 8),
-            CornerRadius = new CornerRadius(6),
-            Background = Tk("SubtleFillColorSecondaryBrush"),
-            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 0, 14),
-            Child = new TextBlock
-            {
-                Text = "Tip: Desde el botón 'Avisos' de la barra superior puede enviar mensajes directos (@Usuario o por rol) vinculados a cualquier folio (SOL, OC, ENT, SAL, PRE) para dejar acuerdos registrados.",
-                FontSize = 11,
-                Foreground = Tk("TextFillColorSecondaryBrush"),
-                TextWrapping = TextWrapping.Wrap
-            }
-        };
-        root.Children.Add(bdrFuturos);
-
-        var pnlBotones = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        var btnCancelar = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
-        var btnAplicar = new Wpf.Ui.Controls.Button { Content = "Aplicar Usuario y Rol", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
-
-        btnCancelar.Click += (_, _) => win.DialogResult = false;
-        btnAplicar.Click += (_, _) =>
-        {
-            if (cboUsuario.SelectedItem is UsuarioSistema uElegido)
-            {
-                DatabaseService.GuardarUsuarioActivo(uElegido.Id);
-            }
-            string nuevoRol = rbAlmacen.IsChecked == true ? "Almacén" : "Compras";
-            AplicarRolOperativo(nuevoRol);
-            DatabaseService.RegistrarBitacoraUsuario("Sesión", "CAMBIO_SESION", "", $"Sesión activa cambiada a '{DatabaseService.ObtenerUsuarioActivo().Nombre}' en vista '{nuevoRol}'.");
-            win.DialogResult = true;
-        };
-
-        pnlBotones.Children.Add(btnCancelar);
-        pnlBotones.Children.Add(btnAplicar);
-        root.Children.Add(pnlBotones);
-
-        win.Content = root;
-        win.ShowDialog();
+        MostrarDialogoSesionYCuenta();
     }
 
     // =========================================================================
@@ -791,6 +505,10 @@ public partial class MainWindow
 
     private void BtnFiniquitarOcParcial_Click(object sender, RoutedEventArgs e)
     {
+        if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeAutorizarOc,
+                "Finiquitar o cerrar parcialmente una Orden de Compra", "Responsable de Compras o Dirección"))
+            return;
+
         if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
         {
             DialogoFluent.Show(this, "Seleccione primero una Orden de Compra.", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -825,6 +543,10 @@ public partial class MainWindow
 
     private void BtnEntradaSinOcAlmacen_Click(object sender, RoutedEventArgs e)
     {
+        if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeRecibirAlmacen,
+                "Registrar entrada física directa de material a Almacén", "Auxiliar de Almacén o Responsable de Compras"))
+            return;
+
         var win = new Window
         {
             Title = "Registrar Entrada Directa a Almacén sin Orden de Compra (Por Regularizar - CP-5C)",
@@ -2233,6 +1955,10 @@ public partial class MainWindow
 
         if (string.Equals(oc.Estatus, "Pendiente Vo.Bo. Dirección", StringComparison.OrdinalIgnoreCase))
         {
+            if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeAutorizarOc,
+                    $"Autorizar Vo.Bo. de la Orden de Compra {oc.Folio}", "Responsable de Compras o Dirección"))
+                return;
+
             bool esCredito = oc.CondicionPago.StartsWith("Crédito", StringComparison.OrdinalIgnoreCase);
             string nuevoEst = esCredito ? "Emitida" : "Autorizada / Pendiente Pago Finanzas";
             string fProg = string.IsNullOrWhiteSpace(oc.FechaProgramadaPago) ? DateTime.Today.AddDays(1).ToString("yyyy-MM-dd") : oc.FechaProgramadaPago;
@@ -2244,6 +1970,9 @@ public partial class MainWindow
 
         if (string.Equals(oc.Estatus, "Autorizada / Pendiente Pago Finanzas", StringComparison.OrdinalIgnoreCase))
         {
+            if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeProgramarPagosOc,
+                    $"Confirmar pago de la Orden de Compra {oc.Folio}", "Responsable de Compras, Dirección o Finanzas"))
+                return;
             string fProg = string.IsNullOrWhiteSpace(oc.FechaProgramadaPago) ? DateTime.Today.ToString("yyyy-MM-dd") : oc.FechaProgramadaPago;
             string tiempoSugerido = DatabaseService.CalcularTiempoRelativoEntregaOc(oc, fProg);
 
@@ -2329,6 +2058,10 @@ public partial class MainWindow
 
     private void BtnDashboardOcCerrarPendiente_Click(object sender, RoutedEventArgs e)
     {
+        if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeAutorizarOc,
+                "Cerrar o cancelar una Orden de Compra pendiente", "Responsable de Compras o Dirección"))
+            return;
+
         if (sender is not FrameworkElement { DataContext: OrdenCompra oc })
             return;
 

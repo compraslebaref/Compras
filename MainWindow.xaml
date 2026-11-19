@@ -97,14 +97,17 @@
                     </MenuItem>
 
                     <MenuItem Header="Sistema" Padding="7,4">
-                        <MenuItem Header="Usuarios, Sesión Activa y Bitácora Nominal" Click="BtnRolOperativo_Click" />
-                        <MenuItem Header="Bandeja de Avisos y Mensajes entre Usuarios (@Usuario)" Click="BtnNotificacionesCheckpoints_Click" />
+                        <MenuItem Header="Mi Sesión, Permisos y Cambiar de Usuario..." Click="BtnRolOperativo_Click" FontWeight="Bold" />
+                        <MenuItem Header="Administrar Usuarios, Auxiliares y Contraseñas..." Click="MenuAdministrarUsuarios_Click" />
+                        <MenuItem Header="Servidor Multiusuario ERPNext y Migración..." Click="MenuSincronizarErpNext_Click" />
                         <Separator />
-                        <MenuItem Header="Activar / Cerrar Sesión Perfil Administrador" Click="BtnPerfilAdmin_Click" />
-                        <MenuItem Header="Cambiar PIN de Administrador" Click="BtnCambiarPinAdmin_Click" />
+                        <MenuItem Header="Bandeja de Avisos y Mensajes entre Usuarios (@Usuario)" Click="BtnNotificacionesCheckpoints_Click" />
+                        <MenuItem Header="Cambiar PIN de Emergencia de Administrador" Click="BtnCambiarPinAdmin_Click" />
                         <MenuItem Header="Crear Respaldo Local de Base de Datos (SQLite)" Click="BtnRespaldarDb_Click" />
                         <Separator />
                         <MenuItem Header="Directorios Maestros (Proveedores, Proyectos, Personal)" Click="MenuIrDirectorios_Click" />
+                        <Separator />
+                        <MenuItem Header="Cerrar Sesión" Click="MenuCerrarSesion_Click" />
                     </MenuItem>
                 </Menu>
 

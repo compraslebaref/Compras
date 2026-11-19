@@ -1,0 +1,230 @@
+<ui:FluentWindow x:Class="SistemaComprasAlmacen.LoginWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="Lebaref | Iniciar Sesión"
+                 Width="480"
+                 Height="610"
+                 MinWidth="450"
+                 MinHeight="560"
+                 ResizeMode="NoResize"
+                 WindowStartupLocation="CenterScreen"
+                 Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                 Background="{DynamicResource ApplicationBackgroundBrush}"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     Title="Lebaref · Acceso al Sistema"
+                     ShowMaximize="False"
+                     ShowMinimize="True" />
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="28,10,28,24">
+            <StackPanel>
+                <!-- Cabecera de Identidad -->
+                <DockPanel Margin="0,4,0,14">
+                    <ui:Button x:Name="BtnToggleConfigServidor"
+                               DockPanel.Dock="Right"
+                               Content="⚙ Servidor"
+                               FontSize="11"
+                               Padding="9,4"
+                               VerticalAlignment="Top"
+                               ToolTip="Configurar dirección del servidor multiusuario ERPNext"
+                               Click="BtnToggleConfigServidor_Click" />
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="44"
+                                Height="44"
+                                CornerRadius="10"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                Margin="0,0,12,0">
+                            <ui:SymbolIcon Symbol="BoxMultiple24" Foreground="White" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="LEBAREF" FontWeight="Bold" FontSize="19" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <TextBlock Text="Compras, Almacén y Control Operativo" FontSize="11.5" Opacity="0.72" />
+                        </StackPanel>
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Indicador de estado del Servidor ERPNext -->
+                <Border x:Name="BdrEstadoServidor"
+                        Padding="10,7"
+                        CornerRadius="6"
+                        Margin="0,0,0,12"
+                        Background="#F8FAFC"
+                        BorderBrush="#CBD5E1"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ui:Button DockPanel.Dock="Right"
+                                   Content="Reintentar"
+                                   FontSize="10.5"
+                                   Padding="7,2"
+                                   Margin="8,0,0,0"
+                                   Click="BtnProbarServidor_Click" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="DotEstadoServidor" Width="9" Height="9" Fill="#94A3B8" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="TxtEstadoServidor"
+                                       Text="Verificando conexión con servidor ERPNext..."
+                                       FontSize="11.2"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Panel colapsable para configurar URL del servidor -->
+                <Border x:Name="PnlConfigServidor"
+                        Visibility="Collapsed"
+                        Padding="12,10"
+                        CornerRadius="6"
+                        Margin="0,0,0,12"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="Dirección del Servidor ERPNext (Oficina o Local)" FontSize="11.5" FontWeight="Bold" Margin="0,0,0,4" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox x:Name="TxtUrlServidor"
+                                        Grid.Column="0"
+                                        Margin="0,0,6,0"
+                                        FontFamily="Consolas"
+                                        PlaceholderText="http://127.0.0.1:8186/" />
+                            <ui:Button Grid.Column="1"
+                                       Content="Guardar"
+                                       Appearance="Primary"
+                                       Padding="12,5"
+                                       Click="BtnGuardarServidor_Click" />
+                        </Grid>
+                        <TextBlock Text="Use http://127.0.0.1:8186/ para pruebas en esta PC o https://servidor-oficina/ para red multiusuario."
+                                   FontSize="10.5"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Tarjeta Principal de Inicio de Sesión -->
+                <Border Padding="20,18"
+                        CornerRadius="10"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                        BorderThickness="1"
+                        Effect="{StaticResource CardElevationShadow}">
+                    <StackPanel>
+                        <TextBlock Text="Iniciar Sesión" FontSize="16.5" FontWeight="Bold" Margin="0,0,0,2" />
+                        <TextBlock Text="Ingrese con su usuario y contraseña para cargar sus módulos y permisos asignados."
+                                   FontSize="11.5"
+                                   Opacity="0.72"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14" />
+
+                        <!-- Selección rápida opcional de cuentas registradas -->
+                        <TextBlock Text="Selección rápida de cuenta (opcional)" FontSize="11.2" FontWeight="SemiBold" Opacity="0.8" Margin="0,0,0,4" />
+                        <ComboBox x:Name="CboUsuariosRapidos"
+                                  Margin="0,0,0,12"
+                                  SelectionChanged="CboUsuariosRapidos_SelectionChanged" />
+
+                        <TextBlock Text="Usuario o correo electrónico *" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ui:TextBox x:Name="TxtUsuario"
+                                    PlaceholderText="Ej. oscar, auxiliar, almacen o correo@lebaref.test"
+                                    Margin="0,0,0,12"
+                                    TextChanged="TxtUsuario_TextChanged"
+                                    KeyDown="CampoLogin_KeyDown" />
+
+                        <DockPanel Margin="0,0,0,4">
+                            <CheckBox x:Name="ChkMostrarPassword"
+                                      DockPanel.Dock="Right"
+                                      Content="Mostrar"
+                                      FontSize="11"
+                                      VerticalAlignment="Center"
+                                      Checked="ChkMostrarPassword_Changed"
+                                      Unchecked="ChkMostrarPassword_Changed" />
+                            <TextBlock Text="Contraseña *" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </DockPanel>
+
+                        <Grid Margin="0,0,0,12">
+                            <PasswordBox x:Name="PwdContrasena"
+                                         FontSize="13"
+                                         Padding="10,6"
+                                         MinHeight="32"
+                                         KeyDown="CampoLogin_KeyDown" />
+                            <ui:TextBox x:Name="TxtContrasenaVisible"
+                                        Visibility="Collapsed"
+                                        FontSize="12.5"
+                                        MinHeight="32"
+                                        KeyDown="CampoLogin_KeyDown" />
+                        </Grid>
+
+                        <!-- Resumen en vivo del perfil detectado -->
+                        <Border x:Name="BdrResumenRol"
+                                Padding="10,8"
+                                CornerRadius="6"
+                                Margin="0,0,0,12"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock x:Name="TxtResumenRolTitulo"
+                                           Text="Perfil: Responsable de Compras"
+                                           FontSize="11.5"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                <TextBlock x:Name="TxtResumenRolDetalle"
+                                           Text="El sistema adaptará automáticamente las pestañas, costos y autorizaciones según su tipo de usuario."
+                                           FontSize="10.8"
+                                           Opacity="0.82"
+                                           TextWrapping="Wrap"
+                                           Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Mensaje de error -->
+                        <Border x:Name="BdrErrorLogin"
+                                Visibility="Collapsed"
+                                Padding="10,8"
+                                CornerRadius="6"
+                                Margin="0,0,0,12"
+                                Background="#FEF2F2"
+                                BorderBrush="#FCA5A5"
+                                BorderThickness="1">
+                            <TextBlock x:Name="TxtErrorLogin"
+                                       Foreground="#991B1B"
+                                       FontSize="11.5"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap" />
+                        </Border>
+
+                        <ui:Button x:Name="BtnEntrar"
+                                   Content="Entrar al Sistema"
+                                   Appearance="Primary"
+                                   HorizontalAlignment="Stretch"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Padding="14,9"
+                                   Click="BtnEntrar_Click" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock x:Name="TxtNotaPie"
+                           Text="Nota inicial: Las cuentas locales recién creadas usan la clave temporal 1234 hasta que cada usuario o el Responsable de Compras la personalice en Sistema → Usuarios y Contraseñas."
+                           FontSize="10.5"
+                           Opacity="0.68"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Margin="4,12,4,0" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</ui:FluentWindow>

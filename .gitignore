@@ -19,3 +19,12 @@ publish/
 *.db-shm
 *.db-wal
 *.sqlite
+
+# Configuración local y secretos de servidor ERPNext / pruebas
+.env
+*.env
+integracion_erpnext/pruebas/.mantener-wsl.sh
+lebaref-servidor.txt
+Accesos-Lebaref-Pruebas.txt
+*.sql.gz
+*.tgz

@@ -262,7 +262,7 @@ WHERE oc.Estatus != 'Cancelada'";
 
         foreach (var p in proveedores)
         {
-            string nom = (string.IsNullOrWhiteSpace(p.NombreComercial) ? p.RazonSocial : p.NombreComercial).Trim();
+            string nom = ((string.IsNullOrWhiteSpace(p.NombreComercial) ? p.RazonSocial : p.NombreComercial) ?? string.Empty).Trim();
             if (GirosBase.TryGetValue(nom, out var g))
             {
                 foreach (var cb in g.CategoriasBase) _ = GetStat(cb, p.Id);
@@ -286,7 +286,7 @@ WHERE oc.Estatus != 'Cancelada'";
             var (cat, pid) = kv.Key;
             var st = kv.Value;
             var p = provDict[pid];
-            string nom = (string.IsNullOrWhiteSpace(p.NombreComercial) ? p.RazonSocial : p.NombreComercial).Trim();
+            string nom = ((string.IsNullOrWhiteSpace(p.NombreComercial) ? p.RazonSocial : p.NombreComercial) ?? string.Empty).Trim();
             if (tiendasConsumo.Contains(nom) && cat != "Limpieza, Higiene y Jardinería" && cat != "Papelería, Oficina y Comedor" && st.Ocs.Count <= 1) continue;
             if (soloPapeleria.Contains(nom) && cat != "Papelería, Oficina y Comedor" && st.Ocs.Count <= 2) continue;
 
@@ -371,7 +371,7 @@ WHERE oc.Estatus != 'Cancelada'";
         };
         foreach (var p in proveedores.OrderBy(x => ((string.IsNullOrWhiteSpace(x.NombreComercial) ? x.RazonSocial : x.NombreComercial) ?? string.Empty).ToUpperInvariant()))
         {
-            string nom = (string.IsNullOrWhiteSpace(p.NombreComercial) ? p.RazonSocial : p.NombreComercial).Trim();
+            string nom = ((string.IsNullOrWhiteSpace(p.NombreComercial) ? p.RazonSocial : p.NombreComercial) ?? string.Empty).Trim();
             rowsDir.Add(new object[]
             {
                 p.Id,
