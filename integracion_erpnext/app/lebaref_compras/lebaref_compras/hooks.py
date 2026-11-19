@@ -13,8 +13,31 @@ after_migrate = [
     "lebaref_compras.desk_ui.configurar_todo_desk",
 ]
 
-app_include_js = "/assets/lebaref_compras/js/lebaref_desk.js"
-doctype_js = {"Material Request": "public/js/material_request.js"}
+doctype_js = {
+    "Material Request": ["public/js/lebaref_desk.js", "public/js/material_request.js"],
+    "Request for Quotation": "public/js/lebaref_desk.js",
+    "Purchase Order": "public/js/lebaref_desk.js",
+    "Purchase Receipt": "public/js/lebaref_desk.js",
+    "Stock Entry": "public/js/lebaref_desk.js",
+    "Supplier": "public/js/lebaref_desk.js",
+    "Item": "public/js/lebaref_desk.js",
+    "Lebaref Herramienta": "public/js/lebaref_desk.js",
+    "Lebaref Mantenimiento Herramienta": "public/js/lebaref_desk.js",
+    "Lebaref Kit": "public/js/lebaref_desk.js",
+    "Lebaref Prestamo": "public/js/lebaref_desk.js",
+    "Lebaref Vehiculo": "public/js/lebaref_desk.js",
+}
+
+doctype_list_js = {
+    "Material Request": "public/js/lebaref_desk.js",
+    "Stock Entry": "public/js/lebaref_desk.js",
+    "Supplier": "public/js/lebaref_desk.js",
+    "Item": "public/js/lebaref_desk.js",
+    "Lebaref Herramienta": "public/js/lebaref_desk.js",
+    "Lebaref Kit": "public/js/lebaref_desk.js",
+    "Lebaref Prestamo": "public/js/lebaref_desk.js",
+    "Lebaref Vehiculo": "public/js/lebaref_desk.js",
+}
 
 jinja = {
     "methods": [

@@ -1,4 +1,6 @@
 (() => {
+    if (window.__lebarefDeskLoaded) return;
+    window.__lebarefDeskLoaded = true;
     const SHEETS_URL = "https://docs.google.com/spreadsheets/d/1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I/edit?gid=0#gid=0";
 
     function nuevoUuid() {
