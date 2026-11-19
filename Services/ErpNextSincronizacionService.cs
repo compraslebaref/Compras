@@ -239,6 +239,110 @@ public static class ErpNextSincronizacionService
             }
         }
 
+        // 4. Herramientas Individuales (HER-xxxx)
+        if (!string.IsNullOrWhiteSpace(empresaDefault))
+        {
+            try
+            {
+                progreso?.Report("Verificando herramientas individuales (HER-xxxx) en ERPNext...");
+                var herRemotas = await client.ListAsync("Lebaref Herramienta", new[] { "name", "codigo" }, limitPageLength: 1000, ct: ct);
+                var codsHerRemotos = new HashSet<string>(
+                    herRemotas.SelectMany(r => new[] { r.GetValueOrDefault("name")?.ToString() ?? "", r.GetValueOrDefault("codigo")?.ToString() ?? "" })
+                              .Where(s => !string.IsNullOrWhiteSpace(s)),
+                    StringComparer.OrdinalIgnoreCase);
+
+                var prodPorId = productosLocales.ToDictionary(x => x.Id);
+                foreach (var h in DatabaseService.ObtenerHerramientas())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    string codHer = (h.CodigoIndividual ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(codHer) || codsHerRemotos.Contains(codHer)) continue;
+                    if (!prodPorId.TryGetValue(h.ProductoId, out var pBase)) continue;
+                    string itemCode = string.IsNullOrWhiteSpace(pBase.CodigoInterno) ? $"PRD-{pBase.Id:D4}" : pBase.CodigoInterno.Trim();
+                    if (!codigosRemotos.Contains(itemCode)) continue;
+
+                    string marcaMod = string.IsNullOrWhiteSpace(h.MarcaModelo) ? pBase.Nombre : h.MarcaModelo.Trim();
+                    if (marcaMod.Length > 140) marcaMod = marcaMod[..140];
+                    string serieTxt = string.IsNullOrWhiteSpace(h.NumeroSerie) ? codHer : h.NumeroSerie.Trim();
+                    if (serieTxt.Length > 140) serieTxt = serieTxt[..140];
+
+                    try
+                    {
+                        await client.ExecuteAsync("herramienta", new Dictionary<string, object?>
+                        {
+                            ["codigo"] = codHer,
+                            ["company"] = empresaDefault,
+                            ["articulo"] = itemCode,
+                            ["serie"] = serieTxt,
+                            ["marca_modelo"] = marcaMod,
+                            ["ubicacion"] = string.IsNullOrWhiteSpace(h.Ubicacion) ? "GABINETE-1" : h.Ubicacion.Trim()
+                        }, "", GenerarUuidDeterministico($"HER:{codHer}"), ct);
+                        codsHerRemotos.Add(codHer);
+                        res.HerramientasCreadas++;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (res.Advertencias.Count < 25)
+                            res.Advertencias.Add($"Herramienta '{codHer}': {ex.Message}");
+                    }
+                }
+            }
+            catch { }
+
+            // 5. Flotilla Vehicular (VEH-xxxx)
+            try
+            {
+                progreso?.Report("Verificando unidades de flotilla (VEH-xxxx) en ERPNext...");
+                var vehRemotos = await client.ListAsync("Lebaref Vehiculo", new[] { "name", "codigo" }, limitPageLength: 1000, ct: ct);
+                var codsVehRemotos = new HashSet<string>(
+                    vehRemotos.SelectMany(r => new[] { r.GetValueOrDefault("name")?.ToString() ?? "", r.GetValueOrDefault("codigo")?.ToString() ?? "" })
+                              .Where(s => !string.IsNullOrWhiteSpace(s)),
+                    StringComparer.OrdinalIgnoreCase);
+
+                foreach (var v in DatabaseService.ObtenerVehiculosFlotilla())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    string codVeh = (v.CodigoVehiculo ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(codVeh) || codsVehRemotos.Contains(codVeh)) continue;
+
+                    string comb = v.TipoCombustible?.Contains("Diésel", StringComparison.OrdinalIgnoreCase) == true || v.TipoCombustible?.Contains("Diesel", StringComparison.OrdinalIgnoreCase) == true
+                        ? "Diésel"
+                        : (v.TipoCombustible?.Contains("Premium", StringComparison.OrdinalIgnoreCase) == true ? "Gasolina Premium" : "Gasolina Regular");
+                    string fecSeg = DateTime.TryParse(v.VigenciaSeguro, out var dSeg) ? dSeg.ToString("yyyy-MM-dd") : DateTime.Today.AddMonths(6).ToString("yyyy-MM-dd");
+                    int kmIni = Math.Max(0, v.KilometrajeActual > 0 ? v.KilometrajeActual : v.KilometrajeInicial);
+                    int interv = v.IntervaloServicioKm > 0 ? v.IntervaloServicioKm : 10000;
+                    int proxKm = v.ProximoServicioKm > kmIni ? v.ProximoServicioKm : kmIni + interv;
+
+                    try
+                    {
+                        await client.ExecuteAsync("vehiculo", new Dictionary<string, object?>
+                        {
+                            ["codigo"] = codVeh,
+                            ["placas"] = string.IsNullOrWhiteSpace(v.Placas) ? "SIN-PLACA" : v.Placas.Trim(),
+                            ["company"] = empresaDefault,
+                            ["marca_modelo"] = string.IsNullOrWhiteSpace(v.MarcaModelo) ? codVeh : v.MarcaModelo.Trim(),
+                            ["responsable"] = string.IsNullOrWhiteSpace(v.ResponsableHabitual) ? "Operaciones" : v.ResponsableHabitual.Trim(),
+                            ["km"] = kmIni.ToString(),
+                            ["fecha"] = DateTime.Today.ToString("yyyy-MM-dd"),
+                            ["intervalo"] = interv.ToString(),
+                            ["proximo_servicio"] = proxKm.ToString(),
+                            ["capacidad"] = Math.Max(10, (int)Math.Round(v.CapacidadTanqueLitros > 0 ? v.CapacidadTanqueLitros : 60m)).ToString(),
+                            ["combustible"] = comb,
+                            ["seguro"] = fecSeg
+                        }, "", GenerarUuidDeterministico($"VEH:{codVeh}"), ct);
+                        codsVehRemotos.Add(codVeh);
+                        res.VehiculosCreados++;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (res.Advertencias.Count < 25)
+                            res.Advertencias.Add($"Vehículo '{codVeh}': {ex.Message}");
+                    }
+                }
+            }
+            catch { }
+        }
+
         progreso?.Report("Sincronización de catálogos maestros finalizada.");
         return res;
     }
