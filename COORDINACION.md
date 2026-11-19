@@ -33,10 +33,10 @@
 
 | Prioridad | ID Matriz | Tarea en la Interfaz Nativa de ERPNext (`Frappe Desk`) | Estado |
 |---|---|---|---|
-| 1 | `UX-DESK-01` | **Workspace "Lebaref" completo y botones guiados en Desk (`public/js/` + `desk_ui.py`):** Accesos claros para Compras y Almacén (ocultando importes al perfil Almacén donde aplique), botones guiados en `Material Request`, `Request for Quotation`, `Purchase Order`, `Purchase Receipt`, y diálogos en Desk para operar `Lebaref Herramienta`, `Lebaref Kit`, `Lebaref Prestamo` y `Lebaref Vehiculo` sin chocar con el candado `equipos.proteger`. | `SIGUIENTE PARA ANTIGRAVITY` |
-| 2 | `COM-02` / `UX-DESK-02` | **Cuadro Comparativo Lebaref mejorado dentro de ERPNext (`public/js/material_request.js`):** Vista lado a lado multiproveedor mostrando renglones *"Sin cotizar"*, mejor precio resaltado, captura ágil de ofertas desde la solicitud/petición y enlace directo a la hoja *¿A quién cotizar?*. | `SIGUIENTE PARA ANTIGRAVITY` |
-| 3 | `DOC-01` | **Formatos de Impresión Tamaño Carta con Código de Barras Code 128 (`impresion_carta.py`):** Print Formats limpios en español dentro de ERPNext para Solicitud, Comparativa, Orden de Compra, Recepción, Entrega/Salida, Vale de Préstamo, Check-list Vehicular y Responsiva EPP. | `PENDIENTE ANTIGRAVITY` |
-| 4 | `CAT-03` / `ALM-MAPA` | **Sincronización ERPNext ↔ Google Sheets (`1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I`) y Mapa de Ubicaciones A–F** accesible desde el Workspace Lebaref en ERPNext. | `PENDIENTE ANTIGRAVITY` |
+| 1 | `UX-DESK-01` | **Workspace "Lebaref" completo y botones guiados en Desk (`public/js/lebaref_desk.js` + `desk_ui.py`):** 19 accesos por sección en el Workspace Lebaref, ejecutor universal de operaciones guiadas en Desk para Compras, Almacén, Herramientas `HER`, Kits `KIT`, Préstamos `PRE` y Flotilla `VEH`, y diálogo de Mapa de Ubicaciones. | `COMPLETADO Y MIGRADO` |
+| 2 | `COM-02` / `UX-DESK-02` | **Cuadro Comparativo Lebaref mejorado dentro de ERPNext (`public/js/material_request.js`):** Matriz multiproveedor lado a lado mostrando *"Sin cotizar"*, insignia `★ Mejor`, selección automática del mejor precio, totales adjudicados por proveedor, impresión Carta horizontal y enlace a Google Sheets *¿A quién cotizar?*. | `COMPLETADO Y MIGRADO` |
+| 3 | `DOC-01` | **Formatos de Impresión Tamaño Carta con Código de Barras Code 128 (`impresion_carta.py`):** 6 Print Formats Jinja en español con Code 128B SVG nativo (`Solicitud`, `Orden de Compra`, `Recepción Almacén`, `Salida o Sobrante`, `Vale Préstamo Herramienta`, `Check-list Vehicular`). | `COMPLETADO BASE (6 FORMATOS) · FALTA RESPONSIVA EPP` |
+| 4 | `CAT-03` / `ALM-MAPA` | **Sincronización ERPNext ↔ Google Sheets (`1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I`) desde ERPNext (`sheets_proveedores.py`)** y cuadrícula visual 3×3 interactiva A–F. | `SIGUIENTE PARA ANTIGRAVITY` |
 
 ---
 
