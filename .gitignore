@@ -2,6 +2,7 @@
 bin/
 obj/
 out/
+outputs/
 publish/
 
 # Archivos de Visual Studio / IDE

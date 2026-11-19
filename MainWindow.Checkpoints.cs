@@ -31,11 +31,111 @@ public partial class MainWindow
     // PASO 1: PERFIL ACTIVO (COMPRAS vs ALMACÉN) Y PRIVACIDAD DE PRECIOS
     // =========================================================================
 
+    private bool _suscritoEventosCorreo;
+    private System.Windows.Threading.DispatcherTimer? _timerImapSolicitudes;
+    private bool _sincronizandoImapEnFondo;
+
     private void InicializarRolYCheckpoints()
     {
+        if (!_suscritoEventosCorreo)
+        {
+            _suscritoEventosCorreo = true;
+            DatabaseService.OnNotificacionCorreoProcesada += reg =>
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (reg.Id <= 0) return; // Ignorar pruebas manuales desde el modal
+                    string titulo = reg.EstadoEnvio.StartsWith("Enviado", StringComparison.OrdinalIgnoreCase)
+                        ? $"Correo enviado a {reg.GerenteNombre}"
+                        : $"Aviso a {reg.GerenteNombre} ({reg.EstadoEnvio})";
+                    MostrarToastDiscreto(reg.MensajePrincipal, titulo);
+                });
+            };
+
+            DatabaseService.OnCorreoSolicitudRecibido += correo =>
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    ActualizarBadgeBandejaCorreosSolicitud();
+                    if (correo.SolicitudCreadaId > 0)
+                    {
+                        RefrescarSolicitudes(correo.SolicitudCreadaId);
+                        MostrarToastDiscreto(
+                            $"Se creó automáticamente la solicitud {correo.SolicitudCreadaFolio} ({correo.PartidasDetectadasCount} partidas) de {correo.RemitenteNombre} ({correo.DepartamentoDetectadoNombre}).",
+                            $"Solicitud por Correo: {correo.SolicitudCreadaFolio}");
+                    }
+                    else
+                    {
+                        MostrarToastDiscreto(
+                            $"Correo recibido de {correo.RemitenteNombre}: \"{correo.Asunto}\" ({correo.PartidasDetectadasCount} partidas detectadas). Disponible en Bandeja de Correo.",
+                            "Correo Entrante en Bandeja");
+                    }
+                });
+            };
+        }
+
+        if (_timerImapSolicitudes == null)
+        {
+            _timerImapSolicitudes = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(2)
+            };
+            _timerImapSolicitudes.Tick += async (_, _) => await EjecutarSincronizacionImapSilenciosaAsync();
+            _timerImapSolicitudes.Start();
+            // Primera revisión suave a los 12 segundos de iniciar la app
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(12000);
+                await Dispatcher.InvokeAsync(async () => await EjecutarSincronizacionImapSilenciosaAsync());
+            });
+        }
+
         string rolGuardado = DatabaseService.ObtenerRolOperativoActivo();
         AplicarRolOperativo(rolGuardado, navegarSiPestanaOculta: false);
         ActualizarBadgeNotificacionesCheckpoints();
+        ActualizarBadgeBandejaCorreosSolicitud();
+    }
+
+    private async System.Threading.Tasks.Task EjecutarSincronizacionImapSilenciosaAsync()
+    {
+        if (_sincronizandoImapEnFondo) return;
+        try
+        {
+            var cfg = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+            if (!cfg.ImapRecepcionActiva || !cfg.TieneCredencialesCompletas) return;
+
+            _sincronizandoImapEnFondo = true;
+            var (_, _, autoCreadas, _) = await DatabaseService.SincronizarCorreosEntrantesImapAsync();
+            ActualizarBadgeBandejaCorreosSolicitud();
+            if (autoCreadas > 0)
+            {
+                RefrescarSolicitudes();
+            }
+        }
+        catch
+        {
+            // Silencioso en segundo plano
+        }
+        finally
+        {
+            _sincronizandoImapEnFondo = false;
+        }
+    }
+
+    private void ActualizarBadgeBandejaCorreosSolicitud()
+    {
+        try
+        {
+            if (BtnBandejaCorreosSol == null) return;
+            var pendientes = DatabaseService.ObtenerCorreosEntrantesSolicitud("PENDIENTES");
+            BtnBandejaCorreosSol.Content = pendientes.Count > 0
+                ? $"Bandeja Correo ({pendientes.Count})"
+                : "Bandeja Correo";
+        }
+        catch
+        {
+            // Ignorar si aún no está inicializado
+        }
     }
 
     private void AplicarRolOperativo(string rol, bool navegarSiPestanaOculta = true)
@@ -54,7 +154,9 @@ public partial class MainWindow
 
         if (BtnRolOperativo != null)
         {
-            BtnRolOperativo.Content = $"Rol: {_rolOperativoActual}";
+            var usrActivo = DatabaseService.ObtenerUsuarioActivo();
+            BtnRolOperativo.Content = $"{usrActivo.Nombre} · {_rolOperativoActual}";
+            BtnRolOperativo.ToolTip = $"Usuario en sesión: {usrActivo.Nombre} ({usrActivo.Puesto}) | Vista: {_rolOperativoActual}. Clic para cambiar de usuario, perfil o consultar la Bitácora Nominal.";
             BtnRolOperativo.Appearance = esAlmacen ? ControlAppearance.Secondary : ControlAppearance.Primary;
         }
 
@@ -96,9 +198,9 @@ public partial class MainWindow
     {
         var win = new Window
         {
-            Title = "Seleccionar Rol Operativo en el Sistema",
-            Width = 520,
-            Height = 435,
+            Title = "Usuario Activo, Rol Operativo y Bitácora Nominal",
+            Width = 580,
+            Height = 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
@@ -107,38 +209,112 @@ public partial class MainWindow
         };
 
         var root = new StackPanel { Margin = new Thickness(18) };
-        root.Children.Add(new TextBlock
+
+        var headerDock = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var btnBitacora = new Wpf.Ui.Controls.Button
         {
-            Text = "Cambiar Vista Operativa por Perfil",
+            Content = "Ver Bitácora por Usuario",
+            FontSize = 11.5,
+            Padding = new Thickness(10, 4, 10, 4),
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        DockPanel.SetDock(btnBitacora, Dock.Right);
+        headerDock.Children.Add(btnBitacora);
+        headerDock.Children.Add(new TextBlock
+        {
+            Text = "Sesión Nominal y Vista Operativa",
             FontSize = 16,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 4)
+            VerticalAlignment = VerticalAlignment.Center
         });
+        root.Children.Add(headerDock);
+
         root.Children.Add(new TextBlock
         {
-            Text = "Seleccione con qué perfil está operando hoy. Cada perfil ajusta las etapas visibles, las notificaciones de checkpoints y la privacidad de costos.",
-            FontSize = 12,
+            Text = "Seleccione qué persona está operando el sistema hoy. Cada movimiento (Solicitudes, OC, Recepciones, Salidas, Ajustes y Avisos) quedará registrado a su nombre en la bitácora nominal.",
+            FontSize = 11.5,
             Foreground = Tk("TextFillColorSecondaryBrush"),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 14)
+            Margin = new Thickness(0, 0, 0, 10)
         });
+
+        // Selector de Usuario Nominal + Alta rápida
+        var bdrUser = new Border
+        {
+            Padding = new Thickness(12, 10, 12, 10),
+            CornerRadius = new CornerRadius(6),
+            Background = Tk("SubtleFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        var spUser = new StackPanel();
+        spUser.Children.Add(new TextBlock { Text = "Usuario Nominal Activo:", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        var gridUser = new Grid();
+        gridUser.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridUser.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var cboUsuario = new ComboBox { Margin = new Thickness(0, 0, 8, 0) };
+        var btnNuevoUsuario = new Wpf.Ui.Controls.Button { Content = "+ Nuevo Usuario", FontSize = 11.5, Padding = new Thickness(10, 5, 10, 5) };
+        Grid.SetColumn(cboUsuario, 0);
+        Grid.SetColumn(btnNuevoUsuario, 1);
+        gridUser.Children.Add(cboUsuario);
+        gridUser.Children.Add(btnNuevoUsuario);
+        spUser.Children.Add(gridUser);
+
+        var pnlAltaRapida = new Border
+        {
+            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(8),
+            CornerRadius = new CornerRadius(5),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1)
+        };
+        var gridAlta = new Grid();
+        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        gridAlta.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var txtNuevoNom = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Nombre (ej. Juan Pérez)", Margin = new Thickness(0, 0, 6, 0) };
+        var txtNuevoPuesto = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Puesto / Área", Margin = new Thickness(0, 0, 6, 0) };
+        var cboNuevoRol = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
+        cboNuevoRol.Items.Add("Compras");
+        cboNuevoRol.Items.Add("Almacén");
+        cboNuevoRol.Items.Add("Solicitante");
+        cboNuevoRol.Items.Add("Dirección");
+        cboNuevoRol.SelectedIndex = 0;
+        var btnGuardarUsr = new Wpf.Ui.Controls.Button { Content = "Guardar", Appearance = ControlAppearance.Primary, Padding = new Thickness(10, 4, 10, 4) };
+        Grid.SetColumn(txtNuevoNom, 0);
+        Grid.SetColumn(txtNuevoPuesto, 1);
+        Grid.SetColumn(cboNuevoRol, 2);
+        Grid.SetColumn(btnGuardarUsr, 3);
+        gridAlta.Children.Add(txtNuevoNom);
+        gridAlta.Children.Add(txtNuevoPuesto);
+        gridAlta.Children.Add(cboNuevoRol);
+        gridAlta.Children.Add(btnGuardarUsr);
+        pnlAltaRapida.Child = gridAlta;
+        spUser.Children.Add(pnlAltaRapida);
+        bdrUser.Child = spUser;
+        root.Children.Add(bdrUser);
 
         var rbCompras = new RadioButton
         {
             IsChecked = !EsModoAlmacen,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 8),
             Content = new StackPanel
             {
                 Children =
                 {
-                    new TextBlock { Text = "Compras (Abastecimiento y Control Administrativo)", FontWeight = FontWeights.SemiBold, FontSize = 13 },
+                    new TextBlock { Text = "Vista Compras (Abastecimiento, Cotizaciones, OC y Facturas XML)", FontWeight = FontWeights.SemiBold, FontSize = 12.5 },
                     new TextBlock
                     {
-                        Text = "Aprueba solicitudes, cotiza en Comparativa, elige proveedores ganadores, emite OC, registra Vo.Bo./Pagos, finiquita parciales y sube Facturas XML. Visibilidad total de precios.",
-                        FontSize = 11.5,
+                        Text = "Aprueba solicitudes, cotiza en Comparativa, emite OC, registra Recepción Directa a Obra y sube Facturas XML. Visibilidad total de costos.",
+                        FontSize = 11,
                         Foreground = Tk("TextFillColorSecondaryBrush"),
                         TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 430
+                        MaxWidth = 490
                     }
                 }
             }
@@ -147,69 +323,111 @@ public partial class MainWindow
         var rbAlmacen = new RadioButton
         {
             IsChecked = EsModoAlmacen,
-            Margin = new Thickness(0, 0, 0, 14),
+            Margin = new Thickness(0, 0, 0, 12),
             Content = new StackPanel
             {
                 Children =
                 {
-                    new TextBlock { Text = "Almacén (Recepción, Bodega, Salidas y Herramientas)", FontWeight = FontWeights.SemiBold, FontSize = 13 },
+                    new TextBlock { Text = "Vista Almacén (Recepción, Bodega, Salidas, Sobrantes y Herramientas)", FontWeight = FontWeights.SemiBold, FontSize = 12.5 },
                     new TextBlock
                     {
-                        Text = "Recibe mercancía (con o sin OC previa), captura folios de remisión/factura impresa, ubica en anaqueles, despacha Salidas (SAL) desde Solicitud u OC y controla Préstamos (PRE). Sin precios ni costos visibles.",
-                        FontSize = 11.5,
+                        Text = "Recibe mercancía, ubica en anaqueles (A–F), despacha Salidas (SAL), reingresa Sobrantes de Obra, registra Ajustes/Merma (AJU) y controla Préstamos (PRE). Sin costos visibles.",
+                        FontSize = 11,
                         Foreground = Tk("TextFillColorSecondaryBrush"),
                         TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 430
+                        MaxWidth = 490
                     }
                 }
             }
         };
+
+        void RecargarUsuariosCombo(int? seleccionarId = null)
+        {
+            var lista = DatabaseService.ObtenerUsuariosSistema(soloActivos: true);
+            cboUsuario.ItemsSource = lista;
+            int idTarget = seleccionarId ?? DatabaseService.ObtenerUsuarioActivo().Id;
+            cboUsuario.SelectedItem = lista.FirstOrDefault(u => u.Id == idTarget) ?? lista.FirstOrDefault();
+        }
+        RecargarUsuariosCombo();
+
+        cboUsuario.SelectionChanged += (_, _) =>
+        {
+            if (cboUsuario.SelectedItem is UsuarioSistema uSel)
+            {
+                if (string.Equals(uSel.RolPredeterminado, "Almacén", StringComparison.OrdinalIgnoreCase))
+                    rbAlmacen.IsChecked = true;
+                else if (string.Equals(uSel.RolPredeterminado, "Compras", StringComparison.OrdinalIgnoreCase))
+                    rbCompras.IsChecked = true;
+            }
+        };
+
+        btnNuevoUsuario.Click += (_, _) =>
+        {
+            pnlAltaRapida.Visibility = pnlAltaRapida.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            if (pnlAltaRapida.Visibility == Visibility.Visible) txtNuevoNom.Focus();
+        };
+
+        btnGuardarUsr.Click += (_, _) =>
+        {
+            string nom = txtNuevoNom.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(nom))
+            {
+                DialogoFluent.Show(win, "Escriba el nombre del usuario.", "Nombre requerido", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            string rolPred = cboNuevoRol.SelectedItem?.ToString() ?? "Compras";
+            string puesto = string.IsNullOrWhiteSpace(txtNuevoPuesto.Text) ? rolPred : txtNuevoPuesto.Text.Trim();
+            int nuevoId = DatabaseService.GuardarUsuarioSistema(new UsuarioSistema
+            {
+                Username = nom.ToLowerInvariant().Replace(" ", "."),
+                NombreCompleto = nom,
+                Rol = rolPred,
+                Puesto = puesto,
+                Activo = true
+            });
+            txtNuevoNom.Clear();
+            txtNuevoPuesto.Clear();
+            pnlAltaRapida.Visibility = Visibility.Collapsed;
+            RecargarUsuariosCombo(nuevoId);
+        };
+
+        btnBitacora.Click += (_, _) => MostrarModalBitacoraUsuarios(win);
 
         root.Children.Add(rbCompras);
         root.Children.Add(rbAlmacen);
 
         var bdrFuturos = new Border
         {
-            Padding = new Thickness(12, 10, 12, 10),
+            Padding = new Thickness(12, 8, 12, 8),
             CornerRadius = new CornerRadius(6),
             Background = Tk("SubtleFillColorSecondaryBrush"),
             BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 0, 16),
-            Child = new StackPanel
+            Margin = new Thickness(0, 0, 0, 14),
+            Child = new TextBlock
             {
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Agentes externos hoy (Perfiles preparados para notificaciones futuras):",
-                        FontSize = 11.5,
-                        FontWeight = FontWeights.SemiBold,
-                        Margin = new Thickness(0, 0, 0, 4)
-                    },
-                    new TextBlock
-                    {
-                        Text = "• Solicitante / Proyectos: Recibe aviso al aprobarse su solicitud, al generarse OC y al llegar su material a Almacén.\n" +
-                               "• Dirección: Recibe aviso cuando Compras emite una OC pendiente de Vo.Bo.\n" +
-                               "• Finanzas: Recibe aviso de OC autorizadas para pago y facturas CFDI XML vinculadas.",
-                        FontSize = 11,
-                        Foreground = Tk("TextFillColorSecondaryBrush"),
-                        TextWrapping = TextWrapping.Wrap
-                    }
-                }
+                Text = "Tip: Desde el botón 'Avisos' de la barra superior puede enviar mensajes directos (@Usuario o por rol) vinculados a cualquier folio (SOL, OC, ENT, SAL, PRE) para dejar acuerdos registrados.",
+                FontSize = 11,
+                Foreground = Tk("TextFillColorSecondaryBrush"),
+                TextWrapping = TextWrapping.Wrap
             }
         };
         root.Children.Add(bdrFuturos);
 
         var pnlBotones = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var btnCancelar = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
-        var btnAplicar = new Wpf.Ui.Controls.Button { Content = "Aplicar Rol", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        var btnAplicar = new Wpf.Ui.Controls.Button { Content = "Aplicar Usuario y Rol", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
 
         btnCancelar.Click += (_, _) => win.DialogResult = false;
         btnAplicar.Click += (_, _) =>
         {
+            if (cboUsuario.SelectedItem is UsuarioSistema uElegido)
+            {
+                DatabaseService.GuardarUsuarioActivo(uElegido.Id);
+            }
             string nuevoRol = rbAlmacen.IsChecked == true ? "Almacén" : "Compras";
             AplicarRolOperativo(nuevoRol);
+            DatabaseService.RegistrarBitacoraUsuario("Sesión", "CAMBIO_SESION", "", $"Sesión activa cambiada a '{DatabaseService.ObtenerUsuarioActivo().Nombre}' en vista '{nuevoRol}'.");
             win.DialogResult = true;
         };
 
@@ -258,11 +476,12 @@ public partial class MainWindow
 
     private void BtnNotificacionesCheckpoints_Click(object sender, RoutedEventArgs e)
     {
+        var usrActual = DatabaseService.ObtenerUsuarioActivo();
         var win = new Window
         {
-            Title = $"Checkpoints y Notificaciones de Etapa — Rol actual: {_rolOperativoActual}",
-            Width = 920,
-            Height = 560,
+            Title = $"Bandeja de Avisos, Checkpoints y Mensajes Internos — Usuario: {usrActual.Nombre} ({_rolOperativoActual})",
+            Width = 980,
+            Height = 620,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             Background = Tk("ControlFillColorDefaultBrush"),
@@ -271,10 +490,10 @@ public partial class MainWindow
 
         var root = new DockPanel { Margin = new Thickness(16) };
 
-        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
-        var cboFiltroRol = new ComboBox { Width = 220, Margin = new Thickness(8, 0, 8, 0) };
-        cboFiltroRol.Items.Add($"Para mi rol ({_rolOperativoActual})");
-        cboFiltroRol.Items.Add("Todos los roles (Vista completa)");
+        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var cboFiltroRol = new ComboBox { Width = 230, Margin = new Thickness(8, 0, 8, 0) };
+        cboFiltroRol.Items.Add($"Para mí ({usrActual.Nombre} / {_rolOperativoActual})");
+        cboFiltroRol.Items.Add("Todos los avisos y mensajes");
         cboFiltroRol.Items.Add("Compras");
         cboFiltroRol.Items.Add("Almacén");
         cboFiltroRol.Items.Add("Solicitante");
@@ -285,21 +504,28 @@ public partial class MainWindow
         var btnMarcarLeidas = new System.Windows.Controls.Button
         {
             Content = "Marcar leídos",
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(0, 0, 6, 0)
+        };
+        var btnVerBitacora = new System.Windows.Controls.Button
+        {
+            Content = "Bitácora de Usuarios",
             Padding = new Thickness(12, 5, 12, 5)
         };
 
         var rightBar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        rightBar.Children.Add(new TextBlock { Text = "Ver avisos de:", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
+        rightBar.Children.Add(new TextBlock { Text = "Filtrar bandeja:", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
         rightBar.Children.Add(cboFiltroRol);
         rightBar.Children.Add(btnMarcarLeidas);
+        rightBar.Children.Add(btnVerBitacora);
         DockPanel.SetDock(rightBar, Dock.Right);
         header.Children.Add(rightBar);
 
         var titleStack = new StackPanel();
-        titleStack.Children.Add(new TextBlock { Text = "Historial de Checkpoints y Transiciones de Etapa", FontSize = 16, FontWeight = FontWeights.SemiBold });
+        titleStack.Children.Add(new TextBlock { Text = "Bandeja de Checkpoints y Mensajes Dirigidos entre Usuarios (@Usuario)", FontSize = 16, FontWeight = FontWeights.SemiBold });
         titleStack.Children.Add(new TextBlock
         {
-            Text = "Registro de cada cambio de etapa (CP-1 a CP-8) y qué perfiles reciben notificación hoy y a futuro.",
+            Text = "Envíe avisos internos vinculados a cualquier folio y consulte las transiciones operativas. Doble clic en un renglón para ir directo al folio.",
             FontSize = 11.5,
             Foreground = Tk("TextFillColorSecondaryBrush")
         });
@@ -307,19 +533,69 @@ public partial class MainWindow
         DockPanel.SetDock(header, Dock.Top);
         root.Children.Add(header);
 
+        // Barra para redactar mensaje directo a un Usuario o Rol vinculado a un folio
+        var bdrMsg = new Border
+        {
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 0, 10),
+            CornerRadius = new CornerRadius(6),
+            Background = Tk("SubtleFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1)
+        };
+        var gridMsg = new Grid();
+        gridMsg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(165) });
+        gridMsg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(135) });
+        gridMsg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        gridMsg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridMsg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var usuariosActivos = DatabaseService.ObtenerUsuariosSistema(soloActivos: true);
+        var cboDestUsuario = new ComboBox { Margin = new Thickness(0, 0, 6, 0), ToolTip = "Persona específica a quien va dirigido el aviso (o Todos)" };
+        cboDestUsuario.Items.Add("A cualquier usuario del rol");
+        foreach (var u in usuariosActivos)
+            cboDestUsuario.Items.Add(u.Nombre);
+        cboDestUsuario.SelectedIndex = 0;
+
+        var cboDestRol = new ComboBox { Margin = new Thickness(0, 0, 6, 0), ToolTip = "Departamento / Rol destinatario" };
+        cboDestRol.Items.Add("Almacén");
+        cboDestRol.Items.Add("Compras");
+        cboDestRol.Items.Add("Solicitante");
+        cboDestRol.Items.Add("Dirección");
+        cboDestRol.Items.Add("Finanzas");
+        cboDestRol.SelectedIndex = EsModoAlmacen ? 1 : 0;
+
+        var txtFolioRef = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Folio (ej. OC-2026-0001)", Margin = new Thickness(0, 0, 6, 0) };
+        var txtMensajeDir = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Escribir aviso o instrucción para el usuario (ej. Favor de recoger material hoy con proveedor)...", Margin = new Thickness(0, 0, 6, 0) };
+        var btnEnviarMsg = new Wpf.Ui.Controls.Button { Content = "Enviar Aviso", Appearance = ControlAppearance.Primary, Padding = new Thickness(12, 5, 12, 5) };
+
+        Grid.SetColumn(cboDestUsuario, 0);
+        Grid.SetColumn(cboDestRol, 1);
+        Grid.SetColumn(txtFolioRef, 2);
+        Grid.SetColumn(txtMensajeDir, 3);
+        Grid.SetColumn(btnEnviarMsg, 4);
+        gridMsg.Children.Add(cboDestUsuario);
+        gridMsg.Children.Add(cboDestRol);
+        gridMsg.Children.Add(txtFolioRef);
+        gridMsg.Children.Add(txtMensajeDir);
+        gridMsg.Children.Add(btnEnviarMsg);
+        bdrMsg.Child = gridMsg;
+        DockPanel.SetDock(bdrMsg, Dock.Top);
+        root.Children.Add(bdrMsg);
+
         var dg = new System.Windows.Controls.DataGrid
         {
             AutoGenerateColumns = false,
             IsReadOnly = true,
             CanUserAddRows = false
         };
-        dg.Columns.Add(new DataGridTextColumn { Header = "Fecha", Binding = new System.Windows.Data.Binding("FechaHora"), Width = 125, ElementStyle = CeldaRecortable() });
-        dg.Columns.Add(new DataGridTextColumn { Header = "CP", Binding = new System.Windows.Data.Binding("CheckpointCodigo"), Width = 70, ElementStyle = CeldaRecortable() });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Etapa", Binding = new System.Windows.Data.Binding("Etapa"), Width = 135, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Fecha", Binding = new System.Windows.Data.Binding("FechaHora"), Width = 120, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Tipo", Binding = new System.Windows.Data.Binding("CheckpointCodigo"), Width = 65, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "De (Origen)", Binding = new System.Windows.Data.Binding("RemitenteTexto"), Width = 135, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Para (Destino)", Binding = new System.Windows.Data.Binding("DestinatarioTexto"), Width = 145, ElementStyle = CeldaRecortable() });
         dg.Columns.Add(new DataGridTextColumn { Header = "Folio", Binding = new System.Windows.Data.Binding("FolioReferencia"), Width = 120, ElementStyle = CeldaRecortable() });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Transición de Estatus", Binding = new System.Windows.Data.Binding("TransicionTexto"), Width = 190, ElementStyle = CeldaRecortable() });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Notifica a", Binding = new System.Windows.Data.Binding("RolesDestino"), Width = 140, ElementStyle = CeldaRecortable() });
-        dg.Columns.Add(new DataGridTextColumn { Header = "Detalle", Binding = new System.Windows.Data.Binding("Mensaje"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Estatus / Asunto", Binding = new System.Windows.Data.Binding("TransicionTexto"), Width = 155, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Mensaje / Detalle", Binding = new System.Windows.Data.Binding("Mensaje"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
 
         void RecargarTabla()
         {
@@ -329,8 +605,27 @@ public partial class MainWindow
                 1 => "Todos",
                 _ => cboFiltroRol.SelectedItem?.ToString() ?? "Todos"
             };
-            dg.ItemsSource = DatabaseService.ObtenerNotificacionesCheckpoint(sel, 120);
+            dg.ItemsSource = DatabaseService.ObtenerNotificacionesCheckpoint(sel, 150);
         }
+
+        btnEnviarMsg.Click += (_, _) =>
+        {
+            string texto = txtMensajeDir.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(texto))
+            {
+                DialogoFluent.Show(win, "Escriba el mensaje o instrucción que desea enviar.", "Mensaje vacío", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            string usrDest = cboDestUsuario.SelectedIndex <= 0 ? "Todos" : (cboDestUsuario.SelectedItem?.ToString() ?? "Todos");
+            string rolDest = cboDestRol.SelectedItem?.ToString() ?? "Todos";
+            string folio = txtFolioRef.Text?.Trim() ?? string.Empty;
+
+            DatabaseService.EnviarNotificacionEntreUsuarios(usrDest, rolDest, folio, "Aviso Directo", texto);
+            txtMensajeDir.Clear();
+            txtFolioRef.Clear();
+            RecargarTabla();
+            ActualizarBadgeNotificacionesCheckpoints();
+        };
 
         cboFiltroRol.SelectionChanged += (_, _) => RecargarTabla();
         btnMarcarLeidas.Click += (_, _) =>
@@ -338,6 +633,21 @@ public partial class MainWindow
             DatabaseService.MarcarNotificacionesLeidas(_rolOperativoActual);
             ActualizarBadgeNotificacionesCheckpoints();
             RecargarTabla();
+        };
+        btnVerBitacora.Click += (_, _) => MostrarModalBitacoraUsuarios(win);
+
+        dg.MouseDoubleClick += (_, _) =>
+        {
+            if (dg.SelectedItem is NotificacionCheckpoint notif && !string.IsNullOrWhiteSpace(notif.FolioReferencia) && notif.FolioReferencia != "GENERAL")
+            {
+                string folioLimpio = notif.FolioReferencia.Split(' ', '(')[0].Trim();
+                win.Close();
+                if (TxtOmniScanner != null)
+                {
+                    TxtOmniScanner.Text = folioLimpio;
+                    BtnProcesarOmniScanner_Click(this, new RoutedEventArgs());
+                }
+            }
         };
 
         DatabaseService.MarcarNotificacionesLeidas(_rolOperativoActual);
@@ -743,25 +1053,54 @@ public partial class MainWindow
             return;
         }
 
+        if (oc.Partidas.All(p => p.CantidadRecibida <= 0m))
+        {
+            DialogoFluent.Show(this,
+                $"La Orden de Compra {oc.Folio} aún no tiene recepciones registradas en Almacén.\n\nPrimero registre la entrada física (ENT-xxxx) antes de generar un Vale de Salida.",
+                "OC aún no recibida en Almacén",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         CargarOrdenCompraEnSalidaPos(oc);
-        CambiarSeccion(5);
+        if (_partidasSalidaPos.Count > 0)
+            CambiarSeccion(5);
     }
 
     private void CargarOrdenCompraEnSalidaPos(OrdenCompra oc)
     {
         var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var yaEntregadasOc = DatabaseService.ObtenerCantidadesEntregadasPorFolioEnSalidas(oc.Folio);
         _partidasSalidaPos.Clear();
 
+        int omitidosPorYaEntregados = 0;
         foreach (var part in oc.Partidas)
         {
-            if (part.ProductoId > 0 && prodsDict.TryGetValue(part.ProductoId, out var prod))
+            if (part.ProductoId > 0 && part.CantidadRecibida > 0m && prodsDict.TryGetValue(part.ProductoId, out var prod))
             {
-                decimal cantBase = part.CantidadRecibida > 0 ? part.CantidadRecibida : part.CantidadPedida;
                 decimal factor = part.FactorConversion > 0 ? part.FactorConversion : (prod.FactorConversion > 0 ? prod.FactorConversion : 1m);
-                decimal cantAlmacen = Math.Round(cantBase * factor, 2);
+                decimal cantAlmacen = Math.Round(part.CantidadRecibida * factor, 2);
+                if (yaEntregadasOc.TryGetValue(part.ProductoId, out decimal yaSalio) && yaSalio > 0m)
+                {
+                    cantAlmacen = Math.Max(0m, cantAlmacen - yaSalio);
+                    if (cantAlmacen <= 0m)
+                        omitidosPorYaEntregados++;
+                }
+
                 if (cantAlmacen > 0 && prod.StockActual > 0)
                     AgregarProductoAValeSalidaPos(prod, Math.Min(cantAlmacen, prod.StockActual));
             }
+        }
+
+        if (_partidasSalidaPos.Count == 0 && omitidosPorYaEntregados > 0)
+        {
+            DialogoFluent.Show(this,
+                $"Los artículos recibidos de la Orden de Compra {oc.Folio} ya fueron entregados previamente en un Vale de Salida (SAL-xxxx).",
+                "Material ya entregado",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
         }
 
         if (CboSalDepartamento != null && !string.IsNullOrWhiteSpace(oc.DepartamentoNombre))
@@ -788,20 +1127,34 @@ public partial class MainWindow
     private void CargarSolicitudEnSalidaPos(Solicitud sol)
     {
         var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var yaEntregadasSol = DatabaseService.ObtenerCantidadesEntregadasPorFolioEnSalidas(sol.Folio);
         _partidasSalidaPos.Clear();
 
         int agregados = 0;
+        int yaCubiertosPrevios = 0;
         foreach (var part in sol.Partidas)
         {
-            if (part.ProductoId > 0 && prodsDict.TryGetValue(part.ProductoId, out var prod) && prod.StockActual > 0)
+            if (part.ProductoId > 0 && prodsDict.TryGetValue(part.ProductoId, out var prod))
             {
-                decimal factor = prod.FactorConversion > 0 ? prod.FactorConversion : 1m;
-                decimal cantRequerida = Math.Round(part.CantidadSolicitada * factor, 2);
-                decimal cantEntregar = Math.Min(cantRequerida, prod.StockActual);
-                if (cantEntregar > 0)
+                decimal cantRequerida = DatabaseService.ConvertirCantidadSolicitudAUnidadAlmacen(part, prod);
+                if (yaEntregadasSol.TryGetValue(part.ProductoId, out decimal yaSalio) && yaSalio > 0m)
                 {
-                    AgregarProductoAValeSalidaPos(prod, cantEntregar);
-                    agregados++;
+                    cantRequerida = Math.Max(0m, cantRequerida - yaSalio);
+                    if (cantRequerida <= 0m)
+                    {
+                        yaCubiertosPrevios++;
+                        continue;
+                    }
+                }
+
+                if (prod.StockActual > 0 && cantRequerida > 0)
+                {
+                    decimal cantEntregar = Math.Min(cantRequerida, prod.StockActual);
+                    if (cantEntregar > 0)
+                    {
+                        AgregarProductoAValeSalidaPos(prod, cantEntregar);
+                        agregados++;
+                    }
                 }
             }
         }
@@ -827,11 +1180,22 @@ public partial class MainWindow
 
         if (agregados == 0)
         {
-            DialogoFluent.Show(this,
-                $"Ninguno de los artículos de la solicitud {sol.Folio} tiene stock disponible (> 0) en este momento en Almacén.",
-                "Sin stock disponible para surtir",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            if (yaCubiertosPrevios > 0)
+            {
+                DialogoFluent.Show(this,
+                    $"Los artículos de la solicitud {sol.Folio} ya fueron surtidos previamente en un Vale de Salida (SAL-xxxx).",
+                    "Solicitud ya surtida",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            else
+            {
+                DialogoFluent.Show(this,
+                    $"Ninguno de los artículos pendientes de la solicitud {sol.Folio} tiene stock disponible (> 0) en este momento en Almacén.",
+                    "Sin stock disponible para surtir",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
     }
 
@@ -1124,15 +1488,34 @@ public partial class MainWindow
             string rfc = string.IsNullOrWhiteSpace(txtRfc.Text) ? "XAXX010101000" : txtRfc.Text.Trim().ToUpperInvariant();
             int dias = Math.Max(1, (int)ParseDecimal(txtDias.Text, 2m));
 
-            nuevoProvId = DatabaseService.GuardarProveedor(new Proveedor
+            var existente = DatabaseService.ObtenerProveedores().FirstOrDefault(p =>
+                string.Equals(p.NombreComercial.Trim(), nomCom, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.RazonSocial.Trim(), razon, StringComparison.OrdinalIgnoreCase) ||
+                (!string.Equals(rfc, "XAXX010101000", StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(p.Rfc.Trim(), rfc, StringComparison.OrdinalIgnoreCase)));
+
+            if (existente != null)
             {
-                NombreComercial = nomCom,
-                RazonSocial = razon,
-                Rfc = rfc,
-                Telefono = (txtTel.Text ?? string.Empty).Trim(),
-                DiasEntregaPromedio = dias,
-                CondicionesPago = "Contado"
-            });
+                if (!string.Equals(rfc, "XAXX010101000", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existente.Rfc.Trim(), "XAXX010101000", StringComparison.OrdinalIgnoreCase))
+                {
+                    existente.Rfc = rfc;
+                    DatabaseService.GuardarProveedor(existente);
+                }
+                nuevoProvId = existente.Id;
+            }
+            else
+            {
+                nuevoProvId = DatabaseService.GuardarProveedor(new Proveedor
+                {
+                    NombreComercial = nomCom,
+                    RazonSocial = razon,
+                    Rfc = rfc,
+                    Telefono = (txtTel.Text ?? string.Empty).Trim(),
+                    DiasEntregaPromedio = dias,
+                    CondicionesPago = "Contado"
+                });
+            }
             win.DialogResult = true;
         };
 
@@ -1269,7 +1652,7 @@ public partial class MainWindow
             r.ProductoNombre = prodVinculado.Nombre;
             r.Familia = prodVinculado.Familia;
             r.StockActualAlmacen = prodVinculado.StockActual;
-            r.UltimoCostoCompraConIva = Math.Round(prodVinculado.UltimoCostoCompra * 1.16m, 2);
+            r.UltimoCostoCompraConIva = prodVinculado.UltimoCostoCompra;
 
             string folSol = (CboCompSolicitud?.SelectedItem as Solicitud)?.Folio ?? "COT";
             DatabaseService.GuardarCotizacionPartida(r, folSol);
@@ -1527,7 +1910,7 @@ public partial class MainWindow
                 UnidadAlmacen = uni,
                 FactorConversion = 1m,
                 StockMinimo = 1m,
-                UltimoCostoCompra = costoSugeridoSinIva,
+                UltimoCostoCompra = Math.Round(costoSugeridoSinIva * 1.16m, 2),
                 Ubicacion = "POR ASIGNAR"
             });
 
@@ -1862,7 +2245,79 @@ public partial class MainWindow
         if (string.Equals(oc.Estatus, "Autorizada / Pendiente Pago Finanzas", StringComparison.OrdinalIgnoreCase))
         {
             string fProg = string.IsNullOrWhiteSpace(oc.FechaProgramadaPago) ? DateTime.Today.ToString("yyyy-MM-dd") : oc.FechaProgramadaPago;
-            DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, "Pagada / Lista para Almacén", oc.CondicionPago, fProg);
+            string tiempoSugerido = DatabaseService.CalcularTiempoRelativoEntregaOc(oc, fProg);
+
+            var winPago = new Window
+            {
+                Title = $"Confirmar Pago y Tiempo de Entrega — {oc.Folio}",
+                Width = 460,
+                Height = 250,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                Background = Tk("ControlFillColorDefaultBrush"),
+                Foreground = Tk("TextFillColorPrimaryBrush")
+            };
+            var spPago = new StackPanel { Margin = new Thickness(16) };
+            spPago.Children.Add(new TextBlock
+            {
+                Text = $"Marcar {oc.Folio} ({oc.ProveedorNombre}) como Pagada",
+                FontWeight = FontWeights.Bold,
+                FontSize = 14,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            spPago.Children.Add(new TextBlock
+            {
+                Text = "Tiempo aproximado de entrega para el correo al gerente (\"La cotización ya fue pagada, tiempo aprox de entrega xxx\"):",
+                FontSize = 11.5,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            var cboTiempoPagoDash = new ComboBox
+            {
+                IsEditable = true,
+                Text = tiempoSugerido,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            cboTiempoPagoDash.Items.Add("Hoy mismo");
+            cboTiempoPagoDash.Items.Add("24 a 48 hrs");
+            cboTiempoPagoDash.Items.Add("1 día hábil");
+            cboTiempoPagoDash.Items.Add("1 a 2 días hábiles");
+            cboTiempoPagoDash.Items.Add("2 a 3 días hábiles");
+            cboTiempoPagoDash.Items.Add("3 a 5 días hábiles");
+            if (!cboTiempoPagoDash.Items.Contains(tiempoSugerido))
+                cboTiempoPagoDash.Items.Insert(0, tiempoSugerido);
+            spPago.Children.Add(cboTiempoPagoDash);
+
+            var chkEnviarCorreoPago = new CheckBox
+            {
+                Content = "Enviar correo de aviso de pago al gerente solicitante",
+                IsChecked = true,
+                FontSize = 11.5,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            spPago.Children.Add(chkEnviarCorreoPago);
+
+            var pnlBtnsPago = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var btnCancPago = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 0, 8, 0) };
+            var btnOkPago = new Wpf.Ui.Controls.Button { Content = "Confirmar Pago y Notificar", Appearance = ControlAppearance.Primary, Padding = new Thickness(14, 5, 14, 5) };
+            btnCancPago.Click += (_, _) => winPago.DialogResult = false;
+            btnOkPago.Click += (_, _) => winPago.DialogResult = true;
+            pnlBtnsPago.Children.Add(btnCancPago);
+            pnlBtnsPago.Children.Add(btnOkPago);
+            spPago.Children.Add(pnlBtnsPago);
+            winPago.Content = spPago;
+
+            if (winPago.ShowDialog() != true)
+                return;
+
+            DatabaseService.ActualizarEstatusYCondicionOrdenCompra(
+                oc.Id,
+                "Pagada / Lista para Almacén",
+                oc.CondicionPago,
+                fProg,
+                cboTiempoPagoDash.Text?.Trim(),
+                chkEnviarCorreoPago.IsChecked == true);
             RegistrarTransicionCheckpoint("Etapa 3: Pago Finanzas", "CP-4A", oc.Folio, oc.Estatus, "Pagada / Lista para Almacén", "Compras, Almacén", $"Se confirmó pago de {oc.Folio} ({oc.ProveedorNombre}); lista para recepción en Almacén.");
             CargarTodoElSistema(conservarPosicionCatalogo: true);
             return;
@@ -1960,9 +2415,11 @@ public partial class MainWindow
         if (DgDashboardPendientesCompras == null) return;
         var pendientes = DatabaseService.ObtenerPendientesOperativosCompras();
         DgDashboardPendientesCompras.ItemsSource = pendientes;
-        if (TabDashboardCheckpointsCompras != null)
+        if (TxtTituloPendientesComprasDashboard != null)
         {
-            TabDashboardCheckpointsCompras.Header = $"Solicitudes, XML y Vigencias ({pendientes.Count})";
+            TxtTituloPendientesComprasDashboard.Text = pendientes.Count > 0
+                ? $"Compras: solicitudes por cotizar, entradas sin XML y cotizaciones por vencer ({pendientes.Count})"
+                : "Compras: ✓ sin pendientes de solicitudes, XML ni vigencias";
         }
     }
 
@@ -2286,6 +2743,10 @@ public partial class MainWindow
         ConfigurarBotonSlot(BtnHojaSlot2, cols[1]);
         ConfigurarBotonSlot(BtnHojaSlot3, cols[2]);
 
+        // Mostrar solo las hojas de proveedores registrados (la hoja vacía aparece al usar "+ Proveedor")
+        BtnHojaSlot2.Visibility = cols[1].provId > 0 || _indiceSlotHojaProveedorActiva == cols[1].indiceColumna ? Visibility.Visible : Visibility.Collapsed;
+        BtnHojaSlot3.Visibility = cols[2].provId > 0 || _indiceSlotHojaProveedorActiva == cols[2].indiceColumna ? Visibility.Visible : Visibility.Collapsed;
+
         if (WpBotonesSlotsExtraHoja != null)
         {
             WpBotonesSlotsExtraHoja.Children.Clear();
@@ -2324,7 +2785,7 @@ public partial class MainWindow
             CboHojaProveedor.SelectedItem = provObj;
         }
 
-        var filasHoja = _renglonesComparativa
+        var filasHoja = ArticulosComparativaVisibles
             .Select(r => new RenglonHojaCotizacionProveedor(
                 r,
                 slot,
@@ -2356,21 +2817,24 @@ public partial class MainWindow
         ActualizarResumenBarraInferiorHoja(filasHoja);
     }
 
-    private void AlModificarCeldaHojaProveedor(RenglonHojaCotizacionProveedor filaEditada)
+    private void AlModificarCeldaHojaProveedor(RenglonHojaCotizacionProveedor filaEditada) =>
+        AlModificarCeldaHojaProveedor(filaEditada, usarProveedorSeleccionado: true);
+
+    private void AlModificarCeldaHojaProveedor(RenglonHojaCotizacionProveedor filaEditada, bool usarProveedorSeleccionado)
     {
         if (_sincronizandoHojaProveedor)
             return;
 
         var r = filaEditada.RenglonBase;
 
-        if (CboHojaProveedor?.SelectedItem is Proveedor provHoja && provHoja.Id > 0)
+        if (usarProveedorSeleccionado && CboHojaProveedor?.SelectedItem is Proveedor provHoja && provHoja.Id > 0)
         {
             filaEditada.ProveedorHojaId = provHoja.Id;
             filaEditada.ProveedorHojaNombre = provHoja.NombreMostrar;
         }
 
         int slotEfectivo = filaEditada.ObtenerSlotEfectivoLectura();
-        if (slotEfectivo == 0 && CboHojaProveedor?.SelectedItem is Proveedor provAsig && provAsig.Id > 0 && filaEditada.PrecioSinIva > 0)
+        if (slotEfectivo == 0 && usarProveedorSeleccionado && CboHojaProveedor?.SelectedItem is Proveedor provAsig && provAsig.Id > 0 && filaEditada.PrecioSinIva > 0)
         {
             slotEfectivo = filaEditada.AsegurarSlotParaEscritura();
         }
@@ -2381,6 +2845,7 @@ public partial class MainWindow
         r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
         SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
         DatabaseService.GuardarCotizacionPartida(r);
+        MarcarComparativaGuardada();
 
         foreach (var ex in r.ProveedoresExtra)
         {
@@ -2723,7 +3188,7 @@ public partial class MainWindow
         string hoyStr = DateTime.Today.ToString("yyyy-MM-dd");
 
         bool fleteAsignado = false;
-        foreach (var r in _renglonesComparativa)
+        foreach (var r in ArticulosComparativaVisibles)
         {
             if (r.TieneOcGenerada) continue;
 
@@ -2816,7 +3281,7 @@ public partial class MainWindow
         int cargados = 0;
         string hoyStr = DateTime.Today.ToString("yyyy-MM-dd");
 
-        foreach (var r in _renglonesComparativa)
+        foreach (var r in ArticulosComparativaVisibles)
         {
             if (r.TieneOcGenerada) continue;
 
@@ -2903,7 +3368,7 @@ public partial class MainWindow
         int provIdHoja = (CboHojaProveedor?.SelectedItem as Proveedor)?.Id ?? colActiva.provId;
         int adjudicados = 0;
 
-        foreach (var r in _renglonesComparativa)
+        foreach (var r in ArticulosComparativaVisibles)
         {
             if (r.TieneOcGenerada) continue;
             var filaHelper = new RenglonHojaCotizacionProveedor(r, _indiceSlotHojaProveedorActiva, null, provIdHoja, colActiva.nombreCompleto);
@@ -2950,7 +3415,7 @@ public partial class MainWindow
         if (!IsLoaded || _sincronizandoHojaProveedor || _cargandoDetalleComparativa)
             return;
 
-        if (DgMatrizComparativaRapida?.SelectedItem is CotizacionRenglonComparativo r &&
+        if (DgMatrizComparativaRapida?.SelectedItem is FilaMatrizProveedor { Articulo: var r } &&
             DgComparativa != null &&
             !ReferenceEquals(DgComparativa.SelectedItem, r))
         {
@@ -3001,6 +3466,7 @@ public partial class MainWindow
 
         if (ReferenceEquals(e.OriginalSource, TcModoCapturaComparativa))
         {
+            ConfirmarEdicionesPendientesComparativa();
             RefrescarHojaProveedorYAnalisisComparativa();
         }
     }
@@ -3009,132 +3475,14 @@ public partial class MainWindow
 
     private void ConstruirMatrizComparativaRapida()
     {
-        if (DgMatrizComparativaRapida == null)
-            return;
-
-        var p1 = ObtenerProveedorPredominanteSlot(1);
-        var p2 = ObtenerProveedorPredominanteSlot(2);
-        var p3 = ObtenerProveedorPredominanteSlot(3);
-        int extraCount = _renglonesComparativa.SelectMany(r => r.ProveedoresExtra).Select(x => x.ProveedorId).Where(id => id > 0).Distinct().Count();
-
-        if (ColMatrizProv1 != null) ColMatrizProv1.Header = $"P.U. {AbreviarNombreProveedorSlot(p1.nombreCorto, 15)}";
-        if (ColMatrizProv2 != null) ColMatrizProv2.Header = $"P.U. {AbreviarNombreProveedorSlot(p2.nombreCorto, 15)}";
-        if (ColMatrizProv3 != null) ColMatrizProv3.Header = extraCount > 0
-            ? $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 12)} (+{extraCount})"
-            : $"P.U. {AbreviarNombreProveedorSlot(p3.nombreCorto, 15)}";
-
-        var visTotal = ChkMatrizMostrarTotalConIva?.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        if (ColMatrizTotal1 != null)
-        {
-            ColMatrizTotal1.Header = $"Total {AbreviarNombreProveedorSlot(p1.nombreCorto, 11)}";
-            ColMatrizTotal1.Visibility = visTotal;
-        }
-        if (ColMatrizTotal2 != null)
-        {
-            ColMatrizTotal2.Header = $"Total {AbreviarNombreProveedorSlot(p2.nombreCorto, 11)}";
-            ColMatrizTotal2.Visibility = visTotal;
-        }
-        if (ColMatrizTotal3 != null)
-        {
-            ColMatrizTotal3.Header = $"Total {AbreviarNombreProveedorSlot(p3.nombreCorto, 11)}";
-            ColMatrizTotal3.Visibility = visTotal;
-        }
-
-        if (!ReferenceEquals(DgMatrizComparativaRapida.ItemsSource, _renglonesComparativa))
-        {
-            DgMatrizComparativaRapida.ItemsSource = _renglonesComparativa;
-        }
-        else
-        {
-            DgMatrizComparativaRapida.Items.Refresh();
-        }
-    }
-
-    private void DgMatrizComparativaRapida_CellEditEnding(object sender, System.Windows.Controls.DataGridCellEditEndingEventArgs e)
-    {
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            if (e.Row.Item is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
-                return;
-
-            var proveedores = CboCompProv1?.ItemsSource as IList<Proveedor> ?? DatabaseService.ObtenerProveedores();
-            string hoyStr = DateTime.Today.ToString("yyyy-MM-dd");
-
-            if (r.PrecioSinIva1 > 0)
-            {
-                if (r.Proveedor1Id <= 0)
-                {
-                    var pred1 = ObtenerProveedorPredominanteSlot(1);
-                    var pObj = proveedores.FirstOrDefault(p => p.Id == pred1.provId);
-                    if (pObj != null) AsignarProveedorASlotEnRenglon(r, 1, pObj);
-                }
-                if (string.IsNullOrWhiteSpace(r.FechaCotizacion1)) r.FechaCotizacion1 = hoyStr;
-            }
-            if (r.PrecioSinIva2 > 0)
-            {
-                if (r.NumeroOpcionesVisibles < 2) r.NumeroOpcionesVisibles = 2;
-                if (r.Proveedor2Id <= 0)
-                {
-                    var pred2 = ObtenerProveedorPredominanteSlot(2);
-                    var pObj = proveedores.FirstOrDefault(p => p.Id == pred2.provId);
-                    if (pObj != null) AsignarProveedorASlotEnRenglon(r, 2, pObj);
-                }
-                if (string.IsNullOrWhiteSpace(r.FechaCotizacion2)) r.FechaCotizacion2 = hoyStr;
-            }
-            if (r.PrecioSinIva3 > 0)
-            {
-                if (r.NumeroOpcionesVisibles < 3) r.NumeroOpcionesVisibles = 3;
-                if (r.Proveedor3Id <= 0)
-                {
-                    var pred3 = ObtenerProveedorPredominanteSlot(3);
-                    var pObj = proveedores.FirstOrDefault(p => p.Id == pred3.provId);
-                    if (pObj != null) AsignarProveedorASlotEnRenglon(r, 3, pObj);
-                }
-                if (string.IsNullOrWhiteSpace(r.FechaCotizacion3)) r.FechaCotizacion3 = hoyStr;
-            }
-
-            r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
-            SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
-            DatabaseService.GuardarCotizacionPartida(r);
-            if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel && ReferenceEquals(sel, r))
-                CargarProductoEnTarjetasComparativa(r);
-
-            RecalcularTotalesComparativa();
-        }), System.Windows.Threading.DispatcherPriority.Background);
-    }
-
-    private void ElegirGanadorDesdeMatriz(object sender, int slot)
-    {
-        if (sender is not FrameworkElement { Tag: CotizacionRenglonComparativo r } || r.TieneOcGenerada)
-            return;
-
-        int provId = slot switch { 1 => r.Proveedor1Id, 2 => r.Proveedor2Id, 3 => r.Proveedor3Id, _ => 0 };
-        decimal precio = slot switch { 1 => r.PrecioSinIva1, 2 => r.PrecioSinIva2, 3 => r.PrecioSinIva3, _ => 0m };
-
-        if (provId <= 0 || precio <= 0)
-        {
-            DialogoFluent.Show(this, $"Asigne primero un proveedor y un precio mayor a $0.00 en la Opción {slot} antes de adjudicar.", "Opción incompleta", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        r.ProveedorGanadorIndice = slot;
-        r.UnidadCompra = DatabaseService.NormalizarUnidadMedida(r.UnidadCompra);
-        SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
-        DatabaseService.GuardarCotizacionPartida(r);
-        if (DgComparativa?.SelectedItem is CotizacionRenglonComparativo sel && ReferenceEquals(sel, r))
-            CargarProductoEnTarjetasComparativa(r);
-
-        RecalcularTotalesComparativa();
+        if (DgMatrizComparativaRapida != null && CboMatrizProveedor3 != null)
+            ConstruirMatrizPorProveedor();
     }
 
     private void ChkMatrizMostrarTotalConIva_Changed(object sender, RoutedEventArgs e)
     {
         ConstruirMatrizComparativaRapida();
     }
-
-    private void BtnMatrizElegirOp1_Click(object sender, RoutedEventArgs e) => ElegirGanadorDesdeMatriz(sender, 1);
-    private void BtnMatrizElegirOp2_Click(object sender, RoutedEventArgs e) => ElegirGanadorDesdeMatriz(sender, 2);
-    private void BtnMatrizElegirOp3_Click(object sender, RoutedEventArgs e) => ElegirGanadorDesdeMatriz(sender, 3);
 
     // --- PASO 3: INTELIGENCIA DE COMPRAS · ANÁLISIS DE PRECIOS, ESCENARIOS Y AHORROS ---
 
@@ -3375,7 +3723,8 @@ public partial class MainWindow
         var productos = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
         var provDict = DatabaseService.ObtenerProveedores().ToDictionary(p => p.Id);
 
-        foreach (var part in sol.Partidas)
+        var articulos = sol.UsaPartidas ? sol.PartidasParaComparativa : sol.Partidas;
+        foreach (var part in articulos)
         {
             productos.TryGetValue(part.ProductoId, out var pObj);
             var provsExtra = part.Id > 0 ? DatabaseService.ObtenerProveedoresExtraPartida(part.Id) : new List<CotizacionProveedorExtra>();
@@ -3391,6 +3740,7 @@ public partial class MainWindow
             lista.Add(new CotizacionRenglonComparativo
             {
                 SolicitudPartidaId = part.Id,
+                NombrePartida = part.NombrePartida,
                 ProductoId = part.ProductoId,
                 ProductoCodigo = part.ProductoCodigo,
                 ProductoNombre = part.ProductoNombre,
@@ -3779,5 +4129,4153 @@ public partial class MainWindow
         {
             BarcodePrintService.MostrarVistaPreviaEImprimirSalida(this, sal, soloDescargar: true);
         }
+    }
+
+    // =========================================================================
+    // FASE 1: BITÁCORA POR USUARIO, FAMILIAS GENÉRICAS, DIRECTO A OBRA,
+    //         REINGRESO DE SOBRANTES Y AJUSTES DE INVENTARIO / MERMA (AJU)
+    // =========================================================================
+
+    private void MostrarModalBitacoraUsuarios(Window? ownerWin = null)
+    {
+        var win = new Window
+        {
+            Title = "Bitácora de Actividad Nominal por Usuario",
+            Width = 940,
+            Height = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = ownerWin ?? this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var topBar = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+
+        var cboUsuarioFiltro = new ComboBox { Width = 210, Margin = new Thickness(8, 0, 8, 0) };
+        cboUsuarioFiltro.Items.Add("Todos");
+        foreach (var u in DatabaseService.ObtenerUsuariosSistema(soloActivos: false))
+            cboUsuarioFiltro.Items.Add(u.Nombre);
+        cboUsuarioFiltro.SelectedIndex = 0;
+
+        var rightPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        rightPanel.Children.Add(new TextBlock { Text = "Filtrar por usuario:", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
+        rightPanel.Children.Add(cboUsuarioFiltro);
+        DockPanel.SetDock(rightPanel, Dock.Right);
+        topBar.Children.Add(rightPanel);
+
+        var titleStack = new StackPanel();
+        titleStack.Children.Add(new TextBlock { Text = "Historial de Operaciones por Usuario", FontSize = 16, FontWeight = FontWeights.SemiBold });
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = "Trazabilidad nominal de quién creó solicitudes, emitió órdenes, recibió mercancía, entregó material o ajustó inventario.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush")
+        });
+        topBar.Children.Add(titleStack);
+        DockPanel.SetDock(topBar, Dock.Top);
+        root.Children.Add(topBar);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            CanUserAddRows = false
+        };
+        dg.Columns.Add(new DataGridTextColumn { Header = "Fecha y Hora", Binding = new System.Windows.Data.Binding("FechaHora"), Width = 130, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Usuario", Binding = new System.Windows.Data.Binding("UsuarioNombre"), Width = 140, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Vista / Rol", Binding = new System.Windows.Data.Binding("RolOperativo"), Width = 95, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Módulo", Binding = new System.Windows.Data.Binding("Modulo"), Width = 125, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Acción", Binding = new System.Windows.Data.Binding("Accion"), Width = 145, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Folio", Binding = new System.Windows.Data.Binding("FolioReferencia"), Width = 120, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Detalle", Binding = new System.Windows.Data.Binding("Detalle"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+
+        void RecargarBitacora()
+        {
+            string f = cboUsuarioFiltro.SelectedItem?.ToString() ?? "Todos";
+            dg.ItemsSource = DatabaseService.ObtenerBitacoraUsuarios(null, f == "Todos" ? string.Empty : f, 300);
+        }
+
+        cboUsuarioFiltro.SelectionChanged += (_, _) => RecargarBitacora();
+        RecargarBitacora();
+
+        root.Children.Add(dg);
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    private void BtnAgregarPorFamiliaGenericaSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        var familias = DatabaseService.ObtenerResumenFamiliasCatalogo();
+        if (familias.Count == 0)
+        {
+            DialogoFluent.Show(this, "Aún no hay familias genéricas registradas en el catálogo.", "Sin familias", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Solicitar por Familia Genérica (Sin casarse con una marca específica)",
+            Width = 760,
+            Height = 500,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var top = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        top.Children.Add(new TextBlock
+        {
+            Text = "Seleccionar Familia Funcional de Material",
+            FontSize = 15.5,
+            FontWeight = FontWeights.SemiBold
+        });
+        top.Children.Add(new TextBlock
+        {
+            Text = "Elija la función o familia genérica (ej. Pegamento para PVC, Tubo Conduit). El sistema sugiere la marca con mejor costo/existencia actual, pero Compras o Almacén podrán intercambiar la marca al cotizar o recoger.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var filterGrid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        filterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        filterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        var txtFiltro = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Filtrar familia o marca disponible (ej. PVC, cable, guante, disco)...", Margin = new Thickness(0, 0, 8, 0) };
+        var txtCant = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Cant. (1)", Text = string.IsNullOrWhiteSpace(TxtSolCantidadAgregar?.Text) ? "1" : TxtSolCantidadAgregar.Text };
+        Grid.SetColumn(txtFiltro, 0);
+        Grid.SetColumn(txtCant, 1);
+        filterGrid.Children.Add(txtFiltro);
+        filterGrid.Children.Add(txtCant);
+        top.Children.Add(filterGrid);
+
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single,
+            ItemsSource = familias
+        };
+        dg.Columns.Add(new DataGridTextColumn { Header = "Categoría", Binding = new System.Windows.Data.Binding("CategoriaNombre"), Width = 125, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Familia Genérica", Binding = new System.Windows.Data.Binding("Familia"), Width = 175, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Variantes / Marcas en Catálogo", Binding = new System.Windows.Data.Binding("MarcasResumen"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Stock Total Familia", Binding = new System.Windows.Data.Binding("StockTotalFamilia"), Width = 120, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadBase"), Width = 80, ElementStyle = CeldaRecortable() });
+        if (familias.Count > 0) dg.SelectedIndex = 0;
+
+        txtFiltro.TextChanged += (_, _) =>
+        {
+            string q = txtFiltro.Text?.Trim() ?? string.Empty;
+            dg.ItemsSource = string.IsNullOrWhiteSpace(q)
+                ? familias
+                : familias.Where(f =>
+                    f.Familia.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    f.CategoriaNombre.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    f.MarcasResumen.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (dg.Items.Count > 0) dg.SelectedIndex = 0;
+        };
+
+        var bottom = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        var chkComoConceptoAbierto = new CheckBox
+        {
+            Content = "Dejar marca abierta hasta Comparativa (Concepto Genérico [FAMILIA])",
+            IsChecked = false,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Si se marca, se agrega como concepto genérico de familia; si no, usa el producto representante sugerido de la familia permitiendo cambiar marca después."
+        };
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnAdd = new Wpf.Ui.Controls.Button { Content = "+ Agregar Familia a Solicitud", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnAdd);
+        DockPanel.SetDock(btnPanel, Dock.Right);
+        bottom.Children.Add(btnPanel);
+        bottom.Children.Add(chkComoConceptoAbierto);
+        DockPanel.SetDock(bottom, Dock.Bottom);
+        root.Children.Add(bottom);
+        root.Children.Add(dg);
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnAdd.Click += (_, _) =>
+        {
+            if (dg.SelectedItem is not ResumenFamiliaCatalogo) return;
+            win.DialogResult = true;
+        };
+        dg.MouseDoubleClick += (_, _) =>
+        {
+            if (dg.SelectedItem is ResumenFamiliaCatalogo) win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() == true && dg.SelectedItem is ResumenFamiliaCatalogo famSel)
+        {
+            decimal cant = ParseDecimal(txtCant.Text, 1m);
+            if (cant <= 0) cant = 1m;
+
+            if (chkComoConceptoAbierto.IsChecked == true || famSel.ProductoSugeridoId <= 0)
+            {
+                _partidasNuevaSolicitud.Add(new SolicitudPartida
+                {
+                    ProductoId = 0,
+                    ProductoCodigo = "FAMILIA",
+                    ProductoNombre = $"[FAMILIA: {famSel.Familia}] (Cualquier marca equivalente)",
+                    UnidadCompra = famSel.UnidadBase,
+                    CantidadSolicitada = cant,
+                    StockActualAlmacen = famSel.StockTotalFamilia,
+                    IncluirEnCotizacion = true
+                });
+            }
+            else
+            {
+                var prodRep = DatabaseService.ObtenerProductos().FirstOrDefault(p => p.Id == famSel.ProductoSugeridoId);
+                if (prodRep != null)
+                {
+                    _partidasNuevaSolicitud.Add(new SolicitudPartida
+                    {
+                        ProductoId = prodRep.Id,
+                        ProductoCodigo = prodRep.CodigoInterno,
+                        ProductoNombre = $"{prodRep.Nombre} [Familia: {famSel.Familia} — Marca intercambiable]",
+                        UnidadCompra = prodRep.UnidadCompra,
+                        CantidadSolicitada = cant,
+                        StockActualAlmacen = famSel.StockTotalFamilia,
+                        IncluirEnCotizacion = true
+                    });
+                }
+            }
+            DgPartidasNuevaSolicitud.Items.Refresh();
+        }
+    }
+
+    private void BtnSustituirProductoEnRecepcionOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una Orden de Compra.", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var partidaSel = DgPartidasRecepcionOc.SelectedItem as OrdenCompraPartida ?? oc.Partidas.FirstOrDefault();
+        if (partidaSel == null)
+        {
+            DialogoFluent.Show(this, "Seleccione en la tabla de recepción la partida cuya marca o producto desea sustituir.", "Seleccione partida", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var todosProds = DatabaseService.ObtenerProductos();
+        var prodActual = todosProds.FirstOrDefault(p => p.Id == partidaSel.ProductoId);
+        string familiaActual = prodActual?.Familia ?? string.Empty;
+
+        var candidatos = todosProds
+            .OrderByDescending(p => !string.IsNullOrWhiteSpace(familiaActual) && string.Equals(p.Familia, familiaActual, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(p => p.Nombre)
+            .ToList();
+
+        var win = new Window
+        {
+            Title = $"Sustituir Marca / Producto Equivalente en {oc.Folio}",
+            Width = 680,
+            Height = 460,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var top = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        top.Children.Add(new TextBlock
+        {
+            Text = $"Partida original: {partidaSel.ProductoCodigo} — {partidaSel.ProductoNombre}",
+            FontSize = 14.5,
+            FontWeight = FontWeights.SemiBold
+        });
+        top.Children.Add(new TextBlock
+        {
+            Text = "Si al recoger con el proveedor entregaron otra marca o variante equivalente, selecciónela aquí para que el inventario y el kardex reciban el artículo exacto:",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var txtBuscar = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "Buscar sustituto por nombre, marca, familia o código...",
+            Text = familiaActual,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        top.Children.Add(txtBuscar);
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single
+        };
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("CodigoInterno"), Width = 100, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Producto / Marca", Binding = new System.Windows.Data.Binding("Nombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Familia", Binding = new System.Windows.Data.Binding("Familia"), Width = 140, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Stock", Binding = new System.Windows.Data.Binding("StockActual"), Width = 75, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Ubicación", Binding = new System.Windows.Data.Binding("Ubicacion"), Width = 85, ElementStyle = CeldaRecortable() });
+
+        void FiltrarSustitutos()
+        {
+            string q = txtBuscar.Text?.Trim() ?? string.Empty;
+            dg.ItemsSource = string.IsNullOrWhiteSpace(q)
+                ? candidatos
+                : candidatos.Where(p =>
+                    p.Nombre.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    p.Familia.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    p.CodigoInterno.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (dg.Items.Count > 0) dg.SelectedIndex = 0;
+        }
+        txtBuscar.TextChanged += (_, _) => FiltrarSustitutos();
+        FiltrarSustitutos();
+
+        var bottom = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        var txtMotivo = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Motivo (ej. Proveedor entregó marca equivalente por disponibilidad en mostrador)", Width = 390, HorizontalAlignment = HorizontalAlignment.Left };
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnOk = new Wpf.Ui.Controls.Button { Content = "Aplicar Sustitución", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnOk);
+        DockPanel.SetDock(btnPanel, Dock.Right);
+        bottom.Children.Add(btnPanel);
+        bottom.Children.Add(txtMotivo);
+        DockPanel.SetDock(bottom, Dock.Bottom);
+        root.Children.Add(bottom);
+        root.Children.Add(dg);
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnOk.Click += (_, _) =>
+        {
+            if (dg.SelectedItem is not Producto) return;
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() == true && dg.SelectedItem is Producto prodNuevo)
+        {
+            string motivo = string.IsNullOrWhiteSpace(txtMotivo.Text) ? "Cambio de marca/equivalente al recibir" : txtMotivo.Text.Trim();
+            DatabaseService.CambiarProductoEnPartidaOrdenCompra(partidaSel.Id, prodNuevo, motivo);
+            CargarTodoElSistema();
+            DialogoFluent.Show(this,
+                $"La partida se actualizó a '{prodNuevo.CodigoInterno} — {prodNuevo.Nombre}'.\n\nYa puede registrar su recepción en almacén o entrega directa a obra.",
+                "Marca / Producto Sustituido",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnRegistrarRecepcionDirectaObraOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una Orden de Compra.", "Sin OC seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (oc.Estatus == "Cancelada")
+        {
+            DialogoFluent.Show(this, "Esta Orden de Compra está Cancelada.", "OC Cancelada", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Si todas las cantidades 'Recibir Hoy' están en 0, precargar automáticamente todo lo pendiente para ahorrar clics
+        if (oc.Partidas.All(p => p.CantidadRecibirAhora <= 0m))
+        {
+            foreach (var p in oc.Partidas)
+                p.CantidadRecibirAhora = Math.Max(0m, p.CantidadPendiente);
+            DgPartidasRecepcionOc.Items.Refresh();
+        }
+
+        var aRecibir = oc.Partidas
+            .Where(p => p.CantidadRecibirAhora > 0)
+            .Select(p => (p, p.CantidadRecibirAhora))
+            .ToList();
+
+        if (aRecibir.Count == 0)
+        {
+            DialogoFluent.Show(this, "No hay cantidades pendientes por recibir en esta Orden de Compra.", "Sin cantidades", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = $"Recolección con Proveedor y Entrega Directa a Obra — {oc.Folio}",
+            Width = 560,
+            Height = 500,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Cerrar Compra con Entrega Directa a Obra / Servicio",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Use esta opción cuando el material se recogió en mostrador del proveedor y se llevó directo al proyecto (sin pisar los anaqueles de Almacén). El sistema registrará la Entrada y su Salida Espejo automática al proyecto, conservando el Stock de Almacén intacto.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 12)
+        });
+
+        root.Children.Add(new TextBlock { Text = $"Proyecto destino: {oc.ProyectoNombre}", FontWeight = FontWeights.SemiBold, FontSize = 12.5, Margin = new Thickness(0, 0, 0, 8) });
+
+        root.Children.Add(new TextBlock { Text = "Persona que recogió el material o recibió en obra *", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var cboPersona = new ComboBox
+        {
+            ItemsSource = DatabaseService.ObtenerEncargados().Select(x => x.Nombre).Distinct().ToList(),
+            IsEditable = true,
+            Text = !string.IsNullOrWhiteSpace(oc.EncargadoNombre) ? oc.EncargadoNombre : DatabaseService.ObtenerUsuarioActivo().Nombre,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(cboPersona);
+
+        root.Children.Add(new TextBlock { Text = "Folio de Remisión / Factura o Nota de Mostrador", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtRemision = new Wpf.Ui.Controls.TextBox
+        {
+            Text = TxtFolioRemisionRecepcionOc?.Text ?? string.Empty,
+            PlaceholderText = "Ej. REM-9012 / Nota mostrador Home Depot / Servicio en sitio",
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(txtRemision);
+
+        var chkServicio = new CheckBox
+        {
+            Content = "Es Servicio / Flete / Gasto Directo No Inventariable (no requiere paso por anaquel)",
+            IsChecked = false,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(chkServicio);
+
+        root.Children.Add(new TextBlock { Text = "Lugar de entrega para correo al gerente (\"...concluido con entrega en xxx\"):", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtLugarCorreoObra = new Wpf.Ui.Controls.TextBox
+        {
+            Text = !string.IsNullOrWhiteSpace(oc.ProyectoNombre) ? $"Obra / Proyecto {oc.ProyectoNombre}" : "Directo en Obra",
+            PlaceholderText = "Ej. Obra Norte / Planta Mérida / Entregado en sitio",
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        root.Children.Add(txtLugarCorreoObra);
+
+        var chkNotificarCorreoObra = new CheckBox
+        {
+            Content = "Enviar correo de conclusión de folio al gerente solicitante",
+            IsChecked = true,
+            FontSize = 11.5,
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(chkNotificarCorreoObra);
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnConfirm = new Wpf.Ui.Controls.Button { Content = "Confirmar Entrega Directa a Obra", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnConfirm);
+        root.Children.Add(btnPanel);
+
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnConfirm.Click += (_, _) => win.DialogResult = true;
+
+        win.Content = root;
+        if (win.ShowDialog() != true)
+            return;
+
+        string persona = string.IsNullOrWhiteSpace(cboPersona.Text) ? DatabaseService.ObtenerUsuarioActivo().Nombre : cboPersona.Text.Trim();
+        string rem = txtRemision.Text?.Trim() ?? string.Empty;
+        string obs = TxtNotasRecepcionOc?.Text?.Trim() ?? string.Empty;
+        string lugarObraPersonalizado = txtLugarCorreoObra.Text?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(lugarObraPersonalizado) && !lugarObraPersonalizado.Contains(persona, StringComparison.OrdinalIgnoreCase))
+            lugarObraPersonalizado = $"{lugarObraPersonalizado} (Recibió: {persona})";
+
+        bool esServ = chkServicio.IsChecked == true;
+        var (ent, sal) = DatabaseService.RegistrarRecepcionDirectaAObra(
+            oc,
+            aRecibir,
+            persona,
+            rem,
+            obs,
+            esServ,
+            lugarObraPersonalizado,
+            chkNotificarCorreoObra.IsChecked == true);
+
+        TxtNotasRecepcionOc?.Clear();
+        TxtFolioRemisionRecepcionOc?.Clear();
+        CargarTodoElSistema();
+
+        DialogoFluent.Show(this,
+            $"Se registró exitosamente la operación directa de {oc.Folio}:\n\n" +
+            $"• Folio Entrada Contable: {ent.Folio} ({ent.TipoEntrada})\n" +
+            (sal != null ? $"• Folio Salida Espejo a Obra: {sal.Folio} (Entregado a: {persona})\n" : "") +
+            $"• Proyecto imputado: {oc.ProyectoNombre}\n" +
+            "• El Stock físico de los anaqueles de Almacén se mantuvo intacto (variación neta 0).",
+            "Entrega Directa a Obra Registrada",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void BtnReingresoSobranteObra_Click(object sender, RoutedEventArgs e)
+    {
+        var win = new Window
+        {
+            Title = "Reingresar Material Sobrante de Obra a Stock de Almacén",
+            Width = 760,
+            Height = 540,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var top = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        top.Children.Add(new TextBlock
+        {
+            Text = "Reingreso de Sobrante de Obra a Bolsa Libre de Almacén",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold
+        });
+        top.Children.Add(new TextBlock
+        {
+            Text = "Use esta ventana cuando regrese material útil de una obra (incluso si fue comprado directo en mostrador y no tuvo un Vale de Salida SAL previo). El material se sumará al Stock Actual en la ubicación de anaquel indicada.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 10)
+        });
+
+        var metaGrid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        metaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        metaGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var spProy = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spProy.Children.Add(new TextBlock { Text = "Proyecto / Obra de donde regresa *", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var cboProy = new ComboBox { ItemsSource = DatabaseService.ObtenerProyectos(), IsEditable = true };
+        if (cboProy.Items.Count > 0) cboProy.SelectedIndex = 0;
+        spProy.Children.Add(cboProy);
+
+        var spPersona = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
+        spPersona.Children.Add(new TextBlock { Text = "Persona que entrega el sobrante en Almacén *", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var cboPersona = new ComboBox
+        {
+            ItemsSource = DatabaseService.ObtenerEncargados().Select(x => x.Nombre).Distinct().ToList(),
+            IsEditable = true,
+            Text = DatabaseService.ObtenerUsuarioActivo().Nombre
+        };
+        spPersona.Children.Add(cboPersona);
+
+        Grid.SetColumn(spProy, 0);
+        Grid.SetColumn(spPersona, 1);
+        metaGrid.Children.Add(spProy);
+        metaGrid.Children.Add(spPersona);
+        top.Children.Add(metaGrid);
+
+        var addBar = new Grid { Margin = new Thickness(0, 2, 0, 4) };
+        addBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        addBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
+        addBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        addBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var prods = DatabaseService.ObtenerProductos();
+        var cboProd = new ComboBox { ItemsSource = prods, IsEditable = true, Margin = new Thickness(0, 0, 6, 0) };
+        var txtCant = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Cant. (1)", Text = "1", Margin = new Thickness(0, 0, 6, 0) };
+        var txtUbic = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Anaquel (A-01)", Text = "A-01", Margin = new Thickness(0, 0, 6, 0) };
+        var btnAdd = new Wpf.Ui.Controls.Button { Content = "+ Agregar sobrante", Appearance = ControlAppearance.Primary };
+
+        cboProd.SelectionChanged += (_, _) =>
+        {
+            if (cboProd.SelectedItem is Producto pSel && !string.IsNullOrWhiteSpace(pSel.Ubicacion))
+                txtUbic.Text = pSel.Ubicacion;
+        };
+
+        Grid.SetColumn(cboProd, 0);
+        Grid.SetColumn(txtCant, 1);
+        Grid.SetColumn(txtUbic, 2);
+        Grid.SetColumn(btnAdd, 3);
+        addBar.Children.Add(cboProd);
+        addBar.Children.Add(txtCant);
+        addBar.Children.Add(txtUbic);
+        addBar.Children.Add(btnAdd);
+        top.Children.Add(addBar);
+
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
+
+        var partidas = new ObservableCollection<EntradaPartida>();
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            ItemsSource = partidas
+        };
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("ProductoCodigo"), IsReadOnly = true, Width = 100 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Producto", Binding = new System.Windows.Data.Binding("ProductoNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Cant. a Reingresar", Binding = new System.Windows.Data.Binding("CantidadIngresadaAlmacen"), Width = 130 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Unidad", Binding = new System.Windows.Data.Binding("UnidadAlmacen"), IsReadOnly = true, Width = 90 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Ubicación Anaquel", Binding = new System.Windows.Data.Binding("UbicacionAlmacen"), Width = 130 });
+
+        btnAdd.Click += (_, _) =>
+        {
+            if (cboProd.SelectedItem is not Producto prod)
+            {
+                DialogoFluent.Show(win, "Seleccione un artículo del catálogo.", "Artículo requerido", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            decimal cant = ParseDecimal(txtCant.Text, 1m);
+            if (cant <= 0) cant = 1m;
+            string ubic = string.IsNullOrWhiteSpace(txtUbic.Text) ? prod.Ubicacion : txtUbic.Text.Trim();
+
+            var existente = partidas.FirstOrDefault(x => x.ProductoId == prod.Id);
+            if (existente != null)
+            {
+                existente.CantidadIngresadaAlmacen += cant;
+                existente.CantidadCompraRecibida = existente.CantidadIngresadaAlmacen;
+                dg.Items.Refresh();
+            }
+            else
+            {
+                partidas.Add(new EntradaPartida
+                {
+                    ProductoId = prod.Id,
+                    ProductoCodigo = prod.CodigoInterno,
+                    ProductoNombre = prod.Nombre,
+                    CantidadCompraRecibida = cant,
+                    UnidadCompra = prod.UnidadAlmacen,
+                    FactorConversion = 1m,
+                    CantidadIngresadaAlmacen = cant,
+                    UnidadAlmacen = prod.UnidadAlmacen,
+                    UbicacionAlmacen = ubic,
+                    CostoUnitarioCompraConIva = prod.UltimoCostoCompra
+                });
+            }
+        };
+
+        var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
+        var txtNotas = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Observaciones del sobrante (ej. Material nuevo sin usar al cierre de instalación)...", Width = 420, HorizontalAlignment = HorizontalAlignment.Left };
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnSave = new Wpf.Ui.Controls.Button { Content = "Reingresar a Stock", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnSave);
+        DockPanel.SetDock(btnPanel, Dock.Right);
+        bottom.Children.Add(btnPanel);
+        bottom.Children.Add(txtNotas);
+        DockPanel.SetDock(bottom, Dock.Bottom);
+        root.Children.Add(bottom);
+        root.Children.Add(dg);
+
+        EntradaAlmacen? entradaCreada = null;
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnSave.Click += (_, _) =>
+        {
+            if (partidas.Count == 0)
+            {
+                DialogoFluent.Show(win, "Agregue al menos un artículo sobrante para reingresar.", "Sin artículos", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            string proyNombre = (cboProy.SelectedItem as Proyecto)?.Nombre ?? cboProy.Text?.Trim() ?? "Obra General";
+            string persona = string.IsNullOrWhiteSpace(cboPersona.Text) ? DatabaseService.ObtenerUsuarioActivo().Nombre : cboPersona.Text.Trim();
+            entradaCreada = DatabaseService.RegistrarReingresoSobranteObra(proyNombre, persona, txtNotas.Text?.Trim() ?? string.Empty, partidas.ToList());
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() == true && entradaCreada != null)
+        {
+            CargarTodoElSistema();
+            DialogoFluent.Show(this,
+                $"Se registró el reingreso de sobrante con folio {entradaCreada.Folio} y se incrementaron las existencias en Almacén.",
+                "Sobrante Reingresado a Stock",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnAjusteInventarioMerma_Click(object sender, RoutedEventArgs e)
+    {
+        var prods = DatabaseService.ObtenerProductos();
+        if (prods.Count == 0) return;
+
+        var win = new Window
+        {
+            Title = "Ajuste Físico de Inventario o Baja por Merma / Daño (AJU-xxxx)",
+            Width = 560,
+            Height = 450,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Ajuste Cíclico de Inventario o Registro de Merma (AJU)",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Cuadre las existencias reales de un anaquel tras un conteo físico o dé de baja material dañado/extraviado sin inventar salidas falsas a obra. Quedará auditado con folio AJU-xxxx.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 12)
+        });
+
+        root.Children.Add(new TextBlock { Text = "Artículo a ajustar *", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var cboProd = new ComboBox
+        {
+            ItemsSource = prods,
+            IsEditable = true,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        if (_productoEnFicha != null)
+            cboProd.SelectedItem = prods.FirstOrDefault(p => p.Id == _productoEnFicha.Id);
+        if (cboProd.SelectedItem == null && prods.Count > 0)
+            cboProd.SelectedIndex = 0;
+        root.Children.Add(cboProd);
+
+        var gridStock = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        gridStock.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridStock.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridStock.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var spActual = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spActual.Children.Add(new TextBlock { Text = "Stock en Sistema", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtStockSistema = new Wpf.Ui.Controls.TextBox { IsReadOnly = true };
+        spActual.Children.Add(txtStockSistema);
+
+        var spNuevo = new StackPanel { Margin = new Thickness(3, 0, 3, 0) };
+        spNuevo.Children.Add(new TextBlock { Text = "Existencia Física Real *", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtStockFisico = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Conteo real" };
+        spNuevo.Children.Add(txtStockFisico);
+
+        var spUbic = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
+        spUbic.Children.Add(new TextBlock { Text = "Ubicación Anaquel", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtUbic = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Ej. A-01" };
+        spUbic.Children.Add(txtUbic);
+
+        Grid.SetColumn(spActual, 0);
+        Grid.SetColumn(spNuevo, 1);
+        Grid.SetColumn(spUbic, 2);
+        gridStock.Children.Add(spActual);
+        gridStock.Children.Add(spNuevo);
+        gridStock.Children.Add(spUbic);
+        root.Children.Add(gridStock);
+
+        root.Children.Add(new TextBlock { Text = "Tipo de Ajuste *", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var cboTipoAjuste = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+        cboTipoAjuste.Items.Add("Conteo Cíclico Físico (Cuadre de Anaquel)");
+        cboTipoAjuste.Items.Add("Baja por Merma / Material Dañado o Caduco");
+        cboTipoAjuste.Items.Add("Baja por Extravío / Faltante en Bodega");
+        cboTipoAjuste.Items.Add("Alta por Hallazgo en Inventario Físico");
+        cboTipoAjuste.SelectedIndex = 0;
+        root.Children.Add(cboTipoAjuste);
+
+        root.Children.Add(new TextBlock { Text = "Motivo / Justificación detallada *", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        var txtMotivo = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "Explique la razón de la diferencia física o daño...",
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        root.Children.Add(txtMotivo);
+
+        void SincronizarProductoSel()
+        {
+            if (cboProd.SelectedItem is Producto p)
+            {
+                txtStockSistema.Text = $"{p.StockActual:0.##} {p.UnidadAlmacen}";
+                txtStockFisico.Text = p.StockActual.ToString("0.##", CultureInfo.InvariantCulture);
+                txtUbic.Text = p.Ubicacion;
+            }
+        }
+        cboProd.SelectionChanged += (_, _) => SincronizarProductoSel();
+        SincronizarProductoSel();
+
+        var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnApply = new Wpf.Ui.Controls.Button { Content = "Aplicar Ajuste (AJU-xxxx)", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnPanel.Children.Add(btnCancel);
+        btnPanel.Children.Add(btnApply);
+        root.Children.Add(btnPanel);
+
+        string folioGenerado = string.Empty;
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnApply.Click += (_, _) =>
+        {
+            if (cboProd.SelectedItem is not Producto pSel)
+            {
+                DialogoFluent.Show(win, "Seleccione un artículo del catálogo.", "Artículo requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            decimal nuevoStock = ParseDecimal(txtStockFisico.Text, -1m);
+            if (nuevoStock < 0m)
+            {
+                DialogoFluent.Show(win, "Ingrese una existencia física válida (mayor o igual a 0).", "Cantidad inválida", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(txtMotivo.Text))
+            {
+                DialogoFluent.Show(win, "Es obligatorio capturar el motivo o justificación del ajuste para la bitácora de auditoría.", "Motivo requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string tipo = cboTipoAjuste.SelectedItem?.ToString() ?? "Ajuste Físico";
+            string ubicNueva = txtUbic.Text?.Trim() ?? pSel.Ubicacion;
+            if (!string.IsNullOrWhiteSpace(ubicNueva) && !string.Equals(pSel.Ubicacion, ubicNueva, StringComparison.OrdinalIgnoreCase))
+            {
+                pSel.Ubicacion = ubicNueva;
+                DatabaseService.GuardarProducto(pSel);
+            }
+            var entAjuste = DatabaseService.RegistrarAjusteInventarioAlmacen(
+                pSel,
+                nuevoStock,
+                tipo,
+                txtMotivo.Text.Trim());
+            folioGenerado = entAjuste.Folio;
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() == true && !string.IsNullOrWhiteSpace(folioGenerado))
+        {
+            CargarTodoElSistema();
+            DialogoFluent.Show(this,
+                $"Ajuste de inventario aplicado y auditado con el folio {folioGenerado}.",
+                "Ajuste Aplicado",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+    }
+
+    // =========================================================================
+    // FASE 2: MALETINES / KITS DE HERRAMIENTAS (KIT-xxxx) CON SALIDA Y
+    //         CHECK-LIST DE REGRESO EN 1 CLIC (OPERACIÓN SIN ALMACENISTA)
+    // =========================================================================
+
+    private void BtnAbrirGestorKitsHerramientas_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarModalGestorKitsHerramientas(null);
+    }
+
+    private void BtnCargarKitEnPrestamoActual_Click(object sender, RoutedEventArgs e)
+    {
+        var kits = DatabaseService.ObtenerKitsHerramientas();
+        if (kits.Count == 0)
+        {
+            MostrarModalGestorKitsHerramientas(null);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Despachar o Cargar Maletín / Kit de Herramientas (KIT-xxxx) en 1 Clic",
+            Width = 760,
+            Height = 480,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var top = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        top.Children.Add(new TextBlock
+        {
+            Text = "Seleccionar Maletín / Kit para Salida Rápida",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold
+        });
+        top.Children.Add(new TextBlock
+        {
+            Text = "Elija un maletín armado (KIT-xxxx). Puede cargar sus herramientas a la lista actual de préstamo o emitir el Vale de Préstamo (PRE-xxxx) en un solo clic:",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var formRapido = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        formRapido.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        formRapido.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        formRapido.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var spDep = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+        spDep.Children.Add(new TextBlock { Text = "Depto. que Aprueba", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var cboDep = new ComboBox { ItemsSource = DatabaseService.ObtenerDepartamentos() };
+        if (CboPreDepartamento?.SelectedItem is Departamento dPre)
+            cboDep.SelectedItem = cboDep.Items.Cast<Departamento>().FirstOrDefault(x => x.Id == dPre.Id);
+        if (cboDep.SelectedItem == null && cboDep.Items.Count > 0) cboDep.SelectedIndex = 0;
+        spDep.Children.Add(cboDep);
+
+        var spPer = new StackPanel { Margin = new Thickness(3, 0, 3, 0) };
+        spPer.Children.Add(new TextBlock { Text = "Persona que lleva el Maletín *", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var cboPer = new ComboBox
+        {
+            ItemsSource = DatabaseService.ObtenerEncargados().Select(x => x.Nombre).Distinct().ToList(),
+            IsEditable = true,
+            Text = !string.IsNullOrWhiteSpace(CboPrePersonaRecibe?.Text) ? CboPrePersonaRecibe.Text : DatabaseService.ObtenerUsuarioActivo().Nombre
+        };
+        spPer.Children.Add(cboPer);
+
+        var spProy = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
+        spProy.Children.Add(new TextBlock { Text = "Proyecto / Obra Destino", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var cboProy = new ComboBox { ItemsSource = DatabaseService.ObtenerProyectos() };
+        if (CboPreProyecto?.SelectedItem is Proyecto pPre)
+            cboProy.SelectedItem = cboProy.Items.Cast<Proyecto>().FirstOrDefault(x => x.Id == pPre.Id);
+        if (cboProy.SelectedItem == null && cboProy.Items.Count > 0) cboProy.SelectedIndex = 0;
+        spProy.Children.Add(cboProy);
+
+        Grid.SetColumn(spDep, 0);
+        Grid.SetColumn(spPer, 1);
+        Grid.SetColumn(spProy, 2);
+        formRapido.Children.Add(spDep);
+        formRapido.Children.Add(spPer);
+        formRapido.Children.Add(spProy);
+        top.Children.Add(formRapido);
+
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single,
+            ItemsSource = kits
+        };
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código Kit", Binding = new System.Windows.Data.Binding("CodigoKit"), Width = 95, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Nombre del Maletín", Binding = new System.Windows.Data.Binding("Nombre"), Width = 220, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Disponibles", Binding = new System.Windows.Data.Binding("DisponibilidadTexto"), Width = 90, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Estatus", Binding = new System.Windows.Data.Binding("Estatus"), Width = 135, ElementStyle = CeldaRecortable() });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Herramientas Incluidas", Binding = new System.Windows.Data.Binding("ResumenHerramientas"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+        if (kits.Count > 0) dg.SelectedIndex = 0;
+
+        var bottom = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        var btnAdminKits = new System.Windows.Controls.Button { Content = "Editar / Armar Maletines...", Padding = new Thickness(12, 6, 12, 6), HorizontalAlignment = HorizontalAlignment.Left };
+        var rightBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 6, 0) };
+        var btnSoloCargar = new Wpf.Ui.Controls.Button { Content = "Solo Cargar a Lista", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 6, 0) };
+        var btnDespachar1Clic = new Wpf.Ui.Controls.Button { Content = "Despachar Maletín en 1 Clic (PRE)", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        rightBtns.Children.Add(btnCancel);
+        rightBtns.Children.Add(btnSoloCargar);
+        rightBtns.Children.Add(btnDespachar1Clic);
+        DockPanel.SetDock(rightBtns, Dock.Right);
+        bottom.Children.Add(rightBtns);
+        bottom.Children.Add(btnAdminKits);
+        DockPanel.SetDock(bottom, Dock.Bottom);
+        root.Children.Add(bottom);
+        root.Children.Add(dg);
+
+        int modoElegido = 0; // 1 = Solo cargar a lista, 2 = Despachar en 1 clic, 3 = Abrir gestor
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        btnAdminKits.Click += (_, _) => { modoElegido = 3; win.DialogResult = true; };
+        btnSoloCargar.Click += (_, _) =>
+        {
+            if (dg.SelectedItem is not KitHerramienta) return;
+            modoElegido = 1;
+            win.DialogResult = true;
+        };
+        btnDespachar1Clic.Click += (_, _) =>
+        {
+            if (dg.SelectedItem is not KitHerramienta) return;
+            modoElegido = 2;
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() != true) return;
+
+        var kitSel = dg.SelectedItem as KitHerramienta;
+        if (modoElegido == 3)
+        {
+            MostrarModalGestorKitsHerramientas(kitSel?.Id);
+            return;
+        }
+
+        if (kitSel == null) return;
+
+        if (modoElegido == 1)
+        {
+            var todasHer = DatabaseService.ObtenerHerramientasIndividuales().ToDictionary(h => h.Id);
+            int agregadas = 0;
+            foreach (var part in kitSel.Partidas)
+            {
+                if (todasHer.TryGetValue(part.HerramientaActivoId, out var hObj) &&
+                    string.Equals(hObj.Estado, "Disponible", StringComparison.OrdinalIgnoreCase))
+                {
+                    AgregarHerramientaAListaPrestamo(hObj);
+                    agregadas++;
+                }
+            }
+            if (agregadas == 0)
+                DialogoFluent.Show(this, $"Ninguna de las herramientas del maletín {kitSel.CodigoKit} figura como Disponible en este momento.", "Sin herramientas disponibles", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (modoElegido == 2)
+        {
+            var dep = cboDep.SelectedItem as Departamento ?? DatabaseService.ObtenerDepartamentos().FirstOrDefault();
+            var proy = cboProy.SelectedItem as Proyecto;
+            string persona = string.IsNullOrWhiteSpace(cboPer.Text) ? DatabaseService.ObtenerUsuarioActivo().Nombre : cboPer.Text.Trim();
+            int depId = dep?.Id ?? 1;
+            int proyId = proy?.Id ?? DatabaseService.ObtenerProyectoStockGeneralId();
+            int encId = DatabaseService.ObtenerEncargados(depId).FirstOrDefault()?.Id ?? 1;
+            string fechaComp = (DpPreFechaCompromiso?.SelectedDate ?? DateTime.Today.AddDays(7)).ToString("yyyy-MM-dd");
+
+            var prestamo = DatabaseService.DespacharKitHerramientaEnUnClic(kitSel.Id, depId, encId, proyId, persona, fechaComp);
+            if (prestamo == null)
+            {
+                DialogoFluent.Show(this, $"El maletín {kitSel.CodigoKit} no tiene herramientas disponibles para despachar.", "Maletín ya en obra o vacío", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            CargarTodoElSistema();
+            BarcodePrintService.MostrarVistaPreviaEImprimirPrestamo(this, prestamo);
+        }
+    }
+
+    private void BtnChecklistRegresoKitRapido_Click(object sender, RoutedEventArgs e)
+    {
+        var kits = DatabaseService.ObtenerKitsHerramientas();
+        if (kits.Count == 0)
+        {
+            DialogoFluent.Show(this, "No hay maletines registrados.", "Sin maletines", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var kitEnObra = kits.FirstOrDefault(k => k.EnPrestamoCount > 0) ?? kits.First();
+        MostrarModalChecklistRegresoKit(kitEnObra);
+    }
+
+    private void MostrarModalChecklistRegresoKit(KitHerramienta kitInicial, Window? ownerWin = null)
+    {
+        var kits = DatabaseService.ObtenerKitsHerramientas();
+        var win = new Window
+        {
+            Title = $"Check-list Visual de Regreso de Maletín / Kit — {kitInicial.CodigoKit}",
+            Width = 820,
+            Height = 540,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = ownerWin ?? this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var top = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+
+        var headerDock = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+        var cboKitSelector = new ComboBox
+        {
+            Width = 310,
+            ItemsSource = kits,
+            SelectedItem = kits.FirstOrDefault(k => k.Id == kitInicial.Id) ?? kits.FirstOrDefault()
+        };
+        var rightSel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        rightSel.Children.Add(new TextBlock { Text = "Maletín a revisar:", FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        rightSel.Children.Add(cboKitSelector);
+        DockPanel.SetDock(rightSel, Dock.Right);
+        headerDock.Children.Add(rightSel);
+        headerDock.Children.Add(new TextBlock
+        {
+            Text = "Check-list de Regreso de Maletín en 1 Clic",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        top.Children.Add(headerDock);
+
+        var txtSubtitulo = new TextBlock
+        {
+            Text = "Desmarque únicamente la herramienta que NO haya regresado hoy (si se quedó en obra) o cambie su estado si regresó dañada/extraviada. Todo lo marcado como 'Bueno (Completo)' quedará Disponible de inmediato.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap
+        };
+        top.Children.Add(txtSubtitulo);
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
+
+        var dg = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false
+        };
+        dg.Columns.Add(new DataGridCheckBoxColumn
+        {
+            Header = "Regresó OK",
+            Binding = new System.Windows.Data.Binding("RegresoOk") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged },
+            Width = 90
+        });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("CodigoIndividual"), IsReadOnly = true, Width = 85 });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Herramienta", Binding = new System.Windows.Data.Binding("HerramientaNombre"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dg.Columns.Add(new DataGridTextColumn { Header = "Estado Actual", Binding = new System.Windows.Data.Binding("EstadoActual"), IsReadOnly = true, Width = 105 });
+
+        var colEstadoRetorno = new DataGridComboBoxColumn
+        {
+            Header = "Resultado Revisión",
+            SelectedItemBinding = new System.Windows.Data.Binding("EstadoRetornoElegido") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged },
+            ItemsSource = new[]
+            {
+                "Bueno (Completo)",
+                "Se queda en obra (Continúa préstamo)",
+                "Incompleto / Falta Pieza",
+                "Dañado / Mantenimiento",
+                "Extraviado / Baja"
+            },
+            Width = 205
+        };
+        dg.Columns.Add(colEstadoRetorno);
+        dg.Columns.Add(new DataGridTextColumn
+        {
+            Header = "Observaciones de la pieza",
+            Binding = new System.Windows.Data.Binding("ObservacionesRetorno") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged },
+            Width = 160
+        });
+
+        var partidasRevision = new ObservableCollection<KitHerramientaPartida>();
+        dg.ItemsSource = partidasRevision;
+
+        void CargarPartidasDeKitSeleccionado()
+        {
+            partidasRevision.Clear();
+            if (cboKitSelector.SelectedItem is KitHerramienta kSel)
+            {
+                foreach (var p in kSel.Partidas)
+                {
+                    p.RegresoOk = true;
+                    p.EstadoRetornoElegido = "Bueno (Completo)";
+                    partidasRevision.Add(p);
+                }
+            }
+        }
+        cboKitSelector.SelectionChanged += (_, _) => CargarPartidasDeKitSeleccionado();
+        CargarPartidasDeKitSeleccionado();
+
+        var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
+        var txtObsGen = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Notas generales de la revisión del maletín...", Width = 380, HorizontalAlignment = HorizontalAlignment.Left };
+        var rightBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnTodoOk = new System.Windows.Controls.Button { Content = "Marcar Todo OK", Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(0, 0, 6, 0) };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 6, 0) };
+        var btnConfirmar = new Wpf.Ui.Controls.Button { Content = "Confirmar Check-list de Regreso", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        rightBtns.Children.Add(btnTodoOk);
+        rightBtns.Children.Add(btnCancel);
+        rightBtns.Children.Add(btnConfirmar);
+        DockPanel.SetDock(rightBtns, Dock.Right);
+        bottom.Children.Add(rightBtns);
+        bottom.Children.Add(txtObsGen);
+        DockPanel.SetDock(bottom, Dock.Bottom);
+        root.Children.Add(bottom);
+        root.Children.Add(dg);
+
+        btnTodoOk.Click += (_, _) =>
+        {
+            foreach (var p in partidasRevision)
+                p.RegresoOk = true;
+            dg.Items.Refresh();
+        };
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        (int ok, int siguen, int inc) resultado = (0, 0, 0);
+        string codKitRevisado = kitInicial.CodigoKit;
+
+        btnConfirmar.Click += (_, _) =>
+        {
+            if (cboKitSelector.SelectedItem is not KitHerramienta kSel) return;
+            codKitRevisado = kSel.CodigoKit;
+            resultado = DatabaseService.RegistrarChecklistRegresoKit(kSel.Id, partidasRevision.ToList(), txtObsGen.Text?.Trim() ?? string.Empty);
+            win.DialogResult = true;
+        };
+
+        win.Content = root;
+        if (win.ShowDialog() == true)
+        {
+            CargarTodoElSistema();
+            DialogoFluent.Show(this,
+                $"Check-list del maletín {codKitRevisado} aplicado:\n\n" +
+                $"• Devueltas en buen estado (Disponibles): {resultado.ok}\n" +
+                $"• Continúan en obra (En préstamo): {resultado.siguen}\n" +
+                $"• Con incidencia (Dañadas/Extraviadas): {resultado.inc}",
+                "Check-list de Maletín Completado",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+    }
+
+    private void MostrarModalGestorKitsHerramientas(int? kitInicialId = null)
+    {
+        var win = new Window
+        {
+            Title = "Maletines y Kits de Herramientas Operativos (KIT-xxxx) — Gestión y Despacho en 1 Clic",
+            Width = 980,
+            Height = 600,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new Grid { Margin = new Thickness(16) };
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.05, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
+
+        // Panel izquierdo: Lista de Kits + Alta/Edición de Kit
+        var leftDock = new DockPanel { Margin = new Thickness(0, 0, 10, 0) };
+        var leftTop = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var btnNuevoKit = new Wpf.Ui.Controls.Button { Content = "+ Nuevo Maletín", FontSize = 11.5, Padding = new Thickness(10, 4, 10, 4) };
+        DockPanel.SetDock(btnNuevoKit, Dock.Right);
+        leftTop.Children.Add(btnNuevoKit);
+        leftTop.Children.Add(new TextBlock { Text = "Maletines / Kits (KIT-xxxx)", FontSize = 15.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        DockPanel.SetDock(leftTop, Dock.Top);
+        leftDock.Children.Add(leftTop);
+
+        var bdrEditKit = new Border
+        {
+            Padding = new Thickness(10),
+            CornerRadius = new CornerRadius(6),
+            Background = Tk("SubtleFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        var spEdit = new StackPanel();
+        spEdit.Children.Add(new TextBlock { Text = "Datos del Maletín Seleccionado", FontWeight = FontWeights.SemiBold, FontSize = 12.5, Margin = new Thickness(0, 0, 0, 6) });
+
+        var g1 = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var txtCodigoKit = new Wpf.Ui.Controls.TextBox { PlaceholderText = "KIT-0001", FontFamily = new FontFamily("Consolas"), Margin = new Thickness(0, 0, 6, 0) };
+        var txtNombreKit = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Nombre (ej. Maletín Eléctrico Cuadrilla 1)" };
+        Grid.SetColumn(txtCodigoKit, 0);
+        Grid.SetColumn(txtNombreKit, 1);
+        g1.Children.Add(txtCodigoKit);
+        g1.Children.Add(txtNombreKit);
+        spEdit.Children.Add(g1);
+
+        var g2 = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        var txtEspKit = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Especialidad (Eléctrica, Mecánica...)", Margin = new Thickness(0, 0, 6, 0) };
+        var txtUbiKit = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Ubicación (GABINETE-1)" };
+        Grid.SetColumn(txtEspKit, 0);
+        Grid.SetColumn(txtUbiKit, 1);
+        g2.Children.Add(txtEspKit);
+        g2.Children.Add(txtUbiKit);
+        spEdit.Children.Add(g2);
+
+        var gBtnsKit = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnEliminarKit = new System.Windows.Controls.Button { Content = "Eliminar Kit", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 0) };
+        var btnGuardarKit = new Wpf.Ui.Controls.Button { Content = "Guardar Datos del Kit", Appearance = ControlAppearance.Primary, Padding = new Thickness(12, 4, 12, 4) };
+        gBtnsKit.Children.Add(btnEliminarKit);
+        gBtnsKit.Children.Add(btnGuardarKit);
+        spEdit.Children.Add(gBtnsKit);
+        bdrEditKit.Child = spEdit;
+        DockPanel.SetDock(bdrEditKit, Dock.Bottom);
+        leftDock.Children.Add(bdrEditKit);
+
+        var dgKits = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single
+        };
+        dgKits.Columns.Add(new DataGridTextColumn { Header = "Código", Binding = new System.Windows.Data.Binding("CodigoKit"), Width = 85, ElementStyle = CeldaRecortable() });
+        dgKits.Columns.Add(new DataGridTextColumn { Header = "Maletín", Binding = new System.Windows.Data.Binding("Nombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+        dgKits.Columns.Add(new DataGridTextColumn { Header = "Piezas", Binding = new System.Windows.Data.Binding("DisponibilidadTexto"), Width = 75, ElementStyle = CeldaRecortable() });
+        dgKits.Columns.Add(new DataGridTextColumn { Header = "Estatus / Resguardo", Binding = new System.Windows.Data.Binding("ResguardoMostrar"), Width = 145, ElementStyle = CeldaRecortable() });
+        leftDock.Children.Add(dgKits);
+
+        // Panel derecho: Herramientas dentro del Kit + Botones de Salida 1 Clic y Check-list Regreso
+        var rightDock = new DockPanel { Margin = new Thickness(10, 0, 0, 0) };
+        var rightTop = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var txtTituloContenido = new TextBlock { Text = "Herramientas asignadas al Maletín", FontSize = 15.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
+        rightTop.Children.Add(txtTituloContenido);
+
+        var addHerGrid = new Grid();
+        addHerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        addHerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        addHerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var cboHerAgregar = new ComboBox { IsEditable = true, Margin = new Thickness(0, 0, 6, 0) };
+        var btnAgregarHerAKit = new Wpf.Ui.Controls.Button { Content = "+ Meter al Maletín", Appearance = ControlAppearance.Primary, Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 0) };
+        var btnQuitarHerDeKit = new System.Windows.Controls.Button { Content = "Sacar Seleccionada", Padding = new Thickness(10, 4, 10, 4) };
+        Grid.SetColumn(cboHerAgregar, 0);
+        Grid.SetColumn(btnAgregarHerAKit, 1);
+        Grid.SetColumn(btnQuitarHerDeKit, 2);
+        addHerGrid.Children.Add(cboHerAgregar);
+        addHerGrid.Children.Add(btnAgregarHerAKit);
+        addHerGrid.Children.Add(btnQuitarHerDeKit);
+        rightTop.Children.Add(addHerGrid);
+        DockPanel.SetDock(rightTop, Dock.Top);
+        rightDock.Children.Add(rightTop);
+
+        var rightBottom = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        var btnChecklistReturn = new Wpf.Ui.Controls.Button { Content = "Check-list de Regreso (1 Clic)", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnIrAPrestarKit = new Wpf.Ui.Controls.Button { Content = "Prestar / Despachar este Maletín", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        rightBottom.Children.Add(btnChecklistReturn);
+        rightBottom.Children.Add(btnIrAPrestarKit);
+        DockPanel.SetDock(rightBottom, Dock.Bottom);
+        rightDock.Children.Add(rightBottom);
+
+        var dgPartidasKit = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single
+        };
+        dgPartidasKit.Columns.Add(new DataGridTextColumn { Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 90, ElementStyle = CeldaRecortable() });
+        dgPartidasKit.Columns.Add(new DataGridTextColumn { Header = "Herramienta", Binding = new System.Windows.Data.Binding("HerramientaNombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+        dgPartidasKit.Columns.Add(new DataGridTextColumn { Header = "Marca / Modelo", Binding = new System.Windows.Data.Binding("MarcaModelo"), Width = 125, ElementStyle = CeldaRecortable() });
+        dgPartidasKit.Columns.Add(new DataGridTextColumn { Header = "Estado", Binding = new System.Windows.Data.Binding("EstadoActual"), Width = 95, ElementStyle = CeldaRecortable() });
+        rightDock.Children.Add(dgPartidasKit);
+
+        Grid.SetColumn(leftDock, 0);
+        Grid.SetColumn(rightDock, 1);
+        root.Children.Add(leftDock);
+        root.Children.Add(rightDock);
+
+        int kitEditandoId = 0;
+
+        void RefrescarVistaKits(int? selId = null)
+        {
+            var listaKits = DatabaseService.ObtenerKitsHerramientas();
+            dgKits.ItemsSource = listaKits;
+            cboHerAgregar.ItemsSource = DatabaseService.ObtenerHerramientasIndividuales();
+
+            int target = selId ?? kitEditandoId;
+            var sel = listaKits.FirstOrDefault(k => k.Id == target) ?? listaKits.FirstOrDefault();
+            if (sel != null)
+                dgKits.SelectedItem = sel;
+        }
+
+        dgKits.SelectionChanged += (_, _) =>
+        {
+            if (dgKits.SelectedItem is KitHerramienta k)
+            {
+                kitEditandoId = k.Id;
+                txtCodigoKit.Text = k.CodigoKit;
+                txtNombreKit.Text = k.Nombre;
+                txtEspKit.Text = k.Especialidad;
+                txtUbiKit.Text = k.Ubicacion;
+                txtTituloContenido.Text = $"Contenido de {k.CodigoKit} — {k.Nombre} ({k.Partidas.Count} piezas)";
+                dgPartidasKit.ItemsSource = k.Partidas;
+            }
+        };
+
+        btnNuevoKit.Click += (_, _) =>
+        {
+            kitEditandoId = 0;
+            dgKits.SelectedIndex = -1;
+            txtCodigoKit.Text = DatabaseService.GenerarSiguienteCodigoKit();
+            txtNombreKit.Text = string.Empty;
+            txtEspKit.Text = "General";
+            txtUbiKit.Text = "GABINETE-1";
+            dgPartidasKit.ItemsSource = null;
+            txtNombreKit.Focus();
+        };
+
+        btnGuardarKit.Click += (_, _) =>
+        {
+            int idGuardado = DatabaseService.GuardarKitHerramienta(new KitHerramienta
+            {
+                Id = kitEditandoId,
+                CodigoKit = txtCodigoKit.Text,
+                Nombre = txtNombreKit.Text,
+                Especialidad = txtEspKit.Text,
+                Ubicacion = txtUbiKit.Text
+            });
+            RefrescarVistaKits(idGuardado);
+            CargarTodoElSistema();
+        };
+
+        btnEliminarKit.Click += (_, _) =>
+        {
+            if (dgKits.SelectedItem is not KitHerramienta kSel) return;
+            if (DialogoFluent.Show(win, $"¿Eliminar el maletín {kSel.CodigoKit} ({kSel.Nombre})? Sus herramientas individuales se conservarán en el catálogo.", "Eliminar Maletín", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                DatabaseService.EliminarKitHerramienta(kSel.Id);
+                kitEditandoId = 0;
+                RefrescarVistaKits();
+            }
+        };
+
+        btnAgregarHerAKit.Click += (_, _) =>
+        {
+            if (dgKits.SelectedItem is not KitHerramienta kSel)
+            {
+                DialogoFluent.Show(win, "Seleccione o guarde primero un maletín a la izquierda.", "Seleccione maletín", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (cboHerAgregar.SelectedItem is not HerramientaActivo hSel)
+            {
+                DialogoFluent.Show(win, "Seleccione una herramienta individual (HER-xxxx) del combo para meterla al maletín.", "Seleccione herramienta", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            DatabaseService.AgregarHerramientaAKit(kSel.Id, hSel.Id);
+            RefrescarVistaKits(kSel.Id);
+        };
+
+        btnQuitarHerDeKit.Click += (_, _) =>
+        {
+            if (dgKits.SelectedItem is not KitHerramienta kSel || dgPartidasKit.SelectedItem is not KitHerramientaPartida pSel)
+                return;
+            DatabaseService.QuitarHerramientaDeKit(kSel.Id, pSel.HerramientaActivoId);
+            RefrescarVistaKits(kSel.Id);
+        };
+
+        btnChecklistReturn.Click += (_, _) =>
+        {
+            if (dgKits.SelectedItem is not KitHerramienta kSel) return;
+            MostrarModalChecklistRegresoKit(kSel, win);
+            RefrescarVistaKits(kSel.Id);
+        };
+
+        btnIrAPrestarKit.Click += (_, _) =>
+        {
+            if (dgKits.SelectedItem is not KitHerramienta kSel) return;
+            var todasHer = DatabaseService.ObtenerHerramientasIndividuales().ToDictionary(h => h.Id);
+            int agregadas = 0;
+            foreach (var part in kSel.Partidas)
+            {
+                if (todasHer.TryGetValue(part.HerramientaActivoId, out var hObj) &&
+                    string.Equals(hObj.Estado, "Disponible", StringComparison.OrdinalIgnoreCase))
+                {
+                    AgregarHerramientaAListaPrestamo(hObj);
+                    agregadas++;
+                }
+            }
+            win.Close();
+            CambiarSeccion(5);
+            if (agregadas == 0)
+            {
+                DialogoFluent.Show(this, $"Las herramientas de {kSel.CodigoKit} ya están en préstamo. Puede usar 'Check-list Regreso de Kit' cuando vuelvan de obra.", "Maletín en obra", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        };
+
+        RefrescarVistaKits(kitInicialId);
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    // =========================================================================
+    // FASE 3: FLOTILLA DE CAMIONETAS (VEH-xxxx), COSTO POR KILÓMETRO (CPK),
+    //         GARANTÍAS VIGENTES Y COSTO TOTAL DE PROPIEDAD (TCO) DE EQUIPOS
+    // =========================================================================
+
+    private void BtnAbrirFlotillaYGarantias_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(9);
+    }
+
+    private void BtnAbrirGarantiasEquipos_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarModalFlotillaYGarantias(1, null);
+    }
+
+    // =========================================================================
+    // MÓDULO PRINCIPAL DE FLOTILLA (TAB 9): KPIS, MODALES DEDICADOS E IMPRESIÓN
+    // =========================================================================
+
+    private void RefrescarModuloFlotilla(int? vehiculoSeleccionarId = null)
+    {
+        if (DgFlotillaPrincipal == null) return;
+
+        int? idPrevio = vehiculoSeleccionarId ?? (DgFlotillaPrincipal.SelectedItem as VehiculoFlotilla)?.Id;
+        var vehiculos = DatabaseService.ObtenerVehiculosFlotilla();
+        DgFlotillaPrincipal.ItemsSource = vehiculos;
+
+        int totalKmRecorridos = vehiculos.Sum(v => v.KilometrosRecorridosPeriodo);
+        decimal totalCombustible = vehiculos.Sum(v => v.GastoCombustibleAcumulado);
+        decimal totalLitros = vehiculos.Sum(v => v.LitrosCombustibleAcumulados);
+        decimal totalMantOtros = vehiculos.Sum(v => v.GastoMantenimientoAcumulado + v.GastoOtrosAcumulado);
+        decimal totalGeneral = totalCombustible + totalMantOtros;
+
+        decimal cpkPromedio = totalKmRecorridos > 0 ? Math.Round(totalGeneral / totalKmRecorridos, 2) : 0m;
+        decimal rendPromedio = totalLitros > 0 && totalKmRecorridos > 0 ? Math.Round(totalKmRecorridos / totalLitros, 2) : 0m;
+
+        if (TxtKpiFlotillaCpk != null)
+            TxtKpiFlotillaCpk.Text = cpkPromedio > 0 ? $"${cpkPromedio:0.00} / km" : "S/D";
+        if (TxtKpiFlotillaCpkSub != null)
+            TxtKpiFlotillaCpkSub.Text = $"{totalKmRecorridos:N0} km recorridos en periodo";
+
+        if (TxtKpiFlotillaCombustible != null)
+            TxtKpiFlotillaCombustible.Text = $"{totalCombustible:C2}";
+        if (TxtKpiFlotillaRendimientoSub != null)
+            TxtKpiFlotillaRendimientoSub.Text = $"{(rendPromedio > 0 ? $"{rendPromedio:0.1} km/L prom." : "Sin rend.")} | {totalLitros:0.#} L cargados";
+
+        if (TxtKpiFlotillaMantenimiento != null)
+            TxtKpiFlotillaMantenimiento.Text = $"{totalMantOtros:C2}";
+        if (TxtKpiFlotillaMantenimientoSub != null)
+            TxtKpiFlotillaMantenimientoSub.Text = $"Gasto total acumulado: {totalGeneral:C2}";
+
+        int activas = vehiculos.Count(v => v.Estatus.Contains("Activo", StringComparison.OrdinalIgnoreCase));
+        int odometroTotal = vehiculos.Sum(v => v.KilometrajeActual);
+        if (TxtKpiFlotillaUnidades != null)
+            TxtKpiFlotillaUnidades.Text = $"{activas} de {vehiculos.Count} activas";
+        if (TxtKpiFlotillaUnidadesSub != null)
+            TxtKpiFlotillaUnidadesSub.Text = $"Odómetro acumulado: {odometroTotal:N0} km";
+
+        var proxVeh = vehiculos
+            .OrderBy(v => v.KmRestantesServicio)
+            .FirstOrDefault();
+        int enAlertaCount = vehiculos.Count(v => v.RequiereServicioPronto);
+        if (TxtKpiFlotillaAlertasServicio != null)
+        {
+            TxtKpiFlotillaAlertasServicio.Text = enAlertaCount > 0
+                ? $"{enAlertaCount} por atender"
+                : (proxVeh != null ? $"{proxVeh.CodigoVehiculo} ({proxVeh.KmRestantesServicio:N0} km)" : "Al día");
+        }
+        if (TxtKpiFlotillaAlertasServicioSub != null)
+        {
+            TxtKpiFlotillaAlertasServicioSub.Text = proxVeh != null
+                ? $"{proxVeh.CodigoVehiculo}: {proxVeh.EstimacionProximoServicioFechaTexto}"
+                : "Sin unidades registradas";
+        }
+
+        var sel = idPrevio.HasValue
+            ? vehiculos.FirstOrDefault(v => v.Id == idPrevio.Value) ?? vehiculos.FirstOrDefault()
+            : vehiculos.FirstOrDefault();
+        if (sel != null)
+        {
+            DgFlotillaPrincipal.SelectedItem = sel;
+            ActualizarDetalleUnidadFlotillaSeleccionada(sel);
+        }
+        else
+        {
+            if (DgFlotillaGastosUnidad != null) DgFlotillaGastosUnidad.ItemsSource = null;
+            if (DgFlotillaRevisionesUnidad != null) DgFlotillaRevisionesUnidad.ItemsSource = null;
+        }
+    }
+
+    private void ActualizarDetalleUnidadFlotillaSeleccionada(VehiculoFlotilla v)
+    {
+        if (TxtTituloBitacoraGastosFlotilla != null)
+        {
+            TxtTituloBitacoraGastosFlotilla.Text =
+                $"{v.CodigoVehiculo} — {v.MarcaModelo} ({v.Placas}) | CPK: {v.CostoPorKilometroTexto} | Rend: {v.RendimientoTexto} | Próx. Servicio: {v.EstimacionProximoServicioFechaTexto}";
+        }
+        if (DgFlotillaGastosUnidad != null)
+            DgFlotillaGastosUnidad.ItemsSource = v.HistorialGastos;
+        if (DgFlotillaRevisionesUnidad != null)
+            DgFlotillaRevisionesUnidad.ItemsSource = v.HistorialRevisiones;
+    }
+
+    private void DgFlotillaPrincipal_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DgFlotillaPrincipal?.SelectedItem is VehiculoFlotilla v)
+            ActualizarDetalleUnidadFlotillaSeleccionada(v);
+    }
+
+    private void DgFlotillaPrincipal_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DgFlotillaPrincipal?.SelectedItem is VehiculoFlotilla v)
+            MostrarModalEquipoFlotilla(v);
+    }
+
+    private void BtnModalNuevaCamionetaFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarModalEquipoFlotilla(null);
+    }
+
+    private void BtnEditarCamionetaSeleccionadaFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgFlotillaPrincipal?.SelectedItem is VehiculoFlotilla v)
+            MostrarModalEquipoFlotilla(v);
+        else
+            MostrarModalEquipoFlotilla(null);
+    }
+
+    private void BtnEliminarCamionetaSeleccionadaFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgFlotillaPrincipal?.SelectedItem is not VehiculoFlotilla vSel)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una unidad de la tabla superior para eliminarla.", "Seleccionar unidad", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (DialogoFluent.Show(this, $"¿Eliminar la unidad {vSel.CodigoVehiculo} ({vSel.MarcaModelo}) junto con sus registros de gastos y revisiones?", "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)
+        {
+            DatabaseService.EliminarVehiculoFlotilla(vSel.Id);
+            CargarTodoElSistema();
+            RefrescarModuloFlotilla();
+        }
+    }
+
+    private void BtnEliminarGastoSeleccionadoFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgFlotillaGastosUnidad?.SelectedItem is not RegistroGastoVehiculo gSel)
+        {
+            DialogoFluent.Show(this, "Seleccione un registro en la bitácora de gastos para eliminarlo.", "Seleccionar gasto", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (DialogoFluent.Show(this, $"¿Eliminar el registro de '{gSel.TipoGasto}' del {gSel.Fecha} por {gSel.MontoConIva:C2}?", "Eliminar gasto", MessageBoxButton.YesNo, MessageBoxImage.Question) == System.Windows.MessageBoxResult.Yes)
+        {
+            int vehId = gSel.VehiculoId;
+            DatabaseService.EliminarGastoVehiculo(gSel.Id);
+            CargarTodoElSistema();
+            RefrescarModuloFlotilla(vehId);
+        }
+    }
+
+    private void BtnEliminarRevisionSemanalFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgFlotillaRevisionesUnidad?.SelectedItem is not RevisionSemanalVehiculo revSel)
+        {
+            DialogoFluent.Show(this, "Seleccione una revisión semanal de la tabla derecha para eliminarla.", "Seleccionar revisión", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (DialogoFluent.Show(this, $"¿Eliminar la revisión semanal {revSel.FolioRevision} del {revSel.Fecha}?", "Eliminar revisión", MessageBoxButton.YesNo, MessageBoxImage.Question) == System.Windows.MessageBoxResult.Yes)
+        {
+            int vehId = revSel.VehiculoId;
+            DatabaseService.EliminarRevisionSemanalVehiculo(revSel.Id);
+            CargarTodoElSistema();
+            RefrescarModuloFlotilla(vehId);
+        }
+    }
+
+    private void BtnModalCargaGasolinaFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        var vSel = DgFlotillaPrincipal?.SelectedItem as VehiculoFlotilla;
+        MostrarModalCargaGasolinaFlotilla(vSel);
+    }
+
+    private void BtnModalGastoTallerFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        var vSel = DgFlotillaPrincipal?.SelectedItem as VehiculoFlotilla;
+        MostrarModalGastoNoGasolinaFlotilla(vSel);
+    }
+
+    private void BtnModalChecklistSemanalFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        var vSel = DgFlotillaPrincipal?.SelectedItem as VehiculoFlotilla;
+        MostrarModalChecklistSemanalFlotilla(vSel);
+    }
+
+    private void BtnImprimirChecklistSemanalFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        var vSel = DgFlotillaPrincipal?.SelectedItem as VehiculoFlotilla
+                   ?? DatabaseService.ObtenerVehiculosFlotilla().FirstOrDefault();
+        if (vSel == null)
+        {
+            DialogoFluent.Show(this, "Primero registre una camioneta en la flotilla.", "Sin unidades", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var ultRev = vSel.HistorialRevisiones.FirstOrDefault();
+        BarcodePrintService.MostrarVistaPreviaEImprimirRevisionSemanalVehiculo(this, vSel, ultRev);
+    }
+
+    private void BtnReimprimirRevisionSemanalFlotilla_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgFlotillaPrincipal?.SelectedItem is not VehiculoFlotilla vSel) return;
+        var rev = DgFlotillaRevisionesUnidad?.SelectedItem as RevisionSemanalVehiculo
+                  ?? vSel.HistorialRevisiones.FirstOrDefault();
+        BarcodePrintService.MostrarVistaPreviaEImprimirRevisionSemanalVehiculo(this, vSel, rev);
+    }
+
+    private void DgFlotillaRevisionesUnidad_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DgFlotillaPrincipal?.SelectedItem is VehiculoFlotilla vSel &&
+            DgFlotillaRevisionesUnidad?.SelectedItem is RevisionSemanalVehiculo rev)
+        {
+            BarcodePrintService.MostrarVistaPreviaEImprimirRevisionSemanalVehiculo(this, vSel, rev);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MODAL 1: CREAR / EDITAR EQUIPO O CAMIONETA DE FLOTILLA (CON CONFIGURACIÓN DE INTERVALO DE SERVICIO)
+    // -------------------------------------------------------------------------
+    private void MostrarModalEquipoFlotilla(VehiculoFlotilla? existente)
+    {
+        bool esEdicion = existente != null && existente.Id > 0;
+        var win = new Window
+        {
+            Title = esEdicion ? $"Editar Camioneta / Equipo ({existente!.CodigoVehiculo})" : "Registrar Nueva Camioneta / Equipo en Flotilla",
+            Width = 620,
+            Height = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = esEdicion ? $"Configuración y Ficha Técnica — {existente!.CodigoVehiculo}" : "Alta de Nueva Unidad / Camioneta en Flotilla",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Configure el kilometraje actual y cada cuántos kilómetros requiere servicio preventivo para estimar automáticamente la fecha del siguiente mantenimiento según su consumo y rodaje.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        var g1 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var txtCodigo = new Wpf.Ui.Controls.TextBox { Text = esEdicion ? existente!.CodigoVehiculo : DatabaseService.GenerarSiguienteCodigoVehiculo(), FontFamily = new FontFamily("Consolas"), Margin = new Thickness(0, 0, 6, 0) };
+        var txtPlacas = new Wpf.Ui.Controls.TextBox { Text = existente?.Placas ?? "", PlaceholderText = "Placas (ej. JKL-4821)", Margin = new Thickness(0, 0, 6, 0) };
+        var txtAnio = new Wpf.Ui.Controls.TextBox { Text = (existente?.Anio ?? DateTime.Today.Year).ToString(), PlaceholderText = "Año", Margin = new Thickness(0, 0, 6, 0) };
+        var cboEstatus = new ComboBox();
+        cboEstatus.Items.Add("Activo en Operación");
+        cboEstatus.Items.Add("En Taller / Servicio");
+        cboEstatus.Items.Add("Fuera de Servicio");
+        cboEstatus.SelectedItem = existente?.Estatus ?? "Activo en Operación";
+        if (cboEstatus.SelectedIndex < 0) cboEstatus.SelectedIndex = 0;
+
+        var fCod = CrearCampoConEtiqueta("Código Interno", txtCodigo); Grid.SetColumn(fCod, 0); g1.Children.Add(fCod);
+        var fPla = CrearCampoConEtiqueta("Placas", txtPlacas); Grid.SetColumn(fPla, 1); g1.Children.Add(fPla);
+        var fAni = CrearCampoConEtiqueta("Año Modelo", txtAnio); Grid.SetColumn(fAni, 2); g1.Children.Add(fAni);
+        var fEst = CrearCampoConEtiqueta("Estatus Operativo", cboEstatus); Grid.SetColumn(fEst, 3); g1.Children.Add(fEst);
+        root.Children.Add(g1);
+
+        var g2 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var txtMarcaModelo = new Wpf.Ui.Controls.TextBox { Text = existente?.MarcaModelo ?? "", PlaceholderText = "Ej. Nissan NP300 Estacas / Hilux / Tornado", Margin = new Thickness(0, 0, 6, 0) };
+        var txtResponsable = new Wpf.Ui.Controls.TextBox { Text = existente?.ResponsableHabitual ?? "", PlaceholderText = "Conductor o Cuadrilla asignada" };
+        var fMod = CrearCampoConEtiqueta("Marca, Línea y Tipo de Unidad", txtMarcaModelo); Grid.SetColumn(fMod, 0); g2.Children.Add(fMod);
+        var fRes = CrearCampoConEtiqueta("Conductor / Cuadrilla Habitual", txtResponsable); Grid.SetColumn(fRes, 1); g2.Children.Add(fRes);
+        root.Children.Add(g2);
+
+        var g3 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g3.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g3.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g3.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g3.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var txtKmInicial = new Wpf.Ui.Controls.TextBox { Text = (existente?.KilometrajeInicial ?? 0).ToString(), Margin = new Thickness(0, 0, 6, 0) };
+        var txtKmActual = new Wpf.Ui.Controls.TextBox { Text = (existente?.KilometrajeActual ?? 0).ToString(), Margin = new Thickness(0, 0, 6, 0) };
+        var txtIntervaloKm = new Wpf.Ui.Controls.TextBox { Text = (existente?.IntervaloEfectivoKm ?? 10000).ToString(), Margin = new Thickness(0, 0, 6, 0), ToolTip = "Cada cuántos kilómetros se realiza el servicio preventivo (ej. 5000, 10000, 15000)" };
+        var txtProxServKm = new Wpf.Ui.Controls.TextBox { Text = (existente?.MetaServicioCalculadaKm ?? 10000).ToString(), ToolTip = "Kilometraje meta para el siguiente mantenimiento" };
+
+        var fKmi = CrearCampoConEtiqueta("Km Inicial Base", txtKmInicial); Grid.SetColumn(fKmi, 0); g3.Children.Add(fKmi);
+        var fKma = CrearCampoConEtiqueta("Odómetro Actual (km)", txtKmActual); Grid.SetColumn(fKma, 1); g3.Children.Add(fKma);
+        var fInt = CrearCampoConEtiqueta("Servicio cada (km)", txtIntervaloKm); Grid.SetColumn(fInt, 2); g3.Children.Add(fInt);
+        var fPrx = CrearCampoConEtiqueta("Próximo Servicio (km)", txtProxServKm); Grid.SetColumn(fPrx, 3); g3.Children.Add(fPrx);
+        root.Children.Add(g3);
+
+        void RecalcularMetaServicioSugerida()
+        {
+            if (int.TryParse(txtKmActual.Text, out int kma) && int.TryParse(txtIntervaloKm.Text, out int interv) && interv >= 1000)
+            {
+                int baseServ = existente?.UltimoServicioKm > 0 ? existente.UltimoServicioKm : kma;
+                int sugerido = baseServ + interv;
+                if (sugerido <= kma)
+                    sugerido = kma + interv;
+                txtProxServKm.Text = sugerido.ToString();
+            }
+        }
+        txtIntervaloKm.TextChanged += (_, _) => RecalcularMetaServicioSugerida();
+
+        var g4 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g4.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g4.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g4.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var cboCombustible = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
+        cboCombustible.Items.Add("Gasolina Regular");
+        cboCombustible.Items.Add("Gasolina Premium");
+        cboCombustible.Items.Add("Diésel");
+        cboCombustible.SelectedItem = existente?.TipoCombustible ?? "Gasolina Regular";
+        if (cboCombustible.SelectedIndex < 0) cboCombustible.SelectedIndex = 0;
+
+        var txtCapTanque = new Wpf.Ui.Controls.TextBox { Text = (existente?.CapacidadTanqueLitros ?? 60m).ToString("0.#", CultureInfo.InvariantCulture), Margin = new Thickness(0, 0, 6, 0) };
+        var txtVigSeguro = new Wpf.Ui.Controls.TextBox { Text = string.IsNullOrWhiteSpace(existente?.VigenciaSeguro) ? DateTime.Today.AddYears(1).ToString("yyyy-MM-dd") : existente!.VigenciaSeguro, PlaceholderText = "yyyy-MM-dd" };
+
+        var fTcb = CrearCampoConEtiqueta("Tipo de Combustible", cboCombustible); Grid.SetColumn(fTcb, 0); g4.Children.Add(fTcb);
+        var fCap = CrearCampoConEtiqueta("Capacidad Tanque (Litros)", txtCapTanque); Grid.SetColumn(fCap, 1); g4.Children.Add(fCap);
+        var fSeg = CrearCampoConEtiqueta("Vigencia Póliza Seguro", txtVigSeguro); Grid.SetColumn(fSeg, 2); g4.Children.Add(fSeg);
+        root.Children.Add(g4);
+
+        var txtNotas = new Wpf.Ui.Controls.TextBox
+        {
+            Text = existente?.Notas ?? "",
+            PlaceholderText = "Notas adicionales (póliza, número de serie VIN, equipamiento, tarjeta de circulación)...",
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(CrearCampoConEtiqueta("Notas y Observaciones de la Unidad", txtNotas));
+
+        var pnlBtns = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        if (esEdicion)
+        {
+            var btnEliminar = new Wpf.Ui.Controls.Button
+            {
+                Content = "Eliminar Unidad",
+                Padding = new Thickness(12, 6, 12, 6)
+            };
+            btnEliminar.Click += (_, _) =>
+            {
+                if (DialogoFluent.Show(win, $"¿Eliminar la unidad {existente!.CodigoVehiculo} ({existente.MarcaModelo}) y su bitácora?", "Confirmar baja", MessageBoxButton.YesNo, MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes)
+                {
+                    DatabaseService.EliminarVehiculoFlotilla(existente.Id);
+                    win.DialogResult = true;
+                }
+            };
+            DockPanel.SetDock(btnEliminar, Dock.Left);
+            pnlBtns.Children.Add(btnEliminar);
+        }
+
+        var spRight = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new Wpf.Ui.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnSave = new Wpf.Ui.Controls.Button { Content = esEdicion ? "Guardar Cambios" : "Crear Unidad en Flotilla", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        int idGuardado = existente?.Id ?? 0;
+        btnSave.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(txtMarcaModelo.Text))
+            {
+                DialogoFluent.Show(win, "Indique la marca y modelo de la camioneta.", "Dato requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            int.TryParse(txtAnio.Text, out int anio);
+            int.TryParse(txtKmInicial.Text, out int kmi);
+            int.TryParse(txtKmActual.Text, out int kma);
+            int.TryParse(txtIntervaloKm.Text, out int interv);
+            int.TryParse(txtProxServKm.Text, out int kmProx);
+            decimal capTanque = ParseDecimal(txtCapTanque.Text, 60m);
+
+            idGuardado = DatabaseService.GuardarVehiculoFlotilla(new VehiculoFlotilla
+            {
+                Id = existente?.Id ?? 0,
+                CodigoVehiculo = txtCodigo.Text,
+                Placas = txtPlacas.Text,
+                MarcaModelo = txtMarcaModelo.Text,
+                Anio = anio > 1990 ? anio : DateTime.Today.Year,
+                ResponsableHabitual = txtResponsable.Text,
+                KilometrajeInicial = kmi,
+                KilometrajeActual = Math.Max(kmi, kma),
+                IntervaloServicioKm = interv > 0 ? interv : 10000,
+                UltimoServicioKm = existente?.UltimoServicioKm > 0 ? existente.UltimoServicioKm : kmi,
+                ProximoServicioKm = kmProx > 0 ? kmProx : (Math.Max(kmi, kma) + (interv > 0 ? interv : 10000)),
+                CapacidadTanqueLitros = capTanque,
+                TipoCombustible = cboCombustible.SelectedItem?.ToString() ?? "Gasolina Regular",
+                VigenciaSeguro = txtVigSeguro.Text,
+                Estatus = cboEstatus.SelectedItem?.ToString() ?? "Activo en Operación",
+                Notas = txtNotas.Text
+            });
+            win.DialogResult = true;
+        };
+        spRight.Children.Add(btnCancel);
+        spRight.Children.Add(btnSave);
+        pnlBtns.Children.Add(spRight);
+        root.Children.Add(pnlBtns);
+
+        win.Content = root;
+        if (win.ShowDialog() == true)
+        {
+            CargarTodoElSistema();
+            RefrescarModuloFlotilla(idGuardado);
+            MostrarToastDiscreto(esEdicion ? "Datos de la unidad actualizados." : "Nueva unidad agregada a la flotilla.", "Flotilla Vehicular");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MODAL 2: REGISTRAR CARGA DE GASOLINA / COMBUSTIBLE (CON LITROS, RENDIMIENTO Y ESTIMACIÓN DE SERVICIO)
+    // -------------------------------------------------------------------------
+    private void MostrarModalCargaGasolinaFlotilla(VehiculoFlotilla? preseleccionado)
+    {
+        var vehiculos = DatabaseService.ObtenerVehiculosFlotilla();
+        if (vehiculos.Count == 0)
+        {
+            DialogoFluent.Show(this, "Primero dé de alta una camioneta en la flotilla.", "Sin unidades", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Registrar Carga de Gasolina / Combustible y Odómetro",
+            Width = 580,
+            Height = 520,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Registro de Carga de Gasolina / Combustible",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Capture los litros cargados, importe y kilometraje actual en tablero. El sistema actualizará el Costo por Kilómetro (CPK), rendimiento km/L y la estimación del siguiente servicio.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        var cboVehiculo = new ComboBox { ItemsSource = vehiculos, Margin = new Thickness(0, 0, 0, 8) };
+        cboVehiculo.SelectedItem = preseleccionado != null
+            ? vehiculos.FirstOrDefault(v => v.Id == preseleccionado.Id) ?? vehiculos[0]
+            : vehiculos[0];
+        root.Children.Add(CrearCampoConEtiqueta("Camioneta / Unidad", cboVehiculo));
+
+        var g1 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var txtFecha = new Wpf.Ui.Controls.TextBox { Text = DateTime.Today.ToString("yyyy-MM-dd"), Margin = new Thickness(0, 0, 6, 0) };
+        var txtKmActual = new Wpf.Ui.Controls.TextBox { Text = ((cboVehiculo.SelectedItem as VehiculoFlotilla)?.KilometrajeActual ?? 0).ToString(), Margin = new Thickness(0, 0, 6, 0) };
+        var chkTanqueLleno = new CheckBox { Content = "Tanque Lleno", IsChecked = true, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(4, 0, 0, 6) };
+
+        var fFec = CrearCampoConEtiqueta("Fecha de Carga", txtFecha); Grid.SetColumn(fFec, 0); g1.Children.Add(fFec);
+        var fKm = CrearCampoConEtiqueta("Odómetro en Tablero (km)", txtKmActual); Grid.SetColumn(fKm, 1); g1.Children.Add(fKm);
+        Grid.SetColumn(chkTanqueLleno, 2); g1.Children.Add(chkTanqueLleno);
+        root.Children.Add(g1);
+
+        var g2 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var txtLitros = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Ej. 52.5", Margin = new Thickness(0, 0, 6, 0) };
+        var txtPrecioLitro = new Wpf.Ui.Controls.TextBox { Text = "24.80", Margin = new Thickness(0, 0, 6, 0) };
+        var txtMontoTotal = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Total $ c/IVA" };
+
+        var fLit = CrearCampoConEtiqueta("Litros Cargados (L)", txtLitros); Grid.SetColumn(fLit, 0); g2.Children.Add(fLit);
+        var fPre = CrearCampoConEtiqueta("Precio por Litro ($)", txtPrecioLitro); Grid.SetColumn(fPre, 1); g2.Children.Add(fPre);
+        var fMon = CrearCampoConEtiqueta("Importe Total ($ c/IVA)", txtMontoTotal); Grid.SetColumn(fMon, 2); g2.Children.Add(fMon);
+        root.Children.Add(g2);
+
+        bool calculandoComb = false;
+        var lblPronosticoServicio = new TextBlock
+        {
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Tk("AccentTextFillColorPrimaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        };
+
+        void ActualizarCalculoCombustible()
+        {
+            if (calculandoComb) return;
+            calculandoComb = true;
+            try
+            {
+                decimal lit = ParseDecimal(txtLitros.Text, 0m);
+                decimal pL = ParseDecimal(txtPrecioLitro.Text, 0m);
+                if (lit > 0 && pL > 0)
+                {
+                    txtMontoTotal.Text = Math.Round(lit * pL, 2).ToString("0.00", CultureInfo.InvariantCulture);
+                }
+
+                if (cboVehiculo.SelectedItem is VehiculoFlotilla v)
+                {
+                    int.TryParse(txtKmActual.Text, out int kmNuevo);
+                    int kmEf = Math.Max(v.KilometrajeActual, kmNuevo);
+                    int rest = v.MetaServicioCalculadaKm - kmEf;
+                    int deltaHoy = Math.Max(0, kmNuevo - v.KilometrajeActual);
+                    string rendCarga = (deltaHoy > 0 && lit > 0) ? $" | Rendimiento tramo: {(deltaHoy / lit):0.1} km/L" : "";
+                    lblPronosticoServicio.Text = rest <= 0
+                        ? $"¡Atención! Con {kmEf:N0} km el servicio preventivo ya está vencido (Meta: {v.MetaServicioCalculadaKm:N0} km){rendCarga}."
+                        : $"Faltan {rest:N0} km para el próximo servicio ({v.MetaServicioCalculadaKm:N0} km, cada {v.IntervaloEfectivoKm:N0} km) — Estimado: {v.EstimacionProximoServicioFechaTexto}{rendCarga}";
+                }
+            }
+            finally
+            {
+                calculandoComb = false;
+            }
+        }
+
+        txtLitros.TextChanged += (_, _) => ActualizarCalculoCombustible();
+        txtPrecioLitro.TextChanged += (_, _) => ActualizarCalculoCombustible();
+        txtKmActual.TextChanged += (_, _) => ActualizarCalculoCombustible();
+        cboVehiculo.SelectionChanged += (_, _) =>
+        {
+            if (cboVehiculo.SelectedItem is VehiculoFlotilla v)
+            {
+                txtKmActual.Text = v.KilometrajeActual.ToString();
+                ActualizarCalculoCombustible();
+            }
+        };
+        ActualizarCalculoCombustible();
+
+        var g3 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g3.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        g3.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var txtGasolinera = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Ej. Estación Pemex / Mobil / Oxxo Gas", Margin = new Thickness(0, 0, 6, 0) };
+        var txtTicketFactura = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Folio Ticket o Factura CFDI" };
+        var fGas = CrearCampoConEtiqueta("Gasolinera / Estación", txtGasolinera); Grid.SetColumn(fGas, 0); g3.Children.Add(fGas);
+        var fFol = CrearCampoConEtiqueta("Folio Ticket / Factura", txtTicketFactura); Grid.SetColumn(fFol, 1); g3.Children.Add(fFol);
+        root.Children.Add(g3);
+
+        var txtNotas = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Ruta o proyecto atendido (ej. Ruta Obras Norte / Recolección proveedores)...", Margin = new Thickness(0, 0, 0, 8) };
+        root.Children.Add(CrearCampoConEtiqueta("Observaciones / Ruta", txtNotas));
+        root.Children.Add(lblPronosticoServicio);
+
+        var spBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 0, 0) };
+        var btnCancel = new Wpf.Ui.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnSave = new Wpf.Ui.Controls.Button { Content = "Guardar Carga de Gasolina", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        int idVehGuardado = 0;
+        btnSave.Click += (_, _) =>
+        {
+            if (cboVehiculo.SelectedItem is not VehiculoFlotilla vSel) return;
+            decimal monto = ParseDecimal(txtMontoTotal.Text, 0m);
+            decimal litros = ParseDecimal(txtLitros.Text, 0m);
+            decimal precioL = ParseDecimal(txtPrecioLitro.Text, 0m);
+            if (monto <= 0m && litros > 0m && precioL > 0m)
+                monto = Math.Round(litros * precioL, 2);
+
+            if (monto <= 0m)
+            {
+                DialogoFluent.Show(win, "Ingrese el importe total o los litros cargados.", "Importe requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            int.TryParse(txtKmActual.Text, out int kmReg);
+            idVehGuardado = vSel.Id;
+
+            DatabaseService.RegistrarGastoVehiculo(new RegistroGastoVehiculo
+            {
+                VehiculoId = vSel.Id,
+                Fecha = txtFecha.Text,
+                TipoGasto = "Gasolina / Combustible",
+                KilometrajeRegistro = kmReg > 0 ? kmReg : vSel.KilometrajeActual,
+                LitrosCargados = litros,
+                PrecioPorLitro = precioL,
+                TanqueLleno = chkTanqueLleno.IsChecked == true,
+                MontoConIva = monto,
+                ProveedorTaller = txtGasolinera.Text,
+                FolioReferencia = txtTicketFactura.Text,
+                Descripcion = string.IsNullOrWhiteSpace(txtNotas.Text) ? $"Carga de combustible ({litros:0.##} L)" : txtNotas.Text
+            });
+            win.DialogResult = true;
+        };
+        spBtns.Children.Add(btnCancel);
+        spBtns.Children.Add(btnSave);
+        root.Children.Add(spBtns);
+
+        win.Content = root;
+        if (win.ShowDialog() == true)
+        {
+            CargarTodoElSistema();
+            RefrescarModuloFlotilla(idVehGuardado);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MODAL 3: REGISTRAR GASTO QUE NO SEA GASOLINA (MANTENIMIENTO, TALLER, LLANTAS, SEGURO, PEAJES)
+    // -------------------------------------------------------------------------
+    private void MostrarModalGastoNoGasolinaFlotilla(VehiculoFlotilla? preseleccionado)
+    {
+        var vehiculos = DatabaseService.ObtenerVehiculosFlotilla();
+        if (vehiculos.Count == 0)
+        {
+            DialogoFluent.Show(this, "Primero dé de alta una camioneta en la flotilla.", "Sin unidades", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Registrar Gasto de Taller, Mantenimiento, Llantas o Peajes",
+            Width = 580,
+            Height = 510,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Registro de Gasto Vehicular (Taller, Mantenimiento, Refacciones u Otros)",
+            FontSize = 15.5,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Si registra un 'Mantenimiento Preventivo', el sistema actualizará automáticamente la meta del siguiente servicio sumando el intervalo configurado de la unidad.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        var cboVehiculo = new ComboBox { ItemsSource = vehiculos, Margin = new Thickness(0, 0, 0, 8) };
+        cboVehiculo.SelectedItem = preseleccionado != null
+            ? vehiculos.FirstOrDefault(v => v.Id == preseleccionado.Id) ?? vehiculos[0]
+            : vehiculos[0];
+        root.Children.Add(CrearCampoConEtiqueta("Camioneta / Unidad", cboVehiculo));
+
+        var g1 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var cboCategoria = new ComboBox { Margin = new Thickness(0, 0, 6, 0), SelectedIndex = 0 };
+        cboCategoria.Items.Add("Mantenimiento Preventivo (Afinación / Aceite)");
+        cboCategoria.Items.Add("Reparación Mecánica / Taller");
+        cboCategoria.Items.Add("Llantas, Alineación y Balanceo");
+        cboCategoria.Items.Add("Batería / Sistema Eléctrico / Refacciones");
+        cboCategoria.Items.Add("Seguro / Verificación / Tenencia");
+        cboCategoria.Items.Add("Casetas / Peajes / Estacionamiento");
+
+        var txtFecha = new Wpf.Ui.Controls.TextBox { Text = DateTime.Today.ToString("yyyy-MM-dd"), Margin = new Thickness(0, 0, 6, 0) };
+        var txtKmActual = new Wpf.Ui.Controls.TextBox { Text = ((cboVehiculo.SelectedItem as VehiculoFlotilla)?.KilometrajeActual ?? 0).ToString() };
+
+        var fCat = CrearCampoConEtiqueta("Rubro del Gasto", cboCategoria); Grid.SetColumn(fCat, 0); g1.Children.Add(fCat);
+        var fFec = CrearCampoConEtiqueta("Fecha", txtFecha); Grid.SetColumn(fFec, 1); g1.Children.Add(fFec);
+        var fKm = CrearCampoConEtiqueta("Odómetro en el Servicio (km)", txtKmActual); Grid.SetColumn(fKm, 2); g1.Children.Add(fKm);
+        root.Children.Add(g1);
+
+        var g2 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var txtMonto = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Importe $ c/IVA", Margin = new Thickness(0, 0, 6, 0) };
+        var txtProveedorTaller = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Nombre del Taller / Proveedor", Margin = new Thickness(0, 0, 6, 0) };
+        var txtFolioRef = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Factura XML / OC / Nota" };
+
+        var fMon = CrearCampoConEtiqueta("Monto con IVA ($)", txtMonto); Grid.SetColumn(fMon, 0); g2.Children.Add(fMon);
+        var fPrv = CrearCampoConEtiqueta("Taller / Proveedor / Aseguradora", txtProveedorTaller); Grid.SetColumn(fPrv, 1); g2.Children.Add(fPrv);
+        var fFol = CrearCampoConEtiqueta("Folio Factura / Nota", txtFolioRef); Grid.SetColumn(fFol, 2); g2.Children.Add(fFol);
+        root.Children.Add(g2);
+
+        cboVehiculo.SelectionChanged += (_, _) =>
+        {
+            if (cboVehiculo.SelectedItem is VehiculoFlotilla v)
+                txtKmActual.Text = v.KilometrajeActual.ToString();
+        };
+
+        var txtDescripcion = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "Detalle de trabajos realizados o refacciones instaladas (ej. Cambio de aceite sintético, filtros y balatas delanteras)...",
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(CrearCampoConEtiqueta("Descripción Detallada del Servicio o Gasto", txtDescripcion));
+
+        var spBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new Wpf.Ui.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnSave = new Wpf.Ui.Controls.Button { Content = "Registrar Gasto", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+        int idVehGuardado = 0;
+        btnSave.Click += (_, _) =>
+        {
+            if (cboVehiculo.SelectedItem is not VehiculoFlotilla vSel) return;
+            decimal monto = ParseDecimal(txtMonto.Text, 0m);
+            if (monto <= 0m)
+            {
+                DialogoFluent.Show(win, "Ingrese un monto válido mayor a 0.", "Monto requerido", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            int.TryParse(txtKmActual.Text, out int kmReg);
+            idVehGuardado = vSel.Id;
+
+            DatabaseService.RegistrarGastoVehiculo(new RegistroGastoVehiculo
+            {
+                VehiculoId = vSel.Id,
+                Fecha = txtFecha.Text,
+                TipoGasto = cboCategoria.SelectedItem?.ToString() ?? "Reparación Mecánica / Taller",
+                KilometrajeRegistro = kmReg > 0 ? kmReg : vSel.KilometrajeActual,
+                MontoConIva = monto,
+                ProveedorTaller = txtProveedorTaller.Text,
+                FolioReferencia = txtFolioRef.Text,
+                Descripcion = string.IsNullOrWhiteSpace(txtDescripcion.Text) ? (cboCategoria.SelectedItem?.ToString() ?? "Gasto vehicular") : txtDescripcion.Text
+            });
+            win.DialogResult = true;
+        };
+        spBtns.Children.Add(btnCancel);
+        spBtns.Children.Add(btnSave);
+        root.Children.Add(spBtns);
+
+        win.Content = root;
+        if (win.ShowDialog() == true)
+        {
+            CargarTodoElSistema();
+            RefrescarModuloFlotilla(idVehGuardado);
+            MostrarToastDiscreto("Gasto vehicular registrado y Costo por Km (CPK) recalculado.", "Taller y Mantenimiento");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MODAL 4: REGISTRO SEMANAL DE ESTADO DE CAMIONETA + KILOMETRAJE + IMPRIMIBLE CARTA
+    // -------------------------------------------------------------------------
+    private void MostrarModalChecklistSemanalFlotilla(VehiculoFlotilla? preseleccionado)
+    {
+        var vehiculos = DatabaseService.ObtenerVehiculosFlotilla();
+        if (vehiculos.Count == 0)
+        {
+            DialogoFluent.Show(this, "Primero dé de alta una camioneta en la flotilla.", "Sin unidades", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Check-list Semanal de Estado de Camioneta y Registro de Odómetro",
+            Width = 620,
+            Height = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(18) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Registro Semanal de Estado Físico y Kilometraje de Camioneta",
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Capture el odómetro semanal y el estado físico de la unidad. Al guardar podrá generar la Hoja Tamaño Carta Imprimible con código de barras para firma del responsable.",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        var cboVehiculo = new ComboBox { ItemsSource = vehiculos, Margin = new Thickness(0, 0, 0, 8) };
+        cboVehiculo.SelectedItem = preseleccionado != null
+            ? vehiculos.FirstOrDefault(v => v.Id == preseleccionado.Id) ?? vehiculos[0]
+            : vehiculos[0];
+        root.Children.Add(CrearCampoConEtiqueta("Camioneta Inspeccionada", cboVehiculo));
+
+        var g1 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+
+        var vInit = cboVehiculo.SelectedItem as VehiculoFlotilla;
+        var txtKmSemanal = new Wpf.Ui.Controls.TextBox { Text = (vInit?.KilometrajeActual ?? 0).ToString(), Margin = new Thickness(0, 0, 6, 0) };
+        var cboNivelTanque = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
+        cboNivelTanque.Items.Add("Tanque Lleno");
+        cboNivelTanque.Items.Add("3/4 Tanque");
+        cboNivelTanque.Items.Add("1/2 Tanque");
+        cboNivelTanque.Items.Add("1/4 Tanque");
+        cboNivelTanque.Items.Add("Reserva (Cargar hoy)");
+        cboNivelTanque.SelectedIndex = 1;
+
+        var txtInspector = new Wpf.Ui.Controls.TextBox { Text = vInit?.ResponsableHabitual ?? "", PlaceholderText = "Conductor / Responsable" };
+
+        var fKm = CrearCampoConEtiqueta("Odómetro Semanal (km)", txtKmSemanal); Grid.SetColumn(fKm, 0); g1.Children.Add(fKm);
+        var fTan = CrearCampoConEtiqueta("Nivel de Combustible", cboNivelTanque); Grid.SetColumn(fTan, 1); g1.Children.Add(fTan);
+        var fIns = CrearCampoConEtiqueta("Conductor / Inspector", txtInspector); Grid.SetColumn(fIns, 2); g1.Children.Add(fIns);
+        root.Children.Add(g1);
+
+        var g2 = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        ComboBox CrearComboEstadoCheck(Thickness margin)
+        {
+            var cb = new ComboBox { Margin = margin };
+            cb.Items.Add("OK");
+            cb.Items.Add("Atención Pronto");
+            cb.Items.Add("Urgente / Dañado");
+            cb.SelectedIndex = 0;
+            return cb;
+        }
+
+        var cboLlantas = CrearComboEstadoCheck(new Thickness(0, 0, 6, 0));
+        var cboFluidos = CrearComboEstadoCheck(new Thickness(0, 0, 6, 0));
+        var cboFrenosLuces = CrearComboEstadoCheck(new Thickness(0, 0, 6, 0));
+        var cboCarroceria = CrearComboEstadoCheck(new Thickness(0));
+
+        var fLla = CrearCampoConEtiqueta("Llantas y Refacción", cboLlantas); Grid.SetColumn(fLla, 0); g2.Children.Add(fLla);
+        var fFlu = CrearCampoConEtiqueta("Aceite y Fluidos", cboFluidos); Grid.SetColumn(fFlu, 1); g2.Children.Add(fFlu);
+        var fFre = CrearCampoConEtiqueta("Frenos y Luces", cboFrenosLuces); Grid.SetColumn(fFre, 2); g2.Children.Add(fFre);
+        var fCar = CrearCampoConEtiqueta("Carrocería y Orden", cboCarroceria); Grid.SetColumn(fCar, 3); g2.Children.Add(fCar);
+        root.Children.Add(g2);
+
+        var lblEstimacionServicio = new TextBlock
+        {
+            FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Tk("AccentTextFillColorPrimaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        };
+
+        void ActualizarPronosticoChecklist()
+        {
+            if (cboVehiculo.SelectedItem is VehiculoFlotilla v)
+            {
+                int.TryParse(txtKmSemanal.Text, out int kmCap);
+                int kmEf = Math.Max(v.KilometrajeActual, kmCap);
+                int rest = v.MetaServicioCalculadaKm - kmEf;
+                lblEstimacionServicio.Text = rest <= 0
+                    ? $"ALERTA DE MANTENIMIENTO: Con {kmEf:N0} km el servicio preventivo ya está vencido por {Math.Abs(rest):N0} km (Meta: {v.MetaServicioCalculadaKm:N0} km)."
+                    : $"Con este kilometraje ({kmEf:N0} km), faltan {rest:N0} km para el próximo servicio (configurado cada {v.IntervaloEfectivoKm:N0} km). Fecha estimada según ritmo de uso: {v.EstimacionProximoServicioFechaTexto}.";
+            }
+        }
+
+        cboVehiculo.SelectionChanged += (_, _) =>
+        {
+            if (cboVehiculo.SelectedItem is VehiculoFlotilla v)
+            {
+                txtKmSemanal.Text = v.KilometrajeActual.ToString();
+                txtInspector.Text = v.ResponsableHabitual;
+                ActualizarPronosticoChecklist();
+            }
+        };
+        txtKmSemanal.TextChanged += (_, _) => ActualizarPronosticoChecklist();
+        ActualizarPronosticoChecklist();
+
+        var txtObs = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "Observaciones semanales (ej. Llanta trasera derecha baja de presión, parabrisa limpio, extintor vigente)...",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        root.Children.Add(CrearCampoConEtiqueta("Observaciones / Hallazgos de la Revisión", txtObs));
+        root.Children.Add(lblEstimacionServicio);
+
+        var chkImprimirAlGuardar = new CheckBox
+        {
+            Content = "Abrir vista previa e imprimir Formato Semanal Tamaño Carta al guardar",
+            IsChecked = true,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        root.Children.Add(chkImprimirAlGuardar);
+
+        var spBtns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancel = new Wpf.Ui.Controls.Button { Content = "Cancelar", Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnSave = new Wpf.Ui.Controls.Button { Content = "Guardar Revisión Semanal", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        btnCancel.Click += (_, _) => win.DialogResult = false;
+
+        int idVehGuardado = 0;
+        RevisionSemanalVehiculo? revCreada = null;
+        btnSave.Click += (_, _) =>
+        {
+            if (cboVehiculo.SelectedItem is not VehiculoFlotilla vSel) return;
+            int.TryParse(txtKmSemanal.Text, out int kmReg);
+            idVehGuardado = vSel.Id;
+
+            revCreada = DatabaseService.RegistrarRevisionSemanalVehiculo(new RevisionSemanalVehiculo
+            {
+                VehiculoId = vSel.Id,
+                Fecha = DateTime.Today.ToString("yyyy-MM-dd"),
+                ResponsableInspector = txtInspector.Text,
+                KilometrajeRegistrado = kmReg > 0 ? kmReg : vSel.KilometrajeActual,
+                NivelCombustible = cboNivelTanque.SelectedItem?.ToString() ?? "3/4 Tanque",
+                EstadoLlantas = cboLlantas.SelectedItem?.ToString() ?? "OK",
+                EstadoNivelesFluidos = cboFluidos.SelectedItem?.ToString() ?? "OK",
+                EstadoFrenosLuces = cboFrenosLuces.SelectedItem?.ToString() ?? "OK",
+                EstadoCarroceriaLimpieza = cboCarroceria.SelectedItem?.ToString() ?? "OK",
+                Observaciones = txtObs.Text
+            });
+            win.DialogResult = true;
+        };
+        spBtns.Children.Add(btnCancel);
+        spBtns.Children.Add(btnSave);
+        root.Children.Add(spBtns);
+
+        win.Content = root;
+        if (win.ShowDialog() == true)
+        {
+            CargarTodoElSistema();
+            RefrescarModuloFlotilla(idVehGuardado);
+            MostrarToastDiscreto($"Check-list semanal {revCreada?.FolioRevision} guardado y odómetro actualizado.", "Revisión Semanal");
+            if (chkImprimirAlGuardar.IsChecked == true && idVehGuardado > 0)
+            {
+                var vehActualizado = DatabaseService.ObtenerVehiculosFlotilla().FirstOrDefault(v => v.Id == idVehGuardado);
+                if (vehActualizado != null)
+                {
+                    BarcodePrintService.MostrarVistaPreviaEImprimirRevisionSemanalVehiculo(this, vehActualizado, revCreada);
+                }
+            }
+        }
+    }
+
+    private StackPanel CrearCampoConEtiqueta(string etiqueta, UIElement control)
+    {
+        var sp = new StackPanel();
+        sp.Children.Add(new TextBlock
+        {
+            Text = etiqueta,
+            FontSize = 11.2,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 3)
+        });
+        sp.Children.Add(control);
+        return sp;
+    }
+
+    private void MostrarModalFlotillaYGarantias(int tabInicial = 0, int? vehiculoInicialId = null)
+    {
+        if (tabInicial == 0)
+        {
+            CambiarSeccion(9);
+            RefrescarModuloFlotilla(vehiculoInicialId);
+            return;
+        }
+
+        var win = new Window
+        {
+            Title = "Control de Garantías con Proveedor y Costo de Mantenimiento (TCO) de Herramientas (HER-xxxx)",
+            Width = 1020,
+            Height = 620,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = Tk("ControlFillColorDefaultBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var dockGar = new DockPanel { Margin = new Thickness(14) };
+
+        var topGar = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        topGar.Children.Add(new TextBlock
+        {
+            Text = "Control de Garantías con Proveedor y Costo Total de Propiedad (TCO) de Herramientas (HER-xxxx)",
+            FontSize = 15.5,
+            FontWeight = FontWeights.SemiBold
+        });
+        topGar.Children.Add(new TextBlock
+        {
+            Text = "Antes de comprar una herramienta nueva o pagar reparación, verifique aquí si sigue Dentro de Garantía. Cuando el gasto acumulado en reparaciones alcanza el 50% de su costo de adquisición, el sistema emite alerta de reemplazo [REEMPLAZAR >=50%].",
+            FontSize = 11.5,
+            Foreground = Tk("TextFillColorSecondaryBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 8)
+        });
+
+        var bdrEditGar = new Border
+        {
+            Padding = new Thickness(10, 8, 10, 8),
+            CornerRadius = new CornerRadius(6),
+            Background = Tk("SubtleFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1)
+        };
+        var gridEditGar = new Grid();
+        gridEditGar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        gridEditGar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        gridEditGar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        gridEditGar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(135) });
+        gridEditGar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridEditGar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var txtGarFechaCompra = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Compra (yyyy-MM-dd)", Margin = new Thickness(0, 0, 6, 0), ToolTip = "Fecha de compra de la herramienta" };
+        var txtGarFechaFin = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Fin Garantía (yyyy-MM-dd)", Margin = new Thickness(0, 0, 6, 0), ToolTip = "Fecha límite de garantía con proveedor/fabricante" };
+        var txtGarCostoAdq = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Costo Compra $", Margin = new Thickness(0, 0, 6, 0), ToolTip = "Valor de adquisición con IVA" };
+        var txtGarSumarMant = new Wpf.Ui.Controls.TextBox { PlaceholderText = "+ Reparación $ (0)", Margin = new Thickness(0, 0, 6, 0), ToolTip = "Monto de reparación o servicio a sumar al historial TCO" };
+        var txtGarMotivo = new Wpf.Ui.Controls.TextBox { PlaceholderText = "Nota de garantía o servicio (ej. Cambio de carbones / Garantía en Bosch)...", Margin = new Thickness(0, 0, 6, 0) };
+        var btnGuardarGar = new Wpf.Ui.Controls.Button { Content = "Actualizar Garantía / TCO", Appearance = ControlAppearance.Primary, Padding = new Thickness(12, 5, 12, 5) };
+
+        Grid.SetColumn(txtGarFechaCompra, 0);
+        Grid.SetColumn(txtGarFechaFin, 1);
+        Grid.SetColumn(txtGarCostoAdq, 2);
+        Grid.SetColumn(txtGarSumarMant, 3);
+        Grid.SetColumn(txtGarMotivo, 4);
+        Grid.SetColumn(btnGuardarGar, 5);
+        gridEditGar.Children.Add(txtGarFechaCompra);
+        gridEditGar.Children.Add(txtGarFechaFin);
+        gridEditGar.Children.Add(txtGarCostoAdq);
+        gridEditGar.Children.Add(txtGarSumarMant);
+        gridEditGar.Children.Add(txtGarMotivo);
+        gridEditGar.Children.Add(btnGuardarGar);
+        bdrEditGar.Child = gridEditGar;
+        topGar.Children.Add(bdrEditGar);
+
+        DockPanel.SetDock(topGar, Dock.Top);
+        dockGar.Children.Add(topGar);
+
+        var dgGarantias = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single
+        };
+        dgGarantias.Columns.Add(new DataGridTextColumn { Header = "Código HER", Binding = new System.Windows.Data.Binding("CodigoIndividual"), Width = 90, ElementStyle = CeldaRecortable() });
+        dgGarantias.Columns.Add(new DataGridTextColumn { Header = "Herramienta / Equipo", Binding = new System.Windows.Data.Binding("ProductoNombre"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = CeldaRecortable() });
+        dgGarantias.Columns.Add(new DataGridTextColumn { Header = "Marca / Serie", Binding = new System.Windows.Data.Binding("MarcaModelo"), Width = 140, ElementStyle = CeldaRecortable() });
+        dgGarantias.Columns.Add(new DataGridTextColumn { Header = "Estado Físico", Binding = new System.Windows.Data.Binding("Estado"), Width = 105, ElementStyle = CeldaRecortable() });
+        dgGarantias.Columns.Add(new DataGridTextColumn { Header = "Vigencia Garantía", Binding = new System.Windows.Data.Binding("EstadoGarantiaTexto"), Width = 185, ElementStyle = CeldaRecortable() });
+        dgGarantias.Columns.Add(new DataGridTextColumn { Header = "Costo Total (TCO) y Alerta 50%", Binding = new System.Windows.Data.Binding("ResumenTcoTexto"), Width = 240, ElementStyle = CeldaRecortable() });
+        dockGar.Children.Add(dgGarantias);
+
+        void RefrescarGarantiasModal(int? selHerId = null)
+        {
+            var herList = DatabaseService.ObtenerHerramientas();
+            dgGarantias.ItemsSource = herList;
+            var sel = selHerId.HasValue ? herList.FirstOrDefault(h => h.Id == selHerId.Value) : herList.FirstOrDefault();
+            if (sel != null)
+                dgGarantias.SelectedItem = sel;
+        }
+
+        dgGarantias.SelectionChanged += (_, _) =>
+        {
+            if (dgGarantias.SelectedItem is HerramientaActivo h)
+            {
+                txtGarFechaCompra.Text = string.IsNullOrWhiteSpace(h.FechaCompra) ? DateTime.Today.ToString("yyyy-MM-dd") : h.FechaCompra;
+                txtGarFechaFin.Text = string.IsNullOrWhiteSpace(h.FechaFinGarantia) ? DateTime.Today.AddYears(1).ToString("yyyy-MM-dd") : h.FechaFinGarantia;
+                txtGarCostoAdq.Text = h.CostoAdquisicion.ToString("0.##", CultureInfo.InvariantCulture);
+                txtGarSumarMant.Text = "0";
+                txtGarMotivo.Text = h.NotasEstado;
+            }
+        };
+
+        btnGuardarGar.Click += (_, _) =>
+        {
+            if (dgGarantias.SelectedItem is not HerramientaActivo hSel) return;
+            decimal costoAdq = ParseDecimal(txtGarCostoAdq.Text, hSel.CostoAdquisicion);
+            decimal sumarMant = ParseDecimal(txtGarSumarMant.Text, 0m);
+            DatabaseService.RegistrarMantenimientoGarantiaHerramienta(
+                hSel.Id,
+                txtGarFechaCompra.Text,
+                txtGarFechaFin.Text,
+                costoAdq,
+                sumarMant,
+                txtGarMotivo.Text);
+            RefrescarGarantiasModal(hSel.Id);
+            CargarTodoElSistema();
+            ActualizarBadgeNotificacionesCheckpoints();
+            MostrarToastDiscreto($"Se actualizó el registro TCO/Garantía de {hSel.CodigoIndividual}.", "Garantías y TCO");
+        };
+
+        RefrescarGarantiasModal();
+
+        win.Content = dockGar;
+        win.ShowDialog();
+    }
+
+    // ==================== FASE 4: TOAST DISCRETO, MENÚS CONTEXTUALES, KRALJIC, PPV Y RESPALDO ZIP ====================
+
+    private System.Windows.Threading.DispatcherTimer? _timerToastDiscreto;
+    private List<ItemMatrizKraljic> _cacheKraljicFase4 = new();
+
+    public void MostrarToastDiscreto(string mensaje, string? titulo = null, bool esAlerta = false)
+    {
+        if (BdrToastNotificacion == null || TxtToastMensaje == null || TxtToastTitulo == null)
+            return;
+
+        TxtToastTitulo.Text = string.IsNullOrWhiteSpace(titulo)
+            ? (esAlerta ? "Aviso Operativo" : "Operación completada")
+            : titulo;
+        TxtToastMensaje.Text = mensaje ?? string.Empty;
+
+        var colorBorde = esAlerta
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11))
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129));
+        BdrToastNotificacion.BorderBrush = colorBorde;
+        TxtToastTitulo.Foreground = colorBorde;
+        BdrToastNotificacion.Visibility = Visibility.Visible;
+
+        if (_timerToastDiscreto == null)
+        {
+            _timerToastDiscreto = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(3.8)
+            };
+            _timerToastDiscreto.Tick += (_, _) =>
+            {
+                _timerToastDiscreto.Stop();
+                if (BdrToastNotificacion != null)
+                    BdrToastNotificacion.Visibility = Visibility.Collapsed;
+            };
+        }
+
+        _timerToastDiscreto.Stop();
+        _timerToastDiscreto.Start();
+    }
+
+    private void BdrToastNotificacion_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _timerToastDiscreto?.Stop();
+        if (BdrToastNotificacion != null)
+            BdrToastNotificacion.Visibility = Visibility.Collapsed;
+    }
+
+    private void RefrescarEconomiaIndustrialFase4()
+    {
+        try
+        {
+            _cacheKraljicFase4 = DatabaseService.ObtenerAnalisisMatrizKraljic();
+            FiltrarTablaKraljicFase4();
+
+            var ppvList = DatabaseService.ObtenerAnalisisPpvEInflacionInterna();
+            if (DgAnalisisPpv != null)
+                DgAnalisisPpv.ItemsSource = ppvList;
+
+            var audList = DatabaseService.ObtenerAuditoriaConsumoYMermaPorCuadrilla();
+            if (DgAuditoriaCuadrillas != null)
+                DgAuditoriaCuadrillas.ItemsSource = audList;
+
+            // Actualizar KPIs Superiores de Economía Industrial
+            int estrategicosOCuello = _cacheKraljicFase4.Count(x =>
+                x.CuadranteKraljic.StartsWith("Estratégico", StringComparison.OrdinalIgnoreCase) ||
+                x.CuadranteKraljic.StartsWith("Cuello", StringComparison.OrdinalIgnoreCase));
+            int rutinarios = _cacheKraljicFase4.Count(x =>
+                x.CuadranteKraljic.StartsWith("Rutinario", StringComparison.OrdinalIgnoreCase));
+
+            if (TxtKpiEconKraljicRiesgo != null)
+                TxtKpiEconKraljicRiesgo.Text = $"{estrategicosOCuello} insumos críticos";
+            if (TxtKpiEconKraljicSub != null)
+                TxtKpiEconKraljicSub.Text = $"{rutinarios} rutinarios automatizables";
+
+            decimal ppvNeto = ppvList.Sum(x => x.AhorroOSobreprecioTotalPpv);
+            if (TxtKpiEconPpvNeto != null)
+            {
+                TxtKpiEconPpvNeto.Text = ppvNeto >= 0m ? $"+{ppvNeto:C2} (Ahorro)" : $"{ppvNeto:C2} (Alza)";
+            }
+            if (TxtKpiEconPpvSub != null)
+                TxtKpiEconPpvSub.Text = $"{ppvList.Count} partidas analizadas vs. promedio";
+
+            int famInflacion = ppvList
+                .Where(x => x.VariacionUnitariaPct >= 10m)
+                .Select(x => x.Familia)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            if (TxtKpiEconInflacion != null)
+                TxtKpiEconInflacion.Text = $"{famInflacion} familia(s) en alerta";
+            if (TxtKpiEconInflacionSub != null)
+                TxtKpiEconInflacionSub.Text = "Variaciones >= +10% vs. histórico";
+
+            int totalHerActivas = audList.Sum(x => x.HerramientasEnResguardoActivo);
+            int totalIncidencias = audList.Sum(x => x.IncidenciasOMermasRegistradas);
+            if (TxtKpiEconAgencia != null)
+                TxtKpiEconAgencia.Text = $"{audList.Count} responsables";
+            if (TxtKpiEconAgenciaSub != null)
+                TxtKpiEconAgenciaSub.Text = $"{totalHerActivas} herram. activas | {totalIncidencias} incidencias";
+        }
+        catch { }
+    }
+
+    private void FiltrarTablaKraljicFase4()
+    {
+        if (DgAnalisisKraljic == null) return;
+        string filtro = (CboFiltroCuadranteKraljic?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Todos";
+        if (string.IsNullOrWhiteSpace(filtro) || filtro.StartsWith("Todos", StringComparison.OrdinalIgnoreCase))
+        {
+            DgAnalisisKraljic.ItemsSource = _cacheKraljicFase4;
+        }
+        else
+        {
+            DgAnalisisKraljic.ItemsSource = _cacheKraljicFase4
+                .Where(x => x.CuadranteKraljic.Equals(filtro, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private void CboFiltroCuadranteKraljic_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        FiltrarTablaKraljicFase4();
+    }
+
+    private void BtnRefrescarEconomiaIndustrial_Click(object sender, RoutedEventArgs e)
+    {
+        RefrescarEconomiaIndustrialFase4();
+        MostrarToastDiscreto("Indicadores de Kraljic, Variación de Precio (PPV) y Auditoría de Cuadrillas actualizados.", "Economía Industrial");
+    }
+
+    private void BtnAbrirEconomiaKraljic_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(7);
+        if (TcSubAnalisis != null && TcSubAnalisis.Items.Count >= 5)
+            TcSubAnalisis.SelectedIndex = 4;
+        if (TcEconomiaIndustrial != null)
+            TcEconomiaIndustrial.SelectedIndex = 0;
+        RefrescarEconomiaIndustrialFase4();
+        MostrarToastDiscreto("Mostrando Matriz Estratégica de Kraljic.", "Segmentación de Insumos");
+    }
+
+    private void BtnAbrirEconomiaPpv_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(7);
+        if (TcSubAnalisis != null && TcSubAnalisis.Items.Count >= 5)
+            TcSubAnalisis.SelectedIndex = 4;
+        if (TcEconomiaIndustrial != null)
+            TcEconomiaIndustrial.SelectedIndex = 1;
+        RefrescarEconomiaIndustrialFase4();
+        MostrarToastDiscreto("Mostrando Variación de Precio de Compra (PPV) e Inflación Interna.", "Auditoría de Precios");
+    }
+
+    private void BtnAbrirAuditoriaCuadrillas_Click(object sender, RoutedEventArgs e)
+    {
+        CambiarSeccion(7);
+        if (TcSubAnalisis != null && TcSubAnalisis.Items.Count >= 5)
+            TcSubAnalisis.SelectedIndex = 4;
+        if (TcEconomiaIndustrial != null)
+            TcEconomiaIndustrial.SelectedIndex = 2;
+        RefrescarEconomiaIndustrialFase4();
+        MostrarToastDiscreto("Mostrando Auditoría de Consumo, Sobrantes y Resguardo por Cuadrilla.", "Control de Agencia");
+    }
+
+    private void BtnAutoAdjudicarRutinariosKraljic_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud?.SelectedItem is not Solicitud sol)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una Solicitud de Compra en el Cuadro Comparativo.", "Solicitud requerida", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var (adjudicados, montoConIva) = DatabaseService.AutoAdjudicarRutinariosMejorPrecioHistorico(sol.Id);
+        if (adjudicados <= 0)
+        {
+            MostrarToastDiscreto("No se encontraron partidas rutinarias con precio histórico para auto-adjudicar en esta solicitud.", "Auto-Cotización Kraljic", esAlerta: true);
+            return;
+        }
+
+        CargarTodoElSistema();
+        CboCompSolicitud.SelectedItem = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == sol.Id);
+        MostrarToastDiscreto($"Se auto-cotizaron y adjudicaron {adjudicados} partida(s) con su mejor precio histórico ({montoConIva:C2} c/IVA).", "Auto-Cotización Kraljic");
+    }
+
+    private void BtnExportarFlotillaCsv_Click(object sender, RoutedEventArgs e)
+    {
+        var unidades = DatabaseService.ObtenerVehiculosFlotilla();
+        if (unidades.Count == 0)
+        {
+            MostrarToastDiscreto("No hay camionetas registradas en la flotilla para exportar.", "Flotilla", esAlerta: true);
+            return;
+        }
+
+        var sfd = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Exportar Resumen de Flotilla y Costo por Kilómetro (CSV)",
+            Filter = "Archivo CSV (*.csv)|*.csv",
+            FileName = $"Flotilla_CPK_{DateTime.Now:yyyyMMdd_HHmm}.csv"
+        };
+
+        if (sfd.ShowDialog() != true) return;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Codigo,Unidad,Placas,Responsable,KmInicial,KmActual,KmRecorridos,LitrosAcumulados,RendimientoKmL,GastoGasolina,GastoTaller,GastoTotal,CostoPorKm,ProximoServicio");
+        foreach (var v in unidades)
+        {
+            sb.AppendLine($"\"{v.CodigoVehiculo}\",\"{v.MarcaModelo.Replace("\"", "\"\"")}\",\"{v.Placas}\",\"{v.ResponsableHabitual.Replace("\"", "\"\"")}\",{v.KilometrajeInicial},{v.KilometrajeActual},{v.KilometrosRecorridosPeriodo},{v.LitrosCombustibleAcumulados:0.##},{v.RendimientoKmPorLitro:0.##},{v.GastoCombustibleAcumulado:0.00},{v.GastoMantenimientoAcumulado + v.GastoOtrosAcumulado:0.00},{v.GastoTotalAcumulado:0.00},{v.CostoPorKilometro:0.00},\"{v.AlertaServicioTexto.Replace("\"", "\"\"")}\"");
+        }
+
+        System.IO.File.WriteAllText(sfd.FileName, sb.ToString(), new System.Text.UTF8Encoding(true));
+        MostrarToastDiscreto($"Reporte CSV de flotilla guardado en: {System.IO.Path.GetFileName(sfd.FileName)}", "Exportación Flotilla");
+    }
+
+    private void BtnModalRespaldoZip_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarModalRespaldoIntegralZip();
+    }
+
+    private void MostrarModalRespaldoIntegralZip()
+    {
+        var win = new Window
+        {
+            Title = "Respaldo y Restauración Integral del Sistema (.ZIP)",
+            Width = 640,
+            Height = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ResizeMode = ResizeMode.NoResize,
+            Background = Tk("ApplicationBackgroundBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(20) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Respaldo Integral en 1 Clic (Base de Datos + Imágenes + Facturas XML)",
+            FontSize = 16.5,
+            FontWeight = FontWeights.Bold
+        });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Empaqueta en un solo archivo .ZIP la base de datos SQLite (con checkpoint WAL seguro), las fotografías del catálogo y las facturas XML CFDI.",
+            FontSize = 11.8,
+            Opacity = 0.76,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 14)
+        });
+
+        var bdrCrear = new Border
+        {
+            Padding = new Thickness(14),
+            CornerRadius = new CornerRadius(8),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlElevationBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        var spCrear = new StackPanel();
+        spCrear.Children.Add(new TextBlock { Text = "1. Generar Respaldo Completo (.ZIP)", FontWeight = FontWeights.Bold, FontSize = 13.5 });
+        spCrear.Children.Add(new TextBlock
+        {
+            Text = $"Carpeta automática de respaldos: {DatabaseService.BackupsFolder}",
+            FontSize = 11,
+            Opacity = 0.72,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 10)
+        });
+
+        var wpBotonesCrear = new WrapPanel();
+        var btnRespaldoRapido = new Wpf.Ui.Controls.Button
+        {
+            Content = "Crear Respaldo .ZIP en Carpeta Local",
+            Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var btnExportarZip = new Wpf.Ui.Controls.Button
+        {
+            Content = "Guardar Respaldo .ZIP en otra ubicación...",
+            Padding = new Thickness(12, 6, 12, 6)
+        };
+        wpBotonesCrear.Children.Add(btnRespaldoRapido);
+        wpBotonesCrear.Children.Add(btnExportarZip);
+        spCrear.Children.Add(wpBotonesCrear);
+        bdrCrear.Child = spCrear;
+        root.Children.Add(bdrCrear);
+
+        var bdrRestaurar = new Border
+        {
+            Padding = new Thickness(14),
+            CornerRadius = new CornerRadius(8),
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlElevationBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        var spRestaurar = new StackPanel();
+        spRestaurar.Children.Add(new TextBlock { Text = "2. Restaurar desde un Archivo .ZIP", FontWeight = FontWeights.Bold, FontSize = 13.5 });
+        spRestaurar.Children.Add(new TextBlock
+        {
+            Text = "Antes de restaurar, el sistema genera automáticamente un respaldo preventivo del estado actual.",
+            FontSize = 11,
+            Opacity = 0.72,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 10)
+        });
+        var btnRestaurarZip = new Wpf.Ui.Controls.Button
+        {
+            Content = "Seleccionar Archivo .ZIP y Restaurar Sistema...",
+            Padding = new Thickness(12, 6, 12, 6)
+        };
+        spRestaurar.Children.Add(btnRestaurarZip);
+        bdrRestaurar.Child = spRestaurar;
+        root.Children.Add(bdrRestaurar);
+
+        var btnCerrar = new System.Windows.Controls.Button
+        {
+            Content = "Cerrar",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(16, 6, 16, 6)
+        };
+        btnCerrar.Click += (_, _) => win.Close();
+        root.Children.Add(btnCerrar);
+
+        btnRespaldoRapido.Click += (_, _) =>
+        {
+            try
+            {
+                string zipPath = DatabaseService.CrearRespaldoIntegralZip();
+                win.Close();
+                MostrarToastDiscreto($"Respaldo integral creado: {System.IO.Path.GetFileName(zipPath)}", "Respaldo .ZIP Exitoso");
+            }
+            catch (Exception ex)
+            {
+                DialogoFluent.Show(win, $"Error al crear el respaldo ZIP:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        };
+
+        btnExportarZip.Click += (_, _) =>
+        {
+            var sfd = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Guardar Respaldo Integral (.ZIP)",
+                Filter = "Archivo ZIP de Respaldo (*.zip)|*.zip",
+                FileName = $"RespaldoIntegral_Lebaref_{DateTime.Now:yyyyMMdd_HHmmss}.zip"
+            };
+            if (sfd.ShowDialog() != true) return;
+            try
+            {
+                string zipPath = DatabaseService.CrearRespaldoIntegralZip(sfd.FileName);
+                win.Close();
+                MostrarToastDiscreto($"Respaldo exportado en: {zipPath}", "Respaldo .ZIP Exportado");
+            }
+            catch (Exception ex)
+            {
+                DialogoFluent.Show(win, $"Error al exportar el respaldo ZIP:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        };
+
+        btnRestaurarZip.Click += (_, _) =>
+        {
+            var ofd = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Seleccionar Respaldo Integral (.ZIP) para Restaurar",
+                Filter = "Archivo ZIP de Respaldo (*.zip)|*.zip",
+                InitialDirectory = System.IO.Directory.Exists(DatabaseService.BackupsFolder) ? DatabaseService.BackupsFolder : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+            };
+            if (ofd.ShowDialog() != true) return;
+
+            var conf = DialogoFluent.Show(
+                win,
+                $"¿Está seguro de restaurar la base de datos, imágenes y XML desde el archivo:\n{System.IO.Path.GetFileName(ofd.FileName)}?\n\nSe creará un respaldo preventivo automático antes de reemplazar los datos actuales.",
+                "Confirmar Restauración Integral",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (conf != System.Windows.MessageBoxResult.Yes) return;
+
+            try
+            {
+                DatabaseService.RestaurarRespaldoIntegralZip(ofd.FileName);
+                CargarTodoElSistema();
+                RefrescarModuloFlotilla();
+                RefrescarEconomiaIndustrialFase4();
+                win.Close();
+                MostrarToastDiscreto($"Sistema restaurado exitosamente desde {System.IO.Path.GetFileName(ofd.FileName)}.", "Restauración Completada");
+            }
+            catch (Exception ex)
+            {
+                DialogoFluent.Show(win, $"No fue posible restaurar el archivo ZIP:\n{ex.Message}", "Error al restaurar", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        };
+
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    // =========================================================================
+    // NOTIFICACIONES POR CORREO A GERENTES (GMAIL SMTP -> CORREO CORPORATIVO)
+    // =========================================================================
+
+    private void BtnAbrirConfigNotificacionesCorreo_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarModalConfiguracionYBitacoraCorreoGerentes();
+    }
+
+    private void MostrarModalConfiguracionYBitacoraCorreoGerentes()
+    {
+        var cfg = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+
+        var win = new Window
+        {
+            Title = "Notificaciones por Correo a Gerentes (Gmail SMTP → Correo Corporativo)",
+            Width = 1040,
+            Height = 680,
+            MaxWidth = SystemParameters.WorkArea.Width - 20,
+            MaxHeight = SystemParameters.WorkArea.Height - 20,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Background = Tk("ApplicationBackgroundBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new Grid { Margin = new Thickness(16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var header = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        header.Children.Add(new TextBlock
+        {
+            Text = "Notificaciones Automáticas por Correo a Gerentes sobre Cambios de Estado de Cotizaciones",
+            FontSize = 15.5,
+            FontWeight = FontWeights.Bold
+        });
+        header.Children.Add(new TextBlock
+        {
+            Text = "Envía avisos automáticos desde su cuenta Gmail hacia el correo corporativo registrado de cada Gerente / Solicitante en las 5 etapas del ciclo de compra.",
+            FontSize = 11.5,
+            Opacity = 0.78,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        Grid.SetRow(header, 0);
+        root.Children.Add(header);
+
+        var bodyGrid = new Grid();
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(365) });
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(bodyGrid, 1);
+        root.Children.Add(bodyGrid);
+
+        // Panel Izquierdo: Configuración Gmail SMTP y Envío Manual
+        var bdrLeft = new Border
+        {
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+        var svLeft = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var spLeft = new StackPanel();
+
+        spLeft.Children.Add(new TextBlock
+        {
+            Text = "1. Cuenta Remitente (Gmail SMTP)",
+            FontWeight = FontWeights.Bold,
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+
+        var chkActivo = new CheckBox
+        {
+            Content = "Activar envío automático en los 5 cambios de estado",
+            IsChecked = cfg.Activo,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        spLeft.Children.Add(chkActivo);
+
+        spLeft.Children.Add(new TextBlock { Text = "Correo Gmail Remitente:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtGmail = new Wpf.Ui.Controls.TextBox { Text = cfg.CorreoRemitenteGmail, PlaceholderText = "ej. compras.lebaref@gmail.com", Margin = new Thickness(0, 0, 0, 6) };
+        spLeft.Children.Add(txtGmail);
+
+        spLeft.Children.Add(new TextBlock { Text = "Contraseña de Aplicación de Google (16 letras):", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtPassApp = new System.Windows.Controls.PasswordBox { Password = cfg.ContrasenaAplicacionGmail, Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 0, 0, 4) };
+        spLeft.Children.Add(txtPassApp);
+
+        var txtEstadoPass = new TextBlock
+        {
+            FontSize = 10.5,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        void ActualizarEstadoPasswordUI()
+        {
+            string pLimpia = (txtPassApp.Password ?? string.Empty).Replace(" ", "").Trim();
+            if (string.IsNullOrEmpty(pLimpia))
+            {
+                txtEstadoPass.Text = "Pendiente: Pegue aquí los 16 caracteres generados por Google.";
+                txtEstadoPass.Foreground = new SolidColorBrush(Color.FromRgb(180, 83, 9));
+            }
+            else if (pLimpia.Length != 16 || pLimpia.Any(c => !char.IsLetter(c)))
+            {
+                txtEstadoPass.Text = $"⚠️ Atención: La clave actual tiene {pLimpia.Length} caracteres (contiene números o símbolos). Parece la contraseña normal de su correo, la cual Google bloquea. Debe usar una Contraseña de Aplicación de 16 letras.";
+                txtEstadoPass.Foreground = new SolidColorBrush(Color.FromRgb(220, 38, 38));
+            }
+            else
+            {
+                txtEstadoPass.Text = "✓ Formato válido: 16 letras de Contraseña de Aplicación detectadas.";
+                txtEstadoPass.Foreground = new SolidColorBrush(Color.FromRgb(22, 163, 74));
+            }
+        }
+        txtPassApp.PasswordChanged += (_, _) => ActualizarEstadoPasswordUI();
+        ActualizarEstadoPasswordUI();
+        spLeft.Children.Add(txtEstadoPass);
+
+        var btnAbrirGoogleAppPass = new System.Windows.Controls.Button
+        {
+            Content = "🔑 Abrir Google para generar Contraseña de 16 letras",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            FontSize = 11,
+            Padding = new Thickness(8, 4, 8, 4),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        btnAbrirGoogleAppPass.Click += (_, _) =>
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://myaccount.google.com/apppasswords")
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                DialogoFluent.Show(win, $"Abra en su navegador:\nhttps://myaccount.google.com/apppasswords\n\n({ex.Message})", "Generar Contraseña de Aplicación", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        };
+        spLeft.Children.Add(btnAbrirGoogleAppPass);
+
+        spLeft.Children.Add(new TextBlock { Text = "Nombre visible del remitente:", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtNombreRem = new Wpf.Ui.Controls.TextBox { Text = cfg.NombreMostrarRemitente, Margin = new Thickness(0, 0, 0, 6) };
+        spLeft.Children.Add(txtNombreRem);
+
+        spLeft.Children.Add(new TextBlock { Text = "Correo Corporativo en Copia Fija (CC Opcional):", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 2) });
+        var txtCopiaGerencia = new Wpf.Ui.Controls.TextBox { Text = cfg.CorreoCopiaFijaGerencia, PlaceholderText = "ej. direccion@empresa.com (opcional)", Margin = new Thickness(0, 0, 0, 8) };
+        spLeft.Children.Add(txtCopiaGerencia);
+
+        var ugSmtp = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 8) };
+        var spHost = new StackPanel { Margin = new Thickness(0, 0, 4, 0) };
+        spHost.Children.Add(new TextBlock { Text = "Servidor SMTP:", FontSize = 11 });
+        var txtHost = new Wpf.Ui.Controls.TextBox { Text = cfg.ServidorSmtp };
+        spHost.Children.Add(txtHost);
+        ugSmtp.Children.Add(spHost);
+
+        var spPort = new StackPanel { Margin = new Thickness(4, 0, 0, 0) };
+        spPort.Children.Add(new TextBlock { Text = "Puerto SSL/TLS:", FontSize = 11 });
+        var txtPort = new Wpf.Ui.Controls.TextBox { Text = cfg.PuertoSmtp.ToString() };
+        spPort.Children.Add(txtPort);
+        ugSmtp.Children.Add(spPort);
+        spLeft.Children.Add(ugSmtp);
+
+        spLeft.Children.Add(new TextBlock
+        {
+            Text = "2. Tiempos Aproximados por Defecto",
+            FontWeight = FontWeights.Bold,
+            FontSize = 12.5,
+            Margin = new Thickness(0, 4, 0, 4)
+        });
+
+        var ugTiempos = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 10) };
+        var spT1 = new StackPanel { Margin = new Thickness(0, 0, 4, 0) };
+        spT1.Children.Add(new TextBlock { Text = "Al crear cotización:", FontSize = 11 });
+        var txtTiempoReg = new Wpf.Ui.Controls.TextBox { Text = cfg.TiempoAproxRegistroDefault, PlaceholderText = "24 a 48 hrs" };
+        spT1.Children.Add(txtTiempoReg);
+        ugTiempos.Children.Add(spT1);
+
+        var spT2 = new StackPanel { Margin = new Thickness(4, 0, 0, 0) };
+        spT2.Children.Add(new TextBlock { Text = "En comparativa:", FontSize = 11 });
+        var txtTiempoComp = new Wpf.Ui.Controls.TextBox { Text = cfg.TiempoAproxComparativaDefault, PlaceholderText = "2 a 4 días hábiles" };
+        spT2.Children.Add(txtTiempoComp);
+        ugTiempos.Children.Add(spT2);
+        spLeft.Children.Add(ugTiempos);
+
+        ConfiguracionSmtpCorreo LeerConfigActualUI() => new()
+        {
+            Activo = chkActivo.IsChecked == true,
+            CorreoRemitenteGmail = txtGmail.Text?.Trim() ?? string.Empty,
+            ContrasenaAplicacionGmail = txtPassApp.Password?.Replace(" ", "").Trim() ?? string.Empty,
+            NombreMostrarRemitente = string.IsNullOrWhiteSpace(txtNombreRem.Text) ? "Compras y Almacén Lebaref" : txtNombreRem.Text.Trim(),
+            CorreoCopiaFijaGerencia = txtCopiaGerencia.Text?.Trim() ?? string.Empty,
+            ServidorSmtp = string.IsNullOrWhiteSpace(txtHost.Text) ? "smtp.gmail.com" : txtHost.Text.Trim(),
+            PuertoSmtp = int.TryParse(txtPort.Text, out int p) && p > 0 ? p : 587,
+            UsarSsl = true,
+            TiempoAproxRegistroDefault = string.IsNullOrWhiteSpace(txtTiempoReg.Text) ? "24 a 48 hrs" : txtTiempoReg.Text.Trim(),
+            TiempoAproxComparativaDefault = string.IsNullOrWhiteSpace(txtTiempoComp.Text) ? "2 a 4 días hábiles" : txtTiempoComp.Text.Trim()
+        };
+
+        var btnGuardarCfg = new Wpf.Ui.Controls.Button
+        {
+            Content = "Guardar Configuración Gmail",
+            Appearance = ControlAppearance.Primary,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        spLeft.Children.Add(btnGuardarCfg);
+
+        var btnProbarSmtp = new System.Windows.Controls.Button
+        {
+            Content = "Enviar Correo de Prueba Ahora",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(10, 5, 10, 5),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        spLeft.Children.Add(btnProbarSmtp);
+
+        // Sección 3: Enviar / Actualizar aviso manual de un folio con tiempo aprox personalizado
+        spLeft.Children.Add(new Border
+        {
+            Height = 1,
+            Background = Tk("ControlStrokeColorDefaultBrush"),
+            Margin = new Thickness(0, 2, 0, 10)
+        });
+        spLeft.Children.Add(new TextBlock
+        {
+            Text = "3. Enviar Aviso Manual con Tiempo/Entrega Personalizado",
+            FontWeight = FontWeights.Bold,
+            FontSize = 12.5,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+
+        var solicitudes = DatabaseService.ObtenerSolicitudes();
+        var cboSolManual = new ComboBox
+        {
+            ItemsSource = solicitudes,
+            SelectedIndex = solicitudes.Count > 0 ? 0 : -1,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        spLeft.Children.Add(cboSolManual);
+
+        var cboEtapaManual = new ComboBox { Margin = new Thickness(0, 0, 0, 6), SelectedIndex = 0 };
+        cboEtapaManual.Items.Add(new ComboBoxItem { Content = "1. Cuando se crea (Tu cotización folio xxx registrada...)", Tag = "1_CREADA" });
+        cboEtapaManual.Items.Add(new ComboBoxItem { Content = "2. Pasa a cuadro comparativo (Recibiendo avances...)", Tag = "2_COMPARATIVA" });
+        cboEtapaManual.Items.Add(new ComboBoxItem { Content = "3. Se emiten órdenes de compra (Esperando pago)", Tag = "3_OC_EMITIDA" });
+        cboEtapaManual.Items.Add(new ComboBoxItem { Content = "4. Pago realizado (Ya fue pagada, tiempo aprox...)", Tag = "4_PAGADA" });
+        cboEtapaManual.Items.Add(new ComboBoxItem { Content = "5. Material recibido (Concluido con entrega en...)", Tag = "5_CONCLUIDA" });
+        spLeft.Children.Add(cboEtapaManual);
+
+        var txtDatoPersonalizado = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = "Tiempo aprox o lugar de entrega (ej. 3 días hábiles / Obra Norte)",
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        spLeft.Children.Add(txtDatoPersonalizado);
+
+        var btnEnviarManual = new System.Windows.Controls.Button
+        {
+            Content = "Generar y Enviar Notificación de esta Etapa",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            FontWeight = FontWeights.SemiBold,
+            Padding = new Thickness(10, 5, 10, 5)
+        };
+        spLeft.Children.Add(btnEnviarManual);
+
+        svLeft.Content = spLeft;
+        bdrLeft.Child = svLeft;
+        Grid.SetColumn(bdrLeft, 0);
+        bodyGrid.Children.Add(bdrLeft);
+
+        // Panel Derecho: Bitácora de Correos Enviados y Vista Previa
+        var bdrRight = new Border
+        {
+            Background = Tk("ControlFillColorDefaultBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12)
+        };
+        var dpRight = new DockPanel();
+
+        var topRight = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel.SetDock(topRight, Dock.Top);
+        var btnReenviarSel = new Wpf.Ui.Controls.Button
+        {
+            Content = "Reenviar Seleccionado (Gmail)",
+            Appearance = ControlAppearance.Primary,
+            FontSize = 11,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(6, 0, 0, 0)
+        };
+        DockPanel.SetDock(btnReenviarSel, Dock.Right);
+        topRight.Children.Add(btnReenviarSel);
+
+        var btnRefrescarBit = new System.Windows.Controls.Button
+        {
+            Content = "Actualizar",
+            FontSize = 11,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(6, 0, 0, 0)
+        };
+        DockPanel.SetDock(btnRefrescarBit, Dock.Right);
+        topRight.Children.Add(btnRefrescarBit);
+
+        var txtFiltroBit = new Wpf.Ui.Controls.TextBox
+        {
+            Width = 180,
+            PlaceholderText = "Filtrar folio o gerente...",
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        DockPanel.SetDock(txtFiltroBit, Dock.Right);
+        topRight.Children.Add(txtFiltroBit);
+
+        topRight.Children.Add(new TextBlock
+        {
+            Text = "Bitácora de Notificaciones a Gerentes",
+            FontWeight = FontWeights.Bold,
+            FontSize = 13.5,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        dpRight.Children.Add(topRight);
+
+        var bdrDetalleMsj = new Border
+        {
+            Background = Tk("SubtleFillColorSecondaryBrush"),
+            BorderBrush = Tk("ControlStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        DockPanel.SetDock(bdrDetalleMsj, Dock.Bottom);
+        var txtDetalleSel = new TextBlock
+        {
+            Text = "Seleccione un registro de la bitácora para ver el mensaje completo y el resultado de entrega SMTP.",
+            FontSize = 11.5,
+            TextWrapping = TextWrapping.Wrap
+        };
+        bdrDetalleMsj.Child = txtDetalleSel;
+        dpRight.Children.Add(bdrDetalleMsj);
+
+        var dgBitacora = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            CanUserAddRows = false,
+            SelectionMode = DataGridSelectionMode.Single
+        };
+        dgBitacora.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Fecha / Hora", Binding = new System.Windows.Data.Binding("FechaHora"), Width = 125 });
+        dgBitacora.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Folio", Binding = new System.Windows.Data.Binding("SolicitudFolio"), Width = 105 });
+        dgBitacora.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Gerente", Binding = new System.Windows.Data.Binding("GerenteNombre"), Width = 130 });
+        dgBitacora.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Correo Corporativo", Binding = new System.Windows.Data.Binding("CorreoDestino"), Width = 155 });
+        dgBitacora.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Mensaje Enviado", Binding = new System.Windows.Data.Binding("MensajePrincipal"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgBitacora.Columns.Add(new DataGridTextColumn { ElementStyle = CeldaRecortable(), Header = "Estado", Binding = new System.Windows.Data.Binding("EstadoEnvio"), Width = 135 });
+
+        dpRight.Children.Add(dgBitacora);
+        bdrRight.Child = dpRight;
+        Grid.SetColumn(bdrRight, 1);
+        bodyGrid.Children.Add(bdrRight);
+
+        void CargarTablaBitacora()
+        {
+            dgBitacora.ItemsSource = DatabaseService.ObtenerNotificacionesCorreo(txtFiltroBit.Text);
+        }
+
+        txtFiltroBit.TextChanged += (_, _) => CargarTablaBitacora();
+        btnRefrescarBit.Click += (_, _) => CargarTablaBitacora();
+
+        dgBitacora.SelectionChanged += (_, _) =>
+        {
+            if (dgBitacora.SelectedItem is RegistroNotificacionCorreo reg)
+            {
+                txtDetalleSel.Text =
+                    $"[{reg.EtapaNombre}] — Para: {reg.GerenteNombre} <{(string.IsNullOrWhiteSpace(reg.CorreoDestino) ? "Sin correo asignado en Directorios" : reg.CorreoDestino)}>\n" +
+                    $"Mensaje: \"{reg.MensajePrincipal}\"\n" +
+                    $"Estado: {reg.EstadoEnvio} | {reg.DetalleResultado}";
+            }
+        };
+
+        void HandlerBitacoraLive(RegistroNotificacionCorreo _)
+        {
+            try
+            {
+                Dispatcher.BeginInvoke(new Action(CargarTablaBitacora));
+            }
+            catch
+            {
+                // Ignorar si ventana ya cerró
+            }
+        }
+        DatabaseService.OnNotificacionCorreoProcesada += HandlerBitacoraLive;
+        win.Closed += (_, _) => DatabaseService.OnNotificacionCorreoProcesada -= HandlerBitacoraLive;
+
+        btnGuardarCfg.Click += (_, _) =>
+        {
+            var nuevaCfg = LeerConfigActualUI();
+            DatabaseService.GuardarConfiguracionSmtpCorreo(nuevaCfg);
+            string pLimpia = nuevaCfg.ContrasenaAplicacionGmail;
+            if (nuevaCfg.ServidorSmtp.Contains("gmail", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(pLimpia) &&
+                (pLimpia.Length != 16 || pLimpia.Any(c => !char.IsLetter(c))))
+            {
+                DialogoFluent.Show(
+                    win,
+                    $"Configuración guardada, pero atención:\n\nLa contraseña ingresada tiene {pLimpia.Length} caracteres (contiene números o signos) y corresponde a una contraseña normal.\n\nGoogle bloquea las contraseñas normales en SMTP (Error 5.7.8 BadCredentials). Para enviar desde {nuevaCfg.CorreoRemitenteGmail}, haga clic en el botón '🔑 Abrir Google para generar Contraseña de 16 letras' y pegue los 16 caracteres que le dará Google.",
+                    "Se requiere Contraseña de Aplicación de 16 letras",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+            MostrarToastDiscreto("Configuración Gmail SMTP guardada correctamente.", "Correo Configurado");
+        };
+
+        btnProbarSmtp.Click += async (_, _) =>
+        {
+            var nuevaCfg = LeerConfigActualUI();
+            DatabaseService.GuardarConfiguracionSmtpCorreo(nuevaCfg);
+            btnProbarSmtp.IsEnabled = false;
+            btnProbarSmtp.Content = "Enviando prueba por Gmail...";
+            try
+            {
+                string destPrueba = !string.IsNullOrWhiteSpace(nuevaCfg.CorreoCopiaFijaGerencia)
+                    ? nuevaCfg.CorreoCopiaFijaGerencia
+                    : nuevaCfg.CorreoRemitenteGmail;
+                var (ok, msj) = await DatabaseService.ProbarConexionSmtpGmailAsync(nuevaCfg, destPrueba);
+                CargarTablaBitacora();
+                DialogoFluent.Show(
+                    win,
+                    ok
+                        ? $"Correo de prueba enviado exitosamente desde {nuevaCfg.CorreoRemitenteGmail} hacia {destPrueba}.\n\nDetalle: {msj}"
+                        : $"No se pudo enviar el correo de prueba:\n\n{msj}",
+                    ok ? "Prueba Gmail Exitosa" : "Aviso de Configuración SMTP",
+                    MessageBoxButton.OK,
+                    ok ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+            finally
+            {
+                btnProbarSmtp.IsEnabled = true;
+                btnProbarSmtp.Content = "Enviar Correo de Prueba Ahora";
+            }
+        };
+
+        btnEnviarManual.Click += (_, _) =>
+        {
+            if (cboSolManual.SelectedItem is not Solicitud solSel)
+            {
+                DialogoFluent.Show(win, "Seleccione una solicitud / cotización de la lista.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            DatabaseService.GuardarConfiguracionSmtpCorreo(LeerConfigActualUI());
+            string etapaTag = (cboEtapaManual.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "1_CREADA";
+            string customTxt = txtDatoPersonalizado.Text?.Trim() ?? string.Empty;
+
+            DatabaseService.NotificarCambioEstadoCotizacionGerente(
+                solSel.Id,
+                null,
+                etapaTag,
+                etapaTag == "5_CONCLUIDA" ? null : customTxt,
+                etapaTag == "5_CONCLUIDA" ? customTxt : null);
+
+            CargarTablaBitacora();
+        };
+
+        btnReenviarSel.Click += async (_, _) =>
+        {
+            if (dgBitacora.SelectedItem is not RegistroNotificacionCorreo regSel)
+            {
+                DialogoFluent.Show(win, "Seleccione un registro de la bitácora para reenviarlo.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var nuevaCfg = LeerConfigActualUI();
+            DatabaseService.GuardarConfiguracionSmtpCorreo(nuevaCfg);
+
+            // Si el gerente ya tiene correo actualizado en Directorios, actualizarlo antes de reenviar
+            if (string.IsNullOrWhiteSpace(regSel.CorreoDestino))
+            {
+                var encMatch = DatabaseService.ObtenerEncargados()
+                    .FirstOrDefault(e => string.Equals(e.Nombre, regSel.GerenteNombre, StringComparison.OrdinalIgnoreCase));
+                if (encMatch != null && !string.IsNullOrWhiteSpace(encMatch.Correo))
+                    regSel.CorreoDestino = encMatch.Correo.Trim();
+            }
+
+            btnReenviarSel.IsEnabled = false;
+            try
+            {
+                var (ok, msj) = await DatabaseService.EnviarNotificacionCorreoSmtpInternoAsync(regSel, nuevaCfg);
+                CargarTablaBitacora();
+                DialogoFluent.Show(
+                    win,
+                    ok ? $"Notificación reenviada con éxito.\n{msj}" : $"No se pudo enviar:\n{msj}",
+                    ok ? "Reenviado" : "Error al Reenviar",
+                    MessageBoxButton.OK,
+                    ok ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+            finally
+            {
+                btnReenviarSel.IsEnabled = true;
+            }
+        };
+
+        var footer = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        var btnCerrar = new System.Windows.Controls.Button
+        {
+            Content = "Cerrar",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(18, 6, 18, 6)
+        };
+        DockPanel.SetDock(btnCerrar, Dock.Right);
+        btnCerrar.Click += (_, _) => win.Close();
+        footer.Children.Add(btnCerrar);
+        footer.Children.Add(new TextBlock
+        {
+            Text = "Tip: Asigne el correo corporativo de cada gerente en '8. Directorios → Personal y Departamentos → Correo Corporativo'.",
+            FontSize = 11.5,
+            Opacity = 0.8,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        Grid.SetRow(footer, 2);
+        root.Children.Add(footer);
+
+        CargarTablaBitacora();
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    // =========================================================================
+    // BANDEJA DE CORREOS ENTRANTES (IMAP GMAIL -> SOLICITUD AUTOMÁTICA) Y PLANTILLA
+    // =========================================================================
+
+    private void BtnAbrirBandejaCorreosSolicitud_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarModalBandejaCorreosSolicitud();
+    }
+
+    private async void BtnEnviarPlantillaCorreoAGerentes_Click(object sender, RoutedEventArgs e)
+    {
+        var cfg = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+        if (!cfg.TieneCredencialesCompletas)
+        {
+            DialogoFluent.Show(
+                this,
+                "Primero configure la cuenta Gmail y su Contraseña de Aplicación de 16 letras en 'Configurar Correo Gmail (Gerentes)'.",
+                "Configuración Requerida",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            MostrarModalConfiguracionYBitacoraCorreoGerentes();
+            return;
+        }
+
+        var encargadosConCorreo = DatabaseService.ObtenerEncargados()
+            .Where(x => !string.IsNullOrWhiteSpace(x.Correo) && x.Correo.Contains('@'))
+            .ToList();
+
+        string listaDestinos = encargadosConCorreo.Count > 0
+            ? string.Join("\n", encargadosConCorreo.Select(x => $"• {x.Nombre} ({x.DepartamentoNombre}) → {x.Correo}"))
+            : $"• {cfg.CorreoCopiaFijaGerencia} (Correo general de gerencia configurado)";
+
+        var resp = DialogoFluent.Show(
+            this,
+            $"Se enviará por correo el archivo 'Plantilla_Solicitud_Compras_Lebaref.csv' junto con las instrucciones para que los gerentes puedan enviar sus solicitudes (con asunto SOLICITUD o pegando su lista tipo WhatsApp) a:\n\n{listaDestinos}\n\n¿Desea enviar la plantilla ahora?",
+            "Enviar Plantilla de Solicitud a Gerentes",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (resp != MessageBoxResult.Yes) return;
+
+        if (sender is System.Windows.Controls.Button btn) btn.IsEnabled = false;
+        try
+        {
+            var (exito, detalle) = await DatabaseService.EnviarPlantillaSolicitudAGerentesPorCorreoAsync();
+            DialogoFluent.Show(
+                this,
+                detalle,
+                exito ? "Plantilla Enviada por Correo" : "Aviso al Enviar Plantilla",
+                MessageBoxButton.OK,
+                exito ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+        finally
+        {
+            if (sender is System.Windows.Controls.Button btnRestore) btnRestore.IsEnabled = true;
+        }
+    }
+
+    private void MostrarModalBandejaCorreosSolicitud()
+    {
+        var cfg = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+
+        var win = new FluentWindow
+        {
+            Title = "Bandeja de Correos Entrantes (Solicitudes por Correo / IMAP Gmail)",
+            Width = 1120,
+            Height = 760,
+            MinWidth = 920,
+            MinHeight = 620,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            ExtendsContentIntoTitleBar = true
+        };
+
+        var root = new Grid { Margin = new Thickness(18, 12, 18, 16) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var titleBar = new TitleBar
+        {
+            Title = "Bandeja Anti-Traspapeleo y Creación Automática de Solicitudes por Correo (Gmail IMAP)",
+            ShowMaximize = true,
+            ShowMinimize = false
+        };
+        Grid.SetRow(titleBar, 0);
+        root.Children.Add(titleBar);
+
+        // Panel superior de reglas y acciones rápidas
+        var cardReglas = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14, 10, 14, 10),
+            Margin = new Thickness(0, 6, 0, 10),
+            BorderThickness = new Thickness(1)
+        };
+        cardReglas.SetResourceReference(Border.BackgroundProperty, "CardBackgroundFillColorDefaultBrush");
+        cardReglas.SetResourceReference(Border.BorderBrushProperty, "CardStrokeColorDefaultBrush");
+
+        var stackTop = new StackPanel();
+
+        var filaReglas1 = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
+        var chkImapActivo = new CheckBox
+        {
+            Content = "Revisar buzón Gmail automáticamente (cada 2 min)",
+            IsChecked = cfg.ImapRecepcionActiva,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 18, 0)
+        };
+        var chkAutoCrearAsunto = new CheckBox
+        {
+            Content = "Auto-crear Solicitud (SOL-xxxx) si el Asunto contiene:",
+            IsChecked = cfg.ImapAutoCrearPorAsunto,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var txtPalabrasClave = new System.Windows.Controls.TextBox
+        {
+            Text = string.IsNullOrWhiteSpace(cfg.PalabrasClaveAsuntoImap)
+                ? "SOLICITUD, COTIZAR, COTIZACION, PEDIDO, REQUERIMIENTO"
+                : cfg.PalabrasClaveAsuntoImap,
+            Width = 340,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+            ToolTip = "Palabras clave separadas por coma. Si el asunto del correo contiene cualquiera de estas palabras y tiene partidas válidas, se creará la Solicitud automáticamente."
+        };
+        var btnGuardarReglas = new Wpf.Ui.Controls.Button
+        {
+            Content = "Guardar Reglas",
+            Appearance = ControlAppearance.Secondary,
+            Padding = new Thickness(12, 4, 12, 4)
+        };
+
+        filaReglas1.Children.Add(chkImapActivo);
+        filaReglas1.Children.Add(chkAutoCrearAsunto);
+        filaReglas1.Children.Add(txtPalabrasClave);
+        filaReglas1.Children.Add(btnGuardarReglas);
+        stackTop.Children.Add(filaReglas1);
+
+        var filaAcciones = new DockPanel { LastChildFill = false };
+        var btnSincronizarAhora = new Wpf.Ui.Controls.Button
+        {
+            Content = "🔄 Revisar Buzón Gmail Ahora",
+            Appearance = ControlAppearance.Primary,
+            Padding = new Thickness(14, 6, 14, 6),
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+        var cboFiltroBandeja = new ComboBox
+        {
+            Width = 210,
+            SelectedIndex = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+        cboFiltroBandeja.Items.Add(new ComboBoxItem { Content = "Todos los correos recibidos", Tag = "TODOS" });
+        cboFiltroBandeja.Items.Add(new ComboBoxItem { Content = "En Bandeja (Por Revisar)", Tag = "PENDIENTES" });
+        cboFiltroBandeja.Items.Add(new ComboBoxItem { Content = "Convertidos en Solicitud", Tag = "PROCESADOS" });
+
+        var txtEstadoSync = new TextBlock
+        {
+            Text = $"Cuenta vinculada: {cfg.CorreoRemitenteGmail}",
+            FontSize = 11.5,
+            Opacity = 0.78,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var btnEnviarPlantillaGerentes = new Wpf.Ui.Controls.Button
+        {
+            Content = "📤 Enviar Plantilla a Gerentes por Correo",
+            Appearance = ControlAppearance.Secondary,
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        var btnDescargarPlantillaLocal = new Wpf.Ui.Controls.Button
+        {
+            Content = "📄 Descargar Plantilla CSV",
+            Appearance = ControlAppearance.Secondary,
+            Padding = new Thickness(12, 6, 12, 6)
+        };
+
+        DockPanel.SetDock(btnSincronizarAhora, Dock.Left);
+        DockPanel.SetDock(cboFiltroBandeja, Dock.Left);
+        DockPanel.SetDock(txtEstadoSync, Dock.Left);
+        DockPanel.SetDock(btnDescargarPlantillaLocal, Dock.Right);
+        DockPanel.SetDock(btnEnviarPlantillaGerentes, Dock.Right);
+
+        filaAcciones.Children.Add(btnSincronizarAhora);
+        filaAcciones.Children.Add(cboFiltroBandeja);
+        filaAcciones.Children.Add(txtEstadoSync);
+        filaAcciones.Children.Add(btnDescargarPlantillaLocal);
+        filaAcciones.Children.Add(btnEnviarPlantillaGerentes);
+        stackTop.Children.Add(filaAcciones);
+
+        cardReglas.Child = stackTop;
+        Grid.SetRow(cardReglas, 1);
+        root.Children.Add(cardReglas);
+
+        // Cuerpo dividido: Izquierda lista de correos, Derecha previsualización y conversión en 1 clic
+        var bodyGrid = new Grid();
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var dgCorreos = new System.Windows.Controls.DataGrid
+        {
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            SelectionMode = DataGridSelectionMode.Single,
+            CanUserAddRows = false,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+            RowHeight = 34
+        };
+        dgCorreos.Columns.Add(new DataGridTextColumn { Header = "Fecha", Binding = new System.Windows.Data.Binding("FechaCorreo"), Width = 122 });
+        dgCorreos.Columns.Add(new DataGridTextColumn { Header = "Remitente", Binding = new System.Windows.Data.Binding("RemitenteNombre"), Width = 140 });
+        dgCorreos.Columns.Add(new DataGridTextColumn { Header = "Depto", Binding = new System.Windows.Data.Binding("DepartamentoDetectadoNombre"), Width = 105 });
+        dgCorreos.Columns.Add(new DataGridTextColumn { Header = "Asunto del Correo", Binding = new System.Windows.Data.Binding("Asunto"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        dgCorreos.Columns.Add(new DataGridTextColumn { Header = "Ítems", Binding = new System.Windows.Data.Binding("PartidasDetectadasCount"), Width = 55 });
+        dgCorreos.Columns.Add(new DataGridTextColumn { Header = "Estado", Binding = new System.Windows.Data.Binding("EstadoBandeja"), Width = 150 });
+        dgCorreos.Columns.Add(new DataGridTextColumn { Header = "Folio SOL", Binding = new System.Windows.Data.Binding("SolicitudCreadaFolio"), Width = 85 });
+
+        Grid.SetColumn(dgCorreos, 0);
+        bodyGrid.Children.Add(dgCorreos);
+
+        // Panel derecho: Detalle del correo seleccionado y conversión rápida
+        var cardDetalle = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14),
+            BorderThickness = new Thickness(1)
+        };
+        cardDetalle.SetResourceReference(Border.BackgroundProperty, "CardBackgroundFillColorDefaultBrush");
+        cardDetalle.SetResourceReference(Border.BorderBrushProperty, "CardStrokeColorDefaultBrush");
+
+        var gridDetalle = new Grid();
+        gridDetalle.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        gridDetalle.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        gridDetalle.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        gridDetalle.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        gridDetalle.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var txtTituloDetalle = new TextBlock
+        {
+            Text = "Seleccione un correo de la lista para revisar sus partidas",
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 13.5,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        Grid.SetRow(txtTituloDetalle, 0);
+        gridDetalle.Children.Add(txtTituloDetalle);
+
+        var txtSubDetalle = new TextBlock
+        {
+            Text = "Puede editar la lista de materiales antes de convertirla en Solicitud (formato WhatsApp o plantilla CSV).",
+            FontSize = 11.5,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        Grid.SetRow(txtSubDetalle, 1);
+        gridDetalle.Children.Add(txtSubDetalle);
+
+        var txtCuerpoEditable = new System.Windows.Controls.TextBox
+        {
+            AcceptsReturn = true,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            TextWrapping = TextWrapping.Wrap,
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        Grid.SetRow(txtCuerpoEditable, 2);
+        gridDetalle.Children.Add(txtCuerpoEditable);
+
+        // Selectores de Departamento, Solicitante y Proyecto para asignar al crear la solicitud
+        var gridMetadatos = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        gridMetadatos.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridMetadatos.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+        gridMetadatos.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridMetadatos.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        gridMetadatos.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var stackDepto = new StackPanel();
+        stackDepto.Children.Add(new TextBlock { Text = "Departamento:", FontSize = 11, Opacity = 0.75, Margin = new Thickness(0, 0, 0, 2) });
+        var cboDeptoCorreo = new ComboBox { DisplayMemberPath = "Nombre", SelectedValuePath = "Id", ItemsSource = DatabaseService.ObtenerDepartamentos() };
+        stackDepto.Children.Add(cboDeptoCorreo);
+        Grid.SetRow(stackDepto, 0);
+        Grid.SetColumn(stackDepto, 0);
+        gridMetadatos.Children.Add(stackDepto);
+
+        var stackEncargado = new StackPanel();
+        stackEncargado.Children.Add(new TextBlock { Text = "Gerente / Solicitante:", FontSize = 11, Opacity = 0.75, Margin = new Thickness(0, 0, 0, 2) });
+        var cboEncargadoCorreo = new ComboBox { DisplayMemberPath = "Nombre", SelectedValuePath = "Id", ItemsSource = DatabaseService.ObtenerEncargados() };
+        stackEncargado.Children.Add(cboEncargadoCorreo);
+        Grid.SetRow(stackEncargado, 0);
+        Grid.SetColumn(stackEncargado, 2);
+        gridMetadatos.Children.Add(stackEncargado);
+
+        var stackProy = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        stackProy.Children.Add(new TextBlock { Text = "Proyecto / Destino (Opcional):", FontSize = 11, Opacity = 0.75, Margin = new Thickness(0, 0, 0, 2) });
+        var cboProyectoCorreo = new ComboBox { DisplayMemberPath = "Nombre", SelectedValuePath = "Id", ItemsSource = DatabaseService.ObtenerProyectos() };
+        stackProy.Children.Add(cboProyectoCorreo);
+        Grid.SetRow(stackProy, 1);
+        Grid.SetColumn(stackProy, 0);
+        Grid.SetColumnSpan(stackProy, 3);
+        gridMetadatos.Children.Add(stackProy);
+
+        Grid.SetRow(gridMetadatos, 3);
+        gridDetalle.Children.Add(gridMetadatos);
+
+        var stackBotonesDetalle = new WrapPanel();
+        var btnConvertirEnSol = new Wpf.Ui.Controls.Button
+        {
+            Content = "✓ Crear Solicitud (SOL-xxxx) con este Correo",
+            Appearance = ControlAppearance.Primary,
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(0, 0, 8, 6),
+            IsEnabled = false
+        };
+        var btnAbrirSolExistente = new Wpf.Ui.Controls.Button
+        {
+            Content = "📂 Ir a Solicitud Creada",
+            Appearance = ControlAppearance.Secondary,
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(0, 0, 8, 6),
+            Visibility = Visibility.Collapsed
+        };
+        var btnDescartarCorreo = new Wpf.Ui.Controls.Button
+        {
+            Content = "✕ Descartar",
+            Appearance = ControlAppearance.Secondary,
+            Padding = new Thickness(10, 6, 10, 6),
+            Margin = new Thickness(0, 0, 0, 6),
+            IsEnabled = false
+        };
+        stackBotonesDetalle.Children.Add(btnConvertirEnSol);
+        stackBotonesDetalle.Children.Add(btnAbrirSolExistente);
+        stackBotonesDetalle.Children.Add(btnDescartarCorreo);
+
+        Grid.SetRow(stackBotonesDetalle, 4);
+        gridDetalle.Children.Add(stackBotonesDetalle);
+
+        cardDetalle.Child = gridDetalle;
+        Grid.SetColumn(cardDetalle, 2);
+        bodyGrid.Children.Add(cardDetalle);
+
+        Grid.SetRow(bodyGrid, 2);
+        root.Children.Add(bodyGrid);
+
+        void GuardarReglasImapUI()
+        {
+            var c = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+            c.ImapRecepcionActiva = chkImapActivo.IsChecked == true;
+            c.ImapAutoCrearPorAsunto = chkAutoCrearAsunto.IsChecked == true;
+            c.PalabrasClaveAsuntoImap = string.IsNullOrWhiteSpace(txtPalabrasClave.Text)
+                ? "SOLICITUD, COTIZAR, COTIZACION, PEDIDO, REQUERIMIENTO"
+                : txtPalabrasClave.Text.Trim();
+            DatabaseService.GuardarConfiguracionSmtpCorreo(c);
+        }
+
+        void CargarListaBandeja()
+        {
+            string tagFiltro = (cboFiltroBandeja.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "TODOS";
+            var lista = DatabaseService.ObtenerCorreosEntrantesSolicitud(tagFiltro);
+            dgCorreos.ItemsSource = lista;
+            ActualizarBadgeBandejaCorreosSolicitud();
+            if (lista.Count > 0 && dgCorreos.SelectedItem == null)
+                dgCorreos.SelectedIndex = 0;
+        }
+
+        btnGuardarReglas.Click += (_, _) =>
+        {
+            GuardarReglasImapUI();
+            MostrarToastDiscreto("Reglas de detección por asunto e IMAP guardadas.", "Reglas Guardadas");
+        };
+
+        cboFiltroBandeja.SelectionChanged += (_, _) => CargarListaBandeja();
+
+        dgCorreos.SelectionChanged += (_, _) =>
+        {
+            if (dgCorreos.SelectedItem is not CorreoEntranteSolicitud sel)
+            {
+                txtTituloDetalle.Text = "Seleccione un correo de la lista para revisar sus partidas";
+                txtSubDetalle.Text = "Puede editar la lista de materiales antes de convertirla en Solicitud.";
+                txtCuerpoEditable.Text = string.Empty;
+                btnConvertirEnSol.IsEnabled = false;
+                btnDescartarCorreo.IsEnabled = false;
+                btnAbrirSolExistente.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            txtTituloDetalle.Text = $"{sel.Asunto}";
+            txtSubDetalle.Text = $"De: {sel.RemitenteNombre} <{sel.RemitenteCorreo}> · Fecha: {sel.FechaCorreo} · Estado: {sel.EstadoBandeja}";
+            txtCuerpoEditable.Text = !string.IsNullOrWhiteSpace(sel.ContenidoAdjuntoCsv)
+                ? sel.ContenidoAdjuntoCsv
+                : sel.CuerpoTexto;
+
+            cboDeptoCorreo.SelectedValue = sel.DepartamentoDetectadoId;
+            cboEncargadoCorreo.SelectedValue = sel.EncargadoDetectadoId;
+            cboProyectoCorreo.SelectedValue = sel.ProyectoDetectadoId;
+
+            bool yaTieneSol = sel.SolicitudCreadaId > 0;
+            btnConvertirEnSol.IsEnabled = !yaTieneSol;
+            btnConvertirEnSol.Content = yaTieneSol
+                ? $"✓ Ya convertido ({sel.SolicitudCreadaFolio})"
+                : "✓ Crear Solicitud (SOL-xxxx) con este Correo";
+            btnDescartarCorreo.IsEnabled = !yaTieneSol && !string.Equals(sel.EstadoBandeja, "Descartado", StringComparison.OrdinalIgnoreCase);
+
+            if (yaTieneSol)
+            {
+                btnAbrirSolExistente.Visibility = Visibility.Visible;
+                btnAbrirSolExistente.Content = $"📂 Abrir {sel.SolicitudCreadaFolio}";
+            }
+            else
+            {
+                btnAbrirSolExistente.Visibility = Visibility.Collapsed;
+            }
+        };
+
+        btnSincronizarAhora.Click += async (_, _) =>
+        {
+            GuardarReglasImapUI();
+            btnSincronizarAhora.IsEnabled = false;
+            btnSincronizarAhora.Content = "Conectando a Gmail IMAP...";
+            txtEstadoSync.Text = "Revisando buzón de entrada en imap.gmail.com:993...";
+            try
+            {
+                var (ok, msj, autoCreadas, enBandeja) = await DatabaseService.SincronizarCorreosEntrantesImapAsync();
+                txtEstadoSync.Text = msj;
+                CargarListaBandeja();
+                if (autoCreadas > 0)
+                    RefrescarSolicitudes();
+
+                if (!ok)
+                {
+                    DialogoFluent.Show(win, msj, "Aviso de Conexión IMAP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            finally
+            {
+                btnSincronizarAhora.IsEnabled = true;
+                btnSincronizarAhora.Content = "🔄 Revisar Buzón Gmail Ahora";
+            }
+        };
+
+        btnConvertirEnSol.Click += (_, _) =>
+        {
+            if (dgCorreos.SelectedItem is not CorreoEntranteSolicitud sel) return;
+
+            int? deptoId = cboDeptoCorreo.SelectedValue as int?;
+            int? encId = cboEncargadoCorreo.SelectedValue as int?;
+            int? proyId = cboProyectoCorreo.SelectedValue as int?;
+
+            var solCreada = DatabaseService.ConvertirCorreoBandejaEnSolicitud(
+                sel.Id,
+                deptoId,
+                encId,
+                proyId,
+                txtCuerpoEditable.Text);
+
+            if (solCreada == null)
+            {
+                DialogoFluent.Show(win, "No se detectaron partidas válidas en el correo o texto editado. Verifique que tenga al menos un renglón con cantidad y descripción.", "No se pudo convertir", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            RefrescarSolicitudes(solCreada.Id);
+            CargarListaBandeja();
+            DialogoFluent.Show(
+                win,
+                $"Se generó exitosamente la solicitud {solCreada.Folio} con {solCreada.TotalSkus} partida(s).\n\nAdemás se envió acuse automático por correo al solicitante con su folio {solCreada.Folio}.",
+                $"Solicitud {solCreada.Folio} Creada",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        };
+
+        btnAbrirSolExistente.Click += (_, _) =>
+        {
+            if (dgCorreos.SelectedItem is not CorreoEntranteSolicitud sel || sel.SolicitudCreadaId <= 0) return;
+            int idSol = sel.SolicitudCreadaId;
+            win.Close();
+            AppMediator.Instance.Publicar(new NavegarModuloMessage(ModuloSistema.Solicitudes));
+            RefrescarSolicitudes(idSol);
+        };
+
+        btnDescartarCorreo.Click += (_, _) =>
+        {
+            if (dgCorreos.SelectedItem is not CorreoEntranteSolicitud sel) return;
+            DatabaseService.DescartarCorreoEntranteSolicitud(sel.Id);
+            CargarListaBandeja();
+        };
+
+        btnEnviarPlantillaGerentes.Click += (_, _) => BtnEnviarPlantillaCorreoAGerentes_Click(btnEnviarPlantillaGerentes, new RoutedEventArgs());
+        btnDescargarPlantillaLocal.Click += (_, _) => BtnExportarPlantillaSolicitud_Click(btnDescargarPlantillaLocal, new RoutedEventArgs());
+
+        var footer = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        var btnCerrar = new System.Windows.Controls.Button
+        {
+            Content = "Cerrar",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(18, 6, 18, 6)
+        };
+        DockPanel.SetDock(btnCerrar, Dock.Right);
+        btnCerrar.Click += (_, _) => win.Close();
+        footer.Children.Add(btnCerrar);
+        footer.Children.Add(new TextBlock
+        {
+            Text = "Tip: Los gerentes pueden adjuntar la plantilla CSV o escribir su lista estilo WhatsApp (ej. '10 pza Guantes de nitrilo') en el cuerpo del correo.",
+            FontSize = 11.5,
+            Opacity = 0.8,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        Grid.SetRow(footer, 3);
+        root.Children.Add(footer);
+
+        CargarListaBandeja();
+        win.Content = root;
+        win.ShowDialog();
+    }
+
+    // =========================================================================
+    // ENVIAR COMPARATIVA POR CORREO (TABLA EN EL CUERPO + PDF ADJUNTO)
+    // =========================================================================
+
+    private void BtnEnviarComparativaPorCorreo_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una solicitud con artículos para enviar su Cuadro Comparativo.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var cfg = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+        if (!cfg.TieneCredencialesCompletas)
+        {
+            DialogoFluent.Show(this, "Primero configure la cuenta Gmail y su Contraseña de Aplicación de 16 letras.", "Configuración Requerida", MessageBoxButton.OK, MessageBoxImage.Information);
+            MostrarModalConfiguracionYBitacoraCorreoGerentes();
+            return;
+        }
+
+        // Guardar lo capturado antes de generar el documento
+        SincronizarRenglonActualDesdeTarjetas();
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio);
+        var renglones = _renglonesComparativa.ToList();
+
+        // Destinatario sugerido: correo del gerente solicitante
+        var enc = DatabaseService.ObtenerEncargados().FirstOrDefault(x => x.Id == sol.EncargadoId);
+        string correoGerente = enc?.Correo?.Trim() ?? string.Empty;
+
+        var win = new Window
+        {
+            Title = $"Enviar Comparativa {sol.Folio} por Correo",
+            Width = 620,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Owner = this,
+            Background = Tk("ApplicationBackgroundBrush"),
+            Foreground = Tk("TextFillColorPrimaryBrush")
+        };
+
+        var root = new StackPanel { Margin = new Thickness(20, 16, 20, 18) };
+        root.Children.Add(new TextBlock { Text = $"Enviar Cuadro Comparativo {sol.Folio}", FontSize = 17, FontWeight = FontWeights.SemiBold });
+        root.Children.Add(new TextBlock
+        {
+            Text = $"{sol.ProyectoMostrar} · {renglones.Count} partida(s) · Desde: {cfg.CorreoRemitenteGmail}",
+            FontSize = 12,
+            Opacity = 0.7,
+            Margin = new Thickness(0, 2, 0, 14),
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        TextBlock Etiqueta(string t) => new() { Text = t, FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) };
+
+        root.Children.Add(Etiqueta("Para (separe varios correos con coma):"));
+        var txtPara = new System.Windows.Controls.TextBox { Text = correoGerente, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 10) };
+        root.Children.Add(txtPara);
+
+        root.Children.Add(Etiqueta("CC (opcional):"));
+        var txtCc = new System.Windows.Controls.TextBox { Text = cfg.CorreoCopiaFijaGerencia ?? string.Empty, Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 10) };
+        root.Children.Add(txtCc);
+
+        root.Children.Add(Etiqueta("Asunto:"));
+        var txtAsunto = new System.Windows.Controls.TextBox
+        {
+            Text = $"Cuadro Comparativo de Cotizaciones {sol.Folio} — {sol.ProyectoMostrar}",
+            Padding = new Thickness(6, 4, 6, 4),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        root.Children.Add(txtAsunto);
+
+        root.Children.Add(Etiqueta("Mensaje:"));
+        string saludo = enc != null ? $"Hola {enc.Nombre}," : "Hola,";
+        var txtMensaje = new System.Windows.Controls.TextBox
+        {
+            Text = $"{saludo}\n\nTe comparto el cuadro comparativo de cotizaciones de la solicitud {sol.Folio} con los precios de los proveedores concursantes, para tu revisión.\n\nQuedo atento a tus comentarios.",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 110,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Padding = new Thickness(6, 4, 6, 4),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        root.Children.Add(txtMensaje);
+
+        var chkTabla = new CheckBox { Content = "Incluir la tabla comparativa dentro del cuerpo del correo", IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
+        var chkPdf = new CheckBox { Content = $"Adjuntar PDF (Comparativa_{sol.Folio}.pdf, igual al impreso)", IsChecked = true, Margin = new Thickness(0, 0, 0, 14) };
+        root.Children.Add(chkTabla);
+        root.Children.Add(chkPdf);
+
+        var botones = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var btnCancelar = new System.Windows.Controls.Button { Content = "Cancelar", Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var btnEnviar = new Wpf.Ui.Controls.Button { Content = "✉ Enviar Correo", Appearance = ControlAppearance.Primary, Padding = new Thickness(16, 6, 16, 6) };
+        botones.Children.Add(btnCancelar);
+        botones.Children.Add(btnEnviar);
+        root.Children.Add(botones);
+
+        btnCancelar.Click += (_, _) => win.Close();
+        btnEnviar.Click += async (_, _) =>
+        {
+            if (chkTabla.IsChecked != true && chkPdf.IsChecked != true)
+            {
+                DialogoFluent.Show(win, "Elija al menos una opción: tabla en el cuerpo o PDF adjunto.", "Aviso", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(txtPara.Text) || !txtPara.Text.Contains('@'))
+            {
+                DialogoFluent.Show(win, "Indique al menos un correo destinatario.", "Falta destinatario", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            btnEnviar.IsEnabled = false;
+            btnEnviar.Content = "Enviando...";
+            try
+            {
+                string html = string.Empty;
+                byte[]? pdf = null;
+
+                if (chkTabla.IsChecked == true)
+                    html = BarcodePrintService.GenerarHtmlTablasDocumento(BarcodePrintService.ConstruirHojaComparativa(sol, renglones));
+                if (chkPdf.IsChecked == true)
+                    pdf = BarcodePrintService.GenerarPdfBytes(BarcodePrintService.ConstruirHojaComparativa(sol, renglones));
+
+                var (ok, msj) = await DatabaseService.EnviarComparativaPorCorreoAsync(
+                    txtPara.Text,
+                    txtCc.Text,
+                    txtAsunto.Text.Trim(),
+                    txtMensaje.Text,
+                    html,
+                    pdf,
+                    $"Comparativa_{sol.Folio}.pdf");
+
+                if (ok)
+                {
+                    win.Close();
+                    MostrarToastDiscreto(msj, $"Comparativa {sol.Folio} enviada");
+                }
+                else
+                {
+                    DialogoFluent.Show(win, $"No se pudo enviar el correo:\n\n{msj}", "Error al enviar", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogoFluent.Show(win, $"No se pudo generar o enviar la comparativa:\n\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                btnEnviar.IsEnabled = true;
+                btnEnviar.Content = "✉ Enviar Correo";
+            }
+        };
+
+        win.Content = root;
+        win.ShowDialog();
     }
 }

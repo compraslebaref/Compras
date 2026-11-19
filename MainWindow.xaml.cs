@@ -152,6 +152,19 @@ public partial class MainWindow : FluentWindow
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         PreviewTextInput += MainWindow_PreviewTextInput;
         RegistrarSuscripcionesMediator();
+        DatabaseService.OnNotificacionCorreoProcesada += reg =>
+        {
+            if (reg.Id <= 0) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                bool enviado = reg.EstadoEnvio.StartsWith("Enviado", StringComparison.OrdinalIgnoreCase);
+                string titulo = enviado ? $"📧 Correo enviado a {reg.GerenteNombre}" : $"Aviso Correo ({reg.EstadoEnvio})";
+                string cuerpo = enviado
+                    ? $"{reg.MensajePrincipal}\nDestino: {reg.CorreoDestino}"
+                    : $"{reg.SolicitudFolio}: {reg.DetalleResultado}";
+                MostrarToastDiscreto(cuerpo, titulo);
+            }));
+        };
         Loaded += async (_, _) =>
         {
             await EjecutarConIndicadorCargaAsync("Cargando sistema y catálogos...", () =>
@@ -162,6 +175,11 @@ public partial class MainWindow : FluentWindow
                 IniciarNuevaSolicitudVacia();
                 PonerFormulariosDirectoriosEnBlanco();
                 InicializarRolYCheckpoints();
+                var cfgCorreo = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+                if (CboSolTiempoAproxRespuesta != null && !string.IsNullOrWhiteSpace(cfgCorreo.TiempoAproxRegistroDefault))
+                    CboSolTiempoAproxRespuesta.Text = cfgCorreo.TiempoAproxRegistroDefault;
+                if (CboCompTiempoAproxAvance != null && !string.IsNullOrWhiteSpace(cfgCorreo.TiempoAproxComparativaDefault))
+                    CboCompTiempoAproxAvance.Text = cfgCorreo.TiempoAproxComparativaDefault;
             });
             TxtOmniScanner.Focus();
         };
@@ -488,6 +506,7 @@ public partial class MainWindow : FluentWindow
         RefrescarFacturasXml();
         RefrescarAnalisis();
         RefrescarDirectorios();
+        RefrescarModuloFlotilla();
     }
 
     private void CargarCombosBase()
@@ -675,10 +694,21 @@ public partial class MainWindow : FluentWindow
     private void CambiarSeccion(int index)
     {
         MainTabControl.SelectedIndex = index;
-        var botones = new[] { NavDashboard, NavCatalogo, NavSolicitudes, NavComparativa, NavOrdenes, NavAlmacenPos, NavFacturasXml, NavAnalisis, NavDirectorios };
+        var botones = new[] { NavDashboard, NavCatalogo, NavSolicitudes, NavComparativa, NavOrdenes, NavAlmacenPos, NavFacturasXml, NavAnalisis, NavDirectorios, NavFlotilla };
         for (int i = 0; i < botones.Length; i++)
         {
-            botones[i].Appearance = i == index ? ControlAppearance.Primary : ControlAppearance.Secondary;
+            if (botones[i] != null)
+                botones[i].Appearance = i == index ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        }
+
+        if (index == 7)
+        {
+            RefrescarEconomiaIndustrialFase4();
+        }
+
+        if (index == 9)
+        {
+            RefrescarModuloFlotilla();
         }
 
         if (index == 5)
@@ -763,7 +793,8 @@ public partial class MainWindow : FluentWindow
             (NavAlmacenPos, "Almacén"),
             (NavFacturasXml, "Facturas"),
             (NavAnalisis, "Análisis"),
-            (NavDirectorios, "Directorios")
+            (NavDirectorios, "Directorios"),
+            (NavFlotilla, "Flotilla")
         };
 
         foreach (var (btn, label) in navItems)
@@ -1143,6 +1174,10 @@ public partial class MainWindow : FluentWindow
                code.StartsWith("OC-") ||
                code.StartsWith("PRE-") ||
                code.StartsWith("HER-") ||
+               code.StartsWith("KIT-") ||
+               code.StartsWith("VEH-") ||
+               code.StartsWith("REV-") ||
+               code.StartsWith("AJU-") ||
                code.StartsWith("SOL-");
     }
 
@@ -1154,6 +1189,47 @@ public partial class MainWindow : FluentWindow
 
         TxtOmniScanner.Clear();
         TxtUltimoEscaneo.Text = $"Último escaneo: {code}";
+
+        // 0. ¿Es un Maletín / Kit de Herramientas (KIT-xxxx), Camioneta de Flotilla (VEH-xxxx) o Revisión Semanal (REV-xxxx)?
+        if (code.StartsWith("VEH-") || code.StartsWith("REV-"))
+        {
+            var listaVeh = DatabaseService.ObtenerVehiculosFlotilla();
+            if (code.StartsWith("REV-"))
+            {
+                foreach (var v in listaVeh)
+                {
+                    var rev = v.HistorialRevisiones.FirstOrDefault(r => CoincideFolioFlexible(r.FolioRevision, code));
+                    if (rev != null)
+                    {
+                        CambiarSeccion(9);
+                        RefrescarModuloFlotilla(v.Id);
+                        BarcodePrintService.MostrarVistaPreviaEImprimirRevisionSemanalVehiculo(this, v, rev);
+                        return;
+                    }
+                }
+            }
+
+            var veh = listaVeh.FirstOrDefault(v => CoincideFolioFlexible(v.CodigoVehiculo, code));
+            if (veh != null)
+            {
+                CambiarSeccion(9);
+                RefrescarModuloFlotilla(veh.Id);
+                return;
+            }
+        }
+        if (code.StartsWith("KIT-"))
+        {
+            var kit = DatabaseService.ObtenerKitsHerramientas().FirstOrDefault(k => CoincideFolioFlexible(k.CodigoKit, code));
+            if (kit != null)
+            {
+                CambiarSeccion(5);
+                if (kit.EnPrestamoCount > 0)
+                    MostrarModalChecklistRegresoKit(kit);
+                else
+                    MostrarModalGestorKitsHerramientas(kit.Id);
+                return;
+            }
+        }
 
         // 1. ¿Es el folio de una Orden de Compra (OC-xxxx)? -> Abrir modal de recepción parcial/total de esa OC
         if (code.StartsWith("OC-"))
@@ -1325,8 +1401,10 @@ public partial class MainWindow : FluentWindow
             .ThenBy(p => p.StockActual)
             .ToList();
 
-        int cantSolsPendientes = sols.Count(s => s.Estatus == "Pendiente");
-        int cantOcsAbiertas = ocs.Count(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)");
+        // Las que están "Esperando respuesta" (externo) o concluidas manualmente NO cuentan como pendientes internos
+        int cantSolsPendientes = sols.Count(s => s.Estatus == "Pendiente" && !s.EstaEsperandoRespuesta && !s.ConcluidoManual);
+        bool OcAbierta(OrdenCompra o) => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)" && !o.ConcluidoManual;
+        int cantOcsAbiertas = ocs.Count(o => OcAbierta(o) && !o.EstaEsperandoRespuesta);
         int cantAlertas = alertasStock.Count;
         int cantPrestamos = her.Count(h => h.Estado == "En Préstamo");
 
@@ -1338,7 +1416,7 @@ public partial class MainWindow : FluentWindow
 
         ActualizarBadgesSidebar(cantAlertas, cantSolsPendientes, cantOcsAbiertas, cantPrestamos);
 
-        DgDashboardOcs.ItemsSource = ocs.Where(o => o.Estatus != "Recibida Completa" && o.Estatus != "Cancelada" && o.Estatus != "Cerrada Parcial Definitiva" && o.Estatus != "Cerrada Parcial (Admin)").ToList();
+        DgDashboardOcs.ItemsSource = ocs.Where(OcAbierta).ToList();
         DgDashboardAlertas.ItemsSource = alertasStock;
         RefrescarPendientesOperativosComprasDashboard();
 
@@ -2103,7 +2181,8 @@ public partial class MainWindow : FluentWindow
         {
             try
             {
-                var solActualizada = DatabaseService.AgregarOIncrementarPartidaEnSolicitud(solDestino.Id, p.Id, cantidad, "Catálogo Visual");
+                string partida = _solicitudEditandoId == solDestino.Id ? NombrePartidaActiva : string.Empty;
+                var solActualizada = DatabaseService.AgregarOIncrementarPartidaEnSolicitud(solDestino.Id, p.Id, cantidad, "Catálogo Visual", partida);
                 _solicitudEditandoId = solActualizada.Id;
                 RefrescarSolicitudes(solActualizada.Id);
                 RefrescarDashboard();
@@ -2449,7 +2528,7 @@ public partial class MainWindow : FluentWindow
         _productoEnEdicion.UnidadAlmacen = DatabaseService.NormalizarUnidadMedida(TxtProdUnidadAlmacen.Text);
         _productoEnEdicion.FactorConversion = ParseDecimal(TxtProdFactor.Text, 1m);
         _productoEnEdicion.StockActual = ParseDecimal(TxtProdStock.Text, 0m);
-        _productoEnEdicion.StockMinimo = ParseDecimal(TxtProdStockMin.Text, 5m);
+        _productoEnEdicion.StockMinimo = ParseDecimal(TxtProdStockMin.Text, 0m);
         _productoEnEdicion.UltimoCostoCompra = ParseDecimal(TxtProdCosto.Text, 0m);
         string ubiLimpiaProd = ExtraerCodigoUbicacionLimpio(TxtProdUbicacion.Text);
         _productoEnEdicion.Ubicacion = string.IsNullOrWhiteSpace(ubiLimpiaProd) ? "A-01" : ubiLimpiaProd;
@@ -2913,13 +2992,30 @@ public partial class MainWindow : FluentWindow
 
         btnLimpiarFormHer.Click += (_, _) =>
         {
-            dgHer.SelectedItem = null;
-            if (cboProd.SelectedItem is Producto pSel)
+            if (cboProd.SelectedItem is not Producto pSel) return;
+            var lista = DatabaseService.ObtenerHerramientas().Where(h => h.ProductoId == pSel.Id && !string.Equals(h.Estado, "Extraviada / Baja", StringComparison.OrdinalIgnoreCase)).ToList();
+            int stockRedondeado = Math.Max(0, (int)Math.Round(pSel.StockActual));
+            if (lista.Count >= stockRedondeado && lista.Count > 0)
             {
-                PrepararFormularioParaProducto(pSel, null, forzarNuevaPiezaManual: true);
+                var pendienteConfig = lista.FirstOrDefault(h =>
+                    string.Equals(h.NumeroSerie, "S/N", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(h.NotasEstado, "Sincronizada desde Catálogo de Herramientas", StringComparison.OrdinalIgnoreCase)) ?? lista[^1];
+                dgHer.SelectedItem = pendienteConfig;
+                PrepararFormularioParaProducto(pSel, pendienteConfig);
                 txtSerie.Focus();
                 txtSerie.SelectAll();
+                DialogoFluent.Show(win,
+                    $"Todas las piezas en existencia ({stockRedondeado}) ya cuentan con su ficha individual HER-xxxx registrada.\n\nSe seleccionó la ficha {pendienteConfig.CodigoIndividual} para que capture o edite su Número de Serie, Marca y Ubicación sin duplicar registros.",
+                    "Fichas HER ya creadas para el stock actual",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
             }
+
+            dgHer.SelectedItem = null;
+            PrepararFormularioParaProducto(pSel, null, forzarNuevaPiezaManual: true);
+            txtSerie.Focus();
+            txtSerie.SelectAll();
         };
 
         btnGuardarHer.Click += (_, _) =>
@@ -2957,26 +3053,53 @@ public partial class MainWindow : FluentWindow
             }
             else
             {
-                int cant = Math.Max(0, (int)ParseDecimal(txtCantNuevas.Text, 0m));
-                for (int i = 0; i < cant; i++)
-                {
-                    string cod = (i == 0 && !string.IsNullOrWhiteSpace(txtCodigo.Text) && !txtCodigo.Text.StartsWith("("))
-                        ? txtCodigo.Text.Trim()
-                        : DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
+                var activasProd = DatabaseService.ObtenerHerramientas()
+                    .Where(h => h.ProductoId == pSel.Id && !string.Equals(h.Estado, "Extraviada / Baja", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                int stockRedondeado = Math.Max(0, (int)Math.Round(pSel.StockActual));
+                int faltantesPorStock = Math.Max(0, stockRedondeado - activasProd.Count);
 
-                    string serieItem = (cant > 1 && serie != "S/N") ? $"{serie}-{i + 1}" : serie;
+                if (faltantesPorStock <= 0 && activasProd.Count > 0)
+                {
+                    var herActualizar = activasProd.FirstOrDefault(h =>
+                        string.Equals(h.NumeroSerie, "S/N", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(h.NotasEstado, "Sincronizada desde Catálogo de Herramientas", StringComparison.OrdinalIgnoreCase)) ?? activasProd[^1];
 
                     DatabaseService.GuardarHerramientaActivo(new HerramientaActivo
                     {
-                        Id = 0,
+                        Id = herActualizar.Id,
                         ProductoId = pSel.Id,
-                        CodigoIndividual = cod,
-                        NumeroSerie = serieItem,
+                        CodigoIndividual = herActualizar.CodigoIndividual,
+                        NumeroSerie = serie,
                         MarcaModelo = marca,
                         Estado = est,
                         Ubicacion = ubi,
                         NotasEstado = notas
                     });
+                }
+                else
+                {
+                    int cant = Math.Min(faltantesPorStock, Math.Max(0, (int)ParseDecimal(txtCantNuevas.Text, 0m)));
+                    for (int i = 0; i < cant; i++)
+                    {
+                        string cod = (i == 0 && !string.IsNullOrWhiteSpace(txtCodigo.Text) && !txtCodigo.Text.StartsWith("("))
+                            ? txtCodigo.Text.Trim()
+                            : DatabaseService.GenerarSiguienteCodigoProducto("HER", "HerramientasActivos", "CodigoIndividual");
+
+                        string serieItem = (cant > 1 && serie != "S/N") ? $"{serie}-{i + 1}" : serie;
+
+                        DatabaseService.GuardarHerramientaActivo(new HerramientaActivo
+                        {
+                            Id = 0,
+                            ProductoId = pSel.Id,
+                            CodigoIndividual = cod,
+                            NumeroSerie = serieItem,
+                            MarcaModelo = marca,
+                            Estado = est,
+                            Ubicacion = ubi,
+                            NotasEstado = notas
+                        });
+                    }
                 }
             }
 
@@ -3336,6 +3459,7 @@ public partial class MainWindow : FluentWindow
 
     private void SincronizarPartidasEditorDesdeSolicitud(Solicitud sol)
     {
+        ChkSolUsaPartidas.IsChecked = sol.UsaPartidas;
         _partidasNuevaSolicitud.Clear();
         foreach (var p in sol.Partidas)
         {
@@ -3352,6 +3476,7 @@ public partial class MainWindow : FluentWindow
                 CantidadSolicitada = p.CantidadSolicitada,
                 StockActualAlmacen = p.StockActualAlmacen,
                 NotasPartida = p.NotasPartida,
+                NombrePartida = p.NombrePartida,
                 Proveedor1Id = p.Proveedor1Id,
                 PrecioSinIva1 = p.PrecioSinIva1,
                 DiasEntrega1 = p.DiasEntrega1,
@@ -3379,10 +3504,37 @@ public partial class MainWindow : FluentWindow
         ActualizarEncabezadoEditorSolicitud(sol);
     }
 
+    private string NombrePartidaActiva => ChkSolUsaPartidas.IsChecked == true
+        ? TxtSolPartidaActiva.Text.Trim()
+        : string.Empty;
+
+    private void ChkSolUsaPartidas_Changed(object sender, RoutedEventArgs e) => ActualizarVistaPartidasSolicitud();
+
+    private void ActualizarVistaPartidasSolicitud()
+    {
+        if (DgPartidasNuevaSolicitud == null || ColSolPartidaCotizar == null) return;
+        bool usaPartidas = ChkSolUsaPartidas.IsChecked == true;
+        var visibleConPartidas = usaPartidas ? Visibility.Visible : Visibility.Collapsed;
+        ColSolNombrePartida.Visibility = visibleConPartidas;
+        ColSolPartidaCotizar.Visibility = usaPartidas ? Visibility.Collapsed : Visibility.Visible;
+        TxtSolPartidaActiva.Visibility = usaPartidas && BtnGuardarSolicitud.IsEnabled
+            ? Visibility.Visible : Visibility.Collapsed;
+        var grupos = DgPartidasNuevaSolicitud.Items.GroupDescriptions;
+        if (usaPartidas && grupos.Count == 0)
+            grupos.Add(new System.Windows.Data.PropertyGroupDescription(nameof(SolicitudPartida.EncabezadoPartida)));
+        else if (!usaPartidas && grupos.Count > 0)
+            grupos.Clear();
+    }
+
     private void ActualizarEncabezadoEditorSolicitud(Solicitud? sol)
     {
         if (TxtTituloEditorSolicitud == null || TxtEstadoEditorSolicitud == null || BdrEstadoEditorSolicitud == null)
             return;
+
+        bool editable = sol == null || sol.EsEditable;
+        ChkSolUsaPartidas.IsEnabled = editable;
+        ColSolNombrePartida.IsReadOnly = !editable && !(sol?.PermiteEditarUnidadYQuitarConceptos ?? false);
+        ActualizarVistaPartidasSolicitud();
 
         if (sol == null || sol.Id == 0)
         {
@@ -3428,6 +3580,7 @@ public partial class MainWindow : FluentWindow
             BtnGuardarSolicitud.IsEnabled = false;
             BtnLimpiarPartidasSolicitud.IsEnabled = false;
         }
+        ActualizarVistaPartidasSolicitud();
     }
 
     private void IniciarNuevaSolicitudVacia()
@@ -3447,6 +3600,8 @@ public partial class MainWindow : FluentWindow
             _sincronizandoSolicitudes = false;
         }
 
+        ChkSolUsaPartidas.IsChecked = false;
+        TxtSolPartidaActiva.Clear();
         _partidasNuevaSolicitud.Clear();
         if (CboSolDepartamento != null) CboSolDepartamento.SelectedIndex = -1;
         if (CboSolEncargado != null)
@@ -3470,6 +3625,7 @@ public partial class MainWindow : FluentWindow
 
     private void CargarSolicitudEnEditor(Solicitud sol)
     {
+        if (_solicitudEditandoId != sol.Id) TxtSolPartidaActiva.Clear();
         _solicitudEditandoId = sol.Id;
 
         var dep = CboSolDepartamento.Items.Cast<Departamento>().FirstOrDefault(d => d.Id == sol.DepartamentoId);
@@ -3515,12 +3671,6 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void DgHistorialSolicitudes_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        // La apertura del detalle se hace explícitamente (clic en fila, Enter o menú "Abrir solicitud"),
-        // para que cambios de selección automáticos no alternen la pantalla.
-    }
-
     private void PersistirCambioSiSolicitudEnEdicion()
     {
         ActualizarIndicadorCarritoSuperior();
@@ -3543,7 +3693,8 @@ public partial class MainWindow : FluentWindow
             origen,
             TxtSolNotas.Text,
             _partidasNuevaSolicitud.ToList(),
-            tipoSol);
+            tipoSol,
+            usaPartidas: ChkSolUsaPartidas.IsChecked == true);
 
         RefrescarSolicitudes(_solicitudEditandoId);
         RefrescarDashboard();
@@ -3574,7 +3725,9 @@ public partial class MainWindow : FluentWindow
         string uEfectiva = DatabaseService.NormalizarUnidadMedida(!string.IsNullOrWhiteSpace(unidadPersonalizada) ? unidadPersonalizada : prod.UnidadCompra);
         var prodCopia = new Producto { Id = prod.Id, CodigoInterno = prod.CodigoInterno, Nombre = prod.Nombre, Familia = prod.Familia, UnidadCompra = uEfectiva, StockActual = prod.StockActual };
         prod = prodCopia;
-        var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == prod.Id);
+        string nombrePartida = NombrePartidaActiva;
+        var existente = _partidasNuevaSolicitud.FirstOrDefault(x => x.ProductoId == prod.Id &&
+            string.Equals(x.NombrePartida, nombrePartida, StringComparison.OrdinalIgnoreCase));
         if (existente != null)
         {
             existente.CantidadSolicitada += cant;
@@ -3597,6 +3750,7 @@ public partial class MainWindow : FluentWindow
                 UnidadCompra = prod.UnidadCompra,
                 CantidadSolicitada = cant,
                 StockActualAlmacen = prod.StockActual,
+                NombrePartida = nombrePartida,
                 NotasPartida = notas
             });
         }
@@ -3615,8 +3769,9 @@ public partial class MainWindow : FluentWindow
         if (cant <= 0) cant = 1m;
         if (!VerificarPermisoEdicionSolicitudActual()) return;
 
+        string nombrePartida = NombrePartidaActiva;
         var existente = _partidasNuevaSolicitud.FirstOrDefault(x =>
-            x.ProductoId <= 0 &&
+            x.ProductoId <= 0 && string.Equals(x.NombrePartida, nombrePartida, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(x.ProductoNombre, desc, StringComparison.OrdinalIgnoreCase));
 
         if (existente != null)
@@ -3643,6 +3798,7 @@ public partial class MainWindow : FluentWindow
                 UnidadCompra = DatabaseService.NormalizarUnidadMedida(!string.IsNullOrWhiteSpace(unidadPersonalizada) ? unidadPersonalizada : "Pieza"),
                 CantidadSolicitada = cant,
                 StockActualAlmacen = 0m,
+                NombrePartida = nombrePartida,
                 NotasPartida = notas
             });
         }
@@ -3788,7 +3944,9 @@ public partial class MainWindow : FluentWindow
 
     private void DgPartidasNuevaSolicitud_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
+        if (e.EditAction != DataGridEditAction.Commit) return;
         var partidaEditada = e.Row?.Item as SolicitudPartida;
+        bool esColumnaPartida = e.Column == ColSolNombrePartida;
         bool esColumnaUnidad = e.Column == ColSolPartidaUnidad ||
             string.Equals(e.Column?.Header?.ToString(), "✏️ Unidad", StringComparison.OrdinalIgnoreCase);
 
@@ -3799,6 +3957,13 @@ public partial class MainWindow : FluentWindow
                 var solActual = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId);
                 if (solActual != null && !solActual.EsEditable)
                 {
+                    if (esColumnaPartida && solActual.UsaPartidas && solActual.PermiteEditarUnidadYQuitarConceptos && partidaEditada != null)
+                    {
+                        DatabaseService.AsignarPartidaAArticulo(solActual.Id, partidaEditada.Id, partidaEditada.NombrePartida);
+                        RefrescarSolicitudes(solActual.Id);
+                        return;
+                    }
+
                     if (solActual.PermiteEditarUnidadYQuitarConceptos && esColumnaUnidad && partidaEditada != null)
                     {
                         if (partidaEditada.TieneOcGenerada)
@@ -3881,14 +4046,69 @@ public partial class MainWindow : FluentWindow
 
     private void BtnNuevaSolicitudVacia_Click(object sender, RoutedEventArgs e)
     {
-        IniciarNuevaSolicitudVacia();
-        MostrarDetalleSolicitud(true);
+        if (PnlCapturaNuevaSolicitud.Content is NuevaSolicitudCaptura)
+        {
+            MostrarCapturaNuevaSolicitud();
+            return;
+        }
+
+        var captura = new NuevaSolicitudCaptura(
+            DatabaseService.ObtenerDepartamentos(),
+            DatabaseService.ObtenerProyectos(),
+            _cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos());
+        var modal = new Window
+        {
+            Owner = this,
+            Content = captura,
+            Title = "Nueva solicitud",
+            Width = 610,
+            Height = 630,
+            MinWidth = 430,
+            MinHeight = 410,
+            ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+        void ConfirmarDatos() => modal.DialogResult = true;
+        void CancelarDatos() => modal.DialogResult = false;
+        captura.DatosConfirmados += ConfirmarDatos;
+        captura.Cancelada += CancelarDatos;
+        bool continuar = modal.ShowDialog() == true;
+        modal.Content = null;
+        captura.DatosConfirmados -= ConfirmarDatos;
+        captura.Cancelada -= CancelarDatos;
+        if (!continuar)
+            return;
+
+        captura.Cancelada += () =>
+        {
+            PnlCapturaNuevaSolicitud.Content = null;
+            MostrarDetalleSolicitud(false);
+        };
+        captura.Guardada += solicitud =>
+        {
+            PnlCapturaNuevaSolicitud.Content = null;
+            RefrescarSolicitudes(solicitud.Id);
+            AbrirSolicitudDeLista(solicitud);
+            RefrescarDashboard();
+        };
+        captura.MostrarArticulos();
+        PnlCapturaNuevaSolicitud.Content = captura;
+        MostrarCapturaNuevaSolicitud();
+    }
+
+    private void MostrarCapturaNuevaSolicitud()
+    {
+        CambiarSeccion(2);
+        PnlSolicitudesLista.Visibility = Visibility.Collapsed;
+        PnlSolicitudDetalle.Visibility = Visibility.Collapsed;
+        PnlCapturaNuevaSolicitud.Visibility = Visibility.Visible;
     }
 
     /// <summary>Alterna entre la lista de solicitudes y el detalle de la solicitud abierta.</summary>
     private void MostrarDetalleSolicitud(bool detalle)
     {
         if (PnlSolicitudesLista == null || PnlSolicitudDetalle == null) return;
+        PnlCapturaNuevaSolicitud.Visibility = Visibility.Collapsed;
         PnlSolicitudesLista.Visibility = detalle ? Visibility.Collapsed : Visibility.Visible;
         PnlSolicitudDetalle.Visibility = detalle ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -3900,15 +4120,65 @@ public partial class MainWindow : FluentWindow
         MostrarDetalleSolicitud(true);
     }
 
-    private void DgHistorialSolicitudes_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    private void DgHistorialSolicitudes_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Solo se abre al hacer clic sobre una fila (no en encabezados ni espacios vacíos)
+        ActualizarFichaSolicitudLista(DgHistorialSolicitudes.SelectedItem as Solicitud);
+    }
+
+    /// <summary>Muestra la ficha (panel derecho) de la solicitud seleccionada en la lista, similar al Catálogo.</summary>
+    private void ActualizarFichaSolicitudLista(Solicitud? sol)
+    {
+        if (PnlFichaSolContenido == null || PnlFichaSolVacia == null) return;
+
+        if (sol == null || sol.Id <= 0)
+        {
+            PnlFichaSolContenido.Visibility = Visibility.Collapsed;
+            PnlFichaSolVacia.Visibility = Visibility.Visible;
+            DgFichaSolPartidas.ItemsSource = null;
+            return;
+        }
+
+        PnlFichaSolVacia.Visibility = Visibility.Collapsed;
+        PnlFichaSolContenido.Visibility = Visibility.Visible;
+
+        TxtFichaSolFolio.Text = sol.Folio;
+        TxtFichaSolTipo.Text = sol.TipoSolicitud;
+        BdrFichaSolEstatus.DataContext = sol.Estatus;
+        TxtFichaSolFecha.Text = sol.Fecha;
+        TxtFichaSolSolicitante.Text = sol.EncargadoNombre;
+        TxtFichaSolDepto.Text = sol.DepartamentoNombre;
+        TxtFichaSolProyecto.Text = sol.ProyectoMostrar;
+        TxtFichaSolOrigen.Text = string.IsNullOrWhiteSpace(sol.Origen) ? "—" : sol.Origen;
+        TxtFichaSolResumen.Text = sol.ResumenArticulos;
+        TxtFichaSolNotas.Text = string.IsNullOrWhiteSpace(sol.Notas) ? string.Empty : $"Notas: {sol.Notas}";
+        TxtFichaSolNotas.Visibility = string.IsNullOrWhiteSpace(sol.Notas) ? Visibility.Collapsed : Visibility.Visible;
+        ColFichaSolNombrePartida.Visibility = sol.UsaPartidas ? Visibility.Visible : Visibility.Collapsed;
+        DgFichaSolPartidas.ItemsSource = sol.Partidas;
+        ConfigurarSiguientePasoSolicitud(sol);
+    }
+
+    private void DgHistorialSolicitudes_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        // Solo se abre al hacer doble clic sobre una fila (no en encabezados ni botones)
         var origen = e.OriginalSource as DependencyObject;
         while (origen != null && origen is not DataGridRow && origen is not System.Windows.Controls.Primitives.DataGridColumnHeader && origen is not System.Windows.Controls.Primitives.ButtonBase)
             origen = System.Windows.Media.VisualTreeHelper.GetParent(origen);
 
         if (origen is DataGridRow fila && fila.Item is Solicitud sol)
             AbrirSolicitudDeLista(sol);
+    }
+
+    /// <summary>Botón "⋯" de cada fila: selecciona la solicitud y abre el menú de opciones junto al botón.</summary>
+    private void BtnOpcionesSolicitudFila_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement btn || btn.Tag is not Solicitud sol) return;
+        DgHistorialSolicitudes.SelectedItem = sol;
+        var menu = DgHistorialSolicitudes.ContextMenu;
+        if (menu == null) return;
+        menu.PlacementTarget = btn;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+        e.Handled = true;
     }
 
     private void DgHistorialSolicitudes_KeyDown(object sender, KeyEventArgs e)
@@ -3969,7 +4239,7 @@ public partial class MainWindow : FluentWindow
                     solExistente.Origen,
                     TxtSolNotas.Text,
                     _partidasNuevaSolicitud.ToList(),
-                    tipoSol);
+                    tipoSol, usaPartidas: ChkSolUsaPartidas.IsChecked == true);
             }
             else
             {
@@ -3978,7 +4248,8 @@ public partial class MainWindow : FluentWindow
         }
         else
         {
-            carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proyId, "Catálogo", TxtSolNotas.Text, _partidasNuevaSolicitud.ToList(), tipoSol);
+            carritoActivo = DatabaseService.CrearSolicitud(dep.Id, enc.Id, proyId, "Catálogo", TxtSolNotas.Text, _partidasNuevaSolicitud.ToList(), tipoSol,
+                usaPartidas: ChkSolUsaPartidas.IsChecked == true);
         }
 
         _solicitudEditandoId = carritoActivo.Id;
@@ -4597,27 +4868,52 @@ public partial class MainWindow : FluentWindow
 
     private void BtnExportarExistenciasCatalogo_Click(object sender, RoutedEventArgs e)
     {
+        var productosConStock = DatabaseService.ObtenerProductos()
+            .Where(x => x.StockActual > 0)
+            .OrderBy(x => x.CategoriaNombre)
+            .ThenBy(x => x.Nombre)
+            .ToList();
+
+        if (productosConStock.Count == 0)
+        {
+            DialogoFluent.Show(this,
+                "Actualmente no hay artículos con existencia mayor a 0 en el Almacén para exportar.",
+                "Sin Existencias en Almacén", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
         var dlg = new SaveFileDialog
         {
-            Title = "Exportar Reporte de Existencias de Almacén (Excel CSV)",
+            Title = "Exportar Existencias Actuales de Almacén (Solo con Stock > 0)",
             FileName = $"Existencias_Almacen_{DateTime.Now:yyyyMMdd}.csv",
             Filter = "Archivo CSV para Excel (*.csv)|*.csv"
         };
         if (dlg.ShowDialog() == true)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("CodigoInterno,CodigoBarras,Familia,Categoria,Articulo,Marca,Modelo,UnidadAlmacen,StockActual,StockMinimo,Ubicacion");
-            foreach (var p in DatabaseService.ObtenerProductos().OrderBy(x => x.CategoriaNombre).ThenBy(x => x.Nombre))
+            sb.AppendLine("CodigoInterno,CodigoBarras,Familia,Categoria,Articulo,Marca,Modelo,UnidadAlmacen,StockActual,StockReservado,StockDisponible,StockMinimo,Ubicacion");
+            foreach (var p in productosConStock)
             {
-                string nom = p.Nombre.Replace(",", " ");
-                string cat = p.CategoriaNombre.Replace(",", " ");
-                string fam = p.Familia.Replace(",", " ");
-                sb.AppendLine($"{p.CodigoInterno},{p.CodigoBarras},{fam},{cat},{nom},{p.Marca},{p.Modelo},{p.UnidadAlmacen},{p.StockActual:0.##},{p.StockMinimo:0.##},{p.Ubicacion}");
+                decimal stockDisponible = Math.Max(0m, p.StockActual - p.StockReservadoProyecto);
+                sb.AppendLine(string.Join(",",
+                    EscaparCsv(p.CodigoInterno),
+                    EscaparCsv(p.CodigoBarras),
+                    EscaparCsv(p.Familia),
+                    EscaparCsv(p.CategoriaNombre),
+                    EscaparCsv(p.Nombre),
+                    EscaparCsv(p.Marca),
+                    EscaparCsv(p.Modelo),
+                    EscaparCsv(p.UnidadAlmacen),
+                    p.StockActual.ToString("0.##"),
+                    p.StockReservadoProyecto.ToString("0.##"),
+                    stockDisponible.ToString("0.##"),
+                    p.StockMinimo.ToString("0.##"),
+                    EscaparCsv(p.Ubicacion)));
             }
-            File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8);
+            File.WriteAllText(dlg.FileName, sb.ToString(), new UTF8Encoding(true));
             DialogoFluent.Show(this,
-                $"Reporte de existencias exportado en:\n{dlg.FileName}\n\nPuede compartirlo con las Gerencias de Área para consulta de stock disponible.",
-                "Existencias Exportadas", MessageBoxButton.OK, MessageBoxImage.Information);
+                $"Se exportaron {productosConStock.Count} artículos con existencia activa en almacén (se omitieron los artículos en 0):\n\n{dlg.FileName}",
+                "Existencias de Almacén Exportadas", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -4630,21 +4926,30 @@ public partial class MainWindow : FluentWindow
         }
 
         var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
-        var conStock = new List<(Producto prod, decimal cantSurtiendo, SolicitudPartida part)>();
+        var solEditando = _solicitudEditandoId > 0 ? DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == _solicitudEditandoId) : null;
+        var yaEntregadasSol = solEditando != null
+            ? DatabaseService.ObtenerCantidadesEntregadasPorFolioEnSalidas(solEditando.Folio)
+            : new Dictionary<int, decimal>();
+
+        var conStock = new List<(Producto prod, decimal cantSurtiendo, decimal cantRequeridaAlm, SolicitudPartida part)>();
 
         foreach (var part in _partidasNuevaSolicitud)
         {
             if (part.ProductoId > 0 && prodsDict.TryGetValue(part.ProductoId, out var prod) && prod.StockActual > 0)
             {
-                decimal cantSurtir = Math.Min(part.CantidadSolicitada, prod.StockActual);
+                decimal cantReqAlmacen = DatabaseService.ConvertirCantidadSolicitudAUnidadAlmacen(part, prod);
+                if (yaEntregadasSol.TryGetValue(part.ProductoId, out decimal yaSalio) && yaSalio > 0m)
+                    cantReqAlmacen = Math.Max(0m, cantReqAlmacen - yaSalio);
+
+                decimal cantSurtir = Math.Min(cantReqAlmacen, prod.StockActual);
                 if (cantSurtir > 0)
-                    conStock.Add((prod, cantSurtir, part));
+                    conStock.Add((prod, cantSurtir, cantReqAlmacen, part));
             }
         }
 
         if (conStock.Count == 0)
         {
-            DialogoFluent.Show(this, "Ninguno de los artículos de esta solicitud tiene existencia disponible actualmente en Almacén.", "Sin stock disponible", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogoFluent.Show(this, "Ninguno de los artículos pendientes de esta solicitud tiene existencia disponible actualmente en Almacén.", "Sin stock disponible", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -4666,6 +4971,10 @@ public partial class MainWindow : FluentWindow
         {
             CboSalProyecto.SelectedItem = CboSalProyecto.Items.Cast<Proyecto>().FirstOrDefault(p => p.Id == proy.Id);
         }
+        if (TxtSalNotas != null && solEditando != null)
+        {
+            TxtSalNotas.Text = $"Surtido de Solicitud {solEditando.Folio} — {solEditando.ProyectoMostrar}";
+        }
 
         var preguntarDesmarcar = DialogoFluent.Show(this,
             $"Se cargaron {conStock.Count} artículo(s) con existencia disponible en la pestaña '5. Almacén -> Salida de Material'.\n\n¿Desea desmarcar la casilla 'Cotizar' en los artículos que ya quedan cubiertos al 100% con el stock de almacén? (Si elige 'No', permanecerán marcados por si desea cotizarlos de todas formas para actualizar precios).",
@@ -4677,7 +4986,7 @@ public partial class MainWindow : FluentWindow
         {
             foreach (var item in conStock)
             {
-                if (item.cantSurtiendo >= item.part.CantidadSolicitada)
+                if (item.cantSurtiendo >= item.cantRequeridaAlm - 0.001m)
                     item.part.IncluirEnCotizacion = false;
             }
             foreach (var p in _partidasNuevaSolicitud)
@@ -4703,6 +5012,8 @@ public partial class MainWindow : FluentWindow
         int proyId = (CboSolProyecto.SelectedItem as Proyecto)?.Id ?? 0;
         string tipoSol = (CboSolTipoSolicitud?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Requerimiento de Compra";
         string origen = _partidasNuevaSolicitud.Any(p => (p.NotasPartida ?? "").StartsWith("WhatsApp")) ? "WhatsApp" : "Catálogo";
+        string tiempoAproxSol = CboSolTiempoAproxRespuesta?.Text?.Trim() ?? string.Empty;
+        bool notificarSol = ChkSolNotificarGerente?.IsChecked != false;
         Solicitud guardada;
 
         if (_solicitudEditandoId > 0)
@@ -4716,7 +5027,10 @@ public partial class MainWindow : FluentWindow
                 origen,
                 TxtSolNotas.Text,
                 _partidasNuevaSolicitud.ToList(),
-                tipoSol);
+                tipoSol,
+                tiempoAproxSol,
+                notificarSol,
+                usaPartidas: ChkSolUsaPartidas.IsChecked == true);
         }
         else
         {
@@ -4727,7 +5041,11 @@ public partial class MainWindow : FluentWindow
                 origen,
                 TxtSolNotas.Text,
                 _partidasNuevaSolicitud.ToList(),
-                tipoSol);
+                tipoSol,
+                 null,
+                tiempoAproxSol,
+                notificarSol,
+                usaPartidas: ChkSolUsaPartidas.IsChecked == true);
             _solicitudEditandoId = guardada.Id;
         }
 
@@ -4769,7 +5087,20 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
+        if (string.Equals(sol.Estatus, "Pendiente", StringComparison.OrdinalIgnoreCase))
+        {
+            DatabaseService.ActualizarEstatusSolicitud(sol.Id, "En Comparativa");
+            RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, "Pendiente", "En Comparativa", "Solicitante, Compras", $"Solicitud {sol.Folio} enviada al Cuadro Comparativo.");
+            if (!DatabaseService.YaSeEnvioNotificacionEtapa(sol.Folio, "2_COMPARATIVA"))
+            {
+                var cfg = DatabaseService.ObtenerConfiguracionSmtpCorreo();
+                DatabaseService.NotificarCambioEstadoCotizacionGerente(sol.Id, null, "2_COMPARATIVA", cfg.TiempoAproxComparativaDefault);
+            }
+            RefrescarSolicitudes(sol.Id);
+        }
+
         CambiarSeccion(3);
+        TcComparativa.SelectedIndex = 0;
         CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
     }
 
@@ -4777,14 +5108,30 @@ public partial class MainWindow : FluentWindow
 
     private void CboCompSolicitud_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (CboCompSolicitud.SelectedItem is not Solicitud sol)
+        // Guardar cualquier celda en edición antes de recargar la comparativa desde la base de datos
+        ConfirmarEdicionesPendientesComparativa();
+        if (ColCompNombrePartida != null) ColCompNombrePartida.Visibility = Visibility.Collapsed;
+
+        if (CboCompSolicitud.SelectedItem is not Solicitud solCombo)
         {
             if (TxtCompInfoSolicitud != null)
                 TxtCompInfoSolicitud.Text = "Seleccione una Solicitud / Carrito en la lista desplegable superior para iniciar o editar su comparativa de proveedores.";
             _renglonesComparativa.Clear();
+            CargarPartidasComparativa(null);
             CargarProductoEnTarjetasComparativa(null);
             RecalcularTotalesComparativa();
             return;
+        }
+
+        // IMPORTANTE: el objeto del combo es una copia cargada cuando se llenó la lista y puede tener precios viejos (en $0).
+        // Siempre se recarga la solicitud desde la base de datos para mostrar los precios capturados más recientes.
+        var sol = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => s.Id == solCombo.Id) ?? solCombo;
+        if (!ReferenceEquals(sol, solCombo))
+        {
+            solCombo.UsaPartidas = sol.UsaPartidas;
+            solCombo.Partidas = sol.Partidas;
+            solCombo.Estatus = sol.Estatus;
+            solCombo.TipoSolicitud = sol.TipoSolicitud;
         }
 
         int prevPartidaId = (DgComparativa.SelectedItem as CotizacionRenglonComparativo)?.SolicitudPartidaId ?? 0;
@@ -4802,11 +5149,14 @@ public partial class MainWindow : FluentWindow
         var proveedores = DatabaseService.ObtenerProveedores();
         var provDict = proveedores.ToDictionary(p => p.Id);
 
-        var partidasParaCotizar = sol.Partidas.Any(p => p.IncluirEnCotizacion || p.TieneOcGenerada)
-            ? sol.Partidas.Where(p => p.IncluirEnCotizacion || p.TieneOcGenerada).ToList()
-            : sol.Partidas;
+        var partidasParaCotizar = sol.PartidasParaComparativa;
+        if (ColCompNombrePartida != null)
+            ColCompNombrePartida.Visibility = sol.UsaPartidas ? Visibility.Visible : Visibility.Collapsed;
 
-        foreach (var part in partidasParaCotizar)
+        var articulosOrdenados = sol.UsaPartidas
+            ? partidasParaCotizar.OrderBy(p => p.NombrePartida, StringComparer.OrdinalIgnoreCase).AsEnumerable()
+            : partidasParaCotizar;
+        foreach (var part in articulosOrdenados)
         {
             productos.TryGetValue(part.ProductoId, out var pObj);
             decimal ultimoCostoConIva = pObj?.UltimoCostoCompra ?? 0m;
@@ -4845,7 +5195,9 @@ public partial class MainWindow : FluentWindow
             }
 
             bool limpioHistoricoAuto = false;
-            if (!part.TieneOcGenerada)
+            // Desactivado: antes se borraban al recargar los precios cuya nota venía del histórico
+            // (ej. los cargados con "Cargar Histórico"), lo que hacía desaparecer precios capturados.
+            if (false && !part.TieneOcGenerada)
             {
                 if (pv1 > 0 && part.ProveedorGanadorIndice != 1 && EsNotaReferenciaHistoricaAuto(nc1))
                 {
@@ -4895,6 +5247,7 @@ public partial class MainWindow : FluentWindow
             var renglon = new CotizacionRenglonComparativo
             {
                 SolicitudPartidaId = part.Id,
+                NombrePartida = part.NombrePartida,
                 ProductoId = part.ProductoId,
                 ProductoCodigo = part.ProductoCodigo,
                 ProductoNombre = part.ProductoNombre,
@@ -4950,9 +5303,11 @@ public partial class MainWindow : FluentWindow
             _renglonesComparativa.Add(renglon);
         }
 
-        if (_renglonesComparativa.Count > 0)
+        CargarPartidasComparativa(sol);
+        var visibles = ArticulosComparativaVisibles.ToList();
+        if (visibles.Count > 0)
         {
-            var aSeleccionar = _renglonesComparativa.FirstOrDefault(r => r.SolicitudPartidaId == prevPartidaId) ?? _renglonesComparativa[0];
+            var aSeleccionar = visibles.FirstOrDefault(r => r.SolicitudPartidaId == prevPartidaId) ?? visibles[0];
             DgComparativa.SelectedItem = aSeleccionar;
             CargarProductoEnTarjetasComparativa(aSeleccionar);
         }
@@ -5011,6 +5366,7 @@ public partial class MainWindow : FluentWindow
                     CboCompSelectorArticuloDetalle.ItemsSource = null;
                     CboCompSelectorArticuloDetalle.SelectedIndex = -1;
                 }
+                MostrarOfertasArticulo(null);
                 return;
             }
 
@@ -5018,9 +5374,9 @@ public partial class MainWindow : FluentWindow
             TxtCompProdTitulo.Text = $"{r.ProductoCodigo} — {r.ProductoNombre}";
             if (CboCompSelectorArticuloDetalle != null)
             {
-                if (!ReferenceEquals(CboCompSelectorArticuloDetalle.ItemsSource, _renglonesComparativa))
-                    CboCompSelectorArticuloDetalle.ItemsSource = _renglonesComparativa;
-                CboCompSelectorArticuloDetalle.SelectedItem = r;
+                var visibles = ArticulosComparativaVisibles.ToList();
+                CboCompSelectorArticuloDetalle.ItemsSource = visibles;
+                CboCompSelectorArticuloDetalle.SelectedItem = visibles.Contains(r) ? r : null;
             }
             TxtCompProdSubtitulo.Text = $"Unidad: {r.UnidadCompra}{famBadge} | Stock actual: {r.StockActualAlmacen:0.##} | Últ. Costo: {(r.UltimoCostoCompraConIva > 0 ? $"{r.UltimoCostoCompraConIva:C2} c/IVA" : "N/D")} | Vigencia: {r.VigenciaEstadoTexto}";
             TxtCompProdHistorial.Text = r.ReferenciaHistorica;
@@ -5045,6 +5401,19 @@ public partial class MainWindow : FluentWindow
             }
 
             var proveedores = CboCompProv1.ItemsSource as IEnumerable<Proveedor> ?? DatabaseService.ObtenerProveedores();
+            bool faltaProveedorEnLista =
+                (r.Proveedor1Id > 0 && !proveedores.Any(p => p.Id == r.Proveedor1Id)) ||
+                (r.Proveedor2Id > 0 && !proveedores.Any(p => p.Id == r.Proveedor2Id)) ||
+                (r.Proveedor3Id > 0 && !proveedores.Any(p => p.Id == r.Proveedor3Id));
+            if (faltaProveedorEnLista)
+            {
+                // Un proveedor recién dado de alta no estaba en los combos: recargar para no perder la asignación
+                var listaFresca = DatabaseService.ObtenerProveedores();
+                CboCompProv1.ItemsSource = listaFresca;
+                CboCompProv2.ItemsSource = listaFresca;
+                CboCompProv3.ItemsSource = listaFresca;
+                proveedores = listaFresca;
+            }
             CboCompProv1.SelectedItem = r.Proveedor1Id > 0 ? proveedores.FirstOrDefault(p => p.Id == r.Proveedor1Id) : null;
             CboCompProv2.SelectedItem = r.Proveedor2Id > 0 ? proveedores.FirstOrDefault(p => p.Id == r.Proveedor2Id) : null;
             CboCompProv3.SelectedItem = r.Proveedor3Id > 0 ? proveedores.FirstOrDefault(p => p.Id == r.Proveedor3Id) : null;
@@ -5529,6 +5898,7 @@ public partial class MainWindow : FluentWindow
 
     private void ActualizarResumenYAparienciaTarjetasProducto(CotizacionRenglonComparativo r)
     {
+        MostrarOfertasArticulo(r);
         if (TxtResumenProv1 == null) return;
 
         decimal sub1 = Math.Round(r.Cantidad * r.PrecioSinIva1, 2);
@@ -5585,10 +5955,73 @@ public partial class MainWindow : FluentWindow
         ActualizarEncabezadosColumnasTablaComparativa();
     }
 
+    /// <summary>
+    /// Confirma (commit) cualquier celda que el usuario esté editando en las tablas de la comparativa,
+    /// para que el último precio tecleado se guarde aunque no haya presionado Enter ni cambiado de celda.
+    /// </summary>
+    private void ConfirmarEdicionesPendientesComparativa()
+    {
+        try
+        {
+            foreach (var dg in new System.Windows.Controls.DataGrid?[] { DgHojaCotizacionProveedor, DgMatrizComparativaRapida, DgProveedoresExtraComp, DgComparativa })
+            {
+                if (dg == null) continue;
+                dg.CommitEdit(DataGridEditingUnit.Cell, true);
+                dg.CommitEdit(DataGridEditingUnit.Row, true);
+            }
+        }
+        catch
+        {
+            // Si alguna celda tiene un valor inválido, se ignora para no bloquear el guardado del resto
+        }
+    }
+
+    private void MarcarComparativaGuardada()
+    {
+        if (TxtCompAutoGuardado != null)
+            TxtCompAutoGuardado.Text = $"✓ Guardado automático {DateTime.Now:HH:mm:ss}";
+    }
+
+    /// <summary>Al hacer clic fuera de la tabla (botón, otra pestaña, etc.) se confirma y guarda la celda en edición.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // Guardar la última celda que se estuviera editando en la comparativa antes de cerrar la app
+        ConfirmarEdicionesPendientesComparativa();
+        base.OnClosing(e);
+    }
+
+    /// <summary>Al hacer clic fuera de la tabla, se confirma y guarda la celda en edición.</summary>
+    private void DgComparativaEdicion_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.DataGrid dg) return;
+        if (e.NewFocus is DependencyObject nuevo && dg.IsAncestorOf(nuevo)) return; // sigue dentro de la tabla
+        try
+        {
+            dg.CommitEdit(DataGridEditingUnit.Cell, true);
+            dg.CommitEdit(DataGridEditingUnit.Row, true);
+        }
+        catch
+        {
+            // Ignorar valores inválidos
+        }
+    }
+
     private void SincronizarRenglonActualDesdeTarjetas()
     {
+        // 1. Guardar primero cualquier celda en edición de las tablas (Hoja por proveedor, Matriz, etc.)
+        ConfirmarEdicionesPendientesComparativa();
+
         if (_cargandoDetalleComparativa || DgComparativa.SelectedItem is not CotizacionRenglonComparativo r || r.TieneOcGenerada)
             return;
+
+        // 2. Solo copiar desde las tarjetas de "Detalle por Artículo Individual" cuando están en pantalla.
+        //    Si el usuario captura en la Hoja por Proveedor o en la Matriz, las tarjetas pueden tener datos viejos
+        //    y antes sobrescribían (borraban) los precios recién capturados.
+        if (TxtCompPrecioSinIva1 == null || !TxtCompPrecioSinIva1.IsVisible)
+        {
+            MarcarComparativaGuardada();
+            return;
+        }
 
         decimal cant = ParseDecimal(TxtCompProdCantidad.Text, r.Cantidad);
         if (cant > 0) r.Cantidad = cant;
@@ -5598,15 +6031,11 @@ public partial class MainWindow : FluentWindow
             SincronizarUnidadEnEditorSolicitudSiAbierta(r.SolicitudPartidaId, r.UnidadCompra);
         }
 
+        // Si el combo no tiene proveedor elegido, conservar el proveedor ya registrado (no borrarlo)
         if (CboCompProv1.SelectedItem is Proveedor p1)
         {
             r.Proveedor1Id = p1.Id;
             r.Proveedor1Nombre = p1.NombreMostrar;
-        }
-        else
-        {
-            r.Proveedor1Id = 0;
-            r.Proveedor1Nombre = "Sin asignar";
         }
 
         if (r.NumeroOpcionesVisibles >= 2 && CboCompProv2.SelectedItem is Proveedor p2)
@@ -5614,30 +6043,20 @@ public partial class MainWindow : FluentWindow
             r.Proveedor2Id = p2.Id;
             r.Proveedor2Nombre = p2.NombreMostrar;
         }
-        else if (r.NumeroOpcionesVisibles < 2)
-        {
-            r.Proveedor2Id = 0;
-            r.Proveedor2Nombre = "Sin asignar";
-        }
 
         if (r.NumeroOpcionesVisibles >= 3 && CboCompProv3.SelectedItem is Proveedor p3)
         {
             r.Proveedor3Id = p3.Id;
             r.Proveedor3Nombre = p3.NombreMostrar;
         }
-        else if (r.NumeroOpcionesVisibles < 3)
-        {
-            r.Proveedor3Id = 0;
-            r.Proveedor3Nombre = "Sin asignar";
-        }
 
-        r.PrecioSinIva1 = ParseDecimal(TxtCompPrecioSinIva1.Text, 0m);
-        r.PrecioSinIva2 = r.NumeroOpcionesVisibles >= 2 ? ParseDecimal(TxtCompPrecioSinIva2.Text, 0m) : 0m;
-        r.PrecioSinIva3 = r.NumeroOpcionesVisibles >= 3 ? ParseDecimal(TxtCompPrecioSinIva3.Text, 0m) : 0m;
+        r.PrecioSinIva1 = ParseDecimal(TxtCompPrecioSinIva1.Text, r.PrecioSinIva1);
+        if (r.NumeroOpcionesVisibles >= 2) r.PrecioSinIva2 = ParseDecimal(TxtCompPrecioSinIva2.Text, r.PrecioSinIva2);
+        if (r.NumeroOpcionesVisibles >= 3) r.PrecioSinIva3 = ParseDecimal(TxtCompPrecioSinIva3.Text, r.PrecioSinIva3);
 
-        r.FleteConIva1 = ParseDecimal(TxtCompFlete1.Text, 0m);
-        r.FleteConIva2 = r.NumeroOpcionesVisibles >= 2 ? ParseDecimal(TxtCompFlete2.Text, 0m) : 0m;
-        r.FleteConIva3 = r.NumeroOpcionesVisibles >= 3 ? ParseDecimal(TxtCompFlete3.Text, 0m) : 0m;
+        r.FleteConIva1 = ParseDecimal(TxtCompFlete1.Text, r.FleteConIva1);
+        if (r.NumeroOpcionesVisibles >= 2) r.FleteConIva2 = ParseDecimal(TxtCompFlete2.Text, r.FleteConIva2);
+        if (r.NumeroOpcionesVisibles >= 3) r.FleteConIva3 = ParseDecimal(TxtCompFlete3.Text, r.FleteConIva3);
 
         r.DiasEntrega1 = Math.Max(1, (int)ParseDecimal(TxtCompDias1.Text, 2m));
         r.DiasEntrega2 = Math.Max(1, (int)ParseDecimal(TxtCompDias2.Text, 3m));
@@ -5660,6 +6079,7 @@ public partial class MainWindow : FluentWindow
             r.FechaCotizacion = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
 
         DatabaseService.GuardarCotizacionPartida(r);
+        MarcarComparativaGuardada();
         ActualizarResumenYAparienciaTarjetasProducto(r);
         RecalcularTotalesComparativa();
     }
@@ -5799,6 +6219,7 @@ public partial class MainWindow : FluentWindow
 
         r.ProveedorGanadorIndice = indiceOpcion;
         DatabaseService.GuardarCotizacionPartida(r);
+        MarcarComparativaGuardada();
         ActualizarResumenYAparienciaTarjetasProducto(r);
         RecalcularTotalesComparativa();
     }
@@ -5956,6 +6377,11 @@ public partial class MainWindow : FluentWindow
                 ? $"Emitir {resumenesOc.Count} OC(s) ({listosParaOc} Productos Decididos)"
                 : (yaConOc == totalProductos && totalProductos > 0 ? "Todas las OCs ya fueron emitidas" : "Elija Ganador en al menos 1 producto");
         }
+
+        if (CboCompTiempoAproxAvance != null && _renglonesComparativa.Count > 0)
+        {
+            CboCompTiempoAproxAvance.Text = DatabaseService.CalcularTiempoRelativoEntregaComparativa(_renglonesComparativa);
+        }
     }
 
     private void BtnSeleccionarMejorPrecioPorPartida_Click(object sender, RoutedEventArgs e)
@@ -5992,13 +6418,41 @@ public partial class MainWindow : FluentWindow
         if (CboCompSolicitud.SelectedItem is not Solicitud sol)
             return;
 
+        if (sol.UsaPartidas && _renglonesComparativa.Count == 0)
+        {
+            DialogoFluent.Show(this, "Agregue artículos a la solicitud antes de cotizar.",
+                "Solicitud sin artículos", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
         SincronizarRenglonActualDesdeTarjetas();
         string estAntSol = sol.Estatus;
-        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio);
+        string tiempoAvance = CboCompTiempoAproxAvance?.Text?.Trim() ?? string.Empty;
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio, tiempoAvance);
         if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
             RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}). La solicitud original queda bloqueada contra edición (use '+ Crear Anexo' si requiere más partidas).");
         RecalcularTotalesComparativa();
         DialogoFluent.Show(this, $"Se guardó el borrador de la comparativa para la solicitud {sol.Folio}.\n\nPuede continuar cotizando más tarde o emitir Órdenes de Compra parciales cuando lo desee.", "Borrador Guardado", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void BtnNotificarAvanceComparativa_Click(object sender, RoutedEventArgs e)
+    {
+        if (CboCompSolicitud.SelectedItem is not Solicitud sol)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una solicitud en la comparativa.", "Sin solicitud", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        SincronizarRenglonActualDesdeTarjetas();
+        string estAntSol = sol.Estatus;
+        string tiempoAvance = CboCompTiempoAproxAvance?.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(tiempoAvance))
+            tiempoAvance = DatabaseService.CalcularTiempoRelativoEntregaComparativa(_renglonesComparativa);
+
+        DatabaseService.GuardarBorradorComparativa(sol.Id, _renglonesComparativa.ToList(), sol.Folio, tiempoAvance, forzarNotificacionCorreo: true);
+        if (string.Equals(estAntSol, "Pendiente", StringComparison.OrdinalIgnoreCase))
+            RegistrarTransicionCheckpoint("Etapa 2: Comparativa", "CP-1B", sol.Folio, estAntSol, "En Comparativa", "Solicitante, Compras", $"Compras inició la cotización de {sol.Folio} ({sol.ProyectoMostrar}).");
+        RecalcularTotalesComparativa();
     }
 
     private void BtnCopiarListaParaCotizar_Click(object sender, RoutedEventArgs e)
@@ -6139,7 +6593,8 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        int pendientesRestantes = _renglonesComparativa.Count(r => !r.TieneOcGenerada) - decididosSinOc.Count;
+        int pendientesRestantes = (sol.UsaPartidas ? sol.Partidas.Count(p => !p.TieneOcGenerada) :
+            _renglonesComparativa.Count(r => !r.TieneOcGenerada)) - decididosSinOc.Count;
         int numOcs = decididosSinOc.Select(r => r.ProveedorGanadorId).Distinct().Count();
 
         if (pendientesRestantes > 0)
@@ -6155,14 +6610,25 @@ public partial class MainWindow : FluentWindow
         }
 
         string folioComp = $"COT-{DateTime.Now:yyyy}-{sol.Id:D4}";
-        var ordenesCreadas = DatabaseService.GenerarOrdenesDesdeComparativa(sol, folioComp, _renglonesComparativa.ToList());
+        bool notificarOc = ChkCompNotificarEmisionOc?.IsChecked != false;
+        List<OrdenCompra> ordenesCreadas;
+        try
+        {
+            ordenesCreadas = DatabaseService.GenerarOrdenesDesdeComparativa(sol, folioComp, _renglonesComparativa.ToList(), notificarOc);
+        }
+        catch (InvalidOperationException ex)
+        {
+            RefrescarSolicitudes(sol.Id);
+            DialogoFluent.Show(this, ex.Message, "Emisión de órdenes", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         foreach (var ocGen in ordenesCreadas)
             RegistrarTransicionCheckpoint("Etapa 3: Emisión OC", "CP-2B", ocGen.Folio, "En Comparativa", ocGen.Estatus, "Dirección, Solicitante, Compras", $"Compras adjudicó proveedor ({ocGen.ProveedorNombre}) y emitió {ocGen.Folio} desde {sol.Folio}. Pendiente Vo.Bo. Dirección.");
 
         CargarTodoElSistema();
         CboCompSolicitud.SelectedItem = CboCompSolicitud.Items.Cast<Solicitud>().FirstOrDefault(s => s.Id == sol.Id);
 
-        if (pendientesRestantes == 0)
+        if (pendientesRestantes == 0 && ordenesCreadas.Count > 0)
         {
             CambiarSeccion(4);
         }
@@ -6210,6 +6676,7 @@ public partial class MainWindow : FluentWindow
 
     private void DgOrdenesCompra_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        ActualizarFichaOrdenCompraLista(DgOrdenesCompra.SelectedItem as OrdenCompra);
         if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
         {
             TxtTituloRecepcionOc.Text = $"Recepción — {oc.Folio} ({oc.AvanceRecepcionTexto})";
@@ -6250,7 +6717,29 @@ public partial class MainWindow : FluentWindow
                     DpOcFechaProgramadaPago.SelectedDate = null;
             }
 
+            if (CboOcTiempoAproxPago != null)
+            {
+                CboOcTiempoAproxPago.Text = DatabaseService.CalcularTiempoRelativoEntregaOc(oc, oc.FechaProgramadaPago);
+            }
+
+            if (CboOcLugarEntregaRecepcion != null)
+            {
+                CboOcLugarEntregaRecepcion.Text = !string.IsNullOrWhiteSpace(oc.ProyectoNombre)
+                    ? $"Almacén General — apartado para {oc.ProyectoNombre}"
+                    : "Almacén General";
+            }
+
             RefrescarHistorialEntradasOc();
+        }
+    }
+
+    private void DpOcFechaProgramadaPago_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        if (DgOrdenesCompra?.SelectedItem is OrdenCompra oc && CboOcTiempoAproxPago != null)
+        {
+            string fProg = DpOcFechaProgramadaPago?.SelectedDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+            CboOcTiempoAproxPago.Text = DatabaseService.CalcularTiempoRelativoEntregaOc(oc, fProg);
         }
     }
 
@@ -6265,14 +6754,31 @@ public partial class MainWindow : FluentWindow
         string nuevoEstatus = (CboOcEstatusOperativo?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? oc.Estatus;
         string condicionPago = (CboOcCondicionPago?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? oc.CondicionPago;
         string fechaProg = DpOcFechaProgramadaPago?.SelectedDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+        string tiempoPago = CboOcTiempoAproxPago?.Text?.Trim() ?? string.Empty;
+        bool notificarPago = ChkOcNotificarPagoGerente?.IsChecked != false;
 
         string estatusPrevOc = oc.Estatus;
-        DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, nuevoEstatus, condicionPago, fechaProg);
+        DatabaseService.ActualizarEstatusYCondicionOrdenCompra(oc.Id, nuevoEstatus, condicionPago, fechaProg, tiempoPago, notificarPago);
         RegistrarTransicionCheckpoint("Etapa 3: Orden de Compra", nuevoEstatus.Contains("Lista para Almacén") || nuevoEstatus == "Emitida" ? "CP-4" : "CP-3", oc.Folio, estatusPrevOc, nuevoEstatus, "Almacén, Finanzas", $"Cambio de estatus operativo de {oc.Folio} ({oc.ProveedorNombre}) a '{nuevoEstatus}' ({condicionPago}).");
         CargarTodoElSistema();
         DialogoFluent.Show(this,
             $"Se actualizó el flujo de la Orden de Compra {oc.Folio}:\n• Estatus: {nuevoEstatus}\n• Condición: {condicionPago}\n• Fecha programada/vencimiento: {(string.IsNullOrWhiteSpace(fechaProg) ? "No especificada" : fechaProg)}\n\nLos recordatorios de seguimiento se actualizaron en el Calendario del Dashboard.",
             "Flujo de OC Actualizado", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void BtnEnviarAvisoPagoOcManual_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
+        {
+            DialogoFluent.Show(this, "Seleccione primero una Orden de Compra de la tabla.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string tiempoPago = CboOcTiempoAproxPago?.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(tiempoPago))
+            tiempoPago = DatabaseService.CalcularTiempoRelativoEntregaOc(oc, DpOcFechaProgramadaPago?.SelectedDate?.ToString("yyyy-MM-dd"));
+
+        DatabaseService.NotificarCambioEstadoCotizacionGerente(oc.SolicitudId, oc.Folio, "4_PAGADA", tiempoPago);
     }
 
     private void BtnRecibirTodoPendienteOc_Click(object sender, RoutedEventArgs e)
@@ -6351,13 +6857,30 @@ public partial class MainWindow : FluentWindow
         string remision = TxtFolioRemisionRecepcionOc?.Text?.Trim() ?? string.Empty;
         string notas = TxtNotasRecepcionOc.Text?.Trim() ?? string.Empty;
         string notasCompletas = !string.IsNullOrWhiteSpace(remision)
-            ? (string.IsNullOrWhiteSpace(notas) ? $"Remisión/Nota Proveedor: {remision}" : $"Remisión/Nota: {remision} | {notas}")
+            ? (string.IsNullOrWhiteSpace(remision) ? notas : $"Remisión/Nota: {remision} | {notas}")
             : notas;
 
         bool reservarProyecto = ChkReservarStockProyectoRecepcion?.IsChecked == true;
+        string lugarEntrega = CboOcLugarEntregaRecepcion?.Text?.Trim() ?? string.Empty;
+        bool notificarRecep = ChkOcNotificarRecepcionGerente?.IsChecked != false;
         string estatusPrevRecep = oc.Estatus;
         bool sinAutorizacionOPagoPrevio = estatusPrevRecep.Contains("Pendiente Vo.Bo.", StringComparison.OrdinalIgnoreCase) || estatusPrevRecep.Contains("Pendiente Pago", StringComparison.OrdinalIgnoreCase);
-        var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(oc, aRecibir, notasCompletas, reservarProyecto);
+        var entrada = DatabaseService.RegistrarRecepcionOrdenCompra(oc, aRecibir, notasCompletas, reservarProyecto, lugarEntrega, notificarRecep);
+
+        // Actualizar ubicación en almacén si el almacenista la especificó en la tabla de recepción
+        var prodsActualizadosRecep = DatabaseService.ObtenerProductos().ToDictionary(x => x.Id);
+        foreach (var (partOc, _) in aRecibir)
+        {
+            string ubiElegida = ExtraerCodigoUbicacionLimpio(partOc.UbicacionDestino);
+            if (partOc.ProductoId > 0 && !string.IsNullOrWhiteSpace(ubiElegida) &&
+                prodsActualizadosRecep.TryGetValue(partOc.ProductoId, out var prodDb) &&
+                !string.Equals(prodDb.Ubicacion, ubiElegida, StringComparison.OrdinalIgnoreCase))
+            {
+                prodDb.Ubicacion = ubiElegida;
+                DatabaseService.GuardarProducto(prodDb);
+            }
+        }
+
         var ocPost = DatabaseService.ObtenerOrdenesCompra().FirstOrDefault(x => x.Id == oc.Id);
         string nuevoEstRecep = ocPost?.Estatus ?? "Recibida";
         if (sinAutorizacionOPagoPrevio)
@@ -6398,7 +6921,8 @@ public partial class MainWindow : FluentWindow
             if (respSal == System.Windows.MessageBoxResult.Yes)
             {
                 CargarPartidasDeEntradaEnSalidaPos(entrada, oc);
-                CambiarSeccion(5);
+                if (_partidasSalidaPos.Count > 0)
+                    CambiarSeccion(5);
             }
         }
     }
@@ -6406,13 +6930,18 @@ public partial class MainWindow : FluentWindow
     private void CargarPartidasDeEntradaEnSalidaPos(EntradaAlmacen entrada, OrdenCompra? ocOrigen)
     {
         var prodsDict = (_cacheProductos.Count > 0 ? _cacheProductos : DatabaseService.ObtenerProductos()).ToDictionary(p => p.Id);
+        var yaEntregadasEnt = DatabaseService.ObtenerCantidadesEntregadasPorFolioEnSalidas(entrada.Folio);
         _partidasSalidaPos.Clear();
         foreach (var ep in entrada.Partidas)
         {
             if (prodsDict.TryGetValue(ep.ProductoId, out var prod))
             {
                 decimal cantMenudeo = ep.CantidadIngresadaAlmacen > 0 ? ep.CantidadIngresadaAlmacen : ep.CantidadCompraRecibida;
-                AgregarProductoAValeSalidaPos(prod, cantMenudeo);
+                if (yaEntregadasEnt.TryGetValue(ep.ProductoId, out decimal yaSalio) && yaSalio > 0m)
+                    cantMenudeo = Math.Max(0m, cantMenudeo - yaSalio);
+
+                if (cantMenudeo > 0m && prod.StockActual > 0m)
+                    AgregarProductoAValeSalidaPos(prod, Math.Min(cantMenudeo, prod.StockActual));
             }
         }
 
@@ -6806,8 +7335,129 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    // =========================================================================
+    // ALMACÉN → ENTRADA DE MATERIAL (ligada a su Orden de Compra)
+    // =========================================================================
+
+    private List<OrdenCompra> _ocsEntradaAlmacen = new();
+
+    private static bool OcEsperaMaterial(OrdenCompra o) =>
+        !o.ConcluidoManual &&
+        o.Estatus != "Recibida Completa" &&
+        !o.Estatus.Contains("Cancelada", StringComparison.OrdinalIgnoreCase) &&
+        !o.Estatus.Contains("Cerrada", StringComparison.OrdinalIgnoreCase) &&
+        o.Partidas.Any(p => p.CantidadPendiente > 0);
+
+    private void RefrescarEntradaMaterialAlmacen(int? mantenerOcId = null)
+    {
+        if (DgEntradaOcsPendientes == null) return;
+        int idSel = mantenerOcId ?? (DgEntradaOcsPendientes.SelectedItem as OrdenCompra)?.Id ?? 0;
+        _ocsEntradaAlmacen = DatabaseService.ObtenerOrdenesCompra();
+        AplicarFiltroEntradaMaterial(idSel);
+    }
+
+    private void AplicarFiltroEntradaMaterial(int idSel = 0)
+    {
+        if (DgEntradaOcsPendientes == null) return;
+        if (idSel == 0) idSel = (DgEntradaOcsPendientes.SelectedItem as OrdenCompra)?.Id ?? 0;
+
+        bool todas = ChkEntradaMostrarTodas?.IsChecked == true;
+        string f = TxtEntradaBuscarOc?.Text?.Trim() ?? string.Empty;
+
+        var lista = _ocsEntradaAlmacen
+            .Where(o => todas || OcEsperaMaterial(o))
+            .Where(o => string.IsNullOrWhiteSpace(f) ||
+                        o.Folio.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                        o.ProveedorNombre.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                        o.ProyectoNombre.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                        o.SolicitudFolio.Contains(f, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        DgEntradaOcsPendientes.ItemsSource = lista;
+        DgEntradaOcsPendientes.SelectedItem = lista.FirstOrDefault(o => o.Id == idSel);
+        ActualizarPanelEntradaOc(DgEntradaOcsPendientes.SelectedItem as OrdenCompra);
+    }
+
+    private void ActualizarPanelEntradaOc(OrdenCompra? oc)
+    {
+        if (PnlEntradaOcContenido == null) return;
+        if (oc == null)
+        {
+            PnlEntradaOcContenido.Visibility = Visibility.Collapsed;
+            PnlEntradaOcVacia.Visibility = Visibility.Visible;
+            return;
+        }
+
+        PnlEntradaOcVacia.Visibility = Visibility.Collapsed;
+        PnlEntradaOcContenido.Visibility = Visibility.Visible;
+
+        decimal pct = oc.TotalUnidadesPedidas > 0
+            ? Math.Min(100m, Math.Round(oc.TotalUnidadesRecibidas / oc.TotalUnidadesPedidas * 100m, 0))
+            : 0m;
+        TxtEntradaOcFolio.Text = oc.Folio;
+        TxtEntradaOcInfo.Text = $"{oc.ProveedorNombre} · {oc.ProyectoNombre}" +
+                                (string.IsNullOrWhiteSpace(oc.SolicitudFolio) ? "" : $" · Solicitud {oc.SolicitudFolio}") +
+                                $"\nRecibido: {oc.AvanceRecepcionTexto}";
+        PbEntradaOcAvance.Value = (double)pct;
+        DgEntradaOcPartidas.ItemsSource = oc.Partidas;
+
+        var entradas = DatabaseService.ObtenerEntradasAlmacen()
+            .Where(en => en.OrdenCompraId == oc.Id ||
+                         (!string.IsNullOrWhiteSpace(en.OrdenCompraFolio) && en.OrdenCompraFolio.Equals(oc.Folio, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        DgEntradaOcHistorial.ItemsSource = entradas;
+        DgEntradaOcHistorial.Visibility = entradas.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        TxtEntradaOcSinHistorial.Visibility = entradas.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        bool pendiente = oc.Partidas.Any(p => p.CantidadPendiente > 0);
+        BtnEntradaRegistrarOc.IsEnabled = pendiente;
+        BtnEntradaRegistrarOc.Content = pendiente ? "📥 Registrar entrada de esta OC" : "✓ Esta OC ya se recibió completa";
+    }
+
+    private void DgEntradaOcsPendientes_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        ActualizarPanelEntradaOc(DgEntradaOcsPendientes.SelectedItem as OrdenCompra);
+
+    private void DgEntradaOcsPendientes_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (FilaClicada<OrdenCompra>(e) is OrdenCompra)
+            BtnEntradaRegistrarOc_Click(sender, e);
+    }
+
+    private void ChkEntradaMostrarTodas_Changed(object sender, RoutedEventArgs e) => AplicarFiltroEntradaMaterial();
+
+    private void TxtEntradaBuscarOc_TextChanged(object sender, TextChangedEventArgs e) => AplicarFiltroEntradaMaterial();
+
+    private void TxtEntradaBuscarOc_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // Al escanear una OC y presionar Enter, abrir directo su recepción si hay una sola coincidencia
+        if (e.Key != Key.Enter) return;
+        if (DgEntradaOcsPendientes.ItemsSource is List<OrdenCompra> l && l.Count == 1)
+        {
+            DgEntradaOcsPendientes.SelectedItem = l[0];
+            BtnEntradaRegistrarOc_Click(sender, e);
+        }
+        e.Handled = true;
+    }
+
+    private void BtnEntradaRegistrarOc_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgEntradaOcsPendientes.SelectedItem is not OrdenCompra oc) return;
+        int id = oc.Id;
+        MostrarModalRecepcionOrdenCompraAgrupada(oc);
+        // Al cerrar la recepción: actualizar lista, ficha de OC y dashboard
+        RefrescarEntradaMaterialAlmacen(id);
+        try { RefrescarOrdenesManteniendoSeleccion((DgOrdenesCompra.SelectedItem as OrdenCompra)?.Id ?? id); } catch { }
+    }
+
+    private void DgEntradaOcHistorial_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DgEntradaOcHistorial.SelectedItem is EntradaAlmacen ent)
+            MostrarModalAccionEntradaAlmacen(ent);
+    }
+
     private void RefrescarAlmacenPosYPrestamos()
     {
+        RefrescarEntradaMaterialAlmacen();
         int herPrevId = (CboHerramientaDisponible.SelectedItem as HerramientaActivo)?.Id ?? 0;
         var herramientasDisp = DatabaseService.ObtenerHerramientas().Where(h => h.Estado == "Disponible").ToList();
         CboHerramientaDisponible.ItemsSource = herramientasDisp;
@@ -6850,20 +7500,30 @@ public partial class MainWindow : FluentWindow
         var entradas = DatabaseService.ObtenerEntradasAlmacen();
         foreach (var ent in entradas)
         {
-            bool esDevolucionMat = !string.IsNullOrWhiteSpace(ent.TipoEntrada) &&
-                                   ent.TipoEntrada.Contains("Devolución", StringComparison.OrdinalIgnoreCase);
+            string tipoEnt = ent.TipoEntrada ?? string.Empty;
+            bool esDevolucionMat = tipoEnt.Contains("Devolución", StringComparison.OrdinalIgnoreCase);
+            bool esSobranteObra = tipoEnt.Contains("Sobrante", StringComparison.OrdinalIgnoreCase) || string.Equals(ent.OrdenCompraFolio, "SOBRANTE-OBRA", StringComparison.OrdinalIgnoreCase);
+            bool esDirectoObra = tipoEnt.Contains("Directa a Obra", StringComparison.OrdinalIgnoreCase) || tipoEnt.Contains("Servicio", StringComparison.OrdinalIgnoreCase);
+            bool esAjuste = ent.Folio.StartsWith("AJU-", StringComparison.OrdinalIgnoreCase) || tipoEnt.Contains("Ajuste", StringComparison.OrdinalIgnoreCase) || tipoEnt.Contains("Merma", StringComparison.OrdinalIgnoreCase);
+
+            string etiquetaTipo = esAjuste ? "AJUSTE / MERMA"
+                : esSobranteObra ? "SOBRANTE OBRA"
+                : esDirectoObra ? "DIRECTO A OBRA"
+                : esDevolucionMat ? "DEVOLUCIÓN"
+                : "ENTRADA";
+
             string detalle = ent.Partidas.Count > 0
                 ? string.Join(", ", ent.Partidas.Select(p => $"+{p.CantidadIngresadaAlmacen:0.##} {p.UnidadAlmacen} {p.ProductoNombre}"))
                 : ent.Notas;
             movs.Add(new MovimientoAlmacenFila
             {
-                TipoMovimiento = esDevolucionMat ? "DEVOLUCIÓN" : "ENTRADA",
+                TipoMovimiento = etiquetaTipo,
                 Folio = ent.Folio,
                 Fecha = ent.Fecha,
                 ResponsableOProveedor = ent.ProveedorNombre,
                 ProyectoNombre = string.IsNullOrWhiteSpace(ent.OrdenCompraFolio)
                     ? "Almacén General"
-                    : (esDevolucionMat ? $"Vale: {ent.OrdenCompraFolio} ({ent.TipoEntrada})" : $"OC: {ent.OrdenCompraFolio}"),
+                    : (esDevolucionMat || esSobranteObra || esAjuste ? $"{ent.OrdenCompraFolio} ({ent.TipoEntrada})" : $"OC: {ent.OrdenCompraFolio}"),
                 DetalleResumen = detalle,
                 EntradaOriginal = ent
             });
@@ -6872,6 +7532,8 @@ public partial class MainWindow : FluentWindow
         var salidas = DatabaseService.ObtenerSalidasAlmacen();
         foreach (var sal in salidas)
         {
+            bool esAjusteSal = sal.Folio.StartsWith("AJU-", StringComparison.OrdinalIgnoreCase);
+            bool esDirectoSal = !string.IsNullOrWhiteSpace(sal.Notas) && sal.Notas.Contains("[ENTREGA DIRECTA A OBRA", StringComparison.OrdinalIgnoreCase);
             string prefijoDev = sal.TotalUnidadesDevueltas > 0
                 ? $"[{sal.EstatusDevolucionTexto}: {sal.TotalUnidadesDevueltas:0.##}/{sal.TotalUnidadesEntregadas:0.##} dev.] "
                 : string.Empty;
@@ -6883,9 +7545,13 @@ public partial class MainWindow : FluentWindow
                 : sal.Notas;
             movs.Add(new MovimientoAlmacenFila
             {
-                TipoMovimiento = sal.TotalUnidadesDevueltas > 0
-                    ? (sal.TotalUnidadesDevueltas >= sal.TotalUnidadesEntregadas - 0.001m ? "SALIDA (DEV. 100%)" : "SALIDA (DEV. PARC.)")
-                    : "SALIDA",
+                TipoMovimiento = esAjusteSal
+                    ? "AJUSTE / MERMA"
+                    : esDirectoSal
+                        ? "SALIDA DIRECTA OBRA"
+                        : (sal.TotalUnidadesDevueltas > 0
+                            ? (sal.TotalUnidadesDevueltas >= sal.TotalUnidadesEntregadas - 0.001m ? "SALIDA (DEV. 100%)" : "SALIDA (DEV. PARC.)")
+                            : "SALIDA"),
                 Folio = sal.Folio,
                 Fecha = sal.Fecha,
                 ResponsableOProveedor = $"{sal.PersonaRecibeEfectiva} (Aprueba: {sal.DepartamentoNombre})",
@@ -7631,7 +8297,20 @@ public partial class MainWindow : FluentWindow
         RegistrarTransicionCheckpoint("Etapa 5: Salida de Material", "CP-8", salida.Folio, "Disponible en Almacén", "Entregado", "Compras, Solicitante", $"Almacén entregó {salida.Partidas.Count} artículo(s) en el vale {salida.Folio} a '{salida.PersonaRecibeEfectiva}' ({salida.ProyectoNombre}).");
         var solVinculada = DatabaseService.ObtenerSolicitudes().FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.Folio) && notasSalPrev.Contains(s.Folio, StringComparison.OrdinalIgnoreCase));
         if (solVinculada != null && string.Equals(solVinculada.Estatus, "Autorizada para Surtir Stock", StringComparison.OrdinalIgnoreCase))
-            DatabaseService.ActualizarEstatusSolicitud(solVinculada.Id, "Atendida");
+        {
+            var yaEntregadasTotal = DatabaseService.ObtenerCantidadesEntregadasPorFolioEnSalidas(solVinculada.Folio);
+            bool todasCubiertas = solVinculada.Partidas.All(part =>
+            {
+                if (part.TieneOcGenerada) return true;
+                if (part.ProductoId <= 0 || !prodsDict.TryGetValue(part.ProductoId, out var prod)) return false;
+                decimal reqAlm = DatabaseService.ConvertirCantidadSolicitudAUnidadAlmacen(part, prod);
+                decimal entAlm = yaEntregadasTotal.TryGetValue(part.ProductoId, out decimal e) ? e : 0m;
+                return entAlm >= reqAlm - 0.001m;
+            });
+
+            if (todasCubiertas)
+                DatabaseService.ActualizarEstatusSolicitud(solVinculada.Id, "Atendida");
+        }
         bool incluyeEpp = salida.Partidas.Any(sp =>
         {
             prodsDict.TryGetValue(sp.ProductoId, out var prodObj);
@@ -7854,14 +8533,6 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void DgOrdenesCompra_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (DgOrdenesCompra.SelectedItem is OrdenCompra oc)
-        {
-            MostrarModalRecepcionOrdenCompraAgrupada(oc);
-        }
-    }
-
     /// <summary>Devuelve el elemento de la fila sobre la que se hizo clic (ignora encabezados y espacios vacíos).</summary>
     private static T? FilaClicada<T>(MouseButtonEventArgs e) where T : class
     {
@@ -7884,8 +8555,353 @@ public partial class MainWindow : FluentWindow
 
     private void DgOrdenesCompra_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        // Ya no se usa: un clic muestra la ficha; doble clic abre la recepción
+    }
+
+    private void DgOrdenesCompra_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
         if (FilaClicada<OrdenCompra>(e) is OrdenCompra)
             MostrarDetalleOrdenCompra(true);
+    }
+
+    /// <summary>Botón "⋯" de cada fila de OC: selecciona la orden y abre el menú de opciones.</summary>
+    private void BtnOpcionesOrdenFila_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement btn || btn.Tag is not OrdenCompra oc) return;
+        DgOrdenesCompra.SelectedItem = oc;
+        var menu = DgOrdenesCompra.ContextMenu;
+        if (menu == null) return;
+        menu.PlacementTarget = btn;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    /// <summary>Llena la ficha (panel derecho) de la orden de compra seleccionada.</summary>
+    private void ActualizarFichaOrdenCompraLista(OrdenCompra? oc)
+    {
+        if (PnlFichaOcContenido == null || PnlFichaOcVacia == null) return;
+
+        if (oc == null || oc.Id <= 0)
+        {
+            PnlFichaOcContenido.Visibility = Visibility.Collapsed;
+            PnlFichaOcVacia.Visibility = Visibility.Visible;
+            DgFichaOcPartidas.ItemsSource = null;
+            return;
+        }
+
+        PnlFichaOcVacia.Visibility = Visibility.Collapsed;
+        PnlFichaOcContenido.Visibility = Visibility.Visible;
+
+        decimal pct = oc.TotalUnidadesPedidas > 0
+            ? Math.Min(100m, Math.Round(oc.TotalUnidadesRecibidas / oc.TotalUnidadesPedidas * 100m, 0))
+            : (string.Equals(oc.Estatus, "Recibida Completa", StringComparison.OrdinalIgnoreCase) ? 100m : 0m);
+
+        TxtFichaOcFolio.Text = oc.Folio;
+        TxtFichaOcAvance.Text = $"Recepción: {oc.AvanceRecepcionTexto}";
+        PbFichaOcAvance.Value = (double)pct;
+        BdrFichaOcEstatus.DataContext = oc.Estatus;
+        TxtFichaOcFecha.Text = oc.Fecha;
+        TxtFichaOcProveedor.Text = oc.ProveedorNombre;
+        TxtFichaOcProyecto.Text = string.IsNullOrWhiteSpace(oc.ProyectoNombre) ? "Consumo Interno de Departamento" : oc.ProyectoNombre;
+        TxtFichaOcSolicitante.Text = string.IsNullOrWhiteSpace(oc.EncargadoNombre)
+            ? oc.DepartamentoNombre
+            : $"{oc.EncargadoNombre} ({oc.DepartamentoNombre})";
+        TxtFichaOcOrigen.Text = string.IsNullOrWhiteSpace(oc.SolicitudFolio)
+            ? "Sin solicitud vinculada"
+            : $"{oc.SolicitudFolio}{(string.IsNullOrWhiteSpace(oc.CotizacionFolio) ? "" : " · " + oc.CotizacionFolio)}";
+        TxtFichaOcEntrega.Text = $"{oc.TiempoEntregaDias} día(s) hábiles";
+        TxtFichaOcPago.Text = string.IsNullOrWhiteSpace(oc.FechaProgramadaPago)
+            ? oc.CondicionPago
+            : $"{oc.CondicionPago} · {oc.FechaProgramadaPago}";
+        TxtFichaOcResumen.Text = $"{oc.Partidas.Count} partida(s)";
+        TxtFichaOcTotales.Text = $"Subtotal: {oc.Subtotal:C2}   ·   Envío: {oc.CostoEnvioConIva:C2}   ·   IVA: {oc.Iva:C2}   ·   Total: {oc.TotalConIva:C2}";
+        DgFichaOcPartidas.ItemsSource = oc.Partidas;
+        ConfigurarSiguientePasoOrden(oc);
+    }
+
+    // =========================================================================
+    // GUÍA "SIGUIENTE PASO" (para que cualquier usuario sepa qué sigue en el proceso)
+    // =========================================================================
+
+    private Action? _accionSiguientePasoSol;
+    private Action? _accionSiguientePasoOc;
+
+    private void BtnFichaSolSiguientePaso_Click(object sender, RoutedEventArgs e) => _accionSiguientePasoSol?.Invoke();
+    private void BtnFichaOcSiguientePaso_Click(object sender, RoutedEventArgs e) => _accionSiguientePasoOc?.Invoke();
+
+    // ---- "Esperando respuesta" y "Concluida" (Solicitudes y Órdenes de Compra) ----
+
+    private static readonly string[] OpcionesEsperandoRespuesta =
+    {
+        "Proveedor (cotización)",
+        "Proveedor (confirmación / entrega)",
+        "Gerente / Solicitante",
+        "Dirección (Vo.Bo.)",
+        "Finanzas (pago)"
+    };
+
+    private void MostrarMenuEsperandoRespuesta(FrameworkElement boton, bool esOc, int id, bool yaEsperando)
+    {
+        var menu = new ContextMenu();
+        if (yaEsperando)
+        {
+            var miReanudar = new System.Windows.Controls.MenuItem { Header = "▶ Ya respondió — reanudar", FontWeight = FontWeights.Bold };
+            miReanudar.Click += (_, _) => AplicarEsperandoRespuesta(esOc, id, string.Empty);
+            menu.Items.Add(miReanudar);
+            menu.Items.Add(new Separator());
+        }
+        foreach (var op in OpcionesEsperandoRespuesta)
+        {
+            var mi = new System.Windows.Controls.MenuItem { Header = $"Esperando a: {op}" };
+            string quien = op;
+            mi.Click += (_, _) => AplicarEsperandoRespuesta(esOc, id, quien);
+            menu.Items.Add(mi);
+        }
+        menu.PlacementTarget = boton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void AplicarEsperandoRespuesta(bool esOc, int id, string quien)
+    {
+        DatabaseService.EstablecerEsperandoRespuesta(esOc, id, quien);
+        RefrescarTrasCambioSeguimiento(esOc, id);
+        MostrarToastDiscreto(
+            string.IsNullOrWhiteSpace(quien) ? "Se reanudó el proceso." : $"En pausa: esperando respuesta de {quien}.",
+            string.IsNullOrWhiteSpace(quien) ? "Reanudado" : "Esperando respuesta");
+    }
+
+    private void AplicarConcluidoManual(bool esOc, int id, bool concluido)
+    {
+        DatabaseService.EstablecerConcluidoManual(esOc, id, concluido);
+        RefrescarTrasCambioSeguimiento(esOc, id);
+    }
+
+    private void RefrescarTrasCambioSeguimiento(bool esOc, int id)
+    {
+        if (esOc)
+        {
+            RefrescarOrdenesManteniendoSeleccion(id);
+        }
+        else
+        {
+            RefrescarSolicitudes(id);
+            ActualizarFichaSolicitudLista(DgHistorialSolicitudes.SelectedItem as Solicitud);
+        }
+    }
+
+    private void RefrescarOrdenesManteniendoSeleccion(int ocId)
+    {
+        var ocs = DatabaseService.ObtenerOrdenesCompra();
+        DgOrdenesCompra.ItemsSource = ocs;
+        DgOrdenesCompra.SelectedItem = ocs.FirstOrDefault(o => o.Id == ocId);
+        ActualizarFichaOrdenCompraLista(DgOrdenesCompra.SelectedItem as OrdenCompra);
+    }
+
+    private void BtnFichaSolEsperando_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgHistorialSolicitudes.SelectedItem is Solicitud s && sender is FrameworkElement fe)
+            MostrarMenuEsperandoRespuesta(fe, false, s.Id, s.EstaEsperandoRespuesta);
+    }
+
+    private void BtnFichaOcEsperando_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is OrdenCompra o && sender is FrameworkElement fe)
+            MostrarMenuEsperandoRespuesta(fe, true, o.Id, o.EstaEsperandoRespuesta);
+    }
+
+    private void BtnFichaSolConcluir_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgHistorialSolicitudes.SelectedItem is not Solicitud s) return;
+        var r = DialogoFluent.Show(this, $"¿Marcar la solicitud {s.Folio} como concluida?\n\nYa no mostrará 'Siguiente paso'. Puede reabrirla en cualquier momento.", "Marcar como concluida", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (r == System.Windows.MessageBoxResult.Yes) AplicarConcluidoManual(false, s.Id, true);
+    }
+
+    private void BtnFichaOcConcluir_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is not OrdenCompra o) return;
+        var r = DialogoFluent.Show(this, $"¿Marcar la orden {o.Folio} como concluida?\n\nYa no mostrará 'Siguiente paso'. Puede reabrirla en cualquier momento.", "Marcar como concluida", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (r == System.Windows.MessageBoxResult.Yes) AplicarConcluidoManual(true, o.Id, true);
+    }
+
+    private void BtnFichaSolReabrir_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgHistorialSolicitudes.SelectedItem is Solicitud s) AplicarConcluidoManual(false, s.Id, false);
+    }
+
+    private void BtnFichaOcReabrir_Click(object sender, RoutedEventArgs e)
+    {
+        if (DgOrdenesCompra.SelectedItem is OrdenCompra o) AplicarConcluidoManual(true, o.Id, false);
+    }
+
+    /// <summary>
+    /// Aplica el estado visual del aviso: normal (azul), esperando respuesta (ámbar) u oculto si ya concluyó.
+    /// Devuelve true si el aviso debe seguir mostrando el siguiente paso normal.
+    /// </summary>
+    private static bool AplicarEstadoVisualAviso(
+        Border bdr, TextBlock titulo, TextBlock texto, Wpf.Ui.Controls.Button btnAccion,
+        Wpf.Ui.Controls.Button btnEsperando, FrameworkElement pnlConcluida,
+        bool concluido, bool esperando, string esperandoDe, string esperandoDesde)
+    {
+        if (concluido)
+        {
+            bdr.Visibility = Visibility.Collapsed;
+            pnlConcluida.Visibility = Visibility.Visible;
+            return false;
+        }
+
+        bdr.Visibility = Visibility.Visible;
+        pnlConcluida.Visibility = Visibility.Collapsed;
+
+        if (esperando)
+        {
+            string dias = string.Empty;
+            if (DateTime.TryParse(esperandoDesde, out var desde))
+            {
+                int d = (DateTime.Now.Date - desde.Date).Days;
+                dias = d <= 0 ? " (desde hoy)" : $" (hace {d} día{(d == 1 ? "" : "s")})";
+            }
+            bdr.Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xFB, 0xEB));
+            bdr.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFD, 0xE6, 0x8A));
+            titulo.Text = "⏸ ESPERANDO RESPUESTA";
+            titulo.Foreground = new SolidColorBrush(Color.FromRgb(0xB4, 0x53, 0x09));
+            texto.Text = $"En pausa: depende de {esperandoDe}{dias}. No se cuenta como pendiente interno.";
+            texto.Foreground = new SolidColorBrush(Color.FromRgb(0x78, 0x35, 0x0F));
+            btnAccion.Visibility = Visibility.Collapsed;
+            btnEsperando.Content = "▶ Ya respondió ▾";
+            return false;
+        }
+
+        bdr.Background = new SolidColorBrush(Color.FromRgb(0xEF, 0xF6, 0xFF));
+        bdr.BorderBrush = new SolidColorBrush(Color.FromRgb(0xBF, 0xDB, 0xFE));
+        titulo.Text = "➜ SIGUIENTE PASO";
+        titulo.Foreground = new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0xD8));
+        texto.Foreground = new SolidColorBrush(Color.FromRgb(0x1E, 0x3A, 0x8A));
+        btnEsperando.Content = "⏸ Esperando respuesta ▾";
+        return true;
+    }
+
+    private static void IrAModulo(ModuloSistema modulo) =>
+        AppMediator.Instance.Publicar(new NavegarModuloMessage(modulo));
+
+    private void ConfigurarSiguientePasoSolicitud(Solicitud sol)
+    {
+        string est = sol.Estatus ?? string.Empty;
+        string texto;
+        string boton = string.Empty;
+        _accionSiguientePasoSol = null;
+
+        bool Es(string s) => est.Equals(s, StringComparison.OrdinalIgnoreCase);
+
+        bool finalAutomatico = Es("Atendida");
+        if (!AplicarEstadoVisualAviso(BdrFichaSolSiguientePaso, TxtFichaSolSiguientePasoTitulo, TxtFichaSolSiguientePaso,
+                BtnFichaSolSiguientePaso, BtnFichaSolEsperando, PnlFichaSolConcluida,
+                sol.ConcluidoManual || finalAutomatico, sol.EstaEsperandoRespuesta, sol.EsperandoRespuestaDe, sol.EsperandoDesde))
+            return;
+
+        if (Es("Pendiente"))
+        {
+            texto = "Revisar si hay stock en Almacén. Si lo hay, use 'Aprobar Stock' dentro de la solicitud; si no, envíela a Comparativa para pedir cotizaciones.";
+            boton = "Ir a Comparativa →";
+            _accionSiguientePasoSol = () => BtnEnviarSolicitudAComparativa_Click(this, new RoutedEventArgs());
+        }
+        else if (est.Contains("Surtir Stock", StringComparison.OrdinalIgnoreCase))
+        {
+            texto = "Aprobada para surtir con stock. Entregue el material en Almacén con un Vale de Salida (SAL).";
+            boton = "Ir a Almacén →";
+            _accionSiguientePasoSol = () => IrAModulo(ModuloSistema.AlmacenPos);
+        }
+        else if (Es("En Comparativa") || Es("Cotización Entregada"))
+        {
+            texto = "Capture los precios de cada proveedor, adjudique el ganador por artículo y emita las Órdenes de Compra (paso 3 · Emitir órdenes).";
+            boton = "Ir a Comparativa →";
+            _accionSiguientePasoSol = () => BtnEnviarSolicitudAComparativa_Click(this, new RoutedEventArgs());
+        }
+        else if (Es("Parcial en OC"))
+        {
+            texto = "Algunas partidas ya tienen OC y otras no. Termine de adjudicar las pendientes en Comparativa; las OCs emitidas se reciben en Órdenes de Compra.";
+            boton = "Ir a Comparativa →";
+            _accionSiguientePasoSol = () => BtnEnviarSolicitudAComparativa_Click(this, new RoutedEventArgs());
+        }
+        else if (Es("OC Generada"))
+        {
+            texto = "Órdenes de Compra emitidas. Espere la entrega del proveedor y registre la entrada del material en Órdenes de Compra.";
+            boton = "Ir a Órdenes de Compra →";
+            _accionSiguientePasoSol = () => IrAModulo(ModuloSistema.OrdenesCompra);
+        }
+        else if (est.Contains("Presupuesto", StringComparison.OrdinalIgnoreCase))
+        {
+            texto = "Presupuesto terminado. Si el gerente lo aprueba, conviértalo a compra desde Comparativa.";
+            boton = "Ir a Comparativa →";
+            _accionSiguientePasoSol = () => BtnEnviarSolicitudAComparativa_Click(this, new RoutedEventArgs());
+        }
+        else if (Es("Atendida"))
+        {
+            texto = "✓ Proceso concluido. El material ya fue entregado.";
+        }
+        else
+        {
+            texto = $"Estatus actual: {est}. Abra la solicitud para revisar su detalle.";
+        }
+
+        TxtFichaSolSiguientePaso.Text = texto;
+        BtnFichaSolSiguientePaso.Content = boton;
+        BtnFichaSolSiguientePaso.Visibility = _accionSiguientePasoSol != null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ConfigurarSiguientePasoOrden(OrdenCompra oc)
+    {
+        string est = oc.Estatus ?? string.Empty;
+        string texto;
+        string boton = string.Empty;
+        _accionSiguientePasoOc = null;
+
+        bool finalAutomatico = est.Contains("Cancelada", StringComparison.OrdinalIgnoreCase) || est.Contains("Cerrada", StringComparison.OrdinalIgnoreCase);
+        if (!AplicarEstadoVisualAviso(BdrFichaOcSiguientePaso, TxtFichaOcSiguientePasoTitulo, TxtFichaOcSiguientePaso,
+                BtnFichaOcSiguientePaso, BtnFichaOcEsperando, PnlFichaOcConcluida,
+                oc.ConcluidoManual || finalAutomatico, oc.EstaEsperandoRespuesta, oc.EsperandoRespuestaDe, oc.EsperandoDesde))
+            return;
+
+        if (est.Contains("Vo.Bo", StringComparison.OrdinalIgnoreCase))
+        {
+            texto = "Obtener el visto bueno de Dirección para liberar la orden.";
+            boton = "Abrir orden →";
+            _accionSiguientePasoOc = () => MostrarDetalleOrdenCompra(true);
+        }
+        else if (est.Contains("Pendiente Pago", StringComparison.OrdinalIgnoreCase))
+        {
+            texto = "Finanzas debe programar o realizar el pago al proveedor.";
+            boton = "Abrir orden →";
+            _accionSiguientePasoOc = () => MostrarDetalleOrdenCompra(true);
+        }
+        else if (est.Equals("Recibida Parcialmente", StringComparison.OrdinalIgnoreCase))
+        {
+            decimal pend = Math.Max(0m, oc.TotalUnidadesPedidas - oc.TotalUnidadesRecibidas);
+            texto = $"Faltan {pend:0.##} unidad(es) por llegar. Cuando el proveedor entregue, registre la siguiente entrada.";
+            boton = "Registrar entrada de material →";
+            _accionSiguientePasoOc = () => MostrarModalRecepcionOrdenCompraAgrupada(oc);
+        }
+        else if (est.Equals("Recibida Completa", StringComparison.OrdinalIgnoreCase))
+        {
+            texto = "Material recibido completo. Vincule la factura XML del proveedor (o liquide con nota/remisión).";
+            boton = "Ir a Facturas →";
+            _accionSiguientePasoOc = () => IrAModulo(ModuloSistema.FacturasXml);
+        }
+        else if (est.Contains("Cancelada", StringComparison.OrdinalIgnoreCase) || est.Contains("Cerrada", StringComparison.OrdinalIgnoreCase))
+        {
+            texto = "✓ Orden cerrada. No requiere más acciones.";
+        }
+        else
+        {
+            texto = "Esperando la entrega del proveedor. Cuando llegue el material, registre la entrada en Almacén.";
+            boton = "Registrar entrada de material →";
+            _accionSiguientePasoOc = () => MostrarModalRecepcionOrdenCompraAgrupada(oc);
+        }
+
+        TxtFichaOcSiguientePaso.Text = texto;
+        BtnFichaOcSiguientePaso.Content = boton;
+        BtnFichaOcSiguientePaso.Visibility = _accionSiguientePasoOc != null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void DgOrdenesCompra_KeyDown(object sender, KeyEventArgs e)
@@ -9500,6 +10516,14 @@ public partial class MainWindow : FluentWindow
             int? facIdSeleccionada = (DgFacturasRegistradas.SelectedItem as FacturaXml)?.Id;
             var facturas = DatabaseService.ObtenerFacturasXml();
             DgFacturasRegistradas.ItemsSource = facturas;
+            if (CboXmlVehiculoFlotilla != null)
+            {
+                var opcionesVeh = new List<object> { "Sin asignar a camioneta (Gasto general / material)" };
+                opcionesVeh.AddRange(DatabaseService.ObtenerVehiculosFlotilla());
+                CboXmlVehiculoFlotilla.ItemsSource = opcionesVeh;
+                if (CboXmlVehiculoFlotilla.SelectedIndex < 0)
+                    CboXmlVehiculoFlotilla.SelectedIndex = 0;
+            }
             if (facIdSeleccionada.HasValue && _facturaXmlEnPantalla == null)
             {
                 var reSel = facturas.FirstOrDefault(f => f.Id == facIdSeleccionada.Value);
@@ -9867,15 +10891,66 @@ public partial class MainWindow : FluentWindow
         FacturaXml facturaGuardada = null!;
         int nuevosCreados = 0;
         bool ingresarAuto = ChkXmlIngresarAlmacenAuto?.IsChecked == true;
+        bool directoAObraXml = ChkXmlDirectoAObra?.IsChecked == true;
+        string usuarioRecibioXml = DatabaseService.ObtenerUsuarioActivo().Nombre;
+        int vehiculoXmlId = (CboXmlVehiculoFlotilla?.SelectedItem as VehiculoFlotilla)?.Id ?? 0;
+        string tipoGastoVehXml = (CboXmlTipoGastoVehiculo?.SelectedItem as ComboBoxItem)?.Content?.ToString()
+                                 ?? CboXmlTipoGastoVehiculo?.Text
+                                 ?? "Gasolina / Combustible";
+        int.TryParse((TxtXmlKilometrajeVehiculo?.Text ?? string.Empty).Replace(",", "").Trim(), out int kmVehXml);
+        int? entradaSinOcIdRegularizar = null;
+
+        // Verificar si existe una Entrada directa sin OC ('SIN-OC') pendiente de este proveedor o folio para evitar duplicar stock
+        string emisorNom = (_facturaXmlEnPantalla.EmisorNombre ?? string.Empty).Trim();
+        string emisorCorto = Proveedor.ExtraerNombreComercialCorto(emisorNom);
+        string serieFolioXml = (_facturaXmlEnPantalla.SerieFolio ?? string.Empty).Trim();
+        var entradasSinOc = DatabaseService.ObtenerEntradasAlmacen()
+            .Where(ent => string.Equals(ent.OrdenCompraFolio, "SIN-OC", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var candidataSinOc = entradasSinOc.FirstOrDefault(ent =>
+            (!string.IsNullOrWhiteSpace(serieFolioXml) && !string.IsNullOrWhiteSpace(ent.FacturaUuid) &&
+             ent.FacturaUuid.Contains(serieFolioXml, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrWhiteSpace(emisorNom) &&
+             (ent.ProveedorNombre.Contains(emisorNom, StringComparison.OrdinalIgnoreCase) ||
+              emisorNom.Contains(ent.ProveedorNombre, StringComparison.OrdinalIgnoreCase) ||
+              (!string.IsNullOrWhiteSpace(emisorCorto) && emisorCorto.Length >= 4 && ent.ProveedorNombre.Contains(emisorCorto, StringComparison.OrdinalIgnoreCase)))));
+
+        if (candidataSinOc != null)
+        {
+            var respSinOc = DialogoFluent.Show(this,
+                $"Se detectó la Entrada a Almacén sin OC '{candidataSinOc.Folio}' del proveedor '{candidataSinOc.ProveedorNombre}' (Doc: {candidataSinOc.FacturaUuid}) que ya sumó existencias físicas al inventario.\n\n" +
+                "¿Esta factura XML corresponde a esa entrega física para regularizarla y vincularla sin duplicar el stock de almacén?",
+                "Regularizar Entrada sin OC (Evitar Doble Stock)",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (respSinOc == System.Windows.MessageBoxResult.Yes)
+            {
+                entradaSinOcIdRegularizar = candidataSinOc.Id;
+                ingresarAuto = false; // El stock ya ingresó en la entrada SIN-OC
+            }
+        }
 
         await EjecutarConIndicadorCargaAsync("Guardando factura XML, orden de compra y productos...", () =>
         {
             int productosAntes = DatabaseService.ObtenerProductos().Count;
-            facturaGuardada = DatabaseService.GuardarFacturaXml(_facturaXmlEnPantalla, ingresarAuto);
+            facturaGuardada = DatabaseService.GuardarFacturaXml(
+                _facturaXmlEnPantalla,
+                ingresarAuto,
+                entradaSinOcIdRegularizar,
+                directoAObraXml,
+                usuarioRecibioXml,
+                vehiculoXmlId,
+                tipoGastoVehXml,
+                kmVehXml);
             int productosDespues = DatabaseService.ObtenerProductos().Count;
             nuevosCreados = Math.Max(0, productosDespues - productosAntes);
 
             _facturaXmlEnPantalla = null;
+            if (ChkXmlDirectoAObra != null) ChkXmlDirectoAObra.IsChecked = false;
+            if (CboXmlVehiculoFlotilla != null) CboXmlVehiculoFlotilla.SelectedIndex = 0;
+            if (TxtXmlKilometrajeVehiculo != null) TxtXmlKilometrajeVehiculo.Clear();
             DgXmlConceptosActual.ItemsSource = facturaGuardada.Conceptos;
             TxtXmlResumenActual.Text = nuevosCreados > 0
                 ? $"Factura registrada exitosamente (OC: {facturaGuardada.OrdenCompraFolio}). Se crearon {nuevosCreados} producto(s) nuevos en el catálogo."
@@ -10775,9 +11850,22 @@ public partial class MainWindow : FluentWindow
         string nomComercial = !string.IsNullOrWhiteSpace(TxtProvComercial.Text) ? TxtProvComercial.Text.Trim() : Proveedor.ExtraerNombreComercialCorto(TxtProvRazon.Text.Trim());
         string razonSocial = !string.IsNullOrWhiteSpace(TxtProvRazon.Text) ? TxtProvRazon.Text.Trim() : nomComercial;
         string rfcProv = !string.IsNullOrWhiteSpace(TxtProvRfc.Text) ? TxtProvRfc.Text.Trim().ToUpperInvariant() : "XAXX010101000";
+
+        int idGuardarProv = _proveedorEditandoId;
+        if (idGuardarProv == 0)
+        {
+            var existente = DatabaseService.ObtenerProveedores().FirstOrDefault(p =>
+                string.Equals(p.NombreComercial.Trim(), nomComercial, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.RazonSocial.Trim(), razonSocial, StringComparison.OrdinalIgnoreCase) ||
+                (!string.Equals(rfcProv, "XAXX010101000", StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(p.Rfc.Trim(), rfcProv, StringComparison.OrdinalIgnoreCase)));
+            if (existente != null)
+                idGuardarProv = existente.Id;
+        }
+
         DatabaseService.GuardarProveedor(new Proveedor
         {
-            Id = _proveedorEditandoId,
+            Id = idGuardarProv,
 
 
             NombreComercial = nomComercial,
@@ -10946,6 +12034,7 @@ public partial class MainWindow : FluentWindow
         TxtAltaEncargadoNombre.Text = enc.Nombre;
         TxtAltaEncargadoPuesto.Text = enc.Puesto;
         TxtAltaEncargadoTelefono.Text = enc.Telefono;
+        if (TxtAltaEncargadoCorreo != null) TxtAltaEncargadoCorreo.Text = enc.Correo;
         if (CboAltaEncargadoDepto.ItemsSource is IEnumerable<Departamento> deptos)
             CboAltaEncargadoDepto.SelectedItem = deptos.FirstOrDefault(d => d.Id == enc.DepartamentoId);
 
@@ -11000,6 +12089,7 @@ public partial class MainWindow : FluentWindow
         TxtAltaEncargadoNombre.Clear();
         TxtAltaEncargadoPuesto.Clear();
         TxtAltaEncargadoTelefono.Clear();
+        TxtAltaEncargadoCorreo?.Clear();
         TxtDesglosePersonalTitulo.Text = "Seleccione una persona para ver sus solicitudes, salidas de almacén y préstamos de herramienta";
         DgDesglosePersonal.ItemsSource = null;
     }
@@ -11012,7 +12102,8 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        DatabaseService.GuardarEncargado(dep.Id, TxtAltaEncargadoNombre.Text, TxtAltaEncargadoPuesto.Text, TxtAltaEncargadoTelefono.Text, _encargadoEditandoId);
+        string correo = TxtAltaEncargadoCorreo?.Text?.Trim() ?? string.Empty;
+        DatabaseService.GuardarEncargado(dep.Id, TxtAltaEncargadoNombre.Text, TxtAltaEncargadoPuesto.Text, TxtAltaEncargadoTelefono.Text, _encargadoEditandoId, correo);
         BtnNuevoEncargado_Click(sender, e);
         CargarTodoElSistema();
     }
@@ -11265,8 +12356,7 @@ public partial class MainWindow : FluentWindow
 
     private void BtnRespaldarDb_Click(object sender, RoutedEventArgs e)
     {
-        string ruta = DatabaseService.CrearRespaldoBaseDatos();
-        DialogoFluent.Show(this, $"Respaldo local creado exitosamente en:\n{ruta}", "Respaldo SQLite", MessageBoxButton.OK, MessageBoxImage.Information);
+        MostrarModalRespaldoIntegralZip();
     }
 
     // =====================================================================
@@ -12391,7 +13481,7 @@ public partial class MainWindow : FluentWindow
 
         btnExportarCuadranteCsv.Click += (_, _) =>
         {
-            var prodsFiltrados = (dgProdCuadrante.ItemsSource as IEnumerable<Producto>)?.ToList() ?? new List<Producto>();
+            var prodsFiltrados = (dgProdCuadrante.ItemsSource as IEnumerable<Producto>)?.Where(p => p.StockActual > 0).ToList() ?? new List<Producto>();
             var hersFiltradas = (dgHerCuadrante.ItemsSource as IEnumerable<HerramientaActivo>)?.ToList() ?? new List<HerramientaActivo>();
 
             string sufijo = cuadranteActual == "TODOS" ? $"Anaquel_{estanteActual}_Completo" : $"{estanteActual}-{cuadranteActual}";

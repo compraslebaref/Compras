@@ -22,6 +22,7 @@ public class Encargado
     public string Nombre { get; set; } = string.Empty;
     public string Puesto { get; set; } = string.Empty;
     public string Telefono { get; set; } = string.Empty;
+    public string Correo { get; set; } = string.Empty;
     public override string ToString() => $"{Nombre} ({DepartamentoNombre})";
 }
 
@@ -73,7 +74,7 @@ public class Producto : INotifyPropertyChanged
     public decimal FactorConversion { get; set; } = 1m;       // Ej. 1 Caja = 100 Piezas
     public decimal StockActual { get; set; }                  // En UnidadAlmacen
     public decimal StockReservadoProyecto { get; set; }       // En UnidadAlmacen
-    public decimal StockMinimo { get; set; } = 5m;
+    public decimal StockMinimo { get; set; } = 0m;
     public decimal UltimoCostoCompra { get; set; }            // Por UnidadCompra (con IVA)
     public decimal CostoUnitarioAlmacen => FactorConversion > 0 ? Math.Round(UltimoCostoCompra / FactorConversion, 2) : UltimoCostoCompra;
     private string _ubicacion = "A-01";
@@ -168,6 +169,41 @@ public class HerramientaActivo
     public string EncargadoActual { get; set; } = string.Empty;
     public string ProyectoActual { get; set; } = string.Empty;
     public string NotasEstado { get; set; } = string.Empty;
+    public string FechaCompra { get; set; } = string.Empty;
+    public string FechaFinGarantia { get; set; } = string.Empty;
+    public decimal CostoAdquisicion { get; set; }
+    public decimal GastoMantenimientoAcumulado { get; set; }
+
+    public bool EnGarantia =>
+        !string.IsNullOrWhiteSpace(FechaFinGarantia) &&
+        DateTime.TryParse(FechaFinGarantia, out var dtFin) &&
+        dtFin.Date >= DateTime.Today;
+
+    public string EstadoGarantiaTexto
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(FechaFinGarantia) || !DateTime.TryParse(FechaFinGarantia, out var dtFin))
+                return "Sin registro";
+            int dias = (dtFin.Date - DateTime.Today).Days;
+            return dias >= 0
+                ? $"En Garantía ({dias}d rest. · {dtFin:yyyy-MM-dd})"
+                : $"Vencida ({dtFin:yyyy-MM-dd})";
+        }
+    }
+
+    public decimal PorcentajeMantenimientoSobreCosto =>
+        CostoAdquisicion > 0m ? Math.Round((GastoMantenimientoAcumulado / CostoAdquisicion) * 100m, 1) : 0m;
+
+    public bool AlertaReemplazoTco =>
+        CostoAdquisicion > 0m && GastoMantenimientoAcumulado >= (CostoAdquisicion * 0.50m);
+
+    public string ResumenTcoTexto =>
+        CostoAdquisicion <= 0m && GastoMantenimientoAcumulado <= 0m
+            ? "S/D"
+            : $"Costo: {CostoAdquisicion:C0} | Mant: {GastoMantenimientoAcumulado:C0} ({PorcentajeMantenimientoSobreCosto:0.#}%)" +
+              (AlertaReemplazoTco ? " [REEMPLAZAR >=50%]" : "");
+
     public override string ToString() => $"{CodigoIndividual} - {ProductoNombre} ({MarcaModelo}) [{Estado}]";
 }
 
@@ -252,7 +288,20 @@ public class Solicitud
     public string Origen { get; set; } = "Catálogo"; // Catálogo, WhatsApp, Plantilla Excel
     public string Estatus { get; set; } = "Pendiente"; // Pendiente, Autorizada para Surtir Stock, En Comparativa, Cotización Entregada, OC Generada, Atendida
     public string Notas { get; set; } = string.Empty;
+    public bool UsaPartidas { get; set; }
     public List<SolicitudPartida> Partidas { get; set; } = new();
+    // Pausa por dependencia externa y cierre manual (no alteran el Estatus del flujo)
+    public string EsperandoRespuestaDe { get; set; } = string.Empty;
+    public string EsperandoDesde { get; set; } = string.Empty;
+    public bool ConcluidoManual { get; set; }
+    public bool EstaEsperandoRespuesta => !string.IsNullOrWhiteSpace(EsperandoRespuestaDe) && !ConcluidoManual;
+    public string EstatusMostrar => ConcluidoManual ? "Concluida" : (EstaEsperandoRespuesta ? "Esperando respuesta" : Estatus);
+    public IReadOnlyList<SolicitudPartida> PartidasParaComparativa => UsaPartidas
+        ? Partidas
+        : Partidas.Any(p => p.IncluirEnCotizacion || p.TieneOcGenerada)
+            ? Partidas.Where(p => p.IncluirEnCotizacion || p.TieneOcGenerada).ToList()
+            : Partidas;
+
     public int TotalSkus => Partidas.Count;
     public decimal TotalArticulos => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadSolicitada) : 0m;
     public string ResumenArticulos => $"{TotalSkus} SKUs ({TotalArticulos:0.##} pzas)";
@@ -284,6 +333,8 @@ public class SolicitudPartida
     public int DiasVigenciaCotizacion { get; set; } = 15;
     public string FechaCotizacion { get; set; } = string.Empty;
     public string NotasPartida { get; set; } = string.Empty;
+    public string NombrePartida { get; set; } = string.Empty;
+    public string EncabezadoPartida => string.IsNullOrWhiteSpace(NombrePartida) ? "Sin partida asignada" : NombrePartida.Trim().ToUpperInvariant();
 
     // Cotización guardada por producto (3 opciones + ganador + OC generada)
     public int Proveedor1Id { get; set; }
@@ -349,6 +400,7 @@ public class CotizacionProveedorExtra
 
 public class CotizacionRenglonComparativo
 {
+    public string NombrePartida { get; set; } = string.Empty;
     public int SolicitudPartidaId { get; set; }
     public int ProductoId { get; set; }
     public string ProductoCodigo { get; set; } = string.Empty;
@@ -610,6 +662,12 @@ public class OrdenCompra
     public string Estatus { get; set; } = "Emitida"; // Pendiente Vo.Bo. Dirección, Autorizada / Pendiente Pago Finanzas, Pagada / Lista para Almacén, Emitida, Recibida Parcialmente, Recibida Completa, Cerrada Parcial (Admin), Cancelada
     public string Notas { get; set; } = string.Empty;
     public List<OrdenCompraPartida> Partidas { get; set; } = new();
+    // Pausa por dependencia externa y cierre manual (no alteran el Estatus del flujo)
+    public string EsperandoRespuestaDe { get; set; } = string.Empty;
+    public string EsperandoDesde { get; set; } = string.Empty;
+    public bool ConcluidoManual { get; set; }
+    public bool EstaEsperandoRespuesta => !string.IsNullOrWhiteSpace(EsperandoRespuestaDe) && !ConcluidoManual;
+    public string EstatusMostrar => ConcluidoManual ? "Concluida" : (EstaEsperandoRespuesta ? "Esperando respuesta" : Estatus);
     public decimal TotalUnidadesPedidas => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadPedida) : 0m;
     public decimal TotalUnidadesRecibidas => Partidas.Count > 0 ? Partidas.Sum(x => x.CantidadRecibida) : 0m;
     public string AvanceRecepcionTexto
@@ -1252,17 +1310,335 @@ public class NotificacionCheckpoint
     public int Id { get; set; }
     public string FechaHora { get; set; } = string.Empty;
     public string Etapa { get; set; } = string.Empty;            // Ej. Etapa 1: Solicitud, Etapa 4: Recepción
-    public string CheckpointCodigo { get; set; } = string.Empty; // Ej. CP-1A, CP-1B, CP-2B, CP-5B
+    public string CheckpointCodigo { get; set; } = string.Empty; // Ej. CP-1A, CP-1B, CP-2B, CP-5B, MSG
     public string FolioReferencia { get; set; } = string.Empty;  // Ej. SOL-2026-0001, OC-2026-0001
     public string EstatusAnterior { get; set; } = string.Empty;
     public string EstatusNuevo { get; set; } = string.Empty;
     public string RolOrigen { get; set; } = "Compras";           // Compras, Almacén
     public string RolesDestino { get; set; } = "Almacén";        // Compras, Almacén, Solicitante, Dirección, Finanzas
+    public string UsuarioOrigen { get; set; } = string.Empty;
+    public string UsuarioDestino { get; set; } = string.Empty;
     public string Mensaje { get; set; } = string.Empty;
     public bool Leida { get; set; }
+    public string RemitenteTexto => !string.IsNullOrWhiteSpace(UsuarioOrigen)
+        ? $"{UsuarioOrigen} ({RolOrigen})"
+        : RolOrigen;
+    public string DestinatarioTexto => !string.IsNullOrWhiteSpace(UsuarioDestino)
+        ? $"@{UsuarioDestino} ({RolesDestino})"
+        : RolesDestino;
     public string TransicionTexto => string.IsNullOrWhiteSpace(EstatusAnterior)
         ? EstatusNuevo
         : $"{EstatusAnterior} → {EstatusNuevo}";
+}
+
+public class UsuarioSistema
+{
+    public int Id { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string NombreCompleto { get; set; } = string.Empty;
+    public string Nombre
+    {
+        get => NombreCompleto;
+        set => NombreCompleto = value;
+    }
+    public string Puesto { get; set; } = string.Empty;
+    public string Rol { get; set; } = "Compras"; // Compras, Almacén, Operativo, Dirección, Finanzas, Administrador
+    public string RolPredeterminado
+    {
+        get => Rol;
+        set => Rol = value;
+    }
+    public bool Activo { get; set; } = true;
+    public string FechaAlta { get; set; } = string.Empty;
+    public string EstadoTexto => Activo ? "Activo" : "Inactivo";
+    public override string ToString() => $"{NombreCompleto} (@{Username} · {Rol})";
+}
+
+public class RegistroBitacoraUsuario
+{
+    public int Id { get; set; }
+    public string FechaHora { get; set; } = string.Empty;
+    public int UsuarioId { get; set; }
+    public string UsuarioNombre { get; set; } = string.Empty;
+    public string Rol { get; set; } = string.Empty;
+    public string RolOperativo => Rol;
+    public string Modulo { get; set; } = string.Empty;
+    public string Accion { get; set; } = string.Empty;
+    public string FolioReferencia { get; set; } = string.Empty;
+    public string Detalle { get; set; } = string.Empty;
+}
+
+public class ResumenFamiliaCatalogo
+{
+    public string Familia { get; set; } = string.Empty;
+    public string CategoriaNombre { get; set; } = string.Empty;
+    public int CantidadMarcasOpciones { get; set; }
+    public decimal StockTotalFamilia { get; set; }
+    public string UnidadComun { get; set; } = "Pieza";
+    public string UnidadBase => UnidadComun;
+    public decimal MejorCostoConIva { get; set; }
+    public string MarcasDisponiblesResumen { get; set; } = string.Empty;
+    public string MarcasResumen => MarcasDisponiblesResumen;
+    public Producto? ProductoSugerido { get; set; }
+    public int ProductoSugeridoId => ProductoSugerido?.Id ?? 0;
+    public List<Producto> ProductosMiembros { get; set; } = new();
+    public override string ToString() => $"[FAMILIA] {Familia} ({CantidadMarcasOpciones} opciones · Stock: {StockTotalFamilia:0.##} {UnidadComun})";
+}
+
+public class KitHerramienta
+{
+    public int Id { get; set; }
+    public string CodigoKit { get; set; } = string.Empty; // Ej. KIT-0001
+    public string Nombre { get; set; } = string.Empty;    // Ej. Maletín Eléctrico Cuadrilla 1
+    public string Especialidad { get; set; } = "General";
+    public string Ubicacion { get; set; } = "GABINETE-1";
+    public string ResponsableActual { get; set; } = string.Empty;
+    public string ProyectoActual { get; set; } = string.Empty;
+    public string UltimoValePrestamoFolio { get; set; } = string.Empty;
+    public string Estatus { get; set; } = "Disponible";   // Disponible, En Obra / Prestado, Incompleto / Con Incidencia
+    public string Notas { get; set; } = string.Empty;
+    public List<KitHerramientaPartida> Partidas { get; set; } = new();
+
+    public int TotalHerramientas => Partidas.Count;
+    public int DisponiblesCount => Partidas.Count(p => string.Equals(p.EstadoActual, "Disponible", StringComparison.OrdinalIgnoreCase));
+    public int EnPrestamoCount => Partidas.Count(p => string.Equals(p.EstadoActual, "En Préstamo", StringComparison.OrdinalIgnoreCase));
+    public string ResumenHerramientas => Partidas.Count == 0
+        ? "Sin herramientas asignadas"
+        : string.Join(", ", Partidas.Select(p => $"{p.CodigoIndividual} ({p.HerramientaNombre})"));
+    public string DisponibilidadTexto => $"{DisponiblesCount}/{TotalHerramientas} disp.";
+    public string ResguardoMostrar => string.IsNullOrWhiteSpace(ResponsableActual)
+        ? $"En Almacén ({Ubicacion})"
+        : $"{ResponsableActual}" + (!string.IsNullOrWhiteSpace(ProyectoActual) ? $" · {ProyectoActual}" : "");
+
+    public override string ToString() => $"{CodigoKit} — {Nombre} ({DisponiblesCount}/{TotalHerramientas} disp.)";
+}
+
+public class KitHerramientaPartida : INotifyPropertyChanged
+{
+    public int Id { get; set; }
+    public int KitId { get; set; }
+    public int HerramientaActivoId { get; set; }
+    public string CodigoIndividual { get; set; } = string.Empty;
+    public string HerramientaNombre { get; set; } = string.Empty;
+    public string MarcaModelo { get; set; } = string.Empty;
+    public string NumeroSerie { get; set; } = string.Empty;
+    public string Ubicacion { get; set; } = string.Empty;
+    public string EstadoActual { get; set; } = "Disponible";
+    public string EncargadoActual { get; set; } = string.Empty;
+
+    private bool _regresoOk = true;
+    public bool RegresoOk
+    {
+        get => _regresoOk;
+        set
+        {
+            if (_regresoOk == value) return;
+            _regresoOk = value;
+            if (_regresoOk && _estadoRetornoElegido != "Bueno (Completo)")
+                _estadoRetornoElegido = "Bueno (Completo)";
+            else if (!_regresoOk && _estadoRetornoElegido == "Bueno (Completo)")
+                _estadoRetornoElegido = "Se queda en obra (Continúa préstamo)";
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EstadoRetornoElegido));
+        }
+    }
+
+    private string _estadoRetornoElegido = "Bueno (Completo)";
+    public string EstadoRetornoElegido
+    {
+        get => _estadoRetornoElegido;
+        set
+        {
+            if (_estadoRetornoElegido == value) return;
+            _estadoRetornoElegido = value ?? "Bueno (Completo)";
+            _regresoOk = string.Equals(_estadoRetornoElegido, "Bueno (Completo)", StringComparison.OrdinalIgnoreCase);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(RegresoOk));
+        }
+    }
+
+    private string _observacionesRetorno = string.Empty;
+    public string ObservacionesRetorno
+    {
+        get => _observacionesRetorno;
+        set
+        {
+            if (_observacionesRetorno == value) return;
+            _observacionesRetorno = value ?? string.Empty;
+            OnPropertyChanged();
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+public class VehiculoFlotilla
+{
+    public int Id { get; set; }
+    public string CodigoVehiculo { get; set; } = string.Empty; // Ej. VEH-0001
+    public string Placas { get; set; } = string.Empty;
+    public string MarcaModelo { get; set; } = string.Empty;    // Ej. Nissan NP300 Estacas 2023
+    public int Anio { get; set; } = 2024;
+    public string ResponsableHabitual { get; set; } = string.Empty;
+    public int KilometrajeInicial { get; set; }
+    public int KilometrajeActual { get; set; }
+    public int ProximoServicioKm { get; set; }
+    public int IntervaloServicioKm { get; set; } = 10000;      // Cada cuántos km se configura el servicio preventivo
+    public int UltimoServicioKm { get; set; }                  // Odómetro del último mantenimiento realizado
+    public decimal CapacidadTanqueLitros { get; set; } = 60m;
+    public string TipoCombustible { get; set; } = "Gasolina Regular";
+    public string VigenciaSeguro { get; set; } = string.Empty; // yyyy-MM-dd
+    public string Estatus { get; set; } = "Activo en Operación"; // Activo en Operación, En Taller / Servicio, Fuera de Servicio
+    public string Notas { get; set; } = string.Empty;
+
+    public decimal GastoCombustibleAcumulado { get; set; }
+    public decimal LitrosCombustibleAcumulados { get; set; }
+    public decimal GastoMantenimientoAcumulado { get; set; }
+    public decimal GastoOtrosAcumulado { get; set; }
+    public decimal GastoTotalAcumulado => GastoCombustibleAcumulado + GastoMantenimientoAcumulado + GastoOtrosAcumulado;
+    public List<RegistroGastoVehiculo> HistorialGastos { get; set; } = new();
+    public List<RevisionSemanalVehiculo> HistorialRevisiones { get; set; } = new();
+
+    public int KilometrosRecorridosPeriodo => Math.Max(0, KilometrajeActual - KilometrajeInicial);
+
+    public decimal CostoPorKilometro =>
+        KilometrosRecorridosPeriodo > 0
+            ? Math.Round(GastoTotalAcumulado / KilometrosRecorridosPeriodo, 2)
+            : 0m;
+
+    public string CostoPorKilometroTexto =>
+        KilometrosRecorridosPeriodo > 0 && GastoTotalAcumulado > 0m
+            ? $"${CostoPorKilometro:0.00} / km"
+            : "S/D";
+
+    public decimal RendimientoKmPorLitro =>
+        LitrosCombustibleAcumulados > 0 && KilometrosRecorridosPeriodo > 0
+            ? Math.Round(KilometrosRecorridosPeriodo / LitrosCombustibleAcumulados, 2)
+            : 0m;
+
+    public string RendimientoTexto =>
+        RendimientoKmPorLitro > 0
+            ? $"{RendimientoKmPorLitro:0.0} km/L ({LitrosCombustibleAcumulados:0.#} L)"
+            : (LitrosCombustibleAcumulados > 0 ? $"{LitrosCombustibleAcumulados:0.#} L cargados" : "Sin cargas L");
+
+    public int IntervaloEfectivoKm => IntervaloServicioKm > 0 ? IntervaloServicioKm : 10000;
+
+    public int MetaServicioCalculadaKm =>
+        ProximoServicioKm > 0
+            ? ProximoServicioKm
+            : (UltimoServicioKm > 0 ? UltimoServicioKm + IntervaloEfectivoKm : KilometrajeInicial + IntervaloEfectivoKm);
+
+    public int KmRestantesServicio => MetaServicioCalculadaKm - KilometrajeActual;
+
+    public decimal PromedioKmPorDia
+    {
+        get
+        {
+            var puntos = new List<(DateTime fecha, int km)>();
+            foreach (var g in HistorialGastos.Where(x => x.KilometrajeRegistro > 0))
+            {
+                if (DateTime.TryParse(g.Fecha, out var dt))
+                    puntos.Add((dt.Date, g.KilometrajeRegistro));
+            }
+            foreach (var rev in HistorialRevisiones.Where(x => x.KilometrajeRegistrado > 0))
+            {
+                if (DateTime.TryParse(rev.Fecha, out var dt))
+                    puntos.Add((dt.Date, rev.KilometrajeRegistrado));
+            }
+            if (puntos.Count >= 2)
+            {
+                var minP = puntos.OrderBy(p => p.fecha).ThenBy(p => p.km).First();
+                var maxP = puntos.OrderByDescending(p => p.fecha).ThenByDescending(p => p.km).First();
+                double dias = Math.Max(1.0, (maxP.fecha - minP.fecha).TotalDays);
+                int deltaKm = maxP.km - minP.km;
+                if (deltaKm > 0)
+                    return Math.Round((decimal)(deltaKm / dias), 1);
+            }
+            if (KilometrosRecorridosPeriodo > 0)
+                return Math.Round(KilometrosRecorridosPeriodo / 30m, 1);
+            return 45m; // Ritmo estándar de obra por defecto (45 km/día)
+        }
+    }
+
+    public string EstimacionProximoServicioFechaTexto
+    {
+        get
+        {
+            int rest = KmRestantesServicio;
+            if (rest <= 0)
+                return $"Vencido por {Math.Abs(rest):N0} km (Atender ya)";
+            decimal ritmoDia = Math.Max(10m, PromedioKmPorDia);
+            int diasEst = (int)Math.Ceiling(rest / ritmoDia);
+            DateTime fechaEst = DateTime.Today.AddDays(Math.Min(diasEst, 730));
+            return $"~{fechaEst:dd/MMM/yyyy} (en ~{diasEst} días a {ritmoDia:0.#} km/día)";
+        }
+    }
+
+    public bool RequiereServicioPronto =>
+        MetaServicioCalculadaKm > 0 && KilometrajeActual >= (MetaServicioCalculadaKm - 800);
+
+    public string AlertaServicioTexto
+    {
+        get
+        {
+            int meta = MetaServicioCalculadaKm;
+            if (meta <= 0) return "Sin programar";
+            int rest = meta - KilometrajeActual;
+            return rest <= 0
+                ? $"VENCIDO por {Math.Abs(rest):N0} km (Meta: {meta:N0} km)"
+                : (rest <= 800 ? $"Próximo en {rest:N0} km ({meta:N0} km)" : $"En {rest:N0} km (Meta: {meta:N0} km · c/{IntervaloEfectivoKm:N0})");
+        }
+    }
+
+    public override string ToString() => $"{CodigoVehiculo} — {MarcaModelo} ({Placas})";
+}
+
+public class RegistroGastoVehiculo
+{
+    public int Id { get; set; }
+    public int VehiculoId { get; set; }
+    public string CodigoVehiculo { get; set; } = string.Empty;
+    public string VehiculoDescripcion { get; set; } = string.Empty;
+    public string Fecha { get; set; } = string.Empty;
+    public string TipoGasto { get; set; } = "Gasolina / Combustible"; // Gasolina / Combustible, Mantenimiento Preventivo, Reparación / Taller, Llantas / Refacciones, Seguro / Peajes
+    public int KilometrajeRegistro { get; set; }
+    public decimal LitrosCargados { get; set; }
+    public decimal PrecioPorLitro { get; set; }
+    public bool TanqueLleno { get; set; } = true;
+    public decimal MontoConIva { get; set; }
+    public string ProveedorTaller { get; set; } = string.Empty;
+    public string FolioReferencia { get; set; } = string.Empty; // Factura XML, OC o Nota
+    public string ProyectoNombre { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+
+    public string LitrosYPrecioTexto =>
+        LitrosCargados > 0
+            ? $"{LitrosCargados:0.##} L (@ ${PrecioPorLitro:0.00}/L)"
+            : "-";
+}
+
+public class RevisionSemanalVehiculo
+{
+    public int Id { get; set; }
+    public int VehiculoId { get; set; }
+    public string CodigoVehiculo { get; set; } = string.Empty;
+    public string VehiculoDescripcion { get; set; } = string.Empty;
+    public string Placas { get; set; } = string.Empty;
+    public string FolioRevision { get; set; } = string.Empty; // Ej. REV-0001
+    public string Fecha { get; set; } = string.Empty;
+    public string ResponsableInspector { get; set; } = string.Empty;
+    public int KilometrajeRegistrado { get; set; }
+    public string NivelCombustible { get; set; } = "3/4 Tanque";
+    public string EstadoLlantas { get; set; } = "OK";
+    public string EstadoNivelesFluidos { get; set; } = "OK";
+    public string EstadoFrenosLuces { get; set; } = "OK";
+    public string EstadoCarroceriaLimpieza { get; set; } = "OK";
+    public string Observaciones { get; set; } = string.Empty;
+
+    public string ResumenEstadoFisico =>
+        $"Llantas: {EstadoLlantas} | Fluidos: {EstadoNivelesFluidos} | Frenos/Luces: {EstadoFrenosLuces} | Carrocería: {EstadoCarroceriaLimpieza}";
 }
 
 public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
@@ -1300,6 +1676,11 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
         return 0;
     }
 
+    public bool ConservarProveedoresAsignados { get; init; }
+
+    private bool SlotDisponible(int proveedorId, decimal precio) =>
+        proveedorId <= 0 || (!ConservarProveedoresAsignados && precio <= 0);
+
     public int AsegurarSlotParaEscritura()
     {
         int existente = ObtenerSlotEfectivoLectura();
@@ -1315,20 +1696,20 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
         if (ProveedorHojaId > 0)
         {
             // 1. Preferir el slot de esta columna si está libre o sin precio
-            if (IndiceOpcion == 1 && (RenglonBase.Proveedor1Id <= 0 || RenglonBase.PrecioSinIva1 <= 0))
+            if (IndiceOpcion == 1 && SlotDisponible(RenglonBase.Proveedor1Id, RenglonBase.PrecioSinIva1))
             {
                 RenglonBase.Proveedor1Id = ProveedorHojaId;
                 RenglonBase.Proveedor1Nombre = nomProv;
                 return 1;
             }
-            if (IndiceOpcion == 2 && (RenglonBase.Proveedor2Id <= 0 || RenglonBase.PrecioSinIva2 <= 0))
+            if (IndiceOpcion == 2 && SlotDisponible(RenglonBase.Proveedor2Id, RenglonBase.PrecioSinIva2))
             {
                 RenglonBase.Proveedor2Id = ProveedorHojaId;
                 RenglonBase.Proveedor2Nombre = nomProv;
                 if (RenglonBase.NumeroOpcionesVisibles < 2) RenglonBase.NumeroOpcionesVisibles = 2;
                 return 2;
             }
-            if (IndiceOpcion == 3 && (RenglonBase.Proveedor3Id <= 0 || RenglonBase.PrecioSinIva3 <= 0))
+            if (IndiceOpcion == 3 && SlotDisponible(RenglonBase.Proveedor3Id, RenglonBase.PrecioSinIva3))
             {
                 RenglonBase.Proveedor3Id = ProveedorHojaId;
                 RenglonBase.Proveedor3Nombre = nomProv;
@@ -1337,20 +1718,20 @@ public class RenglonHojaCotizacionProveedor : INotifyPropertyChanged
             }
 
             // 2. Si el slot preferido ya tiene precio de otro proveedor (o es slot 4+), buscar cualquier slot 1..3 vacío o sin precio
-            if (RenglonBase.Proveedor1Id <= 0 || RenglonBase.PrecioSinIva1 <= 0)
+            if (SlotDisponible(RenglonBase.Proveedor1Id, RenglonBase.PrecioSinIva1))
             {
                 RenglonBase.Proveedor1Id = ProveedorHojaId;
                 RenglonBase.Proveedor1Nombre = nomProv;
                 return 1;
             }
-            if (RenglonBase.Proveedor2Id <= 0 || RenglonBase.PrecioSinIva2 <= 0)
+            if (SlotDisponible(RenglonBase.Proveedor2Id, RenglonBase.PrecioSinIva2))
             {
                 RenglonBase.Proveedor2Id = ProveedorHojaId;
                 RenglonBase.Proveedor2Nombre = nomProv;
                 if (RenglonBase.NumeroOpcionesVisibles < 2) RenglonBase.NumeroOpcionesVisibles = 2;
                 return 2;
             }
-            if (RenglonBase.Proveedor3Id <= 0 || RenglonBase.PrecioSinIva3 <= 0)
+            if (SlotDisponible(RenglonBase.Proveedor3Id, RenglonBase.PrecioSinIva3))
             {
                 RenglonBase.Proveedor3Id = ProveedorHojaId;
                 RenglonBase.Proveedor3Nombre = nomProv;
@@ -1645,4 +2026,143 @@ public class RenglonAnalisisPrecioPartida
         ? $"{AhorroVsMaximo:C2} ({PorcentajeAhorroVsMaximo:0.0}%)"
         : "$0.00 (0.0%)";
     public string DiagnosticoDiferencia { get; set; } = "Pendiente";
+}
+
+// ==================== FASE 4: ECONOMÍA INDUSTRIAL (KRALJIC, PPV E INFLACIÓN) Y AUDITORÍA DE AGENCIA ====================
+
+public class ItemMatrizKraljic
+{
+    public int ProductoId { get; set; }
+    public string Codigo { get; set; } = string.Empty;
+    public string ProductoNombre { get; set; } = string.Empty;
+    public string Familia { get; set; } = "General";
+    public string Categoria { get; set; } = string.Empty;
+    public decimal GastoAcumulado { get; set; }
+    public int FrecuenciaCompra { get; set; }
+    public int ProveedoresDisponibles { get; set; }
+    public decimal MejorPrecioHistoricoSinIva { get; set; }
+    public int MejorProveedorId { get; set; }
+    public string MejorProveedorNombre { get; set; } = "Sin historial";
+    public decimal StockActual { get; set; }
+    public decimal StockMinimo { get; set; }
+    public string CuadranteKraljic { get; set; } = "Rutinario / No Crítico";
+    public string NivelImpactoFinanciero { get; set; } = "Bajo";
+    public string NivelRiesgoSuministro { get; set; } = "Bajo";
+    public string EstrategiaRecomendada { get; set; } = string.Empty;
+}
+
+public class ItemVariacionPrecioPpv
+{
+    public int ProductoId { get; set; }
+    public string Familia { get; set; } = "General";
+    public string ProductoCodigo { get; set; } = string.Empty;
+    public string ProductoNombre { get; set; } = string.Empty;
+    public decimal PrecioPromedioHistorico { get; set; }
+    public decimal UltimoPrecioPagado { get; set; }
+    public decimal CantidadCompradaReciente { get; set; }
+    public string UltimoProveedor { get; set; } = string.Empty;
+    public string UltimaFechaCompra { get; set; } = string.Empty;
+    public decimal VariacionUnitaria => UltimoPrecioPagado - PrecioPromedioHistorico;
+    public decimal VariacionUnitariaPct => PrecioPromedioHistorico > 0m
+        ? Math.Round(((UltimoPrecioPagado - PrecioPromedioHistorico) / PrecioPromedioHistorico) * 100m, 1)
+        : 0m;
+    // PPV positivo = Ahorro vs promedio histórico; PPV negativo = Sobreprecio / Inflación
+    public decimal AhorroOSobreprecioTotalPpv => Math.Round((PrecioPromedioHistorico - UltimoPrecioPagado) * CantidadCompradaReciente, 2);
+
+    public string VariacionPctTexto => VariacionUnitariaPct > 0m
+        ? $"+{VariacionUnitariaPct:0.0}% (Alza)"
+        : VariacionUnitariaPct < 0m
+            ? $"{VariacionUnitariaPct:0.0}% (Baja)"
+            : "0.0% (Estable)";
+
+    public string PpvResultadoTexto => AhorroOSobreprecioTotalPpv > 0.01m
+        ? $"Ahorro: +{AhorroOSobreprecioTotalPpv:C2}"
+        : AhorroOSobreprecioTotalPpv < -0.01m
+            ? $"Sobreprecio: {AhorroOSobreprecioTotalPpv:C2}"
+            : "$0.00 (En línea)";
+
+    public string DiagnosticoInflacion { get; set; } = "Estable";
+}
+
+public class ItemAuditoriaCuadrilla
+{
+    public string ResponsableOCuadrilla { get; set; } = string.Empty;
+    public string ProyectoReciente { get; set; } = string.Empty;
+    public int ValesSalidaCount { get; set; }
+    public decimal UnidadesRetiradas { get; set; }
+    public decimal UnidadesSobranteReingresadas { get; set; }
+    public int KitsDespachados { get; set; }
+    public int HerramientasEnResguardoActivo { get; set; }
+    public int IncidenciasOMermasRegistradas { get; set; }
+    public decimal CostoEstimadoRetirado { get; set; }
+    public string EstadoControlAgencia { get; set; } = "Controlado";
+}
+
+// ==================== NOTIFICACIONES POR CORREO A GERENTES (GMAIL SMTP -> CORREO CORPORATIVO) ====================
+
+public class ConfiguracionSmtpCorreo
+{
+    public bool Activo { get; set; } = true;
+    public string ServidorSmtp { get; set; } = "smtp.gmail.com";
+    public int PuertoSmtp { get; set; } = 587;
+    public bool UsarSsl { get; set; } = true;
+    public string CorreoRemitenteGmail { get; set; } = string.Empty;
+    public string NombreMostrarRemitente { get; set; } = "Compras y Almacén Lebaref";
+    public string ContrasenaAplicacionGmail { get; set; } = string.Empty;
+    public string CorreoCopiaFijaGerencia { get; set; } = string.Empty;
+    public string TiempoAproxRegistroDefault { get; set; } = "24 a 48 hrs";
+    public string TiempoAproxComparativaDefault { get; set; } = "2 a 4 días hábiles";
+    public bool ImapRecepcionActiva { get; set; } = true;
+    public bool ImapAutoCrearPorAsunto { get; set; } = true;
+    public string PalabrasClaveAsuntoImap { get; set; } = "SOLICITUD, COTIZAR, COTIZACION, PEDIDO, REQUERIMIENTO";
+
+    public bool TieneCredencialesCompletas =>
+        !string.IsNullOrWhiteSpace(ServidorSmtp) &&
+        PuertoSmtp > 0 &&
+        !string.IsNullOrWhiteSpace(CorreoRemitenteGmail) &&
+        !string.IsNullOrWhiteSpace(ContrasenaAplicacionGmail);
+}
+
+public class RegistroNotificacionCorreo
+{
+    public int Id { get; set; }
+    public string FechaHora { get; set; } = string.Empty;
+    public string SolicitudFolio { get; set; } = string.Empty;
+    public string OrdenCompraFolio { get; set; } = string.Empty;
+    public string EtapaClave { get; set; } = string.Empty;
+    public string EtapaNombre { get; set; } = string.Empty;
+    public string GerenteNombre { get; set; } = string.Empty;
+    public string CorreoDestino { get; set; } = string.Empty;
+    public string Asunto { get; set; } = string.Empty;
+    public string MensajePrincipal { get; set; } = string.Empty;
+    public string CuerpoHtml { get; set; } = string.Empty;
+    public string TiempoOLugarTexto { get; set; } = string.Empty;
+    public string EstadoEnvio { get; set; } = "Pendiente";
+    public string DetalleResultado { get; set; } = string.Empty;
+}
+
+public class CorreoEntranteSolicitud
+{
+    public int Id { get; set; }
+    public string UidImap { get; set; } = string.Empty;
+    public string FechaCorreo { get; set; } = string.Empty;
+    public string RemitenteNombre { get; set; } = string.Empty;
+    public string RemitenteCorreo { get; set; } = string.Empty;
+    public string Asunto { get; set; } = string.Empty;
+    public string CuerpoTexto { get; set; } = string.Empty;
+    public string NombreAdjuntoCsv { get; set; } = string.Empty;
+    public string ContenidoAdjuntoCsv { get; set; } = string.Empty;
+    public bool CoincidePalabraClaveAsunto { get; set; }
+    public int EncargadoDetectadoId { get; set; }
+    public string EncargadoDetectadoNombre { get; set; } = string.Empty;
+    public int DepartamentoDetectadoId { get; set; }
+    public string DepartamentoDetectadoNombre { get; set; } = string.Empty;
+    public int ProyectoDetectadoId { get; set; }
+    public string ProyectoDetectadoNombre { get; set; } = string.Empty;
+    public int PartidasDetectadasCount { get; set; }
+    public string ResumenPartidas { get; set; } = string.Empty;
+    public string EstadoBandeja { get; set; } = "En Bandeja (Por Revisar)";
+    public int SolicitudCreadaId { get; set; }
+    public string SolicitudCreadaFolio { get; set; } = string.Empty;
+    public bool EsPendienteRevision => string.Equals(EstadoBandeja, "En Bandeja (Por Revisar)", StringComparison.OrdinalIgnoreCase);
 }

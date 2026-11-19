@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS Productos (
     FactorConversion REAL NOT NULL DEFAULT 1,
     StockActual REAL NOT NULL DEFAULT 0,
     StockReservadoProyecto REAL NOT NULL DEFAULT 0,
-    StockMinimo REAL NOT NULL DEFAULT 5,
+    StockMinimo REAL NOT NULL DEFAULT 0,
     UltimoCostoCompra REAL NOT NULL DEFAULT 0,
     Ubicacion TEXT NOT NULL DEFAULT 'A-01',
     ImagenRuta TEXT NOT NULL DEFAULT '',
@@ -349,8 +349,99 @@ CREATE TABLE IF NOT EXISTS NotificacionesCheckpoint (
     EstatusNuevo TEXT NOT NULL DEFAULT '',
     RolOrigen TEXT NOT NULL DEFAULT 'Compras',
     RolesDestino TEXT NOT NULL DEFAULT 'Almacén',
+    UsuarioOrigen TEXT NOT NULL DEFAULT '',
+    UsuarioDestino TEXT NOT NULL DEFAULT '',
     Mensaje TEXT NOT NULL,
     Leida INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS UsuariosSistema (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Username TEXT NOT NULL UNIQUE,
+    NombreCompleto TEXT NOT NULL,
+    Puesto TEXT NOT NULL DEFAULT '',
+    Rol TEXT NOT NULL DEFAULT 'Compras',
+    PinHash TEXT NOT NULL DEFAULT '',
+    Activo INTEGER NOT NULL DEFAULT 1,
+    FechaAlta TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS BitacoraUsuario (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    FechaHora TEXT NOT NULL,
+    UsuarioId INTEGER NOT NULL DEFAULT 0,
+    UsuarioNombre TEXT NOT NULL DEFAULT '',
+    Rol TEXT NOT NULL DEFAULT '',
+    Modulo TEXT NOT NULL DEFAULT '',
+    Accion TEXT NOT NULL DEFAULT '',
+    FolioReferencia TEXT NOT NULL DEFAULT '',
+    Detalle TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS KitsHerramientas (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CodigoKit TEXT NOT NULL UNIQUE,
+    Nombre TEXT NOT NULL,
+    Especialidad TEXT NOT NULL DEFAULT 'General',
+    Ubicacion TEXT NOT NULL DEFAULT 'GABINETE-1',
+    ResponsableActual TEXT NOT NULL DEFAULT '',
+    ProyectoActual TEXT NOT NULL DEFAULT '',
+    UltimoValePrestamoFolio TEXT NOT NULL DEFAULT '',
+    Estatus TEXT NOT NULL DEFAULT 'Disponible',
+    Notas TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS KitHerramientasPartidas (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    KitId INTEGER NOT NULL,
+    HerramientaActivoId INTEGER NOT NULL,
+    UNIQUE(KitId, HerramientaActivoId)
+);
+
+CREATE TABLE IF NOT EXISTS VehiculosFlotilla (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CodigoVehiculo TEXT NOT NULL UNIQUE,
+    Placas TEXT NOT NULL DEFAULT '',
+    MarcaModelo TEXT NOT NULL,
+    Anio INTEGER NOT NULL DEFAULT 2024,
+    ResponsableHabitual TEXT NOT NULL DEFAULT '',
+    KilometrajeInicial INTEGER NOT NULL DEFAULT 0,
+    KilometrajeActual INTEGER NOT NULL DEFAULT 0,
+    ProximoServicioKm INTEGER NOT NULL DEFAULT 0,
+    VigenciaSeguro TEXT NOT NULL DEFAULT '',
+    Estatus TEXT NOT NULL DEFAULT 'Activo en Operación',
+    Notas TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS BitacoraGastosVehiculo (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    VehiculoId INTEGER NOT NULL,
+    Fecha TEXT NOT NULL,
+    TipoGasto TEXT NOT NULL DEFAULT 'Gasolina / Combustible',
+    KilometrajeRegistro INTEGER NOT NULL DEFAULT 0,
+    LitrosCargados REAL NOT NULL DEFAULT 0,
+    PrecioPorLitro REAL NOT NULL DEFAULT 0,
+    TanqueLleno INTEGER NOT NULL DEFAULT 1,
+    MontoConIva REAL NOT NULL DEFAULT 0,
+    ProveedorTaller TEXT NOT NULL DEFAULT '',
+    FolioReferencia TEXT NOT NULL DEFAULT '',
+    ProyectoNombre TEXT NOT NULL DEFAULT '',
+    Descripcion TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS RevisionesSemanalesVehiculo (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    VehiculoId INTEGER NOT NULL,
+    FolioRevision TEXT NOT NULL UNIQUE,
+    Fecha TEXT NOT NULL,
+    ResponsableInspector TEXT NOT NULL DEFAULT '',
+    KilometrajeRegistrado INTEGER NOT NULL DEFAULT 0,
+    NivelCombustible TEXT NOT NULL DEFAULT '3/4 Tanque',
+    EstadoLlantas TEXT NOT NULL DEFAULT 'OK',
+    EstadoNivelesFluidos TEXT NOT NULL DEFAULT 'OK',
+    EstadoFrenosLuces TEXT NOT NULL DEFAULT 'OK',
+    EstadoCarroceriaLimpieza TEXT NOT NULL DEFAULT 'OK',
+    Observaciones TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS IDX_Productos_CodigoInterno ON Productos(CodigoInterno);
@@ -367,9 +458,54 @@ CREATE INDEX IF NOT EXISTS IDX_SalidaPartidas_SalId ON SalidaPartidas(SalidaAlma
 CREATE INDEX IF NOT EXISTS IDX_FacturaConceptos_FacId ON FacturaConceptos(FacturaXmlId);
 CREATE INDEX IF NOT EXISTS IDX_ProductoProveedorMapa_RfcClave ON ProductoProveedorMapa(EmisorRfc, ClaveProveedor);
 CREATE INDEX IF NOT EXISTS IDX_NotificacionesCheckpoint_Folio ON NotificacionesCheckpoint(FolioReferencia);
+CREATE INDEX IF NOT EXISTS IDX_BitacoraUsuario_Fecha ON BitacoraUsuario(FechaHora);
+CREATE INDEX IF NOT EXISTS IDX_BitacoraUsuario_Folio ON BitacoraUsuario(FolioReferencia);
+
+CREATE TABLE IF NOT EXISTS NotificacionesCorreo (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    FechaHora TEXT NOT NULL,
+    SolicitudFolio TEXT NOT NULL DEFAULT '',
+    OrdenCompraFolio TEXT NOT NULL DEFAULT '',
+    EtapaClave TEXT NOT NULL DEFAULT '',
+    EtapaNombre TEXT NOT NULL DEFAULT '',
+    GerenteNombre TEXT NOT NULL DEFAULT '',
+    CorreoDestino TEXT NOT NULL DEFAULT '',
+    Asunto TEXT NOT NULL DEFAULT '',
+    MensajePrincipal TEXT NOT NULL DEFAULT '',
+    CuerpoHtml TEXT NOT NULL DEFAULT '',
+    TiempoOLugarTexto TEXT NOT NULL DEFAULT '',
+    EstadoEnvio TEXT NOT NULL DEFAULT 'Pendiente',
+    DetalleResultado TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS IDX_NotificacionesCorreo_Folio ON NotificacionesCorreo(SolicitudFolio);
+
+CREATE TABLE IF NOT EXISTS CorreosEntrantesSolicitud (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    UidImap TEXT NOT NULL UNIQUE,
+    FechaCorreo TEXT NOT NULL DEFAULT '',
+    RemitenteNombre TEXT NOT NULL DEFAULT '',
+    RemitenteCorreo TEXT NOT NULL DEFAULT '',
+    Asunto TEXT NOT NULL DEFAULT '',
+    CuerpoTexto TEXT NOT NULL DEFAULT '',
+    NombreAdjuntoCsv TEXT NOT NULL DEFAULT '',
+    ContenidoAdjuntoCsv TEXT NOT NULL DEFAULT '',
+    CoincidePalabraClaveAsunto INTEGER NOT NULL DEFAULT 0,
+    EncargadoDetectadoId INTEGER NOT NULL DEFAULT 0,
+    EncargadoDetectadoNombre TEXT NOT NULL DEFAULT '',
+    DepartamentoDetectadoId INTEGER NOT NULL DEFAULT 0,
+    DepartamentoDetectadoNombre TEXT NOT NULL DEFAULT '',
+    ProyectoDetectadoId INTEGER NOT NULL DEFAULT 0,
+    ProyectoDetectadoNombre TEXT NOT NULL DEFAULT '',
+    PartidasDetectadasCount INTEGER NOT NULL DEFAULT 0,
+    ResumenPartidas TEXT NOT NULL DEFAULT '',
+    EstadoBandeja TEXT NOT NULL DEFAULT 'En Bandeja (Por Revisar)',
+    SolicitudCreadaId INTEGER NOT NULL DEFAULT 0,
+    SolicitudCreadaFolio TEXT NOT NULL DEFAULT ''
+);
 ";
         cmd.ExecuteNonQuery();
 
+        AsegurarColumnaExiste(conn, "Encargados", "Correo", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo1", "TEXT NOT NULL DEFAULT 'Capacidad Eléctrica / Tipo'");
         AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo2", "TEXT NOT NULL DEFAULT 'Especificación / Material'");
         AsegurarColumnaExiste(conn, "Categorias", "EtiquetaCampo3", "TEXT NOT NULL DEFAULT 'Detalle Adicional / Color'");
@@ -387,6 +523,9 @@ CREATE INDEX IF NOT EXISTS IDX_NotificacionesCheckpoint_Folio ON NotificacionesC
         AsegurarColumnaExiste(conn, "SolicitudPartidas", "UnidadLibre", "TEXT NOT NULL DEFAULT 'Pieza'");
         AsegurarColumnaExiste(conn, "OrdenCompraPartidas", "DescripcionLibre", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "OrdenCompraPartidas", "UnidadLibre", "TEXT NOT NULL DEFAULT 'Pieza'");
+
+        AsegurarColumnaExiste(conn, "Solicitudes", "UsaPartidas", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "SolicitudPartidas", "NombrePartida", "TEXT NOT NULL DEFAULT ''");
 
         // Columnas de cotización comparativa por producto en SolicitudPartidas
         AsegurarColumnaExiste(conn, "SolicitudPartidas", "Proveedor1Id", "INTEGER NOT NULL DEFAULT 0");
@@ -425,6 +564,12 @@ CREATE INDEX IF NOT EXISTS IDX_NotificacionesCheckpoint_Folio ON NotificacionesC
         AsegurarColumnaExiste(conn, "Solicitudes", "TipoSolicitud", "TEXT NOT NULL DEFAULT 'Requerimiento de Compra'");
         AsegurarColumnaExiste(conn, "OrdenesCompra", "CondicionPago", "TEXT NOT NULL DEFAULT 'Contado (Transferencia previa)'");
         AsegurarColumnaExiste(conn, "OrdenesCompra", "FechaProgramadaPago", "TEXT NOT NULL DEFAULT ''");
+        foreach (var tablaSeg in new[] { "Solicitudes", "OrdenesCompra" })
+        {
+            AsegurarColumnaExiste(conn, tablaSeg, "EsperandoRespuestaDe", "TEXT NOT NULL DEFAULT ''");
+            AsegurarColumnaExiste(conn, tablaSeg, "EsperandoDesde", "TEXT NOT NULL DEFAULT ''");
+            AsegurarColumnaExiste(conn, tablaSeg, "ConcluidoManual", "INTEGER NOT NULL DEFAULT 0");
+        }
 
         // Columnas de persona abierta que recibe y fecha compromiso en Salidas y Préstamos
         AsegurarColumnaExiste(conn, "SalidasAlmacen", "PersonaRecibe", "TEXT NOT NULL DEFAULT ''");
@@ -439,6 +584,22 @@ CREATE INDEX IF NOT EXISTS IDX_NotificacionesCheckpoint_Folio ON NotificacionesC
         AsegurarColumnaExiste(conn, "EventosCalendario", "ClaveAutomatica", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "BitacoraAdministrador", "Referencia", "TEXT NOT NULL DEFAULT ''");
         AsegurarColumnaExiste(conn, "BitacoraAdministrador", "Motivo", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "NotificacionesCheckpoint", "UsuarioOrigen", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "NotificacionesCheckpoint", "UsuarioDestino", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "HerramientasActivos", "FechaCompra", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "HerramientasActivos", "FechaFinGarantia", "TEXT NOT NULL DEFAULT ''");
+        AsegurarColumnaExiste(conn, "HerramientasActivos", "CostoAdquisicion", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "HerramientasActivos", "GastoMantenimientoAcumulado", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "VehiculosFlotilla", "IntervaloServicioKm", "INTEGER NOT NULL DEFAULT 10000");
+        AsegurarColumnaExiste(conn, "VehiculosFlotilla", "UltimoServicioKm", "INTEGER NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "VehiculosFlotilla", "CapacidadTanqueLitros", "REAL NOT NULL DEFAULT 60");
+        AsegurarColumnaExiste(conn, "VehiculosFlotilla", "TipoCombustible", "TEXT NOT NULL DEFAULT 'Gasolina Regular'");
+        AsegurarColumnaExiste(conn, "BitacoraGastosVehiculo", "LitrosCargados", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "BitacoraGastosVehiculo", "PrecioPorLitro", "REAL NOT NULL DEFAULT 0");
+        AsegurarColumnaExiste(conn, "BitacoraGastosVehiculo", "TanqueLleno", "INTEGER NOT NULL DEFAULT 1");
+        SeedUsuariosSistemaSiVacio(conn);
+        SeedKitsHerramientasSiVacio(conn);
+        SeedVehiculosFlotillaYGarantiasSiVacio(conn);
 
         using (var pinCmd = conn.CreateCommand())
         {
@@ -1055,7 +1216,7 @@ INSERT INTO PrestamoPartidas (PrestamoHerramientaId, HerramientaActivoId, Estado
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-SELECT e.Id, e.DepartamentoId, d.Nombre, e.Nombre, e.Puesto, e.Telefono
+SELECT e.Id, e.DepartamentoId, d.Nombre, e.Nombre, e.Puesto, e.Telefono, COALESCE(e.Correo, '')
 FROM Encargados e
 LEFT JOIN Departamentos d ON d.Id = e.DepartamentoId
 WHERE ($depId IS NULL OR e.DepartamentoId = $depId)
@@ -1071,30 +1232,32 @@ ORDER BY e.Nombre";
                 DepartamentoNombre = r.IsDBNull(2) ? "Sin departamento" : r.GetString(2),
                 Nombre = r.GetString(3),
                 Puesto = r.GetString(4),
-                Telefono = r.GetString(5)
+                Telefono = r.GetString(5),
+                Correo = r.GetString(6)
             });
         }
         return list;
     }
 
-    public static void GuardarEncargado(int departamentoId, string nombre, string puesto, string telefono, int id = 0)
+    public static void GuardarEncargado(int departamentoId, string nombre, string puesto, string telefono, int id = 0, string correo = "")
     {
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
         if (id > 0)
         {
-            cmd.CommandText = "UPDATE Encargados SET DepartamentoId=$d, Nombre=$n, Puesto=$p, Telefono=$t WHERE Id=$id";
+            cmd.CommandText = "UPDATE Encargados SET DepartamentoId=$d, Nombre=$n, Puesto=$p, Telefono=$t, Correo=$c WHERE Id=$id";
             cmd.Parameters.AddWithValue("$id", id);
         }
         else
         {
-            cmd.CommandText = "INSERT INTO Encargados (DepartamentoId, Nombre, Puesto, Telefono) VALUES ($d, $n, $p, $t)";
+            cmd.CommandText = "INSERT INTO Encargados (DepartamentoId, Nombre, Puesto, Telefono, Correo) VALUES ($d, $n, $p, $t, $c)";
         }
         cmd.Parameters.AddWithValue("$d", departamentoId);
         cmd.Parameters.AddWithValue("$n", nombre.Trim());
         cmd.Parameters.AddWithValue("$p", puesto.Trim());
         cmd.Parameters.AddWithValue("$t", telefono.Trim());
+        cmd.Parameters.AddWithValue("$c", (correo ?? string.Empty).Trim());
         cmd.ExecuteNonQuery();
     }
 
@@ -2313,6 +2476,8 @@ VALUES ($pid, $cod, 'S/N', $mm, 'Disponible', $ub, '', '', 'Sincronizada desde C
         return m.Success ? m.Groups[1].Value.Trim() : string.Empty;
     }
 
+    public static List<HerramientaActivo> ObtenerHerramientasIndividuales() => ObtenerHerramientas();
+
     public static List<HerramientaActivo> ObtenerHerramientas()
     {
         var list = new List<HerramientaActivo>();
@@ -2321,7 +2486,10 @@ VALUES ($pid, $cod, 'S/N', $mm, 'Disponible', $ub, '', '', 'Sincronizada desde C
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
 SELECT h.Id, h.ProductoId, COALESCE(p.Nombre, 'Herramienta'), h.CodigoIndividual, h.NumeroSerie, h.MarcaModelo,
-       h.Estado, h.Ubicacion, h.EncargadoActual, h.ProyectoActual, h.NotasEstado
+       h.Estado, h.Ubicacion, h.EncargadoActual, h.ProyectoActual, h.NotasEstado,
+       COALESCE(h.FechaCompra, ''), COALESCE(h.FechaFinGarantia, ''),
+       COALESCE(h.CostoAdquisicion, COALESCE(p.UltimoCostoCompra, 0)),
+       COALESCE(h.GastoMantenimientoAcumulado, 0)
 FROM HerramientasActivos h
 LEFT JOIN Productos p ON p.Id = h.ProductoId
 ORDER BY h.CodigoIndividual";
@@ -2340,7 +2508,11 @@ ORDER BY h.CodigoIndividual";
                 Ubicacion = r.GetString(7),
                 EncargadoActual = r.GetString(8),
                 ProyectoActual = r.GetString(9),
-                NotasEstado = r.GetString(10)
+                NotasEstado = r.GetString(10),
+                FechaCompra = r.GetString(11),
+                FechaFinGarantia = r.GetString(12),
+                CostoAdquisicion = Convert.ToDecimal(r.GetDouble(13)),
+                GastoMantenimientoAcumulado = Convert.ToDecimal(r.GetDouble(14))
             });
         }
         return list;
@@ -2357,15 +2529,17 @@ ORDER BY h.CodigoIndividual";
         if (h.Id > 0)
         {
             cmd.CommandText = @"
-UPDATE HerramientasActivos SET ProductoId=$pid, CodigoIndividual=$ci, NumeroSerie=$ns, MarcaModelo=$mm, Estado=$est, Ubicacion=$ubi, NotasEstado=$not
+UPDATE HerramientasActivos
+SET ProductoId=$pid, CodigoIndividual=$ci, NumeroSerie=$ns, MarcaModelo=$mm, Estado=$est, Ubicacion=$ubi, NotasEstado=$not,
+    FechaCompra=$fc, FechaFinGarantia=$fg, CostoAdquisicion=$ca, GastoMantenimientoAcumulado=$gm
 WHERE Id=$id";
             cmd.Parameters.AddWithValue("$id", h.Id);
         }
         else
         {
             cmd.CommandText = @"
-INSERT INTO HerramientasActivos (ProductoId, CodigoIndividual, NumeroSerie, MarcaModelo, Estado, Ubicacion, EncargadoActual, ProyectoActual, NotasEstado)
-VALUES ($pid, $ci, $ns, $mm, $est, $ubi, '', '', $not)";
+INSERT INTO HerramientasActivos (ProductoId, CodigoIndividual, NumeroSerie, MarcaModelo, Estado, Ubicacion, EncargadoActual, ProyectoActual, NotasEstado, FechaCompra, FechaFinGarantia, CostoAdquisicion, GastoMantenimientoAcumulado)
+VALUES ($pid, $ci, $ns, $mm, $est, $ubi, '', '', $not, $fc, $fg, $ca, $gm)";
         }
         cmd.Parameters.AddWithValue("$pid", h.ProductoId);
         cmd.Parameters.AddWithValue("$ci", h.CodigoIndividual.Trim().ToUpperInvariant());
@@ -2374,6 +2548,10 @@ VALUES ($pid, $ci, $ns, $mm, $est, $ubi, '', '', $not)";
         cmd.Parameters.AddWithValue("$est", h.Estado);
         cmd.Parameters.AddWithValue("$ubi", h.Ubicacion.Trim());
         cmd.Parameters.AddWithValue("$not", h.NotasEstado.Trim());
+        cmd.Parameters.AddWithValue("$fc", h.FechaCompra?.Trim() ?? string.Empty);
+        cmd.Parameters.AddWithValue("$fg", h.FechaFinGarantia?.Trim() ?? string.Empty);
+        cmd.Parameters.AddWithValue("$ca", (double)h.CostoAdquisicion);
+        cmd.Parameters.AddWithValue("$gm", (double)h.GastoMantenimientoAcumulado);
         cmd.ExecuteNonQuery();
 
         if (h.ProductoId > 0)
@@ -2429,7 +2607,7 @@ DELETE FROM Productos WHERE Id = $id;";
         cmd.CommandText = @"
 SELECT s.Id, s.Folio, s.Fecha, s.DepartamentoId, COALESCE(d.Nombre, 'Sin depto'), s.EncargadoId, COALESCE(e.Nombre, 'Sin encargado'),
        s.ProyectoId, COALESCE(pr.Codigo || ' - ' || pr.Nombre, 'Consumo Interno de Departamento'), s.Origen, s.Estatus, s.Notas,
-       COALESCE(NULLIF(s.TipoSolicitud, ''), 'Requerimiento de Compra')
+       COALESCE(NULLIF(s.TipoSolicitud, ''), 'Requerimiento de Compra'), s.UsaPartidas
 FROM Solicitudes s
 LEFT JOIN Departamentos d ON d.Id = s.DepartamentoId
 LEFT JOIN Encargados e ON e.Id = s.EncargadoId
@@ -2452,7 +2630,8 @@ ORDER BY s.Id DESC";
                 Origen = r.GetString(9),
                 Estatus = r.GetString(10),
                 Notas = r.GetString(11),
-                TipoSolicitud = r.GetString(12)
+                TipoSolicitud = r.GetString(12),
+                UsaPartidas = r.GetInt32(13) != 0
             });
         }
 
@@ -2472,7 +2651,8 @@ SELECT sp.Id, sp.SolicitudId, sp.ProductoId, COALESCE(p.CodigoInterno, 'CONCEPTO
        COALESCE(sp.IncluirEnCotizacion, 1), COALESCE(sp.DiasVigenciaCotizacion, 15), COALESCE(sp.FechaCotizacion, ''),
        COALESCE(sp.DiasVigencia1, 0), COALESCE(sp.FechaCotizacion1, ''),
        COALESCE(sp.DiasVigencia2, 0), COALESCE(sp.FechaCotizacion2, ''),
-       COALESCE(sp.DiasVigencia3, 0), COALESCE(sp.FechaCotizacion3, '')
+       COALESCE(sp.DiasVigencia3, 0), COALESCE(sp.FechaCotizacion3, ''),
+       sp.NombrePartida
 FROM SolicitudPartidas sp
 LEFT JOIN Productos p ON p.Id = sp.ProductoId
 WHERE sp.SolicitudId = $sid";
@@ -2534,15 +2714,44 @@ WHERE sp.SolicitudId = $sid";
                     OrdenCompraId = pr.GetInt32(25),
                     OrdenCompraFolio = pr.GetString(26),
                     IncluirEnCotizacion = pr.GetInt32(29) != 0,
+                    NombrePartida = pr.GetString(38),
                     DiasVigenciaCotizacion = vigGen,
                     FechaCotizacion = fecGen
                 });
             }
         }
+
+        // Seguimiento: "Esperando respuesta" y cierre manual
+        var solDict = list.ToDictionary(s => s.Id);
+        using (var sCmd = conn.CreateCommand())
+        {
+            sCmd.CommandText = "SELECT Id, COALESCE(EsperandoRespuestaDe,''), COALESCE(EsperandoDesde,''), COALESCE(ConcluidoManual,0) FROM Solicitudes";
+            using var sr = sCmd.ExecuteReader();
+            while (sr.Read())
+            {
+                if (solDict.TryGetValue(sr.GetInt32(0), out var sS))
+                {
+                    sS.EsperandoRespuestaDe = sr.GetString(1);
+                    sS.EsperandoDesde = sr.GetString(2);
+                    sS.ConcluidoManual = sr.GetInt32(3) != 0;
+                }
+            }
+        }
         return list;
     }
 
-    public static Solicitud CrearSolicitud(int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas, string tipoSolicitud = "Requerimiento de Compra", string? folioPersonalizado = null)
+    public static Solicitud CrearSolicitud(
+        int departamentoId,
+        int encargadoId,
+        int proyectoId,
+        string origen,
+        string notas,
+        List<SolicitudPartida> partidas,
+        string tipoSolicitud = "Requerimiento de Compra",
+        string? folioPersonalizado = null,
+        string? tiempoAproxRespuesta = null,
+        bool notificarCorreo = true,
+        bool usaPartidas = false)
     {
         string folio = string.IsNullOrWhiteSpace(folioPersonalizado)
             ? GenerarSiguienteFolio("SOL", "Solicitudes")
@@ -2557,8 +2766,8 @@ WHERE sp.SolicitudId = $sid";
         using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
-INSERT INTO Solicitudes (Folio, Fecha, DepartamentoId, EncargadoId, ProyectoId, Origen, Estatus, Notas, TipoSolicitud)
-VALUES ($f, $fe, $d, $e, $p, $or, 'Pendiente', $n, $ts);
+INSERT INTO Solicitudes (Folio, Fecha, DepartamentoId, EncargadoId, ProyectoId, Origen, Estatus, Notas, TipoSolicitud, UsaPartidas)
+VALUES ($f, $fe, $d, $e, $p, $or, 'Pendiente', $n, $ts, $usaPartidas);
 SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$f", folio);
         cmd.Parameters.AddWithValue("$fe", fecha);
@@ -2568,6 +2777,7 @@ SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$or", origen);
         cmd.Parameters.AddWithValue("$n", notas.Trim());
         cmd.Parameters.AddWithValue("$ts", tipoLim);
+        cmd.Parameters.AddWithValue("$usaPartidas", usaPartidas);
         int solId = Convert.ToInt32(cmd.ExecuteScalar());
 
         foreach (var item in partidas)
@@ -2575,8 +2785,9 @@ SELECT last_insert_rowid();";
             using var pCmd = conn.CreateCommand();
             pCmd.Transaction = tx;
             pCmd.CommandText = @"
-INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida, PrecioSinIva1, NotasCotizacion1, IncluirEnCotizacion, DiasVigenciaCotizacion)
-VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $pr1, $nc1, $inc, $vig)";
+INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, DescripcionLibre, UnidadLibre, CantidadSolicitada, NotasPartida, PrecioSinIva1, NotasCotizacion1, IncluirEnCotizacion, DiasVigenciaCotizacion, NombrePartida)
+VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $pr1, $nc1, $inc, $vig, $nombrePartida)";
+            pCmd.Parameters.AddWithValue("$nombrePartida", usaPartidas ? item.NombrePartida.Trim() : string.Empty);
             pCmd.Parameters.AddWithValue("$sid", solId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
             pCmd.Parameters.AddWithValue("$dlib", !string.IsNullOrWhiteSpace(item.DescripcionLibre) ? item.DescripcionLibre.Trim() : (item.ProductoNombre ?? string.Empty).Trim());
@@ -2591,10 +2802,26 @@ VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $pr1, $nc1, $inc, $vig)";
         }
 
         tx.Commit();
-        return ObtenerSolicitudes().First(s => s.Id == solId);
+        var solCreada = ObtenerSolicitudes().First(s => s.Id == solId);
+        if (notificarCorreo && solCreada.Partidas.Count > 0)
+        {
+            NotificarCambioEstadoCotizacionGerente(solCreada.Id, null, "1_CREADA", tiempoAproxRespuesta);
+        }
+        return solCreada;
     }
 
-    public static Solicitud ActualizarSolicitudExistente(int solicitudId, int departamentoId, int encargadoId, int proyectoId, string origen, string notas, List<SolicitudPartida> partidas, string tipoSolicitud = "Requerimiento de Compra")
+    public static Solicitud ActualizarSolicitudExistente(
+        int solicitudId,
+        int departamentoId,
+        int encargadoId,
+        int proyectoId,
+        string origen,
+        string notas,
+        List<SolicitudPartida> partidas,
+        string tipoSolicitud = "Requerimiento de Compra",
+        string? tiempoAproxRespuesta = null,
+        bool notificarCorreo = true,
+        bool? usaPartidas = null)
     {
         var solPrevia = ObtenerSolicitudes().FirstOrDefault(s => s.Id == solicitudId);
         if (solPrevia != null && solPrevia.Estatus == "OC Generada")
@@ -2602,7 +2829,8 @@ VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $pr1, $nc1, $inc, $vig)";
             throw new InvalidOperationException("No se puede modificar una Solicitud que ya tiene todas sus Órdenes de Compra generadas.");
         }
 
-        static string ClavePartida(SolicitudPartida sp) =>
+        bool conPartidas = usaPartidas ?? solPrevia?.UsaPartidas ?? false;
+        static string ClavePartida(SolicitudPartida sp) => sp.Id > 0 ? $"ID:{sp.Id}" :
             sp.ProductoId > 0 ? $"PID:{sp.ProductoId}" : $"LIB:{(sp.DescripcionLibre ?? sp.ProductoNombre ?? "").Trim().ToUpperInvariant()}";
 
         var prevPorClave = solPrevia?.Partidas
@@ -2620,7 +2848,7 @@ VALUES ($sid, $pid, $dlib, $ulib, $cant, $not, $pr1, $nc1, $inc, $vig)";
             cmd.Transaction = tx;
             cmd.CommandText = @"
 UPDATE Solicitudes
-SET DepartamentoId = $d, EncargadoId = $e, ProyectoId = $p, Origen = $or, Notas = $n, TipoSolicitud = $ts
+SET DepartamentoId = $d, EncargadoId = $e, ProyectoId = $p, Origen = $or, Notas = $n, TipoSolicitud = $ts, UsaPartidas = $usaPartidas
 WHERE Id = $id";
             cmd.Parameters.AddWithValue("$d", departamentoId);
             cmd.Parameters.AddWithValue("$e", encargadoId);
@@ -2628,6 +2856,7 @@ WHERE Id = $id";
             cmd.Parameters.AddWithValue("$or", origen);
             cmd.Parameters.AddWithValue("$n", (notas ?? string.Empty).Trim());
             cmd.Parameters.AddWithValue("$ts", tipoLim);
+            cmd.Parameters.AddWithValue("$usaPartidas", conPartidas);
             cmd.Parameters.AddWithValue("$id", solicitudId);
             cmd.ExecuteNonQuery();
         }
@@ -2659,7 +2888,7 @@ INSERT INTO SolicitudPartidas (
     Proveedor2Id, PrecioSinIva2, DiasEntrega2, FleteConIva2, NotasCotizacion2, DiasVigencia2, FechaCotizacion2,
     Proveedor3Id, PrecioSinIva3, DiasEntrega3, FleteConIva3, NotasCotizacion3, DiasVigencia3, FechaCotizacion3,
     ProveedorGanadorIndice, OrdenCompraId, OrdenCompraFolio,
-    IncluirEnCotizacion, DiasVigenciaCotizacion, FechaCotizacion
+    IncluirEnCotizacion, DiasVigenciaCotizacion, FechaCotizacion, NombrePartida
 )
 VALUES (
     $sid, $pid, $dlib, $ulib, $cant, $not,
@@ -2667,8 +2896,10 @@ VALUES (
     $pv2, $pr2, $d2, $fl2, $nc2, $dv2, $fc2,
     $pv3, $pr3, $d3, $fl3, $nc3, $dv3, $fc3,
     $gan, 0, '',
-    $inc, $vig, $fcot
+    $inc, $vig, $fcot, $nombrePartida
 )";
+            string nombrePartida = conPartidas ? item.NombrePartida.Trim() : string.Empty;
+            pCmd.Parameters.AddWithValue("$nombrePartida", nombrePartida);
             pCmd.Parameters.AddWithValue("$sid", solicitudId);
             pCmd.Parameters.AddWithValue("$pid", item.ProductoId);
             pCmd.Parameters.AddWithValue("$dlib", !string.IsNullOrWhiteSpace(item.DescripcionLibre) ? item.DescripcionLibre.Trim() : (item.ProductoNombre ?? string.Empty).Trim());
@@ -2725,7 +2956,12 @@ VALUES (
         }
 
         tx.Commit();
-        return ObtenerSolicitudes().First(s => s.Id == solicitudId);
+        var solActualizada = ObtenerSolicitudes().First(s => s.Id == solicitudId);
+        if (notificarCorreo && solActualizada.Partidas.Count > 0 && !YaSeEnvioNotificacionEtapa(solActualizada.Folio, "1_CREADA"))
+        {
+            NotificarCambioEstadoCotizacionGerente(solActualizada.Id, null, "1_CREADA", tiempoAproxRespuesta);
+        }
+        return solActualizada;
     }
 
     public static void ActualizarTipoYEstatusSolicitud(int solicitudId, string tipoSolicitud, string estatus)
@@ -2753,6 +2989,23 @@ VALUES (
         cmd.ExecuteNonQuery();
     }
 
+    public static void AsignarPartidaAArticulo(int solicitudId, int articuloId, string nombrePartida)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+UPDATE SolicitudPartidas SET NombrePartida = $nombre
+WHERE Id = $id AND SolicitudId = $sid AND OrdenCompraId = 0
+  AND EXISTS (SELECT 1 FROM Solicitudes s WHERE s.Id = $sid AND s.UsaPartidas = 1
+              AND s.ConcluidoManual = 0
+              AND s.Estatus IN ('En Comparativa', 'Parcial en OC', 'Cotización Entregada', 'Cotizada (Presupuesto)'));";
+        cmd.Parameters.AddWithValue("$nombre", nombrePartida.Trim());
+        cmd.Parameters.AddWithValue("$id", articuloId);
+        cmd.Parameters.AddWithValue("$sid", solicitudId);
+        cmd.ExecuteNonQuery();
+    }
+
     public static void ActualizarUnidadPartidaEnSolicitud(int solicitudPartidaId, int solicitudId, int productoId, string? descripcionLibre, string nuevaUnidad)
     {
         string uNorm = NormalizarUnidadMedida(nuevaUnidad);
@@ -2761,7 +3014,10 @@ VALUES (
         using var cmd = conn.CreateCommand();
         if (solicitudPartidaId > 0)
         {
-            cmd.CommandText = "UPDATE SolicitudPartidas SET UnidadLibre = $u WHERE Id = $id AND COALESCE(OrdenCompraId, 0) = 0";
+            cmd.CommandText = @"UPDATE SolicitudPartidas
+SET UnidadLibre = $u
+WHERE Id = $id AND SolicitudId = $sid AND OrdenCompraId = 0";
+            cmd.Parameters.AddWithValue("$sid", solicitudId);
             cmd.Parameters.AddWithValue("$u", uNorm);
             cmd.Parameters.AddWithValue("$id", solicitudPartidaId);
             cmd.ExecuteNonQuery();
@@ -2894,7 +3150,7 @@ VALUES ($eid, $pid, $cc, $uc, $fc, $ca, $ua, $costo)";
         return ObtenerEntradasAlmacen().First(e => e.Id == entId);
     }
 
-    public static Solicitud AgregarOIncrementarPartidaEnSolicitud(int solicitudId, int productoId, decimal cantidadAgregar, string notasPartida = "")
+    public static Solicitud AgregarOIncrementarPartidaEnSolicitud(int solicitudId, int productoId, decimal cantidadAgregar, string notasPartida = "", string nombrePartida = "")
     {
         if (cantidadAgregar <= 0) cantidadAgregar = 1;
 
@@ -2914,14 +3170,17 @@ VALUES ($eid, $pid, $cc, $uc, $fc, $ca, $ua, $costo)";
             }
         }
 
+        conn.CreateCollation("PARTIDA_NOCASE", StringComparer.OrdinalIgnoreCase.Compare);
+        nombrePartida = nombrePartida.Trim();
         int? partidaExistenteId = null;
         decimal cantExistente = 0m;
         using (var findCmd = conn.CreateCommand())
         {
             findCmd.Transaction = tx;
-            findCmd.CommandText = "SELECT Id, CantidadSolicitada FROM SolicitudPartidas WHERE SolicitudId = $sid AND ProductoId = $pid LIMIT 1";
+            findCmd.CommandText = "SELECT Id, CantidadSolicitada FROM SolicitudPartidas WHERE SolicitudId = $sid AND ProductoId = $pid AND NombrePartida COLLATE PARTIDA_NOCASE = $nombrePartida AND OrdenCompraId = 0 LIMIT 1";
             findCmd.Parameters.AddWithValue("$sid", solicitudId);
             findCmd.Parameters.AddWithValue("$pid", productoId);
+            findCmd.Parameters.AddWithValue("$nombrePartida", nombrePartida);
             using var r = findCmd.ExecuteReader();
             if (r.Read())
             {
@@ -2944,12 +3203,13 @@ VALUES ($eid, $pid, $cc, $uc, $fc, $ca, $ua, $costo)";
             using var insCmd = conn.CreateCommand();
             insCmd.Transaction = tx;
             insCmd.CommandText = @"
-INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, CantidadSolicitada, NotasPartida)
-VALUES ($sid, $pid, $cant, $not)";
+INSERT INTO SolicitudPartidas (SolicitudId, ProductoId, CantidadSolicitada, NotasPartida, NombrePartida)
+VALUES ($sid, $pid, $cant, $not, $nombrePartida)";
             insCmd.Parameters.AddWithValue("$sid", solicitudId);
             insCmd.Parameters.AddWithValue("$pid", productoId);
             insCmd.Parameters.AddWithValue("$cant", (double)cantidadAgregar);
             insCmd.Parameters.AddWithValue("$not", notasPartida ?? string.Empty);
+            insCmd.Parameters.AddWithValue("$nombrePartida", nombrePartida);
             insCmd.ExecuteNonQuery();
         }
 
@@ -3135,7 +3395,50 @@ LEFT JOIN Productos p ON p.Id = ocp.ProductoId";
             }
         }
 
+        // Seguimiento: "Esperando respuesta" y cierre manual
+        using (var sCmd = conn.CreateCommand())
+        {
+            sCmd.CommandText = "SELECT Id, COALESCE(EsperandoRespuestaDe,''), COALESCE(EsperandoDesde,''), COALESCE(ConcluidoManual,0) FROM OrdenesCompra";
+            using var sr = sCmd.ExecuteReader();
+            while (sr.Read())
+            {
+                if (ocDict.TryGetValue(sr.GetInt32(0), out var ocS))
+                {
+                    ocS.EsperandoRespuestaDe = sr.GetString(1);
+                    ocS.EsperandoDesde = sr.GetString(2);
+                    ocS.ConcluidoManual = sr.GetInt32(3) != 0;
+                }
+            }
+        }
+
         return list;
+    }
+
+    /// <summary>Marca (o quita, con quien = vacío) la pausa "Esperando respuesta" de una Solicitud u Orden de Compra.</summary>
+    public static void EstablecerEsperandoRespuesta(bool esOrdenCompra, int id, string quien)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        string tabla = esOrdenCompra ? "OrdenesCompra" : "Solicitudes";
+        cmd.CommandText = $"UPDATE {tabla} SET EsperandoRespuestaDe = $q, EsperandoDesde = $d WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$q", quien ?? string.Empty);
+        cmd.Parameters.AddWithValue("$d", string.IsNullOrWhiteSpace(quien) ? string.Empty : DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Marca o desmarca una Solicitud u Orden de Compra como concluida manualmente (oculta el "Siguiente paso").</summary>
+    public static void EstablecerConcluidoManual(bool esOrdenCompra, int id, bool concluido)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        string tabla = esOrdenCompra ? "OrdenesCompra" : "Solicitudes";
+        cmd.CommandText = $"UPDATE {tabla} SET ConcluidoManual = $c, EsperandoRespuestaDe = CASE WHEN $c = 1 THEN '' ELSE EsperandoRespuestaDe END WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$c", concluido ? 1 : 0);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
     }
 
     public static List<ReferenciaSimilarHistorica> ObtenerReferenciasSimilaresParaComparativa(int productoId, string? nombreOConcepto = null, string? familia = null)
@@ -3443,6 +3746,15 @@ ORDER BY NumeroOpcion ASC, Id ASC";
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
+        using (var permiso = conn.CreateCommand())
+        {
+            permiso.CommandText = @"SELECT COUNT(*) FROM SolicitudPartidas sp
+JOIN Solicitudes s ON s.Id = sp.SolicitudId
+WHERE sp.Id = $id AND (s.UsaPartidas = 0 OR sp.OrdenCompraId = 0);";
+            permiso.Parameters.AddWithValue("$id", extra.SolicitudPartidaId);
+            if (Convert.ToInt32(permiso.ExecuteScalar()) == 0) return;
+        }
+
         if (extra.NumeroOpcion < 4)
         {
             using var maxCmd = conn.CreateCommand();
@@ -3590,7 +3902,7 @@ SET CantidadSolicitada = $cant,
     ProveedorGanadorIndice = $gan,
     DiasVigenciaCotizacion = $vig,
     FechaCotizacion = $fcot
-WHERE Id = $id";
+WHERE Id = $id AND OrdenCompraId = 0";
         cmd.Parameters.AddWithValue("$cant", (double)r.Cantidad);
         cmd.Parameters.AddWithValue("$ulib", NormalizarUnidadMedida(r.UnidadCompra));
         cmd.Parameters.AddWithValue("$pv1", r.Proveedor1Id);
@@ -3621,7 +3933,7 @@ WHERE Id = $id";
         cmd.Parameters.AddWithValue("$vig", vigencia);
         cmd.Parameters.AddWithValue("$fcot", r.FechaCotizacion ?? string.Empty);
         cmd.Parameters.AddWithValue("$id", r.SolicitudPartidaId);
-        cmd.ExecuteNonQuery();
+        if (cmd.ExecuteNonQuery() == 0) return;
 
         string descConcepto = !string.IsNullOrWhiteSpace(r.DescripcionLibre) ? r.DescripcionLibre : r.ProductoNombre;
         if (tiene1)
@@ -3639,8 +3951,56 @@ WHERE Id = $id";
         }
     }
 
-    public static void GuardarBorradorComparativa(int solicitudId, List<CotizacionRenglonComparativo> renglones, string folioComparativa = "COT")
+    public static string CalcularTiempoRelativoEntregaComparativa(IEnumerable<CotizacionRenglonComparativo>? renglones)
     {
+        var cfg = ObtenerConfiguracionSmtpCorreo();
+        string fallback = string.IsNullOrWhiteSpace(cfg.TiempoAproxComparativaDefault) ? "1 a 2 días hábiles" : cfg.TiempoAproxComparativaDefault.Trim();
+        if (renglones == null) return fallback;
+
+        var lista = renglones.ToList();
+        // Priorizar días de entrega de proveedores ganadores si ya se eligieron; si no, de todos los cotizados
+        var diasGanadores = lista
+            .Where(r => r.ProveedorGanadorIndice >= 1 && r.ProveedorGanadorId > 0 && r.PrecioUnitarioGanadorSinIva > 0)
+            .Select(r =>
+            {
+                if (r.ProveedorGanadorIndice == 1) return r.DiasEntrega1;
+                if (r.ProveedorGanadorIndice == 2) return r.DiasEntrega2;
+                if (r.ProveedorGanadorIndice == 3) return r.DiasEntrega3;
+                var ex = r.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == r.ProveedorGanadorIndice);
+                return ex?.DiasEntrega ?? 0;
+            })
+            .Where(d => d > 0)
+            .ToList();
+
+        var diasCotizados = diasGanadores.Count > 0
+            ? diasGanadores
+            : lista.SelectMany(r => new[]
+            {
+                r.Proveedor1Id > 0 && r.PrecioSinIva1 > 0 ? r.DiasEntrega1 : 0,
+                r.Proveedor2Id > 0 && r.PrecioSinIva2 > 0 ? r.DiasEntrega2 : 0,
+                r.Proveedor3Id > 0 && r.PrecioSinIva3 > 0 ? r.DiasEntrega3 : 0
+            }.Concat(r.ProveedoresExtra.Where(x => x.ProveedorId > 0 && x.PrecioSinIva > 0).Select(x => x.DiasEntrega)))
+            .Where(d => d > 0)
+            .ToList();
+
+        if (diasCotizados.Count == 0) return fallback;
+        int minD = diasCotizados.Min();
+        int maxD = diasCotizados.Max();
+        return minD == maxD
+            ? (minD == 1 ? "1 día hábil" : $"{minD} días hábiles")
+            : $"{minD} a {maxD} días hábiles";
+    }
+
+    public static void GuardarBorradorComparativa(
+        int solicitudId,
+        List<CotizacionRenglonComparativo> renglones,
+        string folioComparativa = "COT",
+        string? tiempoAproxEntregaPersonalizado = null,
+        bool? forzarNotificacionCorreo = null)
+    {
+        if (renglones.Count == 0 && ObtenerSolicitudes().Any(s => s.Id == solicitudId && s.UsaPartidas))
+            return;
+
         foreach (var r in renglones)
         {
             if (!r.TieneOcGenerada)
@@ -3661,6 +4021,16 @@ END
 WHERE Id = $sid";
         cmd.Parameters.AddWithValue("$sid", solicitudId);
         cmd.ExecuteNonQuery();
+
+        var solComp = ObtenerSolicitudes().FirstOrDefault(s => s.Id == solicitudId);
+        bool debeNotificar = forzarNotificacionCorreo ?? (solComp != null && !YaSeEnvioNotificacionEtapa(solComp.Folio, "2_COMPARATIVA"));
+        if (solComp != null && debeNotificar)
+        {
+            string tiempoEstimadoComp = !string.IsNullOrWhiteSpace(tiempoAproxEntregaPersonalizado)
+                ? tiempoAproxEntregaPersonalizado.Trim()
+                : CalcularTiempoRelativoEntregaComparativa(renglones);
+            NotificarCambioEstadoCotizacionGerente(solicitudId, null, "2_COMPARATIVA", tiempoEstimadoComp);
+        }
     }
 
     public static List<RegistroCotizacionVigencia> ObtenerCotizacionesBancoHistorico(int? productoId = null, int? proveedorId = null, string? filtroTexto = null)
@@ -3889,14 +4259,14 @@ WHERE COALESCE(ProductoId, 0) <= 0
             }
         }
 
-        // Actualizar UltimoCostoCompra del producto si aún está en 0 y hay cotización ganadora o precio en BancoPreciosHistorico
+        // Actualizar UltimoCostoCompra (con IVA) del producto si aún está en 0 y hay cotización ganadora o precio en BancoPreciosHistorico
         using (var cmdCosto = conn.CreateCommand())
         {
             cmdCosto.Transaction = tx;
             cmdCosto.CommandText = @"
 UPDATE Productos
 SET UltimoCostoCompra = COALESCE(
-    (SELECT PrecioSinIva FROM BancoPreciosHistorico WHERE ProductoId = $pid AND PrecioSinIva > 0 ORDER BY FueGanador DESC, Id DESC LIMIT 1),
+    (SELECT ROUND(PrecioSinIva * 1.16, 2) FROM BancoPreciosHistorico WHERE ProductoId = $pid AND PrecioSinIva > 0 ORDER BY FueGanador DESC, Id DESC LIMIT 1),
     UltimoCostoCompra
 )
 WHERE Id = $pid AND COALESCE(UltimoCostoCompra, 0) <= 0";
@@ -3911,10 +4281,21 @@ WHERE Id = $pid AND COALESCE(UltimoCostoCompra, 0) <= 0";
     public static List<OrdenCompra> GenerarOrdenesDesdeComparativa(
         Solicitud solicitud,
         string folioComparativa,
-        List<CotizacionRenglonComparativo> renglones)
+        List<CotizacionRenglonComparativo> renglones,
+        bool notificarCorreo = true)
     {
-        // Primero guardar el borrador de todas las cotizaciones capturadas
-        GuardarBorradorComparativa(solicitud.Id, renglones, folioComparativa);
+        var articulosActuales = ObtenerSolicitudes().First(s => s.Id == solicitud.Id);
+        var idsPermitidos = articulosActuales.Partidas
+            .Where(p => !p.TieneOcGenerada)
+            .Select(p => p.Id)
+            .ToHashSet();
+        var idsEmitidos = articulosActuales.Partidas.Where(p => p.TieneOcGenerada).Select(p => p.Id).ToHashSet();
+        renglones = renglones.Where(r => idsPermitidos.Contains(r.SolicitudPartidaId) ||
+            (r.TieneOcGenerada && idsEmitidos.Contains(r.SolicitudPartidaId))).ToList();
+        if (renglones.Count == 0) return new List<OrdenCompra>();
+
+        // Primero guardar el borrador de todas las cotizaciones capturadas (sin disparar correo de Etapa 2 para no duplicar con Etapa 3)
+        GuardarBorradorComparativa(solicitud.Id, renglones, folioComparativa, forzarNotificacionCorreo: false);
 
         var creadas = new List<OrdenCompra>();
         var proveedoresDict = ObtenerProveedores().ToDictionary(p => p.Id);
@@ -3962,6 +4343,61 @@ WHERE Id = $pid AND COALESCE(UltimoCostoCompra, 0) <= 0";
                 };
                 string descLib = !string.IsNullOrWhiteSpace(reng.DescripcionLibre) ? reng.DescripcionLibre : reng.ProductoNombre;
                 partidasOc.Add((reng.SolicitudPartidaId, reng.ProductoId, descLib, reng.UnidadCompra, reng.Cantidad, precioSinIva, notaOpc));
+            }
+
+            // Si en la Hoja por Proveedor se asignó un Flete General en la primera fila, pero a este proveedor se le adjudicó otra fila distinta, rescatar ese flete general
+            if (fleteAcumuladoConIva <= 0m)
+            {
+                foreach (var rOtro in renglones.Where(x => !grupo.Contains(x)))
+                {
+                    decimal fleteRescatado = 0m;
+                    if (rOtro.Proveedor1Id == proveedorId && rOtro.FleteConIva1 > 0m && rOtro.ProveedorGanadorId != proveedorId)
+                    {
+                        fleteRescatado = rOtro.FleteConIva1;
+                        rOtro.FleteConIva1 = 0m;
+                    }
+                    else if (rOtro.Proveedor2Id == proveedorId && rOtro.FleteConIva2 > 0m && rOtro.ProveedorGanadorId != proveedorId)
+                    {
+                        fleteRescatado = rOtro.FleteConIva2;
+                        rOtro.FleteConIva2 = 0m;
+                    }
+                    else if (rOtro.Proveedor3Id == proveedorId && rOtro.FleteConIva3 > 0m && rOtro.ProveedorGanadorId != proveedorId)
+                    {
+                        fleteRescatado = rOtro.FleteConIva3;
+                        rOtro.FleteConIva3 = 0m;
+                    }
+                    else
+                    {
+                        var exOtro = rOtro.ProveedoresExtra.FirstOrDefault(x => x.ProveedorId == proveedorId && x.FleteConIva > 0m);
+                        if (exOtro != null && rOtro.ProveedorGanadorId != proveedorId)
+                        {
+                            fleteRescatado = exOtro.FleteConIva;
+                            exOtro.FleteConIva = 0m;
+                            GuardarProveedorExtraPartida(exOtro);
+                        }
+                    }
+
+                    if (fleteRescatado > 0m)
+                    {
+                        fleteAcumuladoConIva = fleteRescatado;
+                        var primGan = grupo.First();
+                        if (primGan.ProveedorGanadorIndice == 1) primGan.FleteConIva1 = fleteRescatado;
+                        else if (primGan.ProveedorGanadorIndice == 2) primGan.FleteConIva2 = fleteRescatado;
+                        else if (primGan.ProveedorGanadorIndice == 3) primGan.FleteConIva3 = fleteRescatado;
+                        else
+                        {
+                            var exGan = primGan.ProveedoresExtra.FirstOrDefault(x => x.NumeroOpcion == primGan.ProveedorGanadorIndice);
+                            if (exGan != null)
+                            {
+                                exGan.FleteConIva = fleteRescatado;
+                                GuardarProveedorExtraPartida(exGan);
+                            }
+                        }
+                        GuardarCotizacionPartida(rOtro, folioComparativa);
+                        GuardarCotizacionPartida(primGan, folioComparativa);
+                        break;
+                    }
+                }
             }
 
             decimal fleteSinIva = Math.Round(fleteAcumuladoConIva / 1.16m, 2);
@@ -4022,19 +4458,22 @@ VALUES ($ocid, $pid, $dlib, $ulib, $cant, 0, $precio)";
                     upSp.CommandText = @"
 UPDATE SolicitudPartidas
 SET OrdenCompraId = $ocid, OrdenCompraFolio = $ocfol
-WHERE Id = $spid";
+WHERE Id = $spid AND SolicitudId = $sid AND OrdenCompraId = 0";
+                    upSp.Parameters.AddWithValue("$sid", solicitud.Id);
                     upSp.Parameters.AddWithValue("$ocid", ocId);
                     upSp.Parameters.AddWithValue("$ocfol", folioOc);
                     upSp.Parameters.AddWithValue("$spid", p.solicitudPartidaId);
-                    upSp.ExecuteNonQuery();
+                    if (upSp.ExecuteNonQuery() == 0)
+                        throw new InvalidOperationException("Un artículo cambió antes de emitir la orden. Actualice la comparativa e intente nuevamente.");
                 }
 
                 if (p.prodId > 0 && p.precioSinIva > 0)
                 {
+                    decimal costoConIva = Math.Round(p.precioSinIva * 1.16m, 2);
                     using var upPr = conn.CreateCommand();
                     upPr.Transaction = tx;
                     upPr.CommandText = "UPDATE Productos SET UltimoCostoCompra = $costo WHERE Id = $pid AND UPPER(TRIM(COALESCE(UnidadCompra, 'Pieza'))) = UPPER(TRIM($uc))";
-                    upPr.Parameters.AddWithValue("$costo", (double)p.precioSinIva);
+                    upPr.Parameters.AddWithValue("$costo", (double)costoConIva);
                     upPr.Parameters.AddWithValue("$pid", p.prodId);
                     upPr.Parameters.AddWithValue("$uc", string.IsNullOrWhiteSpace(p.unidadCompra) ? "Pieza" : p.unidadCompra);
                     upPr.ExecuteNonQuery();
@@ -4099,12 +4538,39 @@ WHERE Id = $spid";
             upSol.ExecuteNonQuery();
         }
 
+        if (notificarCorreo && creadas.Count > 0)
+        {
+            string foliosOc = string.Join(", ", creadas.Select(o => o.Folio));
+            NotificarCambioEstadoCotizacionGerente(solicitud.Id, foliosOc, "3_OC_EMITIDA");
+        }
+
         return creadas;
     }
 
-    public static void ActualizarEstatusYCondicionOrdenCompra(int ocId, string nuevoEstatus, string condicionPago, string fechaProgramadaPago)
+    public static string CalcularTiempoRelativoEntregaOc(OrdenCompra? oc, string? fechaProgramadaPago = null)
+    {
+        int dias = (oc?.TiempoEntregaDias ?? 0) > 0 ? oc!.TiempoEntregaDias : 2;
+        DateTime baseDate = DateTime.Today;
+        if (!string.IsNullOrWhiteSpace(fechaProgramadaPago) && DateTime.TryParse(fechaProgramadaPago, out var fProg) && fProg.Date > DateTime.Today)
+            baseDate = fProg.Date;
+        DateTime estDate = baseDate.AddDays(dias);
+        return dias == 1
+            ? $"1 día hábil (entrega est. {estDate:dd/MMM/yyyy})"
+            : $"{dias} días hábiles (entrega est. {estDate:dd/MMM/yyyy})";
+    }
+
+    public static void ActualizarEstatusYCondicionOrdenCompra(
+        int ocId,
+        string nuevoEstatus,
+        string condicionPago,
+        string fechaProgramadaPago,
+        string? tiempoAproxEntregaPago = null,
+        bool notificarCorreo = true)
     {
         if (ocId <= 0) return;
+        var ocPrevia = ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == ocId);
+        string estLimpio = string.IsNullOrWhiteSpace(nuevoEstatus) ? "Emitida" : nuevoEstatus.Trim();
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
@@ -4114,11 +4580,32 @@ SET Estatus = $est,
     CondicionPago = $cp,
     FechaProgramadaPago = $fp
 WHERE Id = $id";
-        cmd.Parameters.AddWithValue("$est", string.IsNullOrWhiteSpace(nuevoEstatus) ? "Emitida" : nuevoEstatus.Trim());
+        cmd.Parameters.AddWithValue("$est", estLimpio);
         cmd.Parameters.AddWithValue("$cp", string.IsNullOrWhiteSpace(condicionPago) ? "Contado (Transferencia previa)" : condicionPago.Trim());
         cmd.Parameters.AddWithValue("$fp", (fechaProgramadaPago ?? string.Empty).Trim());
         cmd.Parameters.AddWithValue("$id", ocId);
         cmd.ExecuteNonQuery();
+
+        if (notificarCorreo && ocPrevia != null)
+        {
+            if (estLimpio.Contains("Pagada", StringComparison.OrdinalIgnoreCase) &&
+                !ocPrevia.Estatus.Contains("Pagada", StringComparison.OrdinalIgnoreCase))
+            {
+                string tiempoTexto = !string.IsNullOrWhiteSpace(tiempoAproxEntregaPago)
+                    ? tiempoAproxEntregaPago.Trim()
+                    : CalcularTiempoRelativoEntregaOc(ocPrevia, fechaProgramadaPago);
+                NotificarCambioEstadoCotizacionGerente(ocPrevia.SolicitudId, ocPrevia.Folio, "4_PAGADA", tiempoTexto);
+            }
+            else if (estLimpio.Contains("Pendiente Pago", StringComparison.OrdinalIgnoreCase) &&
+                     !ocPrevia.Estatus.Contains("Pendiente Pago", StringComparison.OrdinalIgnoreCase))
+            {
+                string folioSol = ObtenerSolicitudes().FirstOrDefault(s => s.Id == ocPrevia.SolicitudId)?.Folio ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(folioSol) && !YaSeEnvioNotificacionEtapa(folioSol, "3_OC_EMITIDA"))
+                {
+                    NotificarCambioEstadoCotizacionGerente(ocPrevia.SolicitudId, ocPrevia.Folio, "3_OC_EMITIDA");
+                }
+            }
+        }
     }
 
     public static List<string> GenerarActivosHerramientaDesdeRecepcion(int productoId, int cantidad, string marcaModelo, string ubicacion = "Gabinete H-1")
@@ -4174,44 +4661,65 @@ VALUES ($pid, $cod, 'S/N', $mm, 'Disponible', $ub, '', '', 'Alta desde recepció
         OrdenCompra oc,
         List<(OrdenCompraPartida partida, decimal cantidadRecibirAhora)> recepcion,
         string notas,
-        bool reservarParaProyecto = false)
+        bool reservarParaProyecto = false,
+        string? lugarEntregaPersonalizado = null,
+        bool notificarCorreo = true)
     {
-        // Si alguna partida por recibir era un Concepto Abierto (ProductoId <= 0), darla de alta en el Catálogo (PRD-xxxx) ahora que ya se compró/recibió
+        // Si alguna partida por recibir era un Concepto Abierto (ProductoId <= 0), reutilizar SKU si ya existe por nombre o darla de alta en el Catálogo (PRD-xxxx)
         foreach (var (partida, cantRecibir) in recepcion.Where(x => x.cantidadRecibirAhora > 0))
         {
             if (partida.ProductoId <= 0)
             {
+                string descLibreOrig = partida.DescripcionLibre ?? string.Empty;
                 string nombreReal = !string.IsNullOrWhiteSpace(partida.DescripcionLibre) ? partida.DescripcionLibre.Trim() : partida.ProductoNombre.Trim();
-                var info = ClasificarYExtraerEspecificacionesProducto(nombreReal, notas);
-                string fam = ExtraerFamiliaSugerida(nombreReal);
-                var nuevoProd = new Producto
+                var prodExistente = ObtenerProductos().FirstOrDefault(p => string.Equals(p.Nombre.Trim(), nombreReal, StringComparison.OrdinalIgnoreCase));
+
+                int nuevoProdId;
+                string nuevoCodigo;
+                string nuevoNombre;
+
+                if (prodExistente != null)
                 {
-                    Nombre = nombreReal,
-                    Descripcion = $"Creado al recibir Compra {oc.Folio} ({oc.ProveedorNombre})",
-                    CategoriaId = info.CategoriaId,
-                    Familia = fam,
-                    Marca = info.Marca,
-                    Modelo = info.Modelo,
-                    Medidas = info.Medidas,
-                    CapacidadElectrica = info.CapacidadElectrica,
-                    Especificacion1 = info.Especificacion1,
-                    Especificacion2 = info.Especificacion2,
-                    UnidadCompra = string.IsNullOrWhiteSpace(partida.UnidadCompra) ? "Pieza" : partida.UnidadCompra,
-                    UnidadAlmacen = string.IsNullOrWhiteSpace(partida.UnidadAlmacen) ? "Pieza" : partida.UnidadAlmacen,
-                    FactorConversion = Math.Max(1m, partida.FactorConversion),
-                    StockActual = 0m,
-                    StockMinimo = 5m,
-                    UltimoCostoCompra = partida.PrecioUnitarioConIva,
-                    Ubicacion = "Almacén General"
-                };
-                int nuevoProdId = GuardarProducto(nuevoProd);
+                    nuevoProdId = prodExistente.Id;
+                    nuevoCodigo = prodExistente.CodigoInterno;
+                    nuevoNombre = prodExistente.Nombre;
+                }
+                else
+                {
+                    var info = ClasificarYExtraerEspecificacionesProducto(nombreReal, notas);
+                    string fam = ExtraerFamiliaSugerida(nombreReal);
+                    var nuevoProd = new Producto
+                    {
+                        Nombre = nombreReal,
+                        Descripcion = $"Creado al recibir Compra {oc.Folio} ({oc.ProveedorNombre})",
+                        CategoriaId = info.CategoriaId,
+                        Familia = fam,
+                        Marca = info.Marca,
+                        Modelo = info.Modelo,
+                        Medidas = info.Medidas,
+                        CapacidadElectrica = info.CapacidadElectrica,
+                        Especificacion1 = info.Especificacion1,
+                        Especificacion2 = info.Especificacion2,
+                        UnidadCompra = string.IsNullOrWhiteSpace(partida.UnidadCompra) ? "Pieza" : partida.UnidadCompra,
+                        UnidadAlmacen = string.IsNullOrWhiteSpace(partida.UnidadAlmacen) ? "Pieza" : partida.UnidadAlmacen,
+                        FactorConversion = Math.Max(1m, partida.FactorConversion),
+                        StockActual = 0m,
+                        StockMinimo = 0m,
+                        UltimoCostoCompra = partida.PrecioUnitarioConIva,
+                        Ubicacion = "Almacén General"
+                    };
+                    nuevoProdId = GuardarProducto(nuevoProd);
+                    nuevoCodigo = nuevoProd.CodigoInterno;
+                    nuevoNombre = nuevoProd.Nombre;
+                }
+
                 partida.ProductoId = nuevoProdId;
-                partida.ProductoCodigo = nuevoProd.CodigoInterno;
-                partida.ProductoNombre = nuevoProd.Nombre;
+                partida.ProductoCodigo = nuevoCodigo;
+                partida.ProductoNombre = nuevoNombre;
 
                 if (!string.IsNullOrWhiteSpace(oc.ProveedorRfc) && partida.PrecioUnitarioSinIva > 0m)
                 {
-                    GuardarMapaProductoProveedor(oc.ProveedorRfc, nuevoProd.CodigoInterno, nuevoProd.Nombre, nuevoProdId, partida.PrecioUnitarioSinIva);
+                    GuardarMapaProductoProveedor(oc.ProveedorRfc, nuevoCodigo, nuevoNombre, nuevoProdId, partida.PrecioUnitarioSinIva);
                 }
 
                 using var connUp = new SqliteConnection(ConnectionString);
@@ -4219,9 +4727,15 @@ VALUES ($pid, $cod, 'S/N', $mm, 'Disponible', $ub, '', '', 'Alta desde recepció
                 using var upOcp = connUp.CreateCommand();
                 upOcp.CommandText = @"
 UPDATE OrdenCompraPartidas SET ProductoId = $pid, DescripcionLibre = $nom WHERE Id = $id;
-UPDATE SolicitudPartidas SET ProductoId = $pid WHERE OrdenCompraId = $ocid AND ProductoId <= 0;";
+UPDATE SolicitudPartidas
+SET ProductoId = $pid
+WHERE OrdenCompraId = $ocid
+  AND ProductoId <= 0
+  AND (UPPER(TRIM(COALESCE(DescripcionLibre, ''))) = UPPER(TRIM($nom))
+       OR UPPER(TRIM(COALESCE(DescripcionLibre, ''))) = UPPER(TRIM($dlibOrig)));";
                 upOcp.Parameters.AddWithValue("$pid", nuevoProdId);
                 upOcp.Parameters.AddWithValue("$nom", nombreReal);
+                upOcp.Parameters.AddWithValue("$dlibOrig", descLibreOrig.Trim());
                 upOcp.Parameters.AddWithValue("$id", partida.Id);
                 upOcp.Parameters.AddWithValue("$ocid", oc.Id);
                 upOcp.ExecuteNonQuery();
@@ -4323,9 +4837,47 @@ WHERE OrdenCompraId = $ocid AND CantidadRecibida < CantidadPedida - 0.001";
         upEnt.Parameters.AddWithValue("$eid", entId);
         upEnt.ExecuteNonQuery();
 
+        if (pendientes == 0 && oc.SolicitudId > 0)
+        {
+            using var chkSol = conn.CreateCommand();
+            chkSol.Transaction = tx;
+            chkSol.CommandText = @"
+SELECT COUNT(*) FROM OrdenesCompra
+WHERE SolicitudId = $sid AND Estatus NOT IN ('Recibida Completa', 'Cerrada Parcial Definitiva', 'Cerrada Parcial (Admin)', 'Cancelada')";
+            chkSol.Parameters.AddWithValue("$sid", oc.SolicitudId);
+            int ocsPendSol = Convert.ToInt32(chkSol.ExecuteScalar());
+            if (ocsPendSol == 0)
+            {
+                using var upSol = conn.CreateCommand();
+                upSol.Transaction = tx;
+                upSol.CommandText = @"
+UPDATE Solicitudes SET Estatus = 'Atendida'
+WHERE Id = $sid AND (UsaPartidas = 0 OR NOT EXISTS (
+    SELECT 1 FROM SolicitudPartidas WHERE SolicitudId = $sid AND OrdenCompraId = 0
+));";
+                upSol.Parameters.AddWithValue("$sid", oc.SolicitudId);
+                upSol.ExecuteNonQuery();
+            }
+        }
+
         tx.Commit();
         SincronizarHerramientasCatalogoConDirectorio(conn);
-        return ObtenerEntradasAlmacen().First(e => e.Id == entId);
+        var entradaResult = ObtenerEntradasAlmacen().First(e => e.Id == entId);
+
+        if (notificarCorreo)
+        {
+            string destinoBase = !string.IsNullOrWhiteSpace(lugarEntregaPersonalizado)
+                ? lugarEntregaPersonalizado.Trim()
+                : (reservarParaProyecto && !string.IsNullOrWhiteSpace(oc.ProyectoNombre)
+                    ? $"Almacén General — apartado para {oc.ProyectoNombre}"
+                    : "Almacén General");
+            string destinoAlmacen = destinoBase.Contains("Vale", StringComparison.OrdinalIgnoreCase)
+                ? destinoBase
+                : $"{destinoBase} (Vale {folioEnt})";
+            NotificarCambioEstadoCotizacionGerente(oc.SolicitudId, oc.Folio, "5_CONCLUIDA", null, destinoAlmacen);
+        }
+
+        return entradaResult;
     }
 
     public static List<EntradaAlmacen> ObtenerEntradasAlmacen()
@@ -4391,6 +4943,49 @@ WHERE ep.EntradaAlmacenId = $eid";
 
     // ==================== SALIDAS DE ALMACÉN (CONSUMO) ====================
 
+    public static decimal ConvertirCantidadSolicitudAUnidadAlmacen(SolicitudPartida part, Producto prod)
+    {
+        decimal cant = part.CantidadSolicitada;
+        decimal factor = prod.FactorConversion > 0m ? prod.FactorConversion : 1m;
+        if (factor > 1m)
+        {
+            string uSol = (part.UnidadCompra ?? string.Empty).Trim();
+            string uComp = (prod.UnidadCompra ?? string.Empty).Trim();
+            string uAlm = (prod.UnidadAlmacen ?? string.Empty).Trim();
+            if (!string.Equals(uComp, uAlm, StringComparison.OrdinalIgnoreCase) &&
+                (string.IsNullOrWhiteSpace(uSol) || string.Equals(uSol, uComp, StringComparison.OrdinalIgnoreCase)))
+            {
+                return Math.Round(cant * factor, 2);
+            }
+        }
+        return cant;
+    }
+
+    public static Dictionary<int, decimal> ObtenerCantidadesEntregadasPorFolioEnSalidas(string? folioReferencia)
+    {
+        var entregadas = new Dictionary<int, decimal>();
+        if (string.IsNullOrWhiteSpace(folioReferencia))
+            return entregadas;
+
+        string fol = folioReferencia.Trim();
+        var salidasVinculadas = ObtenerSalidasAlmacen()
+            .Where(s => !string.IsNullOrWhiteSpace(s.Notas) && s.Notas.Contains(fol, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var sal in salidasVinculadas)
+        {
+            foreach (var sp in sal.Partidas)
+            {
+                decimal neta = Math.Max(0m, sp.CantidadEntregada - sp.CantidadDevuelta);
+                if (neta > 0m)
+                {
+                    entregadas[sp.ProductoId] = entregadas.TryGetValue(sp.ProductoId, out decimal prev) ? prev + neta : neta;
+                }
+            }
+        }
+        return entregadas;
+    }
+
     public static SalidaAlmacen RegistrarSalidaAlmacen(
         int departamentoId,
         int encargadoId,
@@ -4406,6 +5001,9 @@ WHERE ep.EntradaAlmacenId = $eid";
         string nombreRecibeFinal = string.IsNullOrWhiteSpace(personaRecibe)
             ? (enc?.Nombre ?? "Personal autorizado")
             : personaRecibe.Trim();
+
+        int proyStockGralId = ObtenerProyectoStockGeneralId();
+        bool descontarReservaProyecto = proyectoId > 0 && proyectoId != proyStockGralId;
 
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
@@ -4443,7 +5041,9 @@ VALUES ($sid, $pid, $cant, $ua, $costo)";
 
             using var upProd = conn.CreateCommand();
             upProd.Transaction = tx;
-            upProd.CommandText = "UPDATE Productos SET StockActual = MAX(0, StockActual - $cant) WHERE Id = $pid";
+            upProd.CommandText = descontarReservaProyecto
+                ? "UPDATE Productos SET StockActual = MAX(0, StockActual - $cant), StockReservadoProyecto = MAX(0, StockReservadoProyecto - $cant) WHERE Id = $pid"
+                : "UPDATE Productos SET StockActual = MAX(0, StockActual - $cant) WHERE Id = $pid";
             upProd.Parameters.AddWithValue("$cant", (double)part.CantidadEntregada);
             upProd.Parameters.AddWithValue("$pid", part.ProductoId);
             upProd.ExecuteNonQuery();
@@ -4893,20 +5493,49 @@ WHERE pp.PrestamoHerramientaId = $pid";
         if (string.IsNullOrWhiteSpace(rfcNorm))
             rfcNorm = "XAXX010101000";
 
-        var provExistente = ObtenerProveedores().FirstOrDefault(p => p.Rfc.Trim().Equals(rfcNorm, StringComparison.OrdinalIgnoreCase));
-        if (provExistente != null)
-            return provExistente.Id;
-
         string razonLimpia = string.IsNullOrWhiteSpace(emisorNombre) ? rfcNorm : emisorNombre.Trim();
-        GuardarProveedor(new Proveedor
+        string nomCorto = Proveedor.ExtraerNombreComercialCorto(razonLimpia);
+        var todosProvs = ObtenerProveedores();
+
+        if (!string.Equals(rfcNorm, "XAXX010101000", StringComparison.OrdinalIgnoreCase))
+        {
+            var provPorRfc = todosProvs.FirstOrDefault(p => p.Rfc.Trim().Equals(rfcNorm, StringComparison.OrdinalIgnoreCase));
+            if (provPorRfc != null)
+                return provPorRfc.Id;
+        }
+
+        // Buscar si ya fue dado de alta en Comparativa con RFC genérico o por nombre comercial / razón social equivalente
+        var provPorNombre = todosProvs.FirstOrDefault(p =>
+            string.Equals(p.RazonSocial.Trim(), razonLimpia, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.NombreComercial.Trim(), razonLimpia, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrWhiteSpace(nomCorto) && nomCorto.Length >= 4 &&
+             (string.Equals(p.NombreComercial.Trim(), nomCorto, StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(Proveedor.ExtraerNombreComercialCorto(p.RazonSocial), nomCorto, StringComparison.OrdinalIgnoreCase))));
+
+        if (provPorNombre != null)
+        {
+            if (!string.Equals(rfcNorm, "XAXX010101000", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(provPorNombre.Rfc.Trim(), "XAXX010101000", StringComparison.OrdinalIgnoreCase))
+            {
+                provPorNombre.Rfc = rfcNorm;
+                if (string.IsNullOrWhiteSpace(provPorNombre.RazonSocial) || string.Equals(provPorNombre.RazonSocial, provPorNombre.NombreComercial, StringComparison.OrdinalIgnoreCase))
+                    provPorNombre.RazonSocial = razonLimpia;
+                GuardarProveedor(provPorNombre);
+            }
+            return provPorNombre.Id;
+        }
+
+        int nuevoId = GuardarProveedor(new Proveedor
         {
             Rfc = rfcNorm,
             RazonSocial = razonLimpia,
-            NombreComercial = Proveedor.ExtraerNombreComercialCorto(razonLimpia),
+            NombreComercial = nomCorto,
             Notas = "Registrado automáticamente desde Factura XML CFDI"
         });
 
-        return ObtenerProveedores().First(p => p.Rfc.Trim().Equals(rfcNorm, StringComparison.OrdinalIgnoreCase)).Id;
+        return nuevoId > 0
+            ? nuevoId
+            : ObtenerProveedores().Last(p => p.Rfc.Trim().Equals(rfcNorm, StringComparison.OrdinalIgnoreCase)).Id;
     }
 
     public static int? BuscarProductoVinculadoXml(string emisorRfc, string noIdentificacion, string descripcion)
@@ -5032,7 +5661,7 @@ LIMIT 1";
             UnidadAlmacen = unidad,
             FactorConversion = 1m,
             StockActual = 0m,
-            StockMinimo = 5m,
+            StockMinimo = 0m,
             UltimoCostoCompra = costoUnitarioConIva,
             Ubicacion = "Almacén General",
             EsHerramienta = false
@@ -5114,24 +5743,177 @@ VALUES ($rfc, $c, $d, $pid, $p)";
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
-        // Conservar cantidades ya recibidas en almacén por ProductoId
-        var recibidasPorProducto = new Dictionary<int, decimal>();
-        using (var qRec = conn.CreateCommand())
+        // Leer las partidas actuales de la OC para NO borrar partidas pendientes cuando se sube una factura parcial
+        var partidasActualesOc = new List<(int id, int prodId, string descLibre, string unidadLibre, decimal cantPedida, decimal cantRecibida, decimal precioSinIva)>();
+        using (var qPart = conn.CreateCommand())
         {
-            qRec.CommandText = "SELECT ProductoId, SUM(CantidadRecibida) FROM OrdenCompraPartidas WHERE OrdenCompraId = $ocid GROUP BY ProductoId";
-            qRec.Parameters.AddWithValue("$ocid", ordenCompraId);
-            using var r = qRec.ExecuteReader();
+            qPart.CommandText = @"
+SELECT Id, ProductoId, COALESCE(DescripcionLibre, ''), COALESCE(UnidadLibre, 'Pieza'), CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva
+FROM OrdenCompraPartidas
+WHERE OrdenCompraId = $ocid
+ORDER BY Id ASC";
+            qPart.Parameters.AddWithValue("$ocid", ordenCompraId);
+            using var r = qPart.ExecuteReader();
             while (r.Read())
             {
-                recibidasPorProducto[r.GetInt32(0)] = Convert.ToDecimal(r.GetDouble(1));
+                partidasActualesOc.Add((
+                    r.GetInt32(0),
+                    r.GetInt32(1),
+                    r.GetString(2),
+                    r.GetString(3),
+                    Convert.ToDecimal(r.GetDouble(4)),
+                    Convert.ToDecimal(r.GetDouble(5)),
+                    Convert.ToDecimal(r.GetDouble(6))));
             }
+        }
+
+        decimal costoEnvioOc = 0m;
+        using (var qEnv = conn.CreateCommand())
+        {
+            qEnv.CommandText = "SELECT COALESCE(CostoEnvioConIva, 0) FROM OrdenesCompra WHERE Id = $ocid";
+            qEnv.Parameters.AddWithValue("$ocid", ordenCompraId);
+            var envObj = qEnv.ExecuteScalar();
+            if (envObj != null && envObj != DBNull.Value)
+                costoEnvioOc = Convert.ToDecimal(envObj);
         }
 
         using var tx = conn.BeginTransaction();
 
-        decimal subtotalSum = facturasDeEstaOc.Sum(f => Math.Max(0m, f.Subtotal - f.Descuento));
-        decimal ivaSum = facturasDeEstaOc.Sum(f => f.Iva);
-        decimal totalSum = facturasDeEstaOc.Sum(f => f.Total);
+        // Agrupar conceptos facturados por ProductoId para actualizar o agregar sin destruir partidas no facturadas aún
+        var conceptosPorProd = facturasDeEstaOc
+            .SelectMany(f => f.Conceptos)
+            .Where(x => x.ProductoIdVinculado.HasValue && x.ProductoIdVinculado.Value > 0)
+            .GroupBy(x => x.ProductoIdVinculado!.Value)
+            .ToList();
+
+        var idsPartidasTocadas = new HashSet<int>();
+
+        foreach (var grp in conceptosPorProd)
+        {
+            int prodId = grp.Key;
+            decimal cantFacturadaTotal = grp.Sum(c => c.Cantidad > 0m ? c.Cantidad : 1m);
+            var ultimoConcepto = grp.Last();
+            decimal precioSinIva = CalcularPrecioUnitarioSinIvaParaOc(ultimoConcepto);
+            decimal costoConIva = Math.Round(precioSinIva * 1.16m, 2);
+
+            // Buscar si ya existe en la OC por ProductoId o como concepto abierto con la misma descripción
+            var match = partidasActualesOc.FirstOrDefault(p => p.prodId == prodId && !idsPartidasTocadas.Contains(p.id));
+            if (match.id == 0)
+            {
+                string descConc = (ultimoConcepto.Descripcion ?? string.Empty).Trim();
+                match = partidasActualesOc.FirstOrDefault(p =>
+                    p.prodId <= 0 &&
+                    !idsPartidasTocadas.Contains(p.id) &&
+                    !string.IsNullOrWhiteSpace(p.descLibre) &&
+                    (string.Equals(p.descLibre.Trim(), descConc, StringComparison.OrdinalIgnoreCase) ||
+                     descConc.Contains(p.descLibre.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                     p.descLibre.Trim().Contains(descConc, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (match.id > 0)
+            {
+                idsPartidasTocadas.Add(match.id);
+                decimal nuevaCantPedida = Math.Max(match.cantPedida, cantFacturadaTotal);
+
+                using var upPart = conn.CreateCommand();
+                upPart.Transaction = tx;
+                upPart.CommandText = @"
+UPDATE OrdenCompraPartidas
+SET ProductoId = $pid,
+    CantidadPedida = $cant,
+    PrecioUnitarioSinIva = $precio
+WHERE Id = $id";
+                upPart.Parameters.AddWithValue("$pid", prodId);
+                upPart.Parameters.AddWithValue("$cant", (double)nuevaCantPedida);
+                upPart.Parameters.AddWithValue("$precio", (double)precioSinIva);
+                upPart.Parameters.AddWithValue("$id", match.id);
+                upPart.ExecuteNonQuery();
+
+                if (match.prodId <= 0 && !string.IsNullOrWhiteSpace(match.descLibre))
+                {
+                    using var upSolP = conn.CreateCommand();
+                    upSolP.Transaction = tx;
+                    upSolP.CommandText = @"
+UPDATE SolicitudPartidas
+SET ProductoId = $pid
+WHERE OrdenCompraId = $ocid
+  AND ProductoId <= 0
+  AND UPPER(TRIM(COALESCE(DescripcionLibre, ''))) = UPPER(TRIM($dlib))";
+                    upSolP.Parameters.AddWithValue("$pid", prodId);
+                    upSolP.Parameters.AddWithValue("$ocid", ordenCompraId);
+                    upSolP.Parameters.AddWithValue("$dlib", match.descLibre.Trim());
+                    upSolP.ExecuteNonQuery();
+                }
+            }
+            else
+            {
+                using var insPart = conn.CreateCommand();
+                insPart.Transaction = tx;
+                insPart.CommandText = @"
+INSERT INTO OrdenCompraPartidas (OrdenCompraId, ProductoId, DescripcionLibre, UnidadLibre, CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva)
+VALUES ($ocid, $pid, $dlib, $ulib, $cant, 0, $precio)";
+                insPart.Parameters.AddWithValue("$ocid", ordenCompraId);
+                insPart.Parameters.AddWithValue("$pid", prodId);
+                insPart.Parameters.AddWithValue("$dlib", (ultimoConcepto.Descripcion ?? string.Empty).Trim());
+                insPart.Parameters.AddWithValue("$ulib", NormalizarUnidadMedida(ultimoConcepto.Unidad));
+                insPart.Parameters.AddWithValue("$cant", (double)cantFacturadaTotal);
+                insPart.Parameters.AddWithValue("$precio", (double)precioSinIva);
+                insPart.ExecuteNonQuery();
+            }
+
+            // Actualizar costo real en Entradas de Almacén previas de esta OC (cuando se recibió primero con remisión)
+            using var upEp = conn.CreateCommand();
+            upEp.Transaction = tx;
+            upEp.CommandText = @"
+UPDATE EntradaPartidas
+SET CostoUnitarioCompraConIva = $costo
+WHERE ProductoId = $pid AND EntradaAlmacenId IN (SELECT Id FROM EntradasAlmacen WHERE OrdenCompraId = $ocid)";
+            upEp.Parameters.AddWithValue("$costo", (double)costoConIva);
+            upEp.Parameters.AddWithValue("$pid", prodId);
+            upEp.Parameters.AddWithValue("$ocid", ordenCompraId);
+            upEp.ExecuteNonQuery();
+        }
+
+        // Recalcular totales de la OC tomando en cuenta todas sus partidas (facturadas + pendientes por facturar)
+        decimal subtotalPartidasOc = 0m;
+        decimal totalPedidasOc = 0m;
+        decimal totalRecibidasOc = 0m;
+        int partidasPendientesRecibir = 0;
+
+        using (var qTot = conn.CreateCommand())
+        {
+            qTot.Transaction = tx;
+            qTot.CommandText = "SELECT CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva FROM OrdenCompraPartidas WHERE OrdenCompraId = $ocid";
+            qTot.Parameters.AddWithValue("$ocid", ordenCompraId);
+            using var r = qTot.ExecuteReader();
+            while (r.Read())
+            {
+                decimal cp = Convert.ToDecimal(r.GetDouble(0));
+                decimal cr = Convert.ToDecimal(r.GetDouble(1));
+                decimal pu = Convert.ToDecimal(r.GetDouble(2));
+                subtotalPartidasOc += Math.Round(cp * pu, 2);
+                totalPedidasOc += cp;
+                totalRecibidasOc += cr;
+                if (cr < cp - 0.001m)
+                    partidasPendientesRecibir++;
+            }
+        }
+
+        decimal fleteSinIva = Math.Round(costoEnvioOc / 1.16m, 2);
+        decimal subtotalCalculado = Math.Round(subtotalPartidasOc + fleteSinIva, 2);
+        decimal ivaCalculado = Math.Round(subtotalCalculado * 0.16m, 2);
+        decimal totalCalculado = Math.Round(subtotalCalculado + ivaCalculado, 2);
+
+        decimal subtotalFacturas = facturasDeEstaOc.Sum(f => Math.Max(0m, f.Subtotal - f.Descuento));
+        decimal ivaFacturas = facturasDeEstaOc.Sum(f => f.Iva);
+        decimal totalFacturas = facturasDeEstaOc.Sum(f => f.Total);
+
+        // Si las facturas cubren el total o más, usar el importe fiscal exacto; si es factura parcial, conservar el total de toda la OC
+        bool usarTotalesFactura = totalFacturas >= totalCalculado - 1.0m || partidasActualesOc.Count <= idsPartidasTocadas.Count;
+        decimal subtotalFinal = usarTotalesFactura ? subtotalFacturas : subtotalCalculado;
+        decimal ivaFinal = usarTotalesFactura ? ivaFacturas : ivaCalculado;
+        decimal totalFinal = usarTotalesFactura ? totalFacturas : totalCalculado;
+
         string foliosFacturas = string.Join(", ", facturasDeEstaOc.Select(f => string.IsNullOrWhiteSpace(f.SerieFolio) ? f.Uuid[..Math.Min(8, f.Uuid.Length)] : f.SerieFolio));
 
         using (var upOc = conn.CreateCommand())
@@ -5162,68 +5944,12 @@ SET ProveedorId = $pvid,
 WHERE Id = $ocid";
             }
             upOc.Parameters.AddWithValue("$pvid", provId);
-            upOc.Parameters.AddWithValue("$sub", (double)subtotalSum);
-            upOc.Parameters.AddWithValue("$iva", (double)ivaSum);
-            upOc.Parameters.AddWithValue("$tot", (double)totalSum);
+            upOc.Parameters.AddWithValue("$sub", (double)subtotalFinal);
+            upOc.Parameters.AddWithValue("$iva", (double)ivaFinal);
+            upOc.Parameters.AddWithValue("$tot", (double)totalFinal);
             upOc.Parameters.AddWithValue("$not", $"Asociada a Factura(s) XML: {foliosFacturas}");
             upOc.Parameters.AddWithValue("$ocid", ordenCompraId);
             upOc.ExecuteNonQuery();
-        }
-
-        using (var delPart = conn.CreateCommand())
-        {
-            delPart.Transaction = tx;
-            delPart.CommandText = "DELETE FROM OrdenCompraPartidas WHERE OrdenCompraId = $ocid";
-            delPart.Parameters.AddWithValue("$ocid", ordenCompraId);
-            delPart.ExecuteNonQuery();
-        }
-
-        decimal totalPedidasNuevas = 0m;
-        decimal totalRecibidasConservadas = 0m;
-
-        foreach (var fac in facturasDeEstaOc)
-        {
-            foreach (var c in fac.Conceptos.Where(x => x.ProductoIdVinculado.HasValue && x.ProductoIdVinculado.Value > 0))
-            {
-                int prodId = c.ProductoIdVinculado!.Value;
-                decimal cantPedida = c.Cantidad > 0m ? c.Cantidad : 1m;
-                decimal cantRecibida = 0m;
-                if (recibidasPorProducto.TryGetValue(prodId, out decimal disp) && disp > 0m)
-                {
-                    cantRecibida = Math.Min(cantPedida, disp);
-                    recibidasPorProducto[prodId] = Math.Max(0m, disp - cantRecibida);
-                }
-
-                totalPedidasNuevas += cantPedida;
-                totalRecibidasConservadas += cantRecibida;
-
-                decimal precioSinIva = CalcularPrecioUnitarioSinIvaParaOc(c);
-                decimal costoConIva = Math.Round(precioSinIva * 1.16m, 2);
-
-                using var insPart = conn.CreateCommand();
-                insPart.Transaction = tx;
-                insPart.CommandText = @"
-INSERT INTO OrdenCompraPartidas (OrdenCompraId, ProductoId, CantidadPedida, CantidadRecibida, PrecioUnitarioSinIva)
-VALUES ($ocid, $pid, $cant, $rec, $precio)";
-                insPart.Parameters.AddWithValue("$ocid", ordenCompraId);
-                insPart.Parameters.AddWithValue("$pid", prodId);
-                insPart.Parameters.AddWithValue("$cant", (double)cantPedida);
-                insPart.Parameters.AddWithValue("$rec", (double)cantRecibida);
-                insPart.Parameters.AddWithValue("$precio", (double)precioSinIva);
-                insPart.ExecuteNonQuery();
-
-                // Actualizar costo real en Entradas de Almacén previas de esta OC (cuando se recibió primero con remisión)
-                using var upEp = conn.CreateCommand();
-                upEp.Transaction = tx;
-                upEp.CommandText = @"
-UPDATE EntradaPartidas
-SET CostoUnitarioCompraConIva = $costo
-WHERE ProductoId = $pid AND EntradaAlmacenId IN (SELECT Id FROM EntradasAlmacen WHERE OrdenCompraId = $ocid)";
-                upEp.Parameters.AddWithValue("$costo", (double)costoConIva);
-                upEp.Parameters.AddWithValue("$pid", prodId);
-                upEp.Parameters.AddWithValue("$ocid", ordenCompraId);
-                upEp.ExecuteNonQuery();
-            }
         }
 
         // Actualizar UUID fiscal en Entradas de Almacén de esta OC y recalcular Estatus de la OC según recepción física
@@ -5236,9 +5962,9 @@ WHERE ProductoId = $pid AND EntradaAlmacenId IN (SELECT Id FROM EntradasAlmacen 
             upEntUuid.ExecuteNonQuery();
         }
 
-        if (totalRecibidasConservadas > 0m)
+        if (totalRecibidasOc > 0m)
         {
-            string estRec = totalRecibidasConservadas >= totalPedidasNuevas - 0.001m ? "Recibida Completa" : "Recibida Parcialmente";
+            string estRec = partidasPendientesRecibir == 0 ? "Recibida Completa" : "Recibida Parcialmente";
             using var upEst = conn.CreateCommand();
             upEst.Transaction = tx;
             upEst.CommandText = "UPDATE OrdenesCompra SET Estatus = $est WHERE Id = $ocid";
@@ -5303,7 +6029,94 @@ VALUES ($ocid, $pid, $cant, 0, $precio)";
         return (ocId, folioOc);
     }
 
-    public static FacturaXml GuardarFacturaXml(FacturaXml factura, bool ingresarAlmacenAutomaticamente = false)
+    public static void RegularizarEntradaSinOcConOrdenCompra(int entradaId, int ordenCompraId, string? facturaUuid = null)
+    {
+        if (entradaId <= 0 || ordenCompraId <= 0) return;
+
+        var entrada = ObtenerEntradasAlmacen().FirstOrDefault(e => e.Id == entradaId);
+        var oc = ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == ordenCompraId);
+        if (entrada == null || oc == null) return;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        // 1. Vincular la Entrada SIN-OC a la Orden de Compra sin volver a incrementar StockActual
+        using (var upEnt = conn.CreateCommand())
+        {
+            upEnt.Transaction = tx;
+            upEnt.CommandText = @"
+UPDATE EntradasAlmacen
+SET OrdenCompraId = $ocid,
+    OrdenCompraFolio = $ocfol,
+    TipoEntrada = 'Entrada Regularizada con OC',
+    FacturaUuid = CASE WHEN $uuid <> '' THEN $uuid ELSE FacturaUuid END
+WHERE Id = $eid";
+            upEnt.Parameters.AddWithValue("$ocid", oc.Id);
+            upEnt.Parameters.AddWithValue("$ocfol", oc.Folio);
+            upEnt.Parameters.AddWithValue("$uuid", (facturaUuid ?? string.Empty).Trim());
+            upEnt.Parameters.AddWithValue("$eid", entrada.Id);
+            upEnt.ExecuteNonQuery();
+        }
+
+        // 2. Acreditar las cantidades recibidas de esa entrada en OrdenCompraPartidas y actualizar costos reales en EntradaPartidas
+        foreach (var ep in entrada.Partidas)
+        {
+            var partOc = oc.Partidas.FirstOrDefault(p => p.ProductoId == ep.ProductoId);
+            if (partOc != null)
+            {
+                decimal nuevaRecibida = Math.Min(partOc.CantidadPedida, partOc.CantidadRecibida + ep.CantidadCompraRecibida);
+                using (var upOcp = conn.CreateCommand())
+                {
+                    upOcp.Transaction = tx;
+                    upOcp.CommandText = "UPDATE OrdenCompraPartidas SET CantidadRecibida = $rec WHERE Id = $id";
+                    upOcp.Parameters.AddWithValue("$rec", (double)nuevaRecibida);
+                    upOcp.Parameters.AddWithValue("$id", partOc.Id);
+                    upOcp.ExecuteNonQuery();
+                }
+
+                if (partOc.PrecioUnitarioConIva > 0m)
+                {
+                    using var upEp = conn.CreateCommand();
+                    upEp.Transaction = tx;
+                    upEp.CommandText = "UPDATE EntradaPartidas SET CostoUnitarioCompraConIva = $costo WHERE Id = $epid";
+                    upEp.Parameters.AddWithValue("$costo", (double)partOc.PrecioUnitarioConIva);
+                    upEp.Parameters.AddWithValue("$epid", ep.Id);
+                    upEp.ExecuteNonQuery();
+                }
+            }
+        }
+
+        // 3. Recalcular el estatus de recepción de la OC
+        using (var chkCmd = conn.CreateCommand())
+        {
+            chkCmd.Transaction = tx;
+            chkCmd.CommandText = @"
+SELECT COUNT(*) FROM OrdenCompraPartidas
+WHERE OrdenCompraId = $ocid AND CantidadRecibida < CantidadPedida - 0.001";
+            chkCmd.Parameters.AddWithValue("$ocid", oc.Id);
+            int pendientes = Convert.ToInt32(chkCmd.ExecuteScalar());
+
+            using var upOc = conn.CreateCommand();
+            upOc.Transaction = tx;
+            upOc.CommandText = "UPDATE OrdenesCompra SET Estatus = $est WHERE Id = $ocid";
+            upOc.Parameters.AddWithValue("$est", pendientes == 0 ? "Recibida Completa" : "Recibida Parcialmente");
+            upOc.Parameters.AddWithValue("$ocid", oc.Id);
+            upOc.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
+    public static FacturaXml GuardarFacturaXml(
+        FacturaXml factura,
+        bool ingresarAlmacenAutomaticamente = false,
+        int? entradaSinOcIdParaRegularizar = null,
+        bool entregadoDirectoEnObra = false,
+        string personaRecibioObra = "",
+        int vehiculoFlotillaId = 0,
+        string tipoGastoVehiculo = "",
+        int kilometrajeVehiculo = 0)
     {
         // 1. Asegurar que el proveedor exista por RFC
         int proveedorId = AsegurarProveedorPorRfc(factura.EmisorRfc, factura.EmisorNombre);
@@ -5430,7 +6243,50 @@ VALUES ($fid, $cps, $nid, $desc, $uni, $cant, $vu, $imp, $iva, $pid)";
             SincronizarOrdenCompraConSusFacturas(factura.OrdenCompraId.Value, proyectoId);
         }
 
-        if (ingresarAlmacenAutomaticamente && factura.OrdenCompraId.HasValue && factura.OrdenCompraId.Value > 0)
+        // 4. Si existe una Entrada sin OC ('SIN-OC') indicada o que coincida con el folio/UUID de esta factura, regularizarla sin duplicar StockActual
+        if (factura.OrdenCompraId.HasValue && factura.OrdenCompraId.Value > 0)
+        {
+            int? idSinOc = entradaSinOcIdParaRegularizar;
+            if (!idSinOc.HasValue || idSinOc.Value <= 0)
+            {
+                string sf = (factura.SerieFolio ?? string.Empty).Trim();
+                string uuid = (factura.Uuid ?? string.Empty).Trim();
+                var coincidenciaSinOc = ObtenerEntradasAlmacen().FirstOrDefault(e =>
+                    string.Equals(e.OrdenCompraFolio, "SIN-OC", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(e.FacturaUuid) &&
+                    ((!string.IsNullOrWhiteSpace(sf) && string.Equals(e.FacturaUuid.Trim(), sf, StringComparison.OrdinalIgnoreCase)) ||
+                     (!string.IsNullOrWhiteSpace(uuid) && string.Equals(e.FacturaUuid.Trim(), uuid, StringComparison.OrdinalIgnoreCase))));
+                if (coincidenciaSinOc != null)
+                    idSinOc = coincidenciaSinOc.Id;
+            }
+
+            if (idSinOc.HasValue && idSinOc.Value > 0)
+            {
+                RegularizarEntradaSinOcConOrdenCompra(idSinOc.Value, factura.OrdenCompraId.Value, factura.Uuid);
+            }
+        }
+
+        if (entregadoDirectoEnObra && factura.OrdenCompraId.HasValue && factura.OrdenCompraId.Value > 0)
+        {
+            var ocActual = ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == factura.OrdenCompraId.Value);
+            if (ocActual != null)
+            {
+                var pendientes = ocActual.Partidas
+                    .Where(p => p.CantidadPendiente > 0m)
+                    .Select(p => (p, p.CantidadPendiente))
+                    .ToList();
+                if (pendientes.Count > 0)
+                {
+                    RegistrarRecepcionDirectaAObra(
+                        ocActual,
+                        pendientes,
+                        string.IsNullOrWhiteSpace(personaRecibioObra) ? "Personal de Obra (Compra Mostrador)" : personaRecibioObra,
+                        factura.SerieFolio ?? string.Empty,
+                        $"Compra urgente de mostrador consumida en obra — Factura XML {factura.SerieFolio} ({factura.Uuid})");
+                }
+            }
+        }
+        else if (ingresarAlmacenAutomaticamente && factura.OrdenCompraId.HasValue && factura.OrdenCompraId.Value > 0)
         {
             var ocActual = ObtenerOrdenesCompra().FirstOrDefault(o => o.Id == factura.OrdenCompraId.Value);
             if (ocActual != null)
@@ -5448,6 +6304,30 @@ VALUES ($fid, $cps, $nid, $desc, $uni, $cant, $vu, $imp, $iva, $pid)";
                 }
             }
         }
+
+        if (vehiculoFlotillaId > 0)
+        {
+            string proyNom = ObtenerProyectos().FirstOrDefault(p => p.Id == proyectoId)?.Nombre ?? "Operación Flotilla";
+            string resumenConceptos = string.Join(", ", factura.Conceptos.Take(3).Select(c => c.Descripcion));
+            RegistrarGastoVehiculo(new RegistroGastoVehiculo
+            {
+                VehiculoId = vehiculoFlotillaId,
+                Fecha = string.IsNullOrWhiteSpace(factura.FechaTimbrado) ? DateTime.Now.ToString("yyyy-MM-dd") : (factura.FechaTimbrado.Length >= 10 ? factura.FechaTimbrado[..10] : factura.FechaTimbrado),
+                TipoGasto = string.IsNullOrWhiteSpace(tipoGastoVehiculo) ? "Mantenimiento / Taller / Combustible" : tipoGastoVehiculo,
+                KilometrajeRegistro = kilometrajeVehiculo,
+                MontoConIva = factura.Total,
+                ProveedorTaller = factura.EmisorNombre ?? string.Empty,
+                FolioReferencia = !string.IsNullOrWhiteSpace(factura.SerieFolio) ? $"{factura.SerieFolio} ({factura.OrdenCompraFolio ?? string.Empty})" : (factura.OrdenCompraFolio ?? string.Empty),
+                ProyectoNombre = proyNom,
+                Descripcion = $"Factura XML {factura.SerieFolio}: {resumenConceptos}"
+            });
+        }
+
+        RegistrarBitacoraUsuario(
+            "Facturas XML",
+            entregadoDirectoEnObra ? "Factura XML (Directo a Obra)" : "Registro Factura XML",
+            factura.OrdenCompraFolio,
+            $"Factura {factura.SerieFolio} ({factura.EmisorNombre}) Total: {factura.Total:C2}");
 
         return ObtenerFacturasXml().First(f => f.Id == factura.Id);
     }
@@ -5850,9 +6730,152 @@ FROM FacturaConceptos";
 
     public static string CrearRespaldoBaseDatos()
     {
-        string dest = Path.Combine(BackupsFolder, $"respaldo_compras_{DateTime.Now:yyyyMMdd_HHmmss}.db");
-        File.Copy(DbPath, dest, true);
-        return dest;
+        return CrearRespaldoIntegralZip();
+    }
+
+    public static string CrearRespaldoIntegralZip(string? rutaZipPersonalizada = null)
+    {
+        Directory.CreateDirectory(BackupsFolder);
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string zipPath = string.IsNullOrWhiteSpace(rutaZipPersonalizada)
+            ? Path.Combine(BackupsFolder, $"RespaldoIntegral_Lebaref_{timestamp}.zip")
+            : rutaZipPersonalizada!;
+
+        string tempDbCopy = Path.Combine(BackupsFolder, $"temp_db_snapshot_{timestamp}.db");
+        try
+        {
+            using (var conn = new SqliteConnection(ConnectionString))
+            {
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+                try { cmd.ExecuteNonQuery(); } catch { }
+            }
+            File.Copy(DbPath, tempDbCopy, true);
+
+            if (File.Exists(zipPath))
+                File.Delete(zipPath);
+
+            using (var zip = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                if (File.Exists(tempDbCopy))
+                {
+                    using var entryStream = zip.CreateEntry("compras_almacen.db", System.IO.Compression.CompressionLevel.Optimal).Open();
+                    using var fs = new FileStream(tempDbCopy, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    fs.CopyTo(entryStream);
+                }
+
+                if (Directory.Exists(ImagesFolder))
+                {
+                    foreach (var imgFile in Directory.GetFiles(ImagesFolder, "*", SearchOption.AllDirectories))
+                    {
+                        string rel = Path.GetRelativePath(BaseFolder, imgFile).Replace('\\', '/');
+                        try
+                        {
+                            using var entryStream = zip.CreateEntry(rel, System.IO.Compression.CompressionLevel.Fastest).Open();
+                            using var fs = new FileStream(imgFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                            fs.CopyTo(entryStream);
+                        }
+                        catch { }
+                    }
+                }
+
+                if (Directory.Exists(XmlFolder))
+                {
+                    foreach (var xmlFile in Directory.GetFiles(XmlFolder, "*", SearchOption.AllDirectories))
+                    {
+                        string rel = Path.GetRelativePath(BaseFolder, xmlFile).Replace('\\', '/');
+                        try
+                        {
+                            using var entryStream = zip.CreateEntry(rel, System.IO.Compression.CompressionLevel.Optimal).Open();
+                            using var fs = new FileStream(xmlFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                            fs.CopyTo(entryStream);
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            RegistrarBitacoraUsuario(
+                "Sistema / Respaldo",
+                "Respaldo Integral ZIP (BD + Imágenes + XML)",
+                Path.GetFileName(zipPath),
+                $"Respaldo empaquetado exitosamente en: {zipPath}");
+        }
+        finally
+        {
+            try { if (File.Exists(tempDbCopy)) File.Delete(tempDbCopy); } catch { }
+        }
+
+        return zipPath;
+    }
+
+    public static void RestaurarRespaldoIntegralZip(string rutaZipOrigen)
+    {
+        if (string.IsNullOrWhiteSpace(rutaZipOrigen) || !File.Exists(rutaZipOrigen))
+            throw new FileNotFoundException("No se encontró el archivo ZIP de respaldo seleccionado.");
+
+        // Respaldo preventivo antes de restaurar
+        try { CrearRespaldoIntegralZip(); } catch { }
+
+        SqliteConnection.ClearAllPools();
+
+        string tempExtractDir = Path.Combine(BackupsFolder, $"restore_tmp_{DateTime.Now:yyyyMMdd_HHmmss}");
+        Directory.CreateDirectory(tempExtractDir);
+        try
+        {
+            System.IO.Compression.ZipFile.ExtractToDirectory(rutaZipOrigen, tempExtractDir, true);
+
+            string dbRestaurada = Path.Combine(tempExtractDir, "compras_almacen.db");
+            if (!File.Exists(dbRestaurada))
+            {
+                var algunDb = Directory.GetFiles(tempExtractDir, "*.db", SearchOption.AllDirectories).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(algunDb))
+                    dbRestaurada = algunDb;
+            }
+
+            if (File.Exists(dbRestaurada))
+            {
+                string walPath = DbPath + "-wal";
+                string shmPath = DbPath + "-shm";
+                try { if (File.Exists(walPath)) File.Delete(walPath); } catch { }
+                try { if (File.Exists(shmPath)) File.Delete(shmPath); } catch { }
+                File.Copy(dbRestaurada, DbPath, true);
+            }
+
+            string imgRestauradaDir = Path.Combine(tempExtractDir, "ImagenesCatalogo");
+            if (Directory.Exists(imgRestauradaDir))
+            {
+                Directory.CreateDirectory(ImagesFolder);
+                foreach (var f in Directory.GetFiles(imgRestauradaDir, "*", SearchOption.AllDirectories))
+                {
+                    string dest = Path.Combine(ImagesFolder, Path.GetFileName(f));
+                    try { File.Copy(f, dest, true); } catch { }
+                }
+            }
+
+            string xmlRestauradaDir = Path.Combine(tempExtractDir, "FacturasXml");
+            if (Directory.Exists(xmlRestauradaDir))
+            {
+                Directory.CreateDirectory(XmlFolder);
+                foreach (var f in Directory.GetFiles(xmlRestauradaDir, "*", SearchOption.AllDirectories))
+                {
+                    string dest = Path.Combine(XmlFolder, Path.GetFileName(f));
+                    try { File.Copy(f, dest, true); } catch { }
+                }
+            }
+
+            Initialize();
+            RegistrarBitacoraUsuario(
+                "Sistema / Restauración",
+                "Restauración de Respaldo Integral ZIP",
+                Path.GetFileName(rutaZipOrigen),
+                $"Datos restaurados desde: {rutaZipOrigen}");
+        }
+        finally
+        {
+            try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+        }
     }
 
     // ==================== PERFIL ADMINISTRADOR Y BITÁCORA ====================
@@ -7069,17 +8092,20 @@ ON CONFLICT(Clave) DO UPDATE SET Valor=$v;";
         string estatusNuevo,
         string rolOrigen,
         string rolesDestino,
-        string mensaje)
+        string mensaje,
+        string usuarioDestino = "")
     {
         try
         {
+            var usr = ObtenerUsuarioActivo();
+            string nomUsr = usr?.NombreCompleto ?? "Compras";
             using var conn = new SqliteConnection(ConnectionString);
             conn.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
 INSERT INTO NotificacionesCheckpoint
-(FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida)
-VALUES ($fh, $et, $cp, $fol, $ea, $en, $ro, $rd, $msg, 0);";
+(FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, UsuarioOrigen, UsuarioDestino, Mensaje, Leida)
+VALUES ($fh, $et, $cp, $fol, $ea, $en, $ro, $rd, $uo, $ud, $msg, 0);";
             cmd.Parameters.AddWithValue("$fh", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
             cmd.Parameters.AddWithValue("$et", etapa ?? string.Empty);
             cmd.Parameters.AddWithValue("$cp", checkpointCodigo ?? string.Empty);
@@ -7088,8 +8114,12 @@ VALUES ($fh, $et, $cp, $fol, $ea, $en, $ro, $rd, $msg, 0);";
             cmd.Parameters.AddWithValue("$en", estatusNuevo ?? string.Empty);
             cmd.Parameters.AddWithValue("$ro", string.IsNullOrWhiteSpace(rolOrigen) ? "Compras" : rolOrigen);
             cmd.Parameters.AddWithValue("$rd", string.IsNullOrWhiteSpace(rolesDestino) ? "Almacén" : rolesDestino);
+            cmd.Parameters.AddWithValue("$uo", nomUsr);
+            cmd.Parameters.AddWithValue("$ud", usuarioDestino ?? string.Empty);
             cmd.Parameters.AddWithValue("$msg", mensaje ?? string.Empty);
             cmd.ExecuteNonQuery();
+
+            RegistrarBitacoraUsuario(etapa ?? "Sistema", $"Checkpoint {checkpointCodigo}", folioReferencia ?? string.Empty, mensaje ?? string.Empty);
         }
         catch
         {
@@ -7097,29 +8127,76 @@ VALUES ($fh, $et, $cp, $fol, $ea, $en, $ro, $rd, $msg, 0);";
         }
     }
 
-    public static List<NotificacionCheckpoint> ObtenerNotificacionesCheckpoint(string? rolFiltro = null, int limite = 80)
+    public static void EnviarNotificacionEntreUsuarios(
+        string usuarioDestino,
+        string rolDestino,
+        string folioReferencia,
+        string asunto,
+        string mensaje)
+    {
+        var usrOrigen = ObtenerUsuarioActivo();
+        string rolOrig = ObtenerRolOperativoActivo();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO NotificacionesCheckpoint
+(FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, UsuarioOrigen, UsuarioDestino, Mensaje, Leida)
+VALUES ($fh, $et, 'MSG-USR', $fol, 'Mensaje Interno', $asunto, $ro, $rd, $uo, $ud, $msg, 0);";
+        cmd.Parameters.AddWithValue("$fh", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+        cmd.Parameters.AddWithValue("$et", string.IsNullOrWhiteSpace(asunto) ? "Aviso entre Usuarios" : asunto.Trim());
+        cmd.Parameters.AddWithValue("$fol", string.IsNullOrWhiteSpace(folioReferencia) ? "GENERAL" : folioReferencia.Trim().ToUpperInvariant());
+        cmd.Parameters.AddWithValue("$asunto", string.IsNullOrWhiteSpace(usuarioDestino) ? $"Para {rolDestino}" : $"Para @{usuarioDestino}");
+        cmd.Parameters.AddWithValue("$ro", rolOrig);
+        cmd.Parameters.AddWithValue("$rd", string.IsNullOrWhiteSpace(rolDestino) ? "Todos" : rolDestino.Trim());
+        cmd.Parameters.AddWithValue("$uo", usrOrigen?.NombreCompleto ?? "Usuario");
+        cmd.Parameters.AddWithValue("$ud", usuarioDestino?.Trim() ?? string.Empty);
+        cmd.Parameters.AddWithValue("$msg", mensaje?.Trim() ?? string.Empty);
+        cmd.ExecuteNonQuery();
+
+        RegistrarBitacoraUsuario("Notificaciones", "Envío de Aviso a Usuario", folioReferencia, $"Para @{usuarioDestino} ({rolDestino}): {mensaje}");
+    }
+
+    public static List<NotificacionCheckpoint> ObtenerNotificacionesCheckpoint(string? rolFiltro = null, int limite = 80, string? usuarioFiltro = null)
     {
         var lista = new List<NotificacionCheckpoint>();
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        if (string.IsNullOrWhiteSpace(rolFiltro) || string.Equals(rolFiltro, "Todos", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(usuarioFiltro))
         {
             cmd.CommandText = @"
-SELECT Id, FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida
+SELECT Id, FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida,
+       COALESCE(UsuarioOrigen, ''), COALESCE(UsuarioDestino, '')
+FROM NotificacionesCheckpoint
+WHERE UsuarioDestino LIKE $usr OR UsuarioOrigen LIKE $usr OR RolesDestino LIKE $rol
+ORDER BY Id DESC
+LIMIT $lim;";
+            cmd.Parameters.AddWithValue("$usr", $"%{usuarioFiltro.Trim()}%");
+            cmd.Parameters.AddWithValue("$rol", $"%{(rolFiltro ?? "Todos").Trim()}%");
+        }
+        else if (string.IsNullOrWhiteSpace(rolFiltro) || string.Equals(rolFiltro, "Todos", StringComparison.OrdinalIgnoreCase))
+        {
+            cmd.CommandText = @"
+SELECT Id, FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida,
+       COALESCE(UsuarioOrigen, ''), COALESCE(UsuarioDestino, '')
 FROM NotificacionesCheckpoint
 ORDER BY Id DESC
 LIMIT $lim;";
         }
         else
         {
+            var usrActivo = ObtenerUsuarioActivo();
             cmd.CommandText = @"
-SELECT Id, FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida
+SELECT Id, FechaHora, Etapa, CheckpointCodigo, FolioReferencia, EstatusAnterior, EstatusNuevo, RolOrigen, RolesDestino, Mensaje, Leida,
+       COALESCE(UsuarioOrigen, ''), COALESCE(UsuarioDestino, '')
 FROM NotificacionesCheckpoint
-WHERE RolesDestino LIKE $rol OR RolOrigen LIKE $rol
+WHERE RolesDestino LIKE $rol OR RolOrigen LIKE $rol OR RolesDestino LIKE '%Todos%'
+   OR ($unom <> '' AND (UsuarioDestino LIKE $unom OR UsuarioOrigen LIKE $unom))
 ORDER BY Id DESC
 LIMIT $lim;";
             cmd.Parameters.AddWithValue("$rol", $"%{rolFiltro.Trim()}%");
+            cmd.Parameters.AddWithValue("$unom", usrActivo != null ? $"%{usrActivo.NombreCompleto}%" : "");
         }
         cmd.Parameters.AddWithValue("$lim", limite);
 
@@ -7138,7 +8215,9 @@ LIMIT $lim;";
                 RolOrigen = r.GetString(7),
                 RolesDestino = r.GetString(8),
                 Mensaje = r.GetString(9),
-                Leida = r.GetInt32(10) != 0
+                Leida = r.GetInt32(10) != 0,
+                UsuarioOrigen = r.GetString(11),
+                UsuarioDestino = r.GetString(12)
             });
         }
         return lista;
@@ -7146,16 +8225,21 @@ LIMIT $lim;";
 
     public static int ContarNotificacionesNoLeidas(string rolDestino)
     {
+        var usrActivo = ObtenerUsuarioActivo();
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(1) FROM NotificacionesCheckpoint WHERE Leida=0 AND RolesDestino LIKE $rol";
+        cmd.CommandText = @"
+SELECT COUNT(1) FROM NotificacionesCheckpoint
+WHERE Leida=0 AND (RolesDestino LIKE $rol OR RolesDestino LIKE '%Todos%' OR ($unom <> '' AND UsuarioDestino LIKE $unom))";
         cmd.Parameters.AddWithValue("$rol", $"%{rolDestino.Trim()}%");
+        cmd.Parameters.AddWithValue("$unom", usrActivo != null ? $"%{usrActivo.NombreCompleto}%" : "");
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
     }
 
     public static void MarcarNotificacionesLeidas(string? rolDestino = null)
     {
+        var usrActivo = ObtenerUsuarioActivo();
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
@@ -7165,9 +8249,3738 @@ LIMIT $lim;";
         }
         else
         {
-            cmd.CommandText = "UPDATE NotificacionesCheckpoint SET Leida=1 WHERE Leida=0 AND RolesDestino LIKE $rol";
+            cmd.CommandText = @"
+UPDATE NotificacionesCheckpoint
+SET Leida=1
+WHERE Leida=0 AND (RolesDestino LIKE $rol OR RolesDestino LIKE '%Todos%' OR ($unom <> '' AND UsuarioDestino LIKE $unom))";
             cmd.Parameters.AddWithValue("$rol", $"%{rolDestino.Trim()}%");
+            cmd.Parameters.AddWithValue("$unom", usrActivo != null ? $"%{usrActivo.NombreCompleto}%" : "");
         }
         cmd.ExecuteNonQuery();
+    }
+
+    // ==================== FASE 1.1: USUARIOS DEL SISTEMA Y BITÁCORA NOMINAL ====================
+
+    private static void SeedUsuariosSistemaSiVacio(SqliteConnection conn)
+    {
+        using var chk = conn.CreateCommand();
+        chk.CommandText = "SELECT COUNT(1) FROM UsuariosSistema;";
+        int count = Convert.ToInt32(chk.ExecuteScalar() ?? 0);
+        if (count > 0) return;
+
+        string fechaHoy = DateTime.Now.ToString("yyyy-MM-dd");
+        string pinDefault = CalcularHashPinAdministrador("1234");
+        var iniciales = new (string user, string nombre, string puesto, string rol)[]
+        {
+            ("oscar", "Oscar (Jefe de Compras)", "Responsable de Compras y Abastecimiento", "Compras"),
+            ("almacen", "Operador de Almacén", "Recepción y Despacho de Bodega", "Almacén"),
+            ("operativo", "Cuadrilla Operativa / Obra", "Técnicos e Instaladores de Proyecto", "Almacén"),
+            ("direccion", "Dirección General", "Autorización Vo.Bo. de Proyectos", "Compras"),
+            ("finanzas", "Finanzas y Tesorería", "Programación de Pagos y Facturación", "Compras")
+        };
+
+        foreach (var u in iniciales)
+        {
+            using var ins = conn.CreateCommand();
+            ins.CommandText = @"
+INSERT INTO UsuariosSistema (Username, NombreCompleto, Puesto, Rol, PinHash, Activo, FechaAlta)
+VALUES ($usr, $nom, $pue, $rol, $pin, 1, $fec);";
+            ins.Parameters.AddWithValue("$usr", u.user);
+            ins.Parameters.AddWithValue("$nom", u.nombre);
+            ins.Parameters.AddWithValue("$pue", u.puesto);
+            ins.Parameters.AddWithValue("$rol", u.rol);
+            ins.Parameters.AddWithValue("$pin", pinDefault);
+            ins.Parameters.AddWithValue("$fec", fechaHoy);
+            ins.ExecuteNonQuery();
+        }
+    }
+
+    public static List<UsuarioSistema> ObtenerUsuariosSistema(bool soloActivos = false)
+    {
+        var list = new List<UsuarioSistema>();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = soloActivos
+            ? "SELECT Id, Username, NombreCompleto, Puesto, Rol, Activo, FechaAlta FROM UsuariosSistema WHERE Activo=1 ORDER BY Id ASC"
+            : "SELECT Id, Username, NombreCompleto, Puesto, Rol, Activo, FechaAlta FROM UsuariosSistema ORDER BY Id ASC";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new UsuarioSistema
+            {
+                Id = r.GetInt32(0),
+                Username = r.GetString(1),
+                NombreCompleto = r.GetString(2),
+                Puesto = r.GetString(3),
+                Rol = r.GetString(4),
+                Activo = r.GetInt32(5) != 0,
+                FechaAlta = r.GetString(6)
+            });
+        }
+        return list;
+    }
+
+    public static UsuarioSistema ObtenerUsuarioActivo()
+    {
+        var usuarios = ObtenerUsuariosSistema(soloActivos: false);
+        int idGuardado = 0;
+        try
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave='UsuarioActivoId' LIMIT 1";
+            int.TryParse(cmd.ExecuteScalar()?.ToString(), out idGuardado);
+        }
+        catch
+        {
+            // Ignorar
+        }
+
+        var encontrado = usuarios.FirstOrDefault(u => u.Id == idGuardado && u.Activo)
+                         ?? usuarios.FirstOrDefault(u => u.Activo)
+                         ?? new UsuarioSistema { Id = 1, Username = "oscar", NombreCompleto = "Oscar (Jefe de Compras)", Rol = "Compras", Activo = true };
+        return encontrado;
+    }
+
+    public static void GuardarUsuarioActivo(int usuarioId)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO ConfiguracionSistema (Clave, Valor) VALUES ('UsuarioActivoId', $v)
+ON CONFLICT(Clave) DO UPDATE SET Valor=$v;";
+        cmd.Parameters.AddWithValue("$v", usuarioId.ToString());
+        cmd.ExecuteNonQuery();
+    }
+
+    public static int GuardarUsuarioSistema(UsuarioSistema u, string? nuevoPinPlano = null)
+    {
+        string usrClean = (u.Username ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", "_");
+        if (string.IsNullOrWhiteSpace(usrClean))
+            usrClean = $"usr_{DateTime.Now:HHmmss}";
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        if (u.Id <= 0)
+        {
+            string pinHash = CalcularHashPinAdministrador(string.IsNullOrWhiteSpace(nuevoPinPlano) ? "1234" : nuevoPinPlano.Trim());
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+INSERT INTO UsuariosSistema (Username, NombreCompleto, Puesto, Rol, PinHash, Activo, FechaAlta)
+VALUES ($usr, $nom, $pue, $rol, $pin, $act, $fec);
+SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$usr", usrClean);
+            cmd.Parameters.AddWithValue("$nom", u.NombreCompleto.Trim());
+            cmd.Parameters.AddWithValue("$pue", u.Puesto?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$rol", string.IsNullOrWhiteSpace(u.Rol) ? "Compras" : u.Rol.Trim());
+            cmd.Parameters.AddWithValue("$pin", pinHash);
+            cmd.Parameters.AddWithValue("$act", u.Activo ? 1 : 0);
+            cmd.Parameters.AddWithValue("$fec", DateTime.Now.ToString("yyyy-MM-dd"));
+            int nuevoId = Convert.ToInt32(cmd.ExecuteScalar());
+            RegistrarBitacoraUsuario("Usuarios", "Alta de Usuario", $"@{usrClean}", $"Se creó el usuario '{u.NombreCompleto}' con rol {u.Rol}");
+            return nuevoId;
+        }
+        else
+        {
+            using var cmd = conn.CreateCommand();
+            if (!string.IsNullOrWhiteSpace(nuevoPinPlano))
+            {
+                cmd.CommandText = @"
+UPDATE UsuariosSistema
+SET Username=$usr, NombreCompleto=$nom, Puesto=$pue, Rol=$rol, Activo=$act, PinHash=$pin
+WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$pin", CalcularHashPinAdministrador(nuevoPinPlano.Trim()));
+            }
+            else
+            {
+                cmd.CommandText = @"
+UPDATE UsuariosSistema
+SET Username=$usr, NombreCompleto=$nom, Puesto=$pue, Rol=$rol, Activo=$act
+WHERE Id=$id;";
+            }
+            cmd.Parameters.AddWithValue("$usr", usrClean);
+            cmd.Parameters.AddWithValue("$nom", u.NombreCompleto.Trim());
+            cmd.Parameters.AddWithValue("$pue", u.Puesto?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$rol", string.IsNullOrWhiteSpace(u.Rol) ? "Compras" : u.Rol.Trim());
+            cmd.Parameters.AddWithValue("$act", u.Activo ? 1 : 0);
+            cmd.Parameters.AddWithValue("$id", u.Id);
+            cmd.ExecuteNonQuery();
+            RegistrarBitacoraUsuario("Usuarios", "Edición de Usuario", $"@{usrClean}", $"Se actualizó el usuario '{u.NombreCompleto}' (Rol: {u.Rol}, Activo: {u.Activo})");
+            return u.Id;
+        }
+    }
+
+    public static void RegistrarBitacoraUsuario(string modulo, string accion, string? folioReferencia, string? detalle)
+    {
+        try
+        {
+            var usr = ObtenerUsuarioActivo();
+            string rolAct = ObtenerRolOperativoActivo();
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+INSERT INTO BitacoraUsuario (FechaHora, UsuarioId, UsuarioNombre, Rol, Modulo, Accion, FolioReferencia, Detalle)
+VALUES ($fh, $uid, $unom, $rol, $mod, $acc, $fol, $det);";
+            cmd.Parameters.AddWithValue("$fh", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            cmd.Parameters.AddWithValue("$uid", usr.Id);
+            cmd.Parameters.AddWithValue("$unom", usr.NombreCompleto);
+            cmd.Parameters.AddWithValue("$rol", rolAct);
+            cmd.Parameters.AddWithValue("$mod", modulo ?? "General");
+            cmd.Parameters.AddWithValue("$acc", accion ?? string.Empty);
+            cmd.Parameters.AddWithValue("$fol", folioReferencia ?? string.Empty);
+            cmd.Parameters.AddWithValue("$det", detalle ?? string.Empty);
+            cmd.ExecuteNonQuery();
+        }
+        catch
+        {
+            // No bloquear por bitácora
+        }
+    }
+
+    public static List<RegistroBitacoraUsuario> ObtenerBitacoraUsuarios(int? usuarioIdFiltro = null, string? textoFiltro = null, int limite = 250)
+    {
+        var lista = new List<RegistroBitacoraUsuario>();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+SELECT Id, FechaHora, UsuarioId, UsuarioNombre, Rol, Modulo, Accion, FolioReferencia, Detalle
+FROM BitacoraUsuario
+WHERE ($uid <= 0 OR UsuarioId = $uid)
+  AND ($q = '' OR FolioReferencia LIKE $ql OR Accion LIKE $ql OR Detalle LIKE $ql OR Modulo LIKE $ql OR UsuarioNombre LIKE $ql)
+ORDER BY Id DESC
+LIMIT $lim;";
+        int uid = usuarioIdFiltro ?? 0;
+        string q = (textoFiltro ?? string.Empty).Trim();
+        cmd.Parameters.AddWithValue("$uid", uid);
+        cmd.Parameters.AddWithValue("$q", q);
+        cmd.Parameters.AddWithValue("$ql", $"%{q}%");
+        cmd.Parameters.AddWithValue("$lim", limite);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            lista.Add(new RegistroBitacoraUsuario
+            {
+                Id = r.GetInt32(0),
+                FechaHora = r.GetString(1),
+                UsuarioId = r.GetInt32(2),
+                UsuarioNombre = r.GetString(3),
+                Rol = r.GetString(4),
+                Modulo = r.GetString(5),
+                Accion = r.GetString(6),
+                FolioReferencia = r.GetString(7),
+                Detalle = r.GetString(8)
+            });
+        }
+        return lista;
+    }
+
+    // ==================== FASE 1.2: SOLICITUDES POR FAMILIA GENÉRICA Y SUSTITUCIÓN DE MARCA ====================
+
+    public static List<ResumenFamiliaCatalogo> ObtenerResumenFamiliasCatalogo()
+    {
+        var productos = ObtenerProductos();
+        var grupos = productos
+            .GroupBy(p => !string.IsNullOrWhiteSpace(p.Familia) ? p.Familia.Trim() : ExtraerFamiliaSugerida(p.Nombre), StringComparer.OrdinalIgnoreCase)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        var resultado = new List<ResumenFamiliaCatalogo>();
+        foreach (var g in grupos)
+        {
+            var miembros = g
+                .OrderByDescending(p => p.StockActual)
+                .ThenBy(p => p.UltimoCostoCompra > 0 ? p.UltimoCostoCompra : decimal.MaxValue)
+                .ToList();
+
+            var conPrecio = miembros.Where(p => p.UltimoCostoCompra > 0m).ToList();
+            decimal mejorCosto = conPrecio.Count > 0 ? conPrecio.Min(p => p.UltimoCostoCompra) : 0m;
+            var marcas = miembros
+                .Select(p => !string.IsNullOrWhiteSpace(p.Marca) ? p.Marca.Trim() : p.Nombre)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(5)
+                .ToList();
+
+            var sugerido = conPrecio.OrderBy(p => p.UltimoCostoCompra).FirstOrDefault() ?? miembros.First();
+
+            resultado.Add(new ResumenFamiliaCatalogo
+            {
+                Familia = g.Key,
+                CategoriaNombre = sugerido.CategoriaNombre,
+                CantidadMarcasOpciones = miembros.Count,
+                StockTotalFamilia = miembros.Sum(p => p.StockActual),
+                UnidadComun = sugerido.UnidadCompra,
+                MejorCostoConIva = mejorCosto,
+                MarcasDisponiblesResumen = string.Join(", ", marcas),
+                ProductoSugerido = sugerido,
+                ProductosMiembros = miembros
+            });
+        }
+        return resultado;
+    }
+
+    public static void CambiarProductoEnPartidaOrdenCompra(int ordenCompraPartidaId, Producto nuevoProducto, string motivo = "Cambio de marca/sustituto en recepción")
+    {
+        if (ordenCompraPartidaId <= 0 || nuevoProducto == null || nuevoProducto.Id <= 0) return;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+UPDATE OrdenCompraPartidas
+SET ProductoId = $pid,
+    DescripcionLibre = $nom,
+    UnidadLibre = $uni
+WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$pid", nuevoProducto.Id);
+        cmd.Parameters.AddWithValue("$nom", nuevoProducto.Nombre);
+        cmd.Parameters.AddWithValue("$uni", nuevoProducto.UnidadCompra);
+        cmd.Parameters.AddWithValue("$id", ordenCompraPartidaId);
+        cmd.ExecuteNonQuery();
+
+        RegistrarBitacoraUsuario("Órdenes de Compra", "Sustitución de Marca / Producto", nuevoProducto.CodigoInterno, $"{motivo} -> [{nuevoProducto.CodigoInterno}] {nuevoProducto.Nombre}");
+    }
+
+    // ==================== FASE 1.3: RECOLECCIÓN CON PROVEEDOR Y ENTREGA DIRECTA A OBRA (ENT + SAL ESPEJO) ====================
+
+    public static (EntradaAlmacen entrada, SalidaAlmacen? salida) RegistrarRecepcionDirectaAObra(
+        OrdenCompra oc,
+        List<(OrdenCompraPartida partida, decimal cantidadRecibirAhora)> recepcion,
+        string personaRecogio,
+        string folioRemision,
+        string notas,
+        bool esServicioNoInventariable = false,
+        string? lugarEntregaPersonalizado = null,
+        bool notificarCorreo = true)
+    {
+        // Asegurar SKUs si había conceptos abiertos (excepto cuando es un servicio puro no inventariable)
+        foreach (var (partida, _) in recepcion.Where(x => x.cantidadRecibirAhora > 0))
+        {
+            if (partida.ProductoId <= 0)
+            {
+                string nombreReal = !string.IsNullOrWhiteSpace(partida.DescripcionLibre) ? partida.DescripcionLibre.Trim() : partida.ProductoNombre.Trim();
+                var prodExistente = ObtenerProductos().FirstOrDefault(p => string.Equals(p.Nombre.Trim(), nombreReal, StringComparison.OrdinalIgnoreCase));
+                if (prodExistente != null)
+                {
+                    partida.ProductoId = prodExistente.Id;
+                    partida.ProductoCodigo = prodExistente.CodigoInterno;
+                    partida.ProductoNombre = prodExistente.Nombre;
+                }
+                else
+                {
+                    var info = ClasificarYExtraerEspecificacionesProducto(nombreReal, notas);
+                    var nuevoProd = new Producto
+                    {
+                        Nombre = nombreReal,
+                        Descripcion = esServicioNoInventariable
+                            ? $"Servicio / Flete registrado en {oc.Folio}"
+                            : $"Material recolectado directo a obra en {oc.Folio}",
+                        CategoriaId = info.CategoriaId,
+                        Familia = esServicioNoInventariable ? "Servicios y Fletes" : ExtraerFamiliaSugerida(nombreReal),
+                        Marca = info.Marca,
+                        Modelo = info.Modelo,
+                        Medidas = info.Medidas,
+                        UnidadCompra = string.IsNullOrWhiteSpace(partida.UnidadCompra) ? "Pieza" : partida.UnidadCompra,
+                        UnidadAlmacen = string.IsNullOrWhiteSpace(partida.UnidadAlmacen) ? "Pieza" : partida.UnidadAlmacen,
+                        FactorConversion = Math.Max(1m, partida.FactorConversion),
+                        StockActual = 0m,
+                        StockMinimo = 0m,
+                        UltimoCostoCompra = partida.PrecioUnitarioConIva,
+                        Ubicacion = esServicioNoInventariable ? "SERVICIO" : "DIRECTO-OBRA"
+                    };
+                    int nuevoId = GuardarProducto(nuevoProd);
+                    partida.ProductoId = nuevoId;
+                    partida.ProductoCodigo = nuevoProd.CodigoInterno;
+                    partida.ProductoNombre = nuevoProd.Nombre;
+                }
+
+                using var connUp = new SqliteConnection(ConnectionString);
+                connUp.Open();
+                using var upOcp = connUp.CreateCommand();
+                upOcp.CommandText = "UPDATE OrdenCompraPartidas SET ProductoId = $pid WHERE Id = $id;";
+                upOcp.Parameters.AddWithValue("$pid", partida.ProductoId);
+                upOcp.Parameters.AddWithValue("$id", partida.Id);
+                upOcp.ExecuteNonQuery();
+            }
+        }
+
+        string folioEnt = GenerarSiguienteFolio("ENT", "EntradasAlmacen");
+        string folioSal = GenerarSiguienteFolio("SAL", "SalidasAlmacen");
+        string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        string responsableFinal = string.IsNullOrWhiteSpace(personaRecogio)
+            ? (!string.IsNullOrWhiteSpace(oc.EncargadoNombre) ? oc.EncargadoNombre : "Personal de Obra")
+            : personaRecogio.Trim();
+
+        string tipoEnt = esServicioNoInventariable ? "Servicio / No Inventariable" : "Recolección Directa a Obra";
+        string notasFinal = $"[{tipoEnt}] Recogió/Recibió: {responsableFinal}" +
+                            (!string.IsNullOrWhiteSpace(folioRemision) ? $" | Remisión/Factura: {folioRemision.Trim()}" : "") +
+                            (!string.IsNullOrWhiteSpace(notas) ? $" | {notas.Trim()}" : "");
+
+        var departamentos = ObtenerDepartamentos();
+        var encargados = ObtenerEncargados();
+        int depId = departamentos.FirstOrDefault(d => string.Equals(d.Nombre, oc.DepartamentoNombre, StringComparison.OrdinalIgnoreCase))?.Id
+                    ?? departamentos.FirstOrDefault()?.Id ?? 1;
+        int encId = encargados.FirstOrDefault(e => string.Equals(e.Nombre, oc.EncargadoNombre, StringComparison.OrdinalIgnoreCase))?.Id
+                    ?? encargados.FirstOrDefault()?.Id ?? 1;
+        int proyId = oc.ProyectoId > 0 ? oc.ProyectoId : ObtenerProyectoStockGeneralId();
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using var cmdEnt = conn.CreateCommand();
+        cmdEnt.Transaction = tx;
+        cmdEnt.CommandText = @"
+INSERT INTO EntradasAlmacen (Folio, Fecha, OrdenCompraId, OrdenCompraFolio, ProveedorNombre, ProyectoNombre, TipoEntrada, FacturaUuid, Notas)
+VALUES ($fol, $fec, $ocid, $ocfol, $prov, $proy, $tipo, $rem, $not);
+SELECT last_insert_rowid();";
+        cmdEnt.Parameters.AddWithValue("$fol", folioEnt);
+        cmdEnt.Parameters.AddWithValue("$fec", fecha);
+        cmdEnt.Parameters.AddWithValue("$ocid", oc.Id);
+        cmdEnt.Parameters.AddWithValue("$ocfol", oc.Folio);
+        cmdEnt.Parameters.AddWithValue("$prov", oc.ProveedorNombre);
+        cmdEnt.Parameters.AddWithValue("$proy", oc.ProyectoNombre);
+        cmdEnt.Parameters.AddWithValue("$tipo", tipoEnt);
+        cmdEnt.Parameters.AddWithValue("$rem", folioRemision?.Trim() ?? string.Empty);
+        cmdEnt.Parameters.AddWithValue("$not", notasFinal);
+        int entId = Convert.ToInt32(cmdEnt.ExecuteScalar());
+
+        decimal costoTotalSalida = 0m;
+        var partidasSalidaInsertar = new List<(int prodId, decimal cantAlmacen, string unidadAlmacen, decimal costoUnitAlmacen)>();
+
+        foreach (var (partida, cantRecibir) in recepcion.Where(x => x.cantidadRecibirAhora > 0))
+        {
+            decimal factor = Math.Max(1m, partida.FactorConversion);
+            decimal cantAlmacen = Math.Round(cantRecibir * factor, 2);
+            decimal costoUnitAlmacen = factor > 0 ? Math.Round(partida.PrecioUnitarioConIva / factor, 2) : partida.PrecioUnitarioConIva;
+            costoTotalSalida += Math.Round(cantAlmacen * costoUnitAlmacen, 2);
+            partidasSalidaInsertar.Add((partida.ProductoId, cantAlmacen, partida.UnidadAlmacen, costoUnitAlmacen));
+
+            using var epCmd = conn.CreateCommand();
+            epCmd.Transaction = tx;
+            epCmd.CommandText = @"
+INSERT INTO EntradaPartidas (EntradaAlmacenId, ProductoId, CantidadCompraRecibida, UnidadCompra, FactorConversion, CantidadIngresadaAlmacen, UnidadAlmacen, CostoUnitarioCompraConIva)
+VALUES ($eid, $pid, $cc, $uc, $fc, $ca, $ua, $costo)";
+            epCmd.Parameters.AddWithValue("$eid", entId);
+            epCmd.Parameters.AddWithValue("$pid", partida.ProductoId);
+            epCmd.Parameters.AddWithValue("$cc", (double)cantRecibir);
+            epCmd.Parameters.AddWithValue("$uc", partida.UnidadCompra);
+            epCmd.Parameters.AddWithValue("$fc", (double)factor);
+            epCmd.Parameters.AddWithValue("$ca", (double)cantAlmacen);
+            epCmd.Parameters.AddWithValue("$ua", partida.UnidadAlmacen);
+            epCmd.Parameters.AddWithValue("$costo", (double)partida.PrecioUnitarioConIva);
+            epCmd.ExecuteNonQuery();
+
+            using var upOcp = conn.CreateCommand();
+            upOcp.Transaction = tx;
+            upOcp.CommandText = "UPDATE OrdenCompraPartidas SET CantidadRecibida = CantidadRecibida + $rec WHERE Id = $id";
+            upOcp.Parameters.AddWithValue("$rec", (double)cantRecibir);
+            upOcp.Parameters.AddWithValue("$id", partida.Id);
+            upOcp.ExecuteNonQuery();
+
+            // Actualizar último costo de compra pero SIN sumar al StockActual de los anaqueles (porque fue directo a obra)
+            using var upProd = conn.CreateCommand();
+            upProd.Transaction = tx;
+            upProd.CommandText = @"
+UPDATE Productos
+SET UltimoCostoCompra = CASE WHEN $costo > 0 THEN $costo ELSE UltimoCostoCompra END
+WHERE Id = $pid";
+            upProd.Parameters.AddWithValue("$costo", (double)partida.PrecioUnitarioConIva);
+            upProd.Parameters.AddWithValue("$pid", partida.ProductoId);
+            upProd.ExecuteNonQuery();
+        }
+
+        int salId = 0;
+        if (!esServicioNoInventariable && partidasSalidaInsertar.Count > 0)
+        {
+            string refSol = !string.IsNullOrWhiteSpace(oc.SolicitudFolio) ? $" | Solicitud: {oc.SolicitudFolio}" : "";
+            string notasSalida = $"[DIRECTO A OBRA] Material recogido con proveedor ({oc.ProveedorNombre}) de {oc.Folio} ({folioEnt}){refSol}. No ingresó a anaquel de Almacén.";
+
+            using var cmdSal = conn.CreateCommand();
+            cmdSal.Transaction = tx;
+            cmdSal.CommandText = @"
+INSERT INTO SalidasAlmacen (Folio, Fecha, DepartamentoId, EncargadoId, ProyectoId, CostoTotalEstimado, Notas, PersonaRecibe)
+VALUES ($fol, $fec, $dep, $enc, $proy, $costo, $not, $per);
+SELECT last_insert_rowid();";
+            cmdSal.Parameters.AddWithValue("$fol", folioSal);
+            cmdSal.Parameters.AddWithValue("$fec", fecha);
+            cmdSal.Parameters.AddWithValue("$dep", depId);
+            cmdSal.Parameters.AddWithValue("$enc", encId);
+            cmdSal.Parameters.AddWithValue("$proy", proyId);
+            cmdSal.Parameters.AddWithValue("$costo", (double)costoTotalSalida);
+            cmdSal.Parameters.AddWithValue("$not", notasSalida);
+            cmdSal.Parameters.AddWithValue("$per", responsableFinal);
+            salId = Convert.ToInt32(cmdSal.ExecuteScalar());
+
+            foreach (var sp in partidasSalidaInsertar)
+            {
+                using var pCmd = conn.CreateCommand();
+                pCmd.Transaction = tx;
+                pCmd.CommandText = @"
+INSERT INTO SalidaPartidas (SalidaAlmacenId, ProductoId, CantidadEntregada, UnidadAlmacen, CostoUnitarioAlmacen)
+VALUES ($sid, $pid, $cant, $ua, $costo)";
+                pCmd.Parameters.AddWithValue("$sid", salId);
+                pCmd.Parameters.AddWithValue("$pid", sp.prodId);
+                pCmd.Parameters.AddWithValue("$cant", (double)sp.cantAlmacen);
+                pCmd.Parameters.AddWithValue("$ua", sp.unidadAlmacen);
+                pCmd.Parameters.AddWithValue("$costo", (double)sp.costoUnitAlmacen);
+                pCmd.ExecuteNonQuery();
+            }
+        }
+
+        // Actualizar estatus de la OC (Recibida Completa / Parcial) y de la Solicitud si ya quedó cubierta
+        using var chkCmd = conn.CreateCommand();
+        chkCmd.Transaction = tx;
+        chkCmd.CommandText = @"
+SELECT COUNT(*) FROM OrdenCompraPartidas
+WHERE OrdenCompraId = $ocid AND CantidadRecibida < CantidadPedida - 0.001";
+        chkCmd.Parameters.AddWithValue("$ocid", oc.Id);
+        int pendientes = Convert.ToInt32(chkCmd.ExecuteScalar());
+
+        string nuevoEstatus = pendientes == 0 ? "Recibida Completa" : "Recibida Parcialmente";
+        using var upOc = conn.CreateCommand();
+        upOc.Transaction = tx;
+        upOc.CommandText = "UPDATE OrdenesCompra SET Estatus = $est WHERE Id = $ocid";
+        upOc.Parameters.AddWithValue("$est", nuevoEstatus);
+        upOc.Parameters.AddWithValue("$ocid", oc.Id);
+        upOc.ExecuteNonQuery();
+
+        if (pendientes == 0 && oc.SolicitudId > 0)
+        {
+            using var chkSol = conn.CreateCommand();
+            chkSol.Transaction = tx;
+            chkSol.CommandText = @"
+SELECT COUNT(*) FROM OrdenesCompra
+WHERE SolicitudId = $sid AND Estatus NOT IN ('Recibida Completa', 'Cerrada Parcial Definitiva', 'Cerrada Parcial (Admin)', 'Cancelada')";
+            chkSol.Parameters.AddWithValue("$sid", oc.SolicitudId);
+            int ocsPendSol = Convert.ToInt32(chkSol.ExecuteScalar());
+            if (ocsPendSol == 0)
+            {
+                using var upSol = conn.CreateCommand();
+                upSol.Transaction = tx;
+                upSol.CommandText = "UPDATE Solicitudes SET Estatus = 'Atendida' WHERE Id = $sid";
+                upSol.Parameters.AddWithValue("$sid", oc.SolicitudId);
+                upSol.ExecuteNonQuery();
+            }
+        }
+
+        tx.Commit();
+
+        RegistrarBitacoraUsuario(
+            "Órdenes de Compra / Obra",
+            tipoEnt,
+            $"{oc.Folio} -> {folioEnt}" + (salId > 0 ? $" / {folioSal}" : ""),
+            $"Entregado directo a proyecto '{oc.ProyectoNombre}' con {responsableFinal}. Stock de anaquel sin alterar.");
+
+        var entObj = ObtenerEntradasAlmacen().First(e => e.Id == entId);
+        var salObj = salId > 0 ? ObtenerSalidasAlmacen().FirstOrDefault(s => s.Id == salId) : null;
+
+        if (notificarCorreo)
+        {
+            string destinoObra = !string.IsNullOrWhiteSpace(lugarEntregaPersonalizado)
+                ? lugarEntregaPersonalizado.Trim()
+                : (esServicioNoInventariable
+                    ? $"Servicio / Proyecto {oc.ProyectoNombre} (Recibió: {responsableFinal})"
+                    : $"Obra / Proyecto {oc.ProyectoNombre} (Recibió: {responsableFinal}, Vale {folioSal})");
+            NotificarCambioEstadoCotizacionGerente(oc.SolicitudId, oc.Folio, "5_CONCLUIDA", null, destinoObra);
+        }
+
+        return (entObj, salObj);
+    }
+
+    // ==================== FASE 1.4: REINGRESO DE SOBRANTE DE OBRA Y AJUSTES DE INVENTARIO / MERMA (AJU-xxxx) ====================
+
+    public static EntradaAlmacen RegistrarReingresoSobranteObra(
+        string proyectoOrigenNombre,
+        string personaDevuelve,
+        string notas,
+        List<EntradaPartida> partidas)
+    {
+        string folioEnt = GenerarSiguienteFolio("ENT", "EntradasAlmacen");
+        string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        string proyFinal = string.IsNullOrWhiteSpace(proyectoOrigenNombre) ? "Obra General" : proyectoOrigenNombre.Trim();
+        string perFinal = string.IsNullOrWhiteSpace(personaDevuelve) ? "Personal Operativo" : personaDevuelve.Trim();
+        string notasFinal = $"[SOBRANTE DE OBRA] Devuelve: {perFinal} de '{proyFinal}'" +
+                            (!string.IsNullOrWhiteSpace(notas) ? $" | {notas.Trim()}" : "");
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+INSERT INTO EntradasAlmacen (Folio, Fecha, OrdenCompraId, OrdenCompraFolio, ProveedorNombre, ProyectoNombre, TipoEntrada, FacturaUuid, Notas)
+VALUES ($fol, $fec, NULL, 'SOBRANTE-OBRA', $per, $proy, 'Retorno Sobrante de Obra', '', $not);
+SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("$fol", folioEnt);
+        cmd.Parameters.AddWithValue("$fec", fecha);
+        cmd.Parameters.AddWithValue("$per", $"Devolvió: {perFinal}");
+        cmd.Parameters.AddWithValue("$proy", proyFinal);
+        cmd.Parameters.AddWithValue("$not", notasFinal);
+        int entId = Convert.ToInt32(cmd.ExecuteScalar());
+
+        foreach (var p in partidas.Where(x => x.CantidadIngresadaAlmacen > 0))
+        {
+            using var epCmd = conn.CreateCommand();
+            epCmd.Transaction = tx;
+            epCmd.CommandText = @"
+INSERT INTO EntradaPartidas (EntradaAlmacenId, ProductoId, CantidadCompraRecibida, UnidadCompra, FactorConversion, CantidadIngresadaAlmacen, UnidadAlmacen, CostoUnitarioCompraConIva)
+VALUES ($eid, $pid, $cc, $uc, 1, $ca, $ua, $costo)";
+            epCmd.Parameters.AddWithValue("$eid", entId);
+            epCmd.Parameters.AddWithValue("$pid", p.ProductoId);
+            epCmd.Parameters.AddWithValue("$cc", (double)p.CantidadIngresadaAlmacen);
+            epCmd.Parameters.AddWithValue("$uc", p.UnidadAlmacen);
+            epCmd.Parameters.AddWithValue("$ca", (double)p.CantidadIngresadaAlmacen);
+            epCmd.Parameters.AddWithValue("$ua", p.UnidadAlmacen);
+            epCmd.Parameters.AddWithValue("$costo", (double)p.CostoUnitarioCompraConIva);
+            epCmd.ExecuteNonQuery();
+
+            using var upProd = conn.CreateCommand();
+            upProd.Transaction = tx;
+            upProd.CommandText = @"
+UPDATE Productos
+SET StockActual = StockActual + $ca,
+    Ubicacion = CASE WHEN $ubi <> '' THEN $ubi ELSE Ubicacion END
+WHERE Id = $pid";
+            upProd.Parameters.AddWithValue("$ca", (double)p.CantidadIngresadaAlmacen);
+            upProd.Parameters.AddWithValue("$ubi", p.UbicacionAlmacen ?? string.Empty);
+            upProd.Parameters.AddWithValue("$pid", p.ProductoId);
+            upProd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+
+        RegistrarBitacoraUsuario(
+            "Almacén",
+            "Reingreso de Sobrante de Obra",
+            folioEnt,
+            $"Sobrante de '{proyFinal}' entregado por {perFinal} ({partidas.Count} partidas sumadas al stock de almacén).");
+
+        return ObtenerEntradasAlmacen().First(e => e.Id == entId);
+    }
+
+    public static EntradaAlmacen RegistrarAjusteInventarioAlmacen(
+        Producto producto,
+        decimal nuevoStockFisicoReal,
+        string motivoAjuste,
+        string observaciones)
+    {
+        var prodActual = ObtenerProductos().First(p => p.Id == producto.Id);
+        decimal stockAnterior = prodActual.StockActual;
+        decimal nuevoStock = Math.Max(0m, Math.Round(nuevoStockFisicoReal, 2));
+        decimal diferencia = nuevoStock - stockAnterior;
+
+        string folioAju = GenerarSiguienteFolio("AJU", "EntradasAlmacen");
+        string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        var usr = ObtenerUsuarioActivo();
+        string tipoAju = diferencia >= 0 ? $"Ajuste Inventario (+{diferencia:0.##})" : $"Ajuste / Merma ({diferencia:0.##})";
+        string motivoLimpio = string.IsNullOrWhiteSpace(motivoAjuste) ? "Conteo físico cíclico" : motivoAjuste.Trim();
+        string detalleNotas = $"[{tipoAju} · {motivoLimpio}] Stock anterior: {stockAnterior:0.##} -> Stock físico real: {nuevoStock:0.##} {prodActual.UnidadAlmacen}" +
+                              (!string.IsNullOrWhiteSpace(observaciones) ? $" | {observaciones.Trim()}" : "");
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+INSERT INTO EntradasAlmacen (Folio, Fecha, OrdenCompraId, OrdenCompraFolio, ProveedorNombre, ProyectoNombre, TipoEntrada, FacturaUuid, Notas)
+VALUES ($fol, $fec, NULL, $mot, $resp, 'Ajuste Inventario Almacén', $tipo, '', $not);
+SELECT last_insert_rowid();";
+        cmd.Parameters.AddWithValue("$fol", folioAju);
+        cmd.Parameters.AddWithValue("$fec", fecha);
+        cmd.Parameters.AddWithValue("$mot", motivoLimpio);
+        cmd.Parameters.AddWithValue("$resp", usr.NombreCompleto);
+        cmd.Parameters.AddWithValue("$tipo", tipoAju);
+        cmd.Parameters.AddWithValue("$not", detalleNotas);
+        int entId = Convert.ToInt32(cmd.ExecuteScalar());
+
+        using (var epCmd = conn.CreateCommand())
+        {
+            epCmd.Transaction = tx;
+            epCmd.CommandText = @"
+INSERT INTO EntradaPartidas (EntradaAlmacenId, ProductoId, CantidadCompraRecibida, UnidadCompra, FactorConversion, CantidadIngresadaAlmacen, UnidadAlmacen, CostoUnitarioCompraConIva)
+VALUES ($eid, $pid, $dif, $ua, 1, $dif, $ua, $costo)";
+            epCmd.Parameters.AddWithValue("$eid", entId);
+            epCmd.Parameters.AddWithValue("$pid", prodActual.Id);
+            epCmd.Parameters.AddWithValue("$dif", (double)diferencia);
+            epCmd.Parameters.AddWithValue("$ua", prodActual.UnidadAlmacen);
+            epCmd.Parameters.AddWithValue("$costo", (double)prodActual.CostoUnitarioAlmacen);
+            epCmd.ExecuteNonQuery();
+        }
+
+        using (var upProd = conn.CreateCommand())
+        {
+            upProd.Transaction = tx;
+            upProd.CommandText = "UPDATE Productos SET StockActual = $nuevo WHERE Id = $pid";
+            upProd.Parameters.AddWithValue("$nuevo", (double)nuevoStock);
+            upProd.Parameters.AddWithValue("$pid", prodActual.Id);
+            upProd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+
+        RegistrarBitacoraAdmin("Ajuste de Inventario / Merma", folioAju, $"{motivoLimpio} | {prodActual.CodigoInterno} ({prodActual.Nombre}): {stockAnterior:0.##} -> {nuevoStock:0.##} ({diferencia:+0.##;-0.##;0})");
+        RegistrarBitacoraUsuario("Almacén", tipoAju, folioAju, $"{prodActual.CodigoInterno} {prodActual.Nombre}: {detalleNotas}");
+
+        return ObtenerEntradasAlmacen().First(e => e.Id == entId);
+    }
+
+    // ============================================================================================================
+    // FASE 2: MALETINES / KITS DE HERRAMIENTAS OPERATIVOS (KIT-xxxx) — SALIDA Y CHECK-LIST DE REGRESO EN 1 CLIC
+    // ============================================================================================================
+
+    private static void SeedKitsHerramientasSiVacio(SqliteConnection conn)
+    {
+        using var chk = conn.CreateCommand();
+        chk.CommandText = "SELECT COUNT(*) FROM KitsHerramientas;";
+        long count = Convert.ToInt64(chk.ExecuteScalar());
+        if (count > 0) return;
+
+        var idsHerramientas = new List<int>();
+        using (var qHer = conn.CreateCommand())
+        {
+            qHer.CommandText = "SELECT Id FROM HerramientasActivos ORDER BY Id ASC LIMIT 8;";
+            using var r = qHer.ExecuteReader();
+            while (r.Read())
+                idsHerramientas.Add(r.GetInt32(0));
+        }
+
+        using var ins1 = conn.CreateCommand();
+        ins1.CommandText = @"
+INSERT INTO KitsHerramientas (CodigoKit, Nombre, Especialidad, Ubicacion, ResponsableActual, ProyectoActual, UltimoValePrestamoFolio, Estatus, Notas)
+VALUES ('KIT-0001', 'Maletín Eléctrico y Control — Cuadrilla 1', 'Eléctrica y Control', 'GABINETE-1', '', '', '', 'Disponible', 'Kit base para armado de tableros y puesta en marcha en obra.');
+SELECT last_insert_rowid();";
+        int kit1Id = Convert.ToInt32(ins1.ExecuteScalar());
+
+        using var ins2 = conn.CreateCommand();
+        ins2.CommandText = @"
+INSERT INTO KitsHerramientas (CodigoKit, Nombre, Especialidad, Ubicacion, ResponsableActual, ProyectoActual, UltimoValePrestamoFolio, Estatus, Notas)
+VALUES ('KIT-0002', 'Maletín Mecánico e Instalación — Cuadrilla 2', 'Mecánica / Obra', 'GABINETE-2', '', '', '', 'Disponible', 'Kit de montaje mecánico y perforación en planta.');
+SELECT last_insert_rowid();";
+        int kit2Id = Convert.ToInt32(ins2.ExecuteScalar());
+
+        for (int i = 0; i < idsHerramientas.Count; i++)
+        {
+            int targetKit = (i % 2 == 0) ? kit1Id : kit2Id;
+            using var insP = conn.CreateCommand();
+            insP.CommandText = "INSERT OR IGNORE INTO KitHerramientasPartidas (KitId, HerramientaActivoId) VALUES ($k, $h);";
+            insP.Parameters.AddWithValue("$k", targetKit);
+            insP.Parameters.AddWithValue("$h", idsHerramientas[i]);
+            insP.ExecuteNonQuery();
+        }
+    }
+
+    public static List<KitHerramienta> ObtenerKitsHerramientas()
+    {
+        var lista = new List<KitHerramienta>();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+SELECT Id, CodigoKit, Nombre, Especialidad, Ubicacion, ResponsableActual, ProyectoActual, UltimoValePrestamoFolio, Estatus, Notas
+FROM KitsHerramientas
+ORDER BY CodigoKit ASC;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                lista.Add(new KitHerramienta
+                {
+                    Id = r.GetInt32(0),
+                    CodigoKit = r.GetString(1),
+                    Nombre = r.GetString(2),
+                    Especialidad = r.GetString(3),
+                    Ubicacion = r.GetString(4),
+                    ResponsableActual = r.GetString(5),
+                    ProyectoActual = r.GetString(6),
+                    UltimoValePrestamoFolio = r.GetString(7),
+                    Estatus = r.GetString(8),
+                    Notas = r.GetString(9)
+                });
+            }
+        }
+
+        foreach (var kit in lista)
+        {
+            using var pCmd = conn.CreateCommand();
+            pCmd.CommandText = @"
+SELECT kp.Id, kp.KitId, kp.HerramientaActivoId,
+       COALESCE(h.CodigoIndividual, 'HER'),
+       COALESCE(pr.Nombre, 'Herramienta'),
+       COALESCE(h.MarcaModelo, ''),
+       COALESCE(h.NumeroSerie, ''),
+       COALESCE(h.Ubicacion, ''),
+       COALESCE(h.Estado, 'Disponible'),
+       COALESCE(h.EncargadoActual, '')
+FROM KitHerramientasPartidas kp
+INNER JOIN HerramientasActivos h ON h.Id = kp.HerramientaActivoId
+LEFT JOIN Productos pr ON pr.Id = h.ProductoId
+WHERE kp.KitId = $kid
+ORDER BY h.CodigoIndividual ASC;";
+            pCmd.Parameters.AddWithValue("$kid", kit.Id);
+            using var r2 = pCmd.ExecuteReader();
+            while (r2.Read())
+            {
+                string estAct = r2.GetString(8);
+                kit.Partidas.Add(new KitHerramientaPartida
+                {
+                    Id = r2.GetInt32(0),
+                    KitId = r2.GetInt32(1),
+                    HerramientaActivoId = r2.GetInt32(2),
+                    CodigoIndividual = r2.GetString(3),
+                    HerramientaNombre = r2.GetString(4),
+                    MarcaModelo = r2.GetString(5),
+                    NumeroSerie = r2.GetString(6),
+                    Ubicacion = r2.GetString(7),
+                    EstadoActual = estAct,
+                    EncargadoActual = r2.GetString(9),
+                    RegresoOk = true,
+                    EstadoRetornoElegido = "Bueno (Completo)"
+                });
+            }
+
+            // Sincronizar estatus dinámico según el estado real de sus herramientas
+            if (kit.Partidas.Count > 0)
+            {
+                if (kit.Partidas.Any(p => p.EstadoActual.Contains("Dañada", StringComparison.OrdinalIgnoreCase) || p.EstadoActual.Contains("Extraviada", StringComparison.OrdinalIgnoreCase)))
+                    kit.Estatus = "Con Incidencia / Incompleto";
+                else if (kit.Partidas.Any(p => string.Equals(p.EstadoActual, "En Préstamo", StringComparison.OrdinalIgnoreCase)))
+                {
+                    kit.Estatus = kit.Partidas.All(p => string.Equals(p.EstadoActual, "En Préstamo", StringComparison.OrdinalIgnoreCase))
+                        ? "En Obra / Prestado"
+                        : "Parcial en Obra";
+                    if (string.IsNullOrWhiteSpace(kit.ResponsableActual))
+                        kit.ResponsableActual = kit.Partidas.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.EncargadoActual))?.EncargadoActual ?? string.Empty;
+                }
+                else
+                {
+                    kit.Estatus = "Disponible";
+                }
+            }
+        }
+
+        return lista;
+    }
+
+    public static string GenerarSiguienteCodigoKit()
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT CodigoKit FROM KitsHerramientas ORDER BY Id DESC LIMIT 50;";
+        int max = 0;
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            string c = r.GetString(0);
+            var parts = c.Split('-');
+            if (parts.Length >= 2 && int.TryParse(parts[^1], out int n) && n > max)
+                max = n;
+        }
+        return $"KIT-{(max + 1):0000}";
+    }
+
+    public static int GuardarKitHerramienta(KitHerramienta kit)
+    {
+        string codigo = string.IsNullOrWhiteSpace(kit.CodigoKit) ? GenerarSiguienteCodigoKit() : kit.CodigoKit.Trim().ToUpperInvariant();
+        string nombre = string.IsNullOrWhiteSpace(kit.Nombre) ? $"Maletín Operativo {codigo}" : kit.Nombre.Trim();
+        string esp = string.IsNullOrWhiteSpace(kit.Especialidad) ? "General" : kit.Especialidad.Trim();
+        string ubi = string.IsNullOrWhiteSpace(kit.Ubicacion) ? "GABINETE-1" : kit.Ubicacion.Trim();
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        if (kit.Id <= 0)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+INSERT INTO KitsHerramientas (CodigoKit, Nombre, Especialidad, Ubicacion, ResponsableActual, ProyectoActual, UltimoValePrestamoFolio, Estatus, Notas)
+VALUES ($cod, $nom, $esp, $ubi, '', '', '', 'Disponible', $not);
+SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$cod", codigo);
+            cmd.Parameters.AddWithValue("$nom", nombre);
+            cmd.Parameters.AddWithValue("$esp", esp);
+            cmd.Parameters.AddWithValue("$ubi", ubi);
+            cmd.Parameters.AddWithValue("$not", kit.Notas?.Trim() ?? string.Empty);
+            int nuevoId = Convert.ToInt32(cmd.ExecuteScalar());
+            RegistrarBitacoraUsuario("Herramientas / Kits", "Alta de Maletín / Kit", codigo, $"Se creó el kit '{nombre}' en {ubi}.");
+            return nuevoId;
+        }
+        else
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+UPDATE KitsHerramientas
+SET CodigoKit = $cod, Nombre = $nom, Especialidad = $esp, Ubicacion = $ubi, Notas = $not
+WHERE Id = $id;";
+            cmd.Parameters.AddWithValue("$cod", codigo);
+            cmd.Parameters.AddWithValue("$nom", nombre);
+            cmd.Parameters.AddWithValue("$esp", esp);
+            cmd.Parameters.AddWithValue("$ubi", ubi);
+            cmd.Parameters.AddWithValue("$not", kit.Notas?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$id", kit.Id);
+            cmd.ExecuteNonQuery();
+            RegistrarBitacoraUsuario("Herramientas / Kits", "Edición de Maletín / Kit", codigo, $"Se actualizó el kit '{nombre}'.");
+            return kit.Id;
+        }
+    }
+
+    public static void AgregarHerramientaAKit(int kitId, int herramientaActivoId)
+    {
+        if (kitId <= 0 || herramientaActivoId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+DELETE FROM KitHerramientasPartidas WHERE HerramientaActivoId = $hid;
+INSERT OR IGNORE INTO KitHerramientasPartidas (KitId, HerramientaActivoId) VALUES ($kid, $hid);";
+        cmd.Parameters.AddWithValue("$kid", kitId);
+        cmd.Parameters.AddWithValue("$hid", herramientaActivoId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void QuitarHerramientaDeKit(int kitId, int herramientaActivoId)
+    {
+        if (kitId <= 0 || herramientaActivoId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM KitHerramientasPartidas WHERE KitId = $kid AND HerramientaActivoId = $hid;";
+        cmd.Parameters.AddWithValue("$kid", kitId);
+        cmd.Parameters.AddWithValue("$hid", herramientaActivoId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarKitHerramienta(int kitId)
+    {
+        if (kitId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+DELETE FROM KitHerramientasPartidas WHERE KitId = $kid;
+DELETE FROM KitsHerramientas WHERE Id = $kid;";
+        cmd.Parameters.AddWithValue("$kid", kitId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static PrestamoHerramienta? DespacharKitHerramientaEnUnClic(
+        int kitId,
+        int departamentoId,
+        int encargadoId,
+        int proyectoId,
+        string personaRecibe,
+        string fechaCompromiso,
+        string notas = "")
+    {
+        var kit = ObtenerKitsHerramientas().FirstOrDefault(k => k.Id == kitId);
+        if (kit == null) return null;
+
+        var todasHer = ObtenerHerramientasIndividuales().ToDictionary(h => h.Id);
+        var herramientasDisponiblesKit = new List<HerramientaActivo>();
+        foreach (var part in kit.Partidas)
+        {
+            if (todasHer.TryGetValue(part.HerramientaActivoId, out var hObj) &&
+                string.Equals(hObj.Estado, "Disponible", StringComparison.OrdinalIgnoreCase))
+            {
+                herramientasDisponiblesKit.Add(hObj);
+            }
+        }
+
+        if (herramientasDisponiblesKit.Count == 0)
+            return null;
+
+        string notaKit = $"[MALETÍN {kit.CodigoKit}: {kit.Nombre}]" + (string.IsNullOrWhiteSpace(notas) ? "" : $" | {notas.Trim()}");
+        var prestamo = RegistrarPrestamoHerramienta(
+            departamentoId,
+            encargadoId,
+            proyectoId,
+            notaKit,
+            herramientasDisponiblesKit,
+            personaRecibe,
+            fechaCompromiso);
+
+        string proyNombre = ObtenerProyectos().FirstOrDefault(p => p.Id == proyectoId)?.Nombre ?? "Obra";
+        using (var conn = new SqliteConnection(ConnectionString))
+        {
+            conn.Open();
+            using var up = conn.CreateCommand();
+            up.CommandText = @"
+UPDATE KitsHerramientas
+SET Estatus = 'En Obra / Prestado',
+    ResponsableActual = $resp,
+    ProyectoActual = $proy,
+    UltimoValePrestamoFolio = $fol
+WHERE Id = $kid;";
+            up.Parameters.AddWithValue("$resp", personaRecibe.Trim());
+            up.Parameters.AddWithValue("$proy", proyNombre);
+            up.Parameters.AddWithValue("$fol", prestamo.Folio);
+            up.Parameters.AddWithValue("$kid", kit.Id);
+            up.ExecuteNonQuery();
+        }
+
+        RegistrarBitacoraUsuario(
+            "Herramientas / Kits",
+            "Despacho de Maletín en 1 Clic",
+            $"{kit.CodigoKit} -> {prestamo.Folio}",
+            $"Se despachó {kit.CodigoKit} ({herramientasDisponiblesKit.Count} herramientas) a '{personaRecibe}' para '{proyNombre}'.");
+
+        return prestamo;
+    }
+
+    public static (int devueltasOk, int siguenEnObra, int conIncidencia) RegistrarChecklistRegresoKit(
+        int kitId,
+        List<KitHerramientaPartida> checklistItems,
+        string observacionesGenerales = "")
+    {
+        var kit = ObtenerKitsHerramientas().FirstOrDefault(k => k.Id == kitId);
+        if (kit == null) return (0, 0, 0);
+
+        var prestamosActivos = ObtenerPrestamosHerramienta()
+            .Where(p => p.Estatus != "Devuelto Completo" && p.Estatus != "Devuelto con Incidencia")
+            .ToList();
+
+        int okCount = 0;
+        int siguenCount = 0;
+        int incCount = 0;
+
+        foreach (var item in checklistItems)
+        {
+            string estadoElegido = item.EstadoRetornoElegido ?? "Bueno (Completo)";
+            if (estadoElegido.StartsWith("Se queda en obra", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(item.EstadoActual, "En Préstamo", StringComparison.OrdinalIgnoreCase))
+                    siguenCount++;
+                continue;
+            }
+
+            string estadoDb = estadoElegido switch
+            {
+                var s when s.Contains("Dañado", StringComparison.OrdinalIgnoreCase) => "Dañado",
+                var s when s.Contains("Extraviado", StringComparison.OrdinalIgnoreCase) => "Extraviado",
+                var s when s.Contains("Incompleto", StringComparison.OrdinalIgnoreCase) => "Incompleto / Falta Pieza",
+                _ => "Bueno (Completo)"
+            };
+
+            string obsPartida = $"[Check-list {kit.CodigoKit}]" +
+                                (!string.IsNullOrWhiteSpace(item.ObservacionesRetorno) ? $" {item.ObservacionesRetorno.Trim()}" : "") +
+                                (!string.IsNullOrWhiteSpace(observacionesGenerales) ? $" | {observacionesGenerales.Trim()}" : "");
+
+            // Buscar si tiene una partida de préstamo activa pendiente
+            var prestamoMatch = prestamosActivos.FirstOrDefault(pr =>
+                pr.Partidas.Any(pp => pp.HerramientaActivoId == item.HerramientaActivoId && pp.EstadoDevolucion == "Pendiente"));
+
+            if (prestamoMatch != null)
+            {
+                var ppMatch = prestamoMatch.Partidas.First(pp => pp.HerramientaActivoId == item.HerramientaActivoId && pp.EstadoDevolucion == "Pendiente");
+                DevolverHerramientaPartida(ppMatch.Id, item.HerramientaActivoId, prestamoMatch.Id, estadoDb, obsPartida);
+            }
+            else
+            {
+                // Actualizar directamente el estado de la herramienta si no tenía vale abierto
+                string nuevoEstHer = estadoDb switch
+                {
+                    "Dañado" => "Dañada",
+                    "Extraviado" => "Extraviada / Baja",
+                    _ => "Disponible"
+                };
+                using var connH = new SqliteConnection(ConnectionString);
+                connH.Open();
+                using var upH = connH.CreateCommand();
+                upH.CommandText = @"
+UPDATE HerramientasActivos
+SET Estado = $est, EncargadoActual = '', ProyectoActual = '', NotasEstado = $obs
+WHERE Id = $hid;";
+                upH.Parameters.AddWithValue("$est", nuevoEstHer);
+                upH.Parameters.AddWithValue("$obs", obsPartida);
+                upH.Parameters.AddWithValue("$hid", item.HerramientaActivoId);
+                upH.ExecuteNonQuery();
+            }
+
+            if (estadoDb == "Bueno (Completo)")
+                okCount++;
+            else
+                incCount++;
+        }
+
+        string nuevoEstatusKit = incCount > 0
+            ? "Con Incidencia / Incompleto"
+            : (siguenCount > 0 ? "Parcial en Obra" : "Disponible");
+
+        using (var conn = new SqliteConnection(ConnectionString))
+        {
+            conn.Open();
+            using var upK = conn.CreateCommand();
+            upK.CommandText = @"
+UPDATE KitsHerramientas
+SET Estatus = $est,
+    ResponsableActual = CASE WHEN $siguen > 0 THEN ResponsableActual ELSE '' END,
+    ProyectoActual = CASE WHEN $siguen > 0 THEN ProyectoActual ELSE '' END
+WHERE Id = $kid;";
+            upK.Parameters.AddWithValue("$est", nuevoEstatusKit);
+            upK.Parameters.AddWithValue("$siguen", siguenCount);
+            upK.Parameters.AddWithValue("$kid", kit.Id);
+            upK.ExecuteNonQuery();
+        }
+
+        if (incCount > 0)
+        {
+            RegistrarCheckpoint(
+                "Herramientas: Check-list de Maletín",
+                "CP-KIT-INC",
+                kit.CodigoKit,
+                "En Obra / Prestado",
+                nuevoEstatusKit,
+                ObtenerRolOperativoActivo(),
+                "Compras, Almacén",
+                $"En el regreso del maletín {kit.CodigoKit} ({kit.Nombre}) se reportaron {incCount} herramienta(s) dañadas o extraviadas.");
+        }
+
+        RegistrarBitacoraUsuario(
+            "Herramientas / Kits",
+            "Check-list de Regreso de Maletín",
+            kit.CodigoKit,
+            $"Regresaron OK: {okCount}, Siguen en obra: {siguenCount}, Con incidencia: {incCount}. {observacionesGenerales}");
+
+        return (okCount, siguenCount, incCount);
+    }
+
+    // ============================================================================================================
+    // FASE 3: FLOTILLA DE CAMIONETAS (VEH-xxxx), COSTO POR KILÓMETRO (CPK) Y GARANTÍAS / TCO DE EQUIPOS
+    // ============================================================================================================
+
+    private static void SeedVehiculosFlotillaYGarantiasSiVacio(SqliteConnection conn)
+    {
+        // Limpiar registros semilla de ejemplo ('FAC-GAS-101', 'FAC-TAL-204', 'FAC-GAS-108', 'JKL-4821', 'MNP-9104') si estaban en la base
+        using (var cleanSeed = conn.CreateCommand())
+        {
+            cleanSeed.CommandText = @"
+DELETE FROM BitacoraGastosVehiculo WHERE FolioReferencia IN ('FAC-GAS-101', 'FAC-TAL-204', 'FAC-GAS-108');
+DELETE FROM RevisionesSemanalesVehiculo WHERE Observaciones LIKE '%Revisión semanal de lunes sin novedades%' OR Observaciones LIKE '%Unidad limpia y con kit de emergencia completo%';
+DELETE FROM VehiculosFlotilla WHERE Placas IN ('JKL-4821', 'MNP-9104');";
+            cleanSeed.ExecuteNonQuery();
+        }
+
+        // Inicializar vigencia de garantía por defecto en herramientas activas si están vacías
+        using var upHerGar = conn.CreateCommand();
+        upHerGar.CommandText = @"
+UPDATE HerramientasActivos
+SET FechaCompra = CASE WHEN FechaCompra = '' THEN $fc ELSE FechaCompra END,
+    FechaFinGarantia = CASE WHEN FechaFinGarantia = '' THEN $fg ELSE FechaFinGarantia END,
+    CostoAdquisicion = CASE WHEN CostoAdquisicion <= 0 THEN COALESCE((SELECT UltimoCostoCompra FROM Productos p WHERE p.Id = HerramientasActivos.ProductoId), 2500) ELSE CostoAdquisicion END
+WHERE Id IN (SELECT Id FROM HerramientasActivos ORDER BY Id ASC LIMIT 12);";
+        upHerGar.Parameters.AddWithValue("$fc", DateTime.Today.AddMonths(-4).ToString("yyyy-MM-dd"));
+        upHerGar.Parameters.AddWithValue("$fg", DateTime.Today.AddMonths(8).ToString("yyyy-MM-dd"));
+        upHerGar.ExecuteNonQuery();
+    }
+
+    public static List<VehiculoFlotilla> ObtenerVehiculosFlotilla()
+    {
+        var lista = new List<VehiculoFlotilla>();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+SELECT Id, CodigoVehiculo, Placas, MarcaModelo, Anio, ResponsableHabitual, KilometrajeInicial, KilometrajeActual, ProximoServicioKm, VigenciaSeguro, Estatus, Notas,
+       COALESCE(IntervaloServicioKm, 10000), COALESCE(UltimoServicioKm, 0), COALESCE(CapacidadTanqueLitros, 60), COALESCE(TipoCombustible, 'Gasolina Regular')
+FROM VehiculosFlotilla
+ORDER BY CodigoVehiculo ASC;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                lista.Add(new VehiculoFlotilla
+                {
+                    Id = r.GetInt32(0),
+                    CodigoVehiculo = r.GetString(1),
+                    Placas = r.GetString(2),
+                    MarcaModelo = r.GetString(3),
+                    Anio = r.GetInt32(4),
+                    ResponsableHabitual = r.GetString(5),
+                    KilometrajeInicial = r.GetInt32(6),
+                    KilometrajeActual = r.GetInt32(7),
+                    ProximoServicioKm = r.GetInt32(8),
+                    VigenciaSeguro = r.GetString(9),
+                    Estatus = r.GetString(10),
+                    Notas = r.GetString(11),
+                    IntervaloServicioKm = r.GetInt32(12) > 0 ? r.GetInt32(12) : 10000,
+                    UltimoServicioKm = r.GetInt32(13),
+                    CapacidadTanqueLitros = Convert.ToDecimal(r.GetDouble(14)),
+                    TipoCombustible = r.GetString(15)
+                });
+            }
+        }
+
+        foreach (var v in lista)
+        {
+            using (var gCmd = conn.CreateCommand())
+            {
+                gCmd.CommandText = @"
+SELECT Id, VehiculoId, Fecha, TipoGasto, KilometrajeRegistro, MontoConIva, ProveedorTaller, FolioReferencia, ProyectoNombre, Descripcion,
+       COALESCE(LitrosCargados, 0), COALESCE(PrecioPorLitro, 0), COALESCE(TanqueLleno, 1)
+FROM BitacoraGastosVehiculo
+WHERE VehiculoId = $vid
+ORDER BY Fecha DESC, Id DESC;";
+                gCmd.Parameters.AddWithValue("$vid", v.Id);
+                using var rg = gCmd.ExecuteReader();
+                while (rg.Read())
+                {
+                    var reg = new RegistroGastoVehiculo
+                    {
+                        Id = rg.GetInt32(0),
+                        VehiculoId = rg.GetInt32(1),
+                        CodigoVehiculo = v.CodigoVehiculo,
+                        VehiculoDescripcion = v.MarcaModelo,
+                        Fecha = rg.GetString(2),
+                        TipoGasto = rg.GetString(3),
+                        KilometrajeRegistro = rg.GetInt32(4),
+                        MontoConIva = Convert.ToDecimal(rg.GetDouble(5)),
+                        ProveedorTaller = rg.GetString(6),
+                        FolioReferencia = rg.GetString(7),
+                        ProyectoNombre = rg.GetString(8),
+                        Descripcion = rg.GetString(9),
+                        LitrosCargados = Convert.ToDecimal(rg.GetDouble(10)),
+                        PrecioPorLitro = Convert.ToDecimal(rg.GetDouble(11)),
+                        TanqueLleno = rg.GetInt32(12) == 1
+                    };
+                    v.HistorialGastos.Add(reg);
+
+                    if (reg.TipoGasto.Contains("Gasolina", StringComparison.OrdinalIgnoreCase) || reg.TipoGasto.Contains("Combustible", StringComparison.OrdinalIgnoreCase) || reg.TipoGasto.Contains("Diésel", StringComparison.OrdinalIgnoreCase))
+                    {
+                        v.GastoCombustibleAcumulado += reg.MontoConIva;
+                        v.LitrosCombustibleAcumulados += reg.LitrosCargados;
+                    }
+                    else if (reg.TipoGasto.Contains("Mantenimiento", StringComparison.OrdinalIgnoreCase) || reg.TipoGasto.Contains("Taller", StringComparison.OrdinalIgnoreCase) || reg.TipoGasto.Contains("Llantas", StringComparison.OrdinalIgnoreCase) || reg.TipoGasto.Contains("Reparación", StringComparison.OrdinalIgnoreCase) || reg.TipoGasto.Contains("Refacciones", StringComparison.OrdinalIgnoreCase))
+                    {
+                        v.GastoMantenimientoAcumulado += reg.MontoConIva;
+                    }
+                    else
+                    {
+                        v.GastoOtrosAcumulado += reg.MontoConIva;
+                    }
+                }
+            }
+
+            using (var revCmd = conn.CreateCommand())
+            {
+                revCmd.CommandText = @"
+SELECT Id, VehiculoId, FolioRevision, Fecha, ResponsableInspector, KilometrajeRegistrado, NivelCombustible, EstadoLlantas, EstadoNivelesFluidos, EstadoFrenosLuces, EstadoCarroceriaLimpieza, Observaciones
+FROM RevisionesSemanalesVehiculo
+WHERE VehiculoId = $vid
+ORDER BY Fecha DESC, Id DESC;";
+                revCmd.Parameters.AddWithValue("$vid", v.Id);
+                using var rr = revCmd.ExecuteReader();
+                while (rr.Read())
+                {
+                    v.HistorialRevisiones.Add(new RevisionSemanalVehiculo
+                    {
+                        Id = rr.GetInt32(0),
+                        VehiculoId = rr.GetInt32(1),
+                        CodigoVehiculo = v.CodigoVehiculo,
+                        VehiculoDescripcion = v.MarcaModelo,
+                        Placas = v.Placas,
+                        FolioRevision = rr.GetString(2),
+                        Fecha = rr.GetString(3),
+                        ResponsableInspector = rr.GetString(4),
+                        KilometrajeRegistrado = rr.GetInt32(5),
+                        NivelCombustible = rr.GetString(6),
+                        EstadoLlantas = rr.GetString(7),
+                        EstadoNivelesFluidos = rr.GetString(8),
+                        EstadoFrenosLuces = rr.GetString(9),
+                        EstadoCarroceriaLimpieza = rr.GetString(10),
+                        Observaciones = rr.GetString(11)
+                    });
+                }
+            }
+        }
+
+        return lista;
+    }
+
+    public static string GenerarSiguienteCodigoVehiculo()
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT CodigoVehiculo FROM VehiculosFlotilla ORDER BY Id DESC LIMIT 50;";
+        int max = 0;
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            string c = r.GetString(0);
+            var parts = c.Split('-');
+            if (parts.Length >= 2 && int.TryParse(parts[^1], out int n) && n > max)
+                max = n;
+        }
+        return $"VEH-{(max + 1):0000}";
+    }
+
+    public static string GenerarSiguienteFolioRevisionVehiculo()
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT FolioRevision FROM RevisionesSemanalesVehiculo ORDER BY Id DESC LIMIT 50;";
+        int max = 0;
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            string c = r.GetString(0);
+            var parts = c.Split('-');
+            if (parts.Length >= 2 && int.TryParse(parts[^1], out int n) && n > max)
+                max = n;
+        }
+        return $"REV-{(max + 1):0000}";
+    }
+
+    public static int GuardarVehiculoFlotilla(VehiculoFlotilla v)
+    {
+        string cod = string.IsNullOrWhiteSpace(v.CodigoVehiculo) ? GenerarSiguienteCodigoVehiculo() : v.CodigoVehiculo.Trim().ToUpperInvariant();
+        string mod = string.IsNullOrWhiteSpace(v.MarcaModelo) ? $"Unidad {cod}" : v.MarcaModelo.Trim();
+        int kmIni = Math.Max(0, v.KilometrajeInicial);
+        int kmAct = Math.Max(kmIni, v.KilometrajeActual);
+        int intervalo = v.IntervaloServicioKm > 0 ? v.IntervaloServicioKm : 10000;
+        int ultServ = v.UltimoServicioKm > 0 ? v.UltimoServicioKm : kmIni;
+        int kmProx = v.ProximoServicioKm > 0 ? v.ProximoServicioKm : (ultServ + intervalo);
+        decimal capTanque = v.CapacidadTanqueLitros > 0 ? v.CapacidadTanqueLitros : 60m;
+        string tipoComb = string.IsNullOrWhiteSpace(v.TipoCombustible) ? "Gasolina Regular" : v.TipoCombustible.Trim();
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        if (v.Id <= 0)
+        {
+            using (var chkDup = conn.CreateCommand())
+            {
+                chkDup.CommandText = "SELECT COUNT(*) FROM VehiculosFlotilla WHERE UPPER(CodigoVehiculo) = $cod;";
+                chkDup.Parameters.AddWithValue("$cod", cod);
+                if (Convert.ToInt64(chkDup.ExecuteScalar()) > 0)
+                    cod = GenerarSiguienteCodigoVehiculo();
+            }
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+INSERT INTO VehiculosFlotilla (CodigoVehiculo, Placas, MarcaModelo, Anio, ResponsableHabitual, KilometrajeInicial, KilometrajeActual, ProximoServicioKm, IntervaloServicioKm, UltimoServicioKm, CapacidadTanqueLitros, TipoCombustible, VigenciaSeguro, Estatus, Notas)
+VALUES ($cod, $pla, $mod, $anio, $resp, $kmi, $kma, $kmp, $intv, $ults, $cap, $tcomb, $seg, $est, $not);
+SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$cod", cod);
+            cmd.Parameters.AddWithValue("$pla", v.Placas?.Trim().ToUpperInvariant() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$mod", mod);
+            cmd.Parameters.AddWithValue("$anio", v.Anio > 1990 ? v.Anio : DateTime.Today.Year);
+            cmd.Parameters.AddWithValue("$resp", v.ResponsableHabitual?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$kmi", kmIni);
+            cmd.Parameters.AddWithValue("$kma", kmAct);
+            cmd.Parameters.AddWithValue("$kmp", kmProx);
+            cmd.Parameters.AddWithValue("$intv", intervalo);
+            cmd.Parameters.AddWithValue("$ults", ultServ);
+            cmd.Parameters.AddWithValue("$cap", (double)capTanque);
+            cmd.Parameters.AddWithValue("$tcomb", tipoComb);
+            cmd.Parameters.AddWithValue("$seg", v.VigenciaSeguro?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$est", string.IsNullOrWhiteSpace(v.Estatus) ? "Activo en Operación" : v.Estatus.Trim());
+            cmd.Parameters.AddWithValue("$not", v.Notas?.Trim() ?? string.Empty);
+            int idNuevo = Convert.ToInt32(cmd.ExecuteScalar());
+            RegistrarBitacoraUsuario("Flotilla / Vehículos", "Alta de Vehículo", cod, $"{mod} ({v.Placas}) Km actual: {kmAct:N0} | Servicio cada {intervalo:N0} km");
+            return idNuevo;
+        }
+        else
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+UPDATE VehiculosFlotilla
+SET CodigoVehiculo=$cod, Placas=$pla, MarcaModelo=$mod, Anio=$anio, ResponsableHabitual=$resp,
+    KilometrajeInicial=$kmi, KilometrajeActual=$kma, ProximoServicioKm=$kmp,
+    IntervaloServicioKm=$intv, UltimoServicioKm=$ults, CapacidadTanqueLitros=$cap, TipoCombustible=$tcomb,
+    VigenciaSeguro=$seg, Estatus=$est, Notas=$not
+WHERE Id=$id;";
+            cmd.Parameters.AddWithValue("$cod", cod);
+            cmd.Parameters.AddWithValue("$pla", v.Placas?.Trim().ToUpperInvariant() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$mod", mod);
+            cmd.Parameters.AddWithValue("$anio", v.Anio > 1990 ? v.Anio : DateTime.Today.Year);
+            cmd.Parameters.AddWithValue("$resp", v.ResponsableHabitual?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$kmi", kmIni);
+            cmd.Parameters.AddWithValue("$kma", kmAct);
+            cmd.Parameters.AddWithValue("$kmp", kmProx);
+            cmd.Parameters.AddWithValue("$intv", intervalo);
+            cmd.Parameters.AddWithValue("$ults", ultServ);
+            cmd.Parameters.AddWithValue("$cap", (double)capTanque);
+            cmd.Parameters.AddWithValue("$tcomb", tipoComb);
+            cmd.Parameters.AddWithValue("$seg", v.VigenciaSeguro?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$est", string.IsNullOrWhiteSpace(v.Estatus) ? "Activo en Operación" : v.Estatus.Trim());
+            cmd.Parameters.AddWithValue("$not", v.Notas?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$id", v.Id);
+            cmd.ExecuteNonQuery();
+            RegistrarBitacoraUsuario("Flotilla / Vehículos", "Actualización de Vehículo", cod, $"{mod} ({v.Placas}) Km actual: {kmAct:N0} | Servicio cada {intervalo:N0} km");
+            return v.Id;
+        }
+    }
+
+    public static void EliminarVehiculoFlotilla(int vehiculoId)
+    {
+        if (vehiculoId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+DELETE FROM RevisionesSemanalesVehiculo WHERE VehiculoId = $id;
+DELETE FROM BitacoraGastosVehiculo WHERE VehiculoId = $id;
+DELETE FROM VehiculosFlotilla WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", vehiculoId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarGastoVehiculo(int gastoId)
+    {
+        if (gastoId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM BitacoraGastosVehiculo WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", gastoId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void EliminarRevisionSemanalVehiculo(int revisionId)
+    {
+        if (revisionId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM RevisionesSemanalesVehiculo WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", revisionId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static void RegistrarGastoVehiculo(RegistroGastoVehiculo g)
+    {
+        if (g.VehiculoId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        decimal litros = Math.Max(0m, g.LitrosCargados);
+        decimal precioLitro = Math.Max(0m, g.PrecioPorLitro);
+        decimal monto = Math.Max(0m, g.MontoConIva);
+        if (litros > 0 && precioLitro <= 0 && monto > 0)
+            precioLitro = Math.Round(monto / litros, 2);
+        else if (litros <= 0 && precioLitro > 0 && monto > 0)
+            litros = Math.Round(monto / precioLitro, 2);
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+INSERT INTO BitacoraGastosVehiculo (VehiculoId, Fecha, TipoGasto, KilometrajeRegistro, LitrosCargados, PrecioPorLitro, TanqueLleno, MontoConIva, ProveedorTaller, FolioReferencia, ProyectoNombre, Descripcion)
+VALUES ($vid, $fec, $tipo, $km, $lit, $pl, $lleno, $monto, $prov, $fol, $proy, $desc);";
+            cmd.Parameters.AddWithValue("$vid", g.VehiculoId);
+            cmd.Parameters.AddWithValue("$fec", string.IsNullOrWhiteSpace(g.Fecha) ? DateTime.Today.ToString("yyyy-MM-dd") : g.Fecha.Trim());
+            cmd.Parameters.AddWithValue("$tipo", string.IsNullOrWhiteSpace(g.TipoGasto) ? "Gasolina / Combustible" : g.TipoGasto.Trim());
+            cmd.Parameters.AddWithValue("$km", Math.Max(0, g.KilometrajeRegistro));
+            cmd.Parameters.AddWithValue("$lit", (double)litros);
+            cmd.Parameters.AddWithValue("$pl", (double)precioLitro);
+            cmd.Parameters.AddWithValue("$lleno", g.TanqueLleno ? 1 : 0);
+            cmd.Parameters.AddWithValue("$monto", (double)monto);
+            cmd.Parameters.AddWithValue("$prov", g.ProveedorTaller?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$fol", g.FolioReferencia?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$proy", g.ProyectoNombre?.Trim() ?? "Operación General");
+            cmd.Parameters.AddWithValue("$desc", g.Descripcion?.Trim() ?? string.Empty);
+            cmd.ExecuteNonQuery();
+        }
+
+        if (g.KilometrajeRegistro > 0)
+        {
+            bool esMantPrev = g.TipoGasto != null && g.TipoGasto.Contains("Mantenimiento Preventivo", StringComparison.OrdinalIgnoreCase);
+            using var upKm = conn.CreateCommand();
+            upKm.Transaction = tx;
+            upKm.CommandText = @"
+UPDATE VehiculosFlotilla
+SET KilometrajeActual = CASE WHEN $km > KilometrajeActual THEN $km ELSE KilometrajeActual END,
+    UltimoServicioKm = CASE WHEN $esMant = 1 THEN $km ELSE UltimoServicioKm END,
+    ProximoServicioKm = CASE WHEN $esMant = 1 THEN $km + COALESCE(NULLIF(IntervaloServicioKm, 0), 10000) ELSE ProximoServicioKm END
+WHERE Id = $vid;";
+            upKm.Parameters.AddWithValue("$km", g.KilometrajeRegistro);
+            upKm.Parameters.AddWithValue("$esMant", esMantPrev ? 1 : 0);
+            upKm.Parameters.AddWithValue("$vid", g.VehiculoId);
+            upKm.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+
+        var veh = ObtenerVehiculosFlotilla().FirstOrDefault(v => v.Id == g.VehiculoId);
+        RegistrarBitacoraUsuario(
+            "Flotilla / Vehículos",
+            g.TipoGasto ?? "Gasto Vehicular",
+            veh?.CodigoVehiculo ?? $"VEH-{g.VehiculoId}",
+            $"Monto: {monto:C2} | Km: {g.KilometrajeRegistro:N0} {(litros > 0 ? $"| {litros:0.##} L " : "")}| Ref: {g.FolioReferencia} | {g.Descripcion}");
+    }
+
+    public static RevisionSemanalVehiculo RegistrarRevisionSemanalVehiculo(RevisionSemanalVehiculo rev)
+    {
+        if (rev.VehiculoId <= 0) return rev;
+        string folio = string.IsNullOrWhiteSpace(rev.FolioRevision) ? GenerarSiguienteFolioRevisionVehiculo() : rev.FolioRevision.Trim().ToUpperInvariant();
+        string fecha = string.IsNullOrWhiteSpace(rev.Fecha) ? DateTime.Today.ToString("yyyy-MM-dd") : rev.Fecha.Trim();
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+INSERT INTO RevisionesSemanalesVehiculo (VehiculoId, FolioRevision, Fecha, ResponsableInspector, KilometrajeRegistrado, NivelCombustible, EstadoLlantas, EstadoNivelesFluidos, EstadoFrenosLuces, EstadoCarroceriaLimpieza, Observaciones)
+VALUES ($vid, $fol, $fec, $resp, $km, $niv, $llan, $flu, $fre, $car, $obs);
+SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$vid", rev.VehiculoId);
+            cmd.Parameters.AddWithValue("$fol", folio);
+            cmd.Parameters.AddWithValue("$fec", fecha);
+            cmd.Parameters.AddWithValue("$resp", rev.ResponsableInspector?.Trim() ?? string.Empty);
+            cmd.Parameters.AddWithValue("$km", Math.Max(0, rev.KilometrajeRegistrado));
+            cmd.Parameters.AddWithValue("$niv", string.IsNullOrWhiteSpace(rev.NivelCombustible) ? "3/4 Tanque" : rev.NivelCombustible.Trim());
+            cmd.Parameters.AddWithValue("$llan", string.IsNullOrWhiteSpace(rev.EstadoLlantas) ? "OK" : rev.EstadoLlantas.Trim());
+            cmd.Parameters.AddWithValue("$flu", string.IsNullOrWhiteSpace(rev.EstadoNivelesFluidos) ? "OK" : rev.EstadoNivelesFluidos.Trim());
+            cmd.Parameters.AddWithValue("$fre", string.IsNullOrWhiteSpace(rev.EstadoFrenosLuces) ? "OK" : rev.EstadoFrenosLuces.Trim());
+            cmd.Parameters.AddWithValue("$car", string.IsNullOrWhiteSpace(rev.EstadoCarroceriaLimpieza) ? "OK" : rev.EstadoCarroceriaLimpieza.Trim());
+            cmd.Parameters.AddWithValue("$obs", rev.Observaciones?.Trim() ?? string.Empty);
+            rev.Id = Convert.ToInt32(cmd.ExecuteScalar());
+        }
+
+        if (rev.KilometrajeRegistrado > 0)
+        {
+            using var upKm = conn.CreateCommand();
+            upKm.Transaction = tx;
+            upKm.CommandText = @"
+UPDATE VehiculosFlotilla
+SET KilometrajeActual = CASE WHEN $km > KilometrajeActual THEN $km ELSE KilometrajeActual END
+WHERE Id = $vid;";
+            upKm.Parameters.AddWithValue("$km", rev.KilometrajeRegistrado);
+            upKm.Parameters.AddWithValue("$vid", rev.VehiculoId);
+            upKm.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+
+        rev.FolioRevision = folio;
+        rev.Fecha = fecha;
+        var veh = ObtenerVehiculosFlotilla().FirstOrDefault(v => v.Id == rev.VehiculoId);
+        if (veh != null)
+        {
+            rev.CodigoVehiculo = veh.CodigoVehiculo;
+            rev.VehiculoDescripcion = veh.MarcaModelo;
+            rev.Placas = veh.Placas;
+        }
+
+        RegistrarBitacoraUsuario(
+            "Flotilla / Revisión Semanal",
+            "Check-list Semanal de Unidad",
+            folio,
+            $"{rev.CodigoVehiculo} ({rev.Placas}): Km {rev.KilometrajeRegistrado:N0} | Combustible: {rev.NivelCombustible} | {rev.ResumenEstadoFisico}");
+
+        return rev;
+    }
+
+    public static void RegistrarMantenimientoGarantiaHerramienta(
+        int herramientaId,
+        string fechaCompra,
+        string fechaFinGarantia,
+        decimal costoAdquisicion,
+        decimal gastoMantenimientoSumar,
+        string motivoMantenimiento)
+    {
+        if (herramientaId <= 0) return;
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+UPDATE HerramientasActivos
+SET FechaCompra = $fc,
+    FechaFinGarantia = $fg,
+    CostoAdquisicion = $ca,
+    GastoMantenimientoAcumulado = GastoMantenimientoAcumulado + $gm,
+    NotasEstado = CASE WHEN $mot <> '' THEN $mot ELSE NotasEstado END
+WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$fc", fechaCompra?.Trim() ?? string.Empty);
+        cmd.Parameters.AddWithValue("$fg", fechaFinGarantia?.Trim() ?? string.Empty);
+        cmd.Parameters.AddWithValue("$ca", (double)Math.Max(0m, costoAdquisicion));
+        cmd.Parameters.AddWithValue("$gm", (double)Math.Max(0m, gastoMantenimientoSumar));
+        cmd.Parameters.AddWithValue("$mot", motivoMantenimiento?.Trim() ?? string.Empty);
+        cmd.Parameters.AddWithValue("$id", herramientaId);
+        cmd.ExecuteNonQuery();
+
+        var her = ObtenerHerramientas().FirstOrDefault(h => h.Id == herramientaId);
+        if (her != null)
+        {
+            RegistrarBitacoraUsuario(
+                "Herramientas / TCO y Garantías",
+                gastoMantenimientoSumar > 0 ? "Cargo de Reparación / Mantenimiento" : "Actualización de Garantía / Costo",
+                her.CodigoIndividual,
+                $"{her.ProductoNombre}: Costo Adq. {her.CostoAdquisicion:C2}, Mant. Acum. {her.GastoMantenimientoAcumulado:C2} ({her.PorcentajeMantenimientoSobreCosto:0.#}%), Garantía: {her.EstadoGarantiaTexto}. {motivoMantenimiento}");
+
+            if (her.AlertaReemplazoTco && gastoMantenimientoSumar > 0)
+            {
+                RegistrarCheckpoint(
+                    "TCO Herramientas: Alerta de Reemplazo (>=50%)",
+                    "CP-TCO",
+                    her.CodigoIndividual,
+                    "Mantenimiento",
+                    "Evaluar Reemplazo por Costo Total",
+                    ObtenerRolOperativoActivo(),
+                    "Compras, Dirección",
+                    $"La herramienta {her.CodigoIndividual} ({her.ProductoNombre}) acumula {her.GastoMantenimientoAcumulado:C2} en reparaciones ({her.PorcentajeMantenimientoSobreCosto:0.#}% de su valor de compra {her.CostoAdquisicion:C2}). Conviene evaluar sustitución.");
+            }
+        }
+    }
+
+    // ==================== FASE 4: ECONOMÍA INDUSTRIAL (MATRIZ KRALJIC, PPV, INFLACIÓN Y AUDITORÍA DE AGENCIA) ====================
+
+    public static List<ItemMatrizKraljic> ObtenerAnalisisMatrizKraljic()
+    {
+        var productos = ObtenerProductos();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        var gastoPorProducto = new Dictionary<int, (decimal GastoTotal, int Frecuencia, int NumProveedores, decimal MejorPrecio, int MejorProvId, string MejorProvNombre)>();
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+SELECT ocp.ProductoId,
+       COALESCE(SUM(ocp.CantidadPedida * ocp.PrecioUnitarioSinIva * 1.16), 0),
+       COUNT(DISTINCT oc.Id),
+       COUNT(DISTINCT oc.ProveedorId),
+       COALESCE(MIN(CASE WHEN ocp.PrecioUnitarioSinIva > 0 THEN ocp.PrecioUnitarioSinIva ELSE NULL END), 0)
+FROM OrdenCompraPartidas ocp
+JOIN OrdenesCompra oc ON oc.Id = ocp.OrdenCompraId
+WHERE ocp.ProductoId > 0 AND oc.Estatus != 'Cancelada'
+GROUP BY ocp.ProductoId;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                int pid = r.GetInt32(0);
+                decimal gasto = (decimal)r.GetDouble(1);
+                int frec = r.GetInt32(2);
+                int nProvs = r.GetInt32(3);
+                decimal minP = (decimal)r.GetDouble(4);
+                gastoPorProducto[pid] = (gasto, frec, nProvs, minP, 0, "Sin historial");
+            }
+        }
+
+        // También sumar cotizaciones de BancoPreciosHistorico para enriquecer número de proveedores y mejor precio
+        using (var cmdCot = conn.CreateCommand())
+        {
+            cmdCot.CommandText = @"
+SELECT bp.ProductoId,
+       bp.ProveedorId,
+       COALESCE(NULLIF(TRIM(pr.NombreComercial), ''), pr.RazonSocial),
+       bp.PrecioSinIva
+FROM BancoPreciosHistorico bp
+JOIN Proveedores pr ON pr.Id = bp.ProveedorId
+WHERE bp.ProductoId > 0 AND bp.PrecioSinIva > 0
+ORDER BY bp.PrecioSinIva ASC;";
+            var provSetByProd = new Dictionary<int, HashSet<int>>();
+            using var r = cmdCot.ExecuteReader();
+            while (r.Read())
+            {
+                int pid = r.GetInt32(0);
+                int provId = r.GetInt32(1);
+                string provNom = r.IsDBNull(2) ? "Proveedor" : r.GetString(2);
+                decimal precio = (decimal)r.GetDouble(3);
+
+                if (!provSetByProd.TryGetValue(pid, out var set))
+                {
+                    set = new HashSet<int>();
+                    provSetByProd[pid] = set;
+                }
+                set.Add(provId);
+
+                if (gastoPorProducto.TryGetValue(pid, out var cur))
+                {
+                    decimal mejorP = (cur.MejorPrecio <= 0m || precio < cur.MejorPrecio) ? precio : cur.MejorPrecio;
+                    int mejorId = (cur.MejorProvId == 0 || precio <= cur.MejorPrecio) ? provId : cur.MejorProvId;
+                    string mejorNom = (cur.MejorProvId == 0 || precio <= cur.MejorPrecio) ? provNom : cur.MejorProvNombre;
+                    int maxProvs = Math.Max(cur.NumProveedores, set.Count);
+                    gastoPorProducto[pid] = (cur.GastoTotal, cur.Frecuencia, maxProvs, mejorP, mejorId, mejorNom);
+                }
+                else
+                {
+                    gastoPorProducto[pid] = (0m, 0, set.Count, precio, provId, provNom);
+                }
+            }
+        }
+
+        var valoresImpacto = productos.Select(p =>
+        {
+            decimal g = gastoPorProducto.TryGetValue(p.Id, out var info) ? info.GastoTotal : 0m;
+            decimal valorStock = p.StockActual * p.CostoUnitarioAlmacen;
+            return Math.Max(g, valorStock);
+        }).Where(v => v > 0m).OrderByDescending(v => v).ToList();
+
+        decimal umbralAltoImpacto = valoresImpacto.Count > 0
+            ? valoresImpacto[Math.Min(valoresImpacto.Count - 1, Math.Max(0, valoresImpacto.Count / 3))]
+            : 2500m;
+        if (umbralAltoImpacto <= 0m) umbralAltoImpacto = 1500m;
+
+        var resultado = new List<ItemMatrizKraljic>();
+        foreach (var p in productos)
+        {
+            gastoPorProducto.TryGetValue(p.Id, out var stat);
+            decimal gasto = stat.GastoTotal;
+            decimal costoBaseSinIva = p.UltimoCostoCompra > 0m ? Math.Round(p.UltimoCostoCompra / 1.16m, 2) : 0m;
+            decimal impactoRef = Math.Max(gasto, Math.Max(p.StockActual, Math.Max(1m, p.StockMinimo)) * p.CostoUnitarioAlmacen);
+            int numProvs = stat.NumProveedores;
+            decimal mejorPrecio = stat.MejorPrecio > 0m ? stat.MejorPrecio : costoBaseSinIva;
+            string mejorProv = stat.MejorProvId > 0 ? stat.MejorProvNombre : (costoBaseSinIva > 0m ? "Precio Catálogo" : "Sin cotizar");
+
+            bool altoImpacto = impactoRef >= umbralAltoImpacto;
+            bool altoRiesgo = numProvs <= 1 && (p.StockMinimo > 0 && p.StockActual < p.StockMinimo || string.IsNullOrWhiteSpace(p.Familia) || p.EsHerramienta);
+            if (numProvs == 1 && altoImpacto) altoRiesgo = true;
+
+            string cuadrante;
+            string estrategia;
+            if (altoImpacto && altoRiesgo)
+            {
+                cuadrante = "Estratégico (Crítico)";
+                estrategia = "Alianza con proveedor clave, asegurar stock de seguridad y homologar sustituto.";
+            }
+            else if (altoImpacto && !altoRiesgo)
+            {
+                cuadrante = "Apalancado (Volumen / Competencia)";
+                estrategia = "Licitar por Familia Genérica entre múltiples proveedores para maximizar ahorro.";
+            }
+            else if (!altoImpacto && altoRiesgo)
+            {
+                cuadrante = "Cuello de Botella (Riesgo Operativo)";
+                estrategia = "Estandarizar a Familia Genérica o mantener reserva mínima para no frenar obra.";
+            }
+            else
+            {
+                cuadrante = "Rutinario / No Crítico";
+                estrategia = "Automatizar compra en 1 clic con mejor precio histórico vigente; minimizar burocracia.";
+            }
+
+            resultado.Add(new ItemMatrizKraljic
+            {
+                ProductoId = p.Id,
+                Codigo = p.CodigoInterno,
+                ProductoNombre = p.Nombre,
+                Familia = string.IsNullOrWhiteSpace(p.Familia) ? "General" : p.Familia,
+                Categoria = p.CategoriaNombre,
+                GastoAcumulado = Math.Round(gasto, 2),
+                FrecuenciaCompra = stat.Frecuencia,
+                ProveedoresDisponibles = numProvs,
+                MejorPrecioHistoricoSinIva = Math.Round(mejorPrecio, 2),
+                MejorProveedorId = stat.MejorProvId,
+                MejorProveedorNombre = mejorProv,
+                StockActual = p.StockActual,
+                StockMinimo = p.StockMinimo,
+                CuadranteKraljic = cuadrante,
+                NivelImpactoFinanciero = altoImpacto ? "Alto" : "Bajo",
+                NivelRiesgoSuministro = altoRiesgo ? "Alto (1 o 0 prov.)" : $"Bajo ({numProvs} provs.)",
+                EstrategiaRecomendada = estrategia
+            });
+        }
+
+        return resultado
+            .OrderByDescending(x => x.GastoAcumulado)
+            .ThenByDescending(x => x.FrecuenciaCompra)
+            .ThenBy(x => x.Codigo)
+            .ToList();
+    }
+
+    public static List<ItemVariacionPrecioPpv> ObtenerAnalisisPpvEInflacionInterna()
+    {
+        var productos = ObtenerProductos().ToDictionary(p => p.Id, p => p);
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        var comprasPorProd = new Dictionary<int, List<(decimal PrecioUnitario, decimal Cantidad, string Fecha, string Proveedor)>>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+SELECT ocp.ProductoId,
+       ocp.PrecioUnitarioSinIva,
+       ocp.CantidadPedida,
+       oc.Fecha,
+       COALESCE(NULLIF(TRIM(pr.NombreComercial), ''), pr.RazonSocial)
+FROM OrdenCompraPartidas ocp
+JOIN OrdenesCompra oc ON oc.Id = ocp.OrdenCompraId
+JOIN Proveedores pr ON pr.Id = oc.ProveedorId
+WHERE ocp.ProductoId > 0 AND ocp.PrecioUnitarioSinIva > 0 AND oc.Estatus != 'Cancelada'
+ORDER BY oc.Id DESC, ocp.Id DESC;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                int pid = r.GetInt32(0);
+                decimal pu = (decimal)r.GetDouble(1);
+                decimal cant = (decimal)r.GetDouble(2);
+                string fecha = r.IsDBNull(3) ? string.Empty : r.GetString(3);
+                string prov = r.IsDBNull(4) ? "Proveedor" : r.GetString(4);
+
+                if (!comprasPorProd.TryGetValue(pid, out var list))
+                {
+                    list = new List<(decimal, decimal, string, string)>();
+                    comprasPorProd[pid] = list;
+                }
+                list.Add((pu, cant, fecha, prov));
+            }
+        }
+
+        var resultado = new List<ItemVariacionPrecioPpv>();
+        foreach (var kv in comprasPorProd)
+        {
+            if (!productos.TryGetValue(kv.Key, out var prod)) continue;
+            var hist = kv.Value;
+            if (hist.Count == 0) continue;
+
+            var ultima = hist[0];
+            decimal promedioHist;
+            decimal costoRefSinIva = prod.UltimoCostoCompra > 0m ? Math.Round(prod.UltimoCostoCompra / 1.16m, 2) : ultima.PrecioUnitario;
+            if (hist.Count > 1)
+            {
+                var previas = hist.Skip(1).ToList();
+                decimal sumaImporte = previas.Sum(x => x.PrecioUnitario * Math.Max(1m, x.Cantidad));
+                decimal sumaCant = previas.Sum(x => Math.Max(1m, x.Cantidad));
+                promedioHist = sumaCant > 0m ? sumaImporte / sumaCant : previas.Average(x => x.PrecioUnitario);
+            }
+            else
+            {
+                promedioHist = costoRefSinIva;
+            }
+
+            var item = new ItemVariacionPrecioPpv
+            {
+                ProductoId = prod.Id,
+                Familia = string.IsNullOrWhiteSpace(prod.Familia) ? "General" : prod.Familia,
+                ProductoCodigo = prod.CodigoInterno,
+                ProductoNombre = prod.Nombre,
+                PrecioPromedioHistorico = Math.Round(promedioHist, 2),
+                UltimoPrecioPagado = Math.Round(ultima.PrecioUnitario, 2),
+                CantidadCompradaReciente = Math.Round(ultima.Cantidad, 2),
+                UltimoProveedor = ultima.Proveedor,
+                UltimaFechaCompra = ultima.Fecha
+            };
+
+            if (item.VariacionUnitariaPct >= 10m)
+                item.DiagnosticoInflacion = "Alerta Inflación (>= +10%) — Licitar por Familia";
+            else if (item.VariacionUnitariaPct > 2m)
+                item.DiagnosticoInflacion = "Alza Moderada";
+            else if (item.VariacionUnitariaPct <= -5m)
+                item.DiagnosticoInflacion = "Ahorro Destacado (PPV Positivo)";
+            else
+                item.DiagnosticoInflacion = "Precio Estable";
+
+            resultado.Add(item);
+        }
+
+        if (resultado.Count == 0)
+        {
+            foreach (var p in productos.Values.Where(x => x.UltimoCostoCompra > 0).Take(25))
+            {
+                decimal refSinIva = Math.Round(p.UltimoCostoCompra / 1.16m, 2);
+                resultado.Add(new ItemVariacionPrecioPpv
+                {
+                    ProductoId = p.Id,
+                    Familia = string.IsNullOrWhiteSpace(p.Familia) ? "General" : p.Familia,
+                    ProductoCodigo = p.CodigoInterno,
+                    ProductoNombre = p.Nombre,
+                    PrecioPromedioHistorico = refSinIva,
+                    UltimoPrecioPagado = refSinIva,
+                    CantidadCompradaReciente = Math.Max(1m, p.StockActual),
+                    UltimoProveedor = "Catálogo Base",
+                    UltimaFechaCompra = DateTime.Today.ToString("yyyy-MM-dd"),
+                    DiagnosticoInflacion = "Referencia Base"
+                });
+            }
+        }
+
+        return resultado
+            .OrderBy(x => x.AhorroOSobreprecioTotalPpv)
+            .ThenByDescending(x => Math.Abs(x.VariacionUnitariaPct))
+            .ToList();
+    }
+
+    public static List<ItemAuditoriaCuadrilla> ObtenerAuditoriaConsumoYMermaPorCuadrilla()
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        var mapa = new Dictionary<string, ItemAuditoriaCuadrilla>(StringComparer.OrdinalIgnoreCase);
+
+        ItemAuditoriaCuadrilla ObtenerOCrear(string nombre, string proy = "")
+        {
+            string key = string.IsNullOrWhiteSpace(nombre) ? "Personal Operativo" : nombre.Trim();
+            if (!mapa.TryGetValue(key, out var item))
+            {
+                item = new ItemAuditoriaCuadrilla
+                {
+                    ResponsableOCuadrilla = key,
+                    ProyectoReciente = string.IsNullOrWhiteSpace(proy) ? "General" : proy
+                };
+                mapa[key] = item;
+            }
+            else if (!string.IsNullOrWhiteSpace(proy) && (item.ProyectoReciente == "General" || string.IsNullOrWhiteSpace(item.ProyectoReciente)))
+            {
+                item.ProyectoReciente = proy;
+            }
+            return item;
+        }
+
+        // 1. Salidas de Almacén
+        using (var cmdSal = conn.CreateCommand())
+        {
+            cmdSal.CommandText = @"
+SELECT COALESCE(NULLIF(TRIM(sa.PersonaRecibe), ''), COALESCE(e.Nombre, 'Personal Operativo')),
+       COALESCE(p.Nombre, 'General'),
+       COUNT(DISTINCT sa.Id),
+       COALESCE(SUM(sp.CantidadEntregada - COALESCE(sp.CantidadDevuelta, 0)), 0),
+       COALESCE(SUM((sp.CantidadEntregada - COALESCE(sp.CantidadDevuelta, 0)) * COALESCE(sp.CostoUnitarioAlmacen, 0)), 0)
+FROM SalidasAlmacen sa
+LEFT JOIN Encargados e ON e.Id = sa.EncargadoId
+LEFT JOIN SalidaPartidas sp ON sp.SalidaAlmacenId = sa.Id
+LEFT JOIN Proyectos p ON p.Id = sa.ProyectoId
+GROUP BY COALESCE(NULLIF(TRIM(sa.PersonaRecibe), ''), COALESCE(e.Nombre, 'Personal Operativo'));";
+            using var r = cmdSal.ExecuteReader();
+            while (r.Read())
+            {
+                string resp = r.IsDBNull(0) ? "Personal Operativo" : r.GetString(0);
+                string proy = r.IsDBNull(1) ? "General" : r.GetString(1);
+                var it = ObtenerOCrear(resp, proy);
+                it.ValesSalidaCount += r.GetInt32(2);
+                it.UnidadesRetiradas += (decimal)r.GetDouble(3);
+                it.CostoEstimadoRetirado += (decimal)r.GetDouble(4);
+            }
+        }
+
+        // 2. Sobrantes de obra reingresados y Ajustes/Mermas en EntradasAlmacen
+        using (var cmdSob = conn.CreateCommand())
+        {
+            cmdSob.CommandText = @"
+SELECT ea.Folio, ea.TipoEntrada, ea.ProveedorNombre, COALESCE(SUM(ep.CantidadIngresadaAlmacen), 0)
+FROM EntradasAlmacen ea
+JOIN EntradaPartidas ep ON ep.EntradaAlmacenId = ea.Id
+WHERE ea.TipoEntrada LIKE '%Sobrante%' OR ea.OrdenCompraFolio = 'SOBRANTE-OBRA' OR ea.Folio LIKE 'AJU-%'
+GROUP BY ea.Id;";
+            using var r = cmdSob.ExecuteReader();
+            while (r.Read())
+            {
+                string folio = r.IsDBNull(0) ? "" : r.GetString(0);
+                string tipo = r.IsDBNull(1) ? "" : r.GetString(1);
+                string provNom = r.IsDBNull(2) ? "Operación" : r.GetString(2);
+                decimal cant = (decimal)r.GetDouble(3);
+
+                string respLimpio = provNom.Replace("Devolvió:", "", StringComparison.OrdinalIgnoreCase)
+                                           .Replace("Devolución:", "", StringComparison.OrdinalIgnoreCase)
+                                           .Trim();
+                var it = ObtenerOCrear(respLimpio);
+                if (folio.StartsWith("AJU-", StringComparison.OrdinalIgnoreCase) && cant < 0m)
+                {
+                    it.IncidenciasOMermasRegistradas += 1;
+                }
+                else if (cant > 0m)
+                {
+                    it.UnidadesSobranteReingresadas += cant;
+                }
+            }
+        }
+
+        // 3. Préstamos de herramientas y kits
+        using (var cmdPre = conn.CreateCommand())
+        {
+            cmdPre.CommandText = @"
+SELECT COALESCE(NULLIF(TRIM(ph.PersonaRecibe), ''), COALESCE(e.Nombre, 'Técnico')),
+       SUM(CASE WHEN ph.Notas LIKE '%KIT-%' THEN 1 ELSE 0 END),
+       SUM(CASE WHEN ph.Estatus = 'Activo' OR ph.Estatus LIKE '%Parcial%' THEN 1 ELSE 0 END),
+       SUM(CASE WHEN ph.Estatus LIKE '%Incidencia%' THEN 1 ELSE 0 END)
+FROM PrestamosHerramienta ph
+LEFT JOIN Encargados e ON e.Id = ph.EncargadoId
+GROUP BY COALESCE(NULLIF(TRIM(ph.PersonaRecibe), ''), COALESCE(e.Nombre, 'Técnico'));";
+            using var r = cmdPre.ExecuteReader();
+            while (r.Read())
+            {
+                string resp = r.IsDBNull(0) ? "Técnico" : r.GetString(0);
+                var it = ObtenerOCrear(resp);
+                it.KitsDespachados += r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                it.HerramientasEnResguardoActivo += r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                it.IncidenciasOMermasRegistradas += r.IsDBNull(3) ? 0 : r.GetInt32(3);
+            }
+        }
+
+        foreach (var it in mapa.Values)
+        {
+            if (it.IncidenciasOMermasRegistradas > 0)
+                it.EstadoControlAgencia = $"Auditar ({it.IncidenciasOMermasRegistradas} incidencia(s))";
+            else if (it.HerramientasEnResguardoActivo >= 5)
+                it.EstadoControlAgencia = $"Resguardo Alto ({it.HerramientasEnResguardoActivo} vales activos)";
+            else if (it.UnidadesSobranteReingresadas > 0)
+                it.EstadoControlAgencia = "Excelente (Retorna sobrante)";
+            else
+                it.EstadoControlAgencia = "Controlado";
+        }
+
+        return mapa.Values
+            .OrderByDescending(x => x.IncidenciasOMermasRegistradas)
+            .ThenByDescending(x => x.HerramientasEnResguardoActivo)
+            .ThenByDescending(x => x.CostoEstimadoRetirado)
+            .ToList();
+    }
+
+    public static (int PartidasAdjudicadas, decimal MontoTotalEstimadoConIva) AutoAdjudicarRutinariosMejorPrecioHistorico(int solicitudId)
+    {
+        if (solicitudId <= 0) return (0, 0m);
+        var sol = ObtenerSolicitudes().FirstOrDefault(s => s.Id == solicitudId);
+        if (sol == null) return (0, 0m);
+
+        var kraljicMap = ObtenerAnalisisMatrizKraljic().ToDictionary(k => k.ProductoId, k => k);
+        var proveedores = ObtenerProveedores();
+        int adjudicados = 0;
+        decimal montoAcum = 0m;
+        string hoy = DateTime.Today.ToString("yyyy-MM-dd");
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+
+        foreach (var sp in sol.Partidas)
+        {
+            if (sp.TieneOcGenerada || sp.ProductoId <= 0) continue;
+            if (!kraljicMap.TryGetValue(sp.ProductoId, out var k)) continue;
+
+            // Si ya tiene cotizaciones capturadas en Opción 1, 2 o 3, elegir la más económica
+            int mejorSlot = 0;
+            decimal mejorPrecio = decimal.MaxValue;
+            if (sp.Proveedor1Id > 0 && sp.PrecioSinIva1 > 0m && sp.PrecioSinIva1 < mejorPrecio)
+            {
+                mejorPrecio = sp.PrecioSinIva1;
+                mejorSlot = 1;
+            }
+            if (sp.Proveedor2Id > 0 && sp.PrecioSinIva2 > 0m && sp.PrecioSinIva2 < mejorPrecio)
+            {
+                mejorPrecio = sp.PrecioSinIva2;
+                mejorSlot = 2;
+            }
+            if (sp.Proveedor3Id > 0 && sp.PrecioSinIva3 > 0m && sp.PrecioSinIva3 < mejorPrecio)
+            {
+                mejorPrecio = sp.PrecioSinIva3;
+                mejorSlot = 3;
+            }
+
+            if (mejorSlot > 0)
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "UPDATE SolicitudPartidas SET ProveedorGanadorIndice = $slot WHERE Id = $id;";
+                cmd.Parameters.AddWithValue("$slot", mejorSlot);
+                cmd.Parameters.AddWithValue("$id", sp.Id);
+                cmd.ExecuteNonQuery();
+                adjudicados++;
+                montoAcum += sp.CantidadSolicitada * mejorPrecio * 1.16m;
+            }
+            else if (k.MejorPrecioHistoricoSinIva > 0m)
+            {
+                int provUsarId = k.MejorProveedorId > 0
+                    ? k.MejorProveedorId
+                    : (proveedores.FirstOrDefault()?.Id ?? 0);
+                if (provUsarId > 0)
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+UPDATE SolicitudPartidas
+SET Proveedor1Id = $pv1,
+    PrecioSinIva1 = $pr1,
+    DiasEntrega1 = 1,
+    DiasVigencia1 = 15,
+    FechaCotizacion1 = $fc,
+    NotasCotizacion1 = 'Auto-cotizado (Mejor Precio Histórico Kraljic)',
+    ProveedorGanadorIndice = 1,
+    FechaCotizacion = $fc
+WHERE Id = $id;";
+                    cmd.Parameters.AddWithValue("$pv1", provUsarId);
+                    cmd.Parameters.AddWithValue("$pr1", (double)k.MejorPrecioHistoricoSinIva);
+                    cmd.Parameters.AddWithValue("$fc", hoy);
+                    cmd.Parameters.AddWithValue("$id", sp.Id);
+                    cmd.ExecuteNonQuery();
+                    adjudicados++;
+                    montoAcum += sp.CantidadSolicitada * k.MejorPrecioHistoricoSinIva * 1.16m;
+                }
+            }
+        }
+
+        if (adjudicados > 0)
+        {
+            RegistrarBitacoraUsuario(
+                "Comparativa / Kraljic",
+                "Auto-Adjudicación de Insumos Rutinarios",
+                sol.Folio,
+                $"Se auto-adjudicaron {adjudicados} partida(s) con su mejor precio histórico ({montoAcum:C2} c/IVA).");
+        }
+
+        return (adjudicados, Math.Round(montoAcum, 2));
+    }
+
+    // ==================== NOTIFICACIONES POR CORREO A GERENTES (GMAIL SMTP -> CORREO CORPORATIVO) ====================
+
+    public static event Action<RegistroNotificacionCorreo>? OnNotificacionCorreoProcesada;
+
+    public static ConfiguracionSmtpCorreo ObtenerConfiguracionSmtpCorreo()
+    {
+        var cfg = new ConfiguracionSmtpCorreo();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Clave, Valor FROM ConfiguracionSistema WHERE Clave LIKE 'SmtpCorreo_%';";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            string k = r.GetString(0);
+            string v = r.IsDBNull(1) ? string.Empty : r.GetString(1);
+            switch (k)
+            {
+                case "SmtpCorreo_Activo":
+                    cfg.Activo = v != "0" && !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase);
+                    break;
+                case "SmtpCorreo_Servidor":
+                    if (!string.IsNullOrWhiteSpace(v)) cfg.ServidorSmtp = v.Trim();
+                    break;
+                case "SmtpCorreo_Puerto":
+                    if (int.TryParse(v, out int p) && p > 0) cfg.PuertoSmtp = p;
+                    break;
+                case "SmtpCorreo_UsarSsl":
+                    cfg.UsarSsl = v != "0" && !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase);
+                    break;
+                case "SmtpCorreo_RemitenteGmail":
+                    cfg.CorreoRemitenteGmail = v.Trim();
+                    break;
+                case "SmtpCorreo_NombreRemitente":
+                    if (!string.IsNullOrWhiteSpace(v)) cfg.NombreMostrarRemitente = v.Trim();
+                    break;
+                case "SmtpCorreo_ContrasenaApp":
+                    cfg.ContrasenaAplicacionGmail = v.Trim();
+                    break;
+                case "SmtpCorreo_CopiaFijaGerencia":
+                    cfg.CorreoCopiaFijaGerencia = v.Trim();
+                    break;
+                case "SmtpCorreo_TiempoRegistro":
+                    if (!string.IsNullOrWhiteSpace(v)) cfg.TiempoAproxRegistroDefault = v.Trim();
+                    break;
+                case "SmtpCorreo_TiempoComparativa":
+                    if (!string.IsNullOrWhiteSpace(v)) cfg.TiempoAproxComparativaDefault = v.Trim();
+                    break;
+                case "SmtpCorreo_ImapRecepcionActiva":
+                    cfg.ImapRecepcionActiva = v != "0" && !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase);
+                    break;
+                case "SmtpCorreo_ImapAutoCrearPorAsunto":
+                    cfg.ImapAutoCrearPorAsunto = v != "0" && !string.Equals(v, "false", StringComparison.OrdinalIgnoreCase);
+                    break;
+                case "SmtpCorreo_PalabrasClaveAsuntoImap":
+                    if (!string.IsNullOrWhiteSpace(v)) cfg.PalabrasClaveAsuntoImap = v.Trim();
+                    break;
+            }
+        }
+        return cfg;
+    }
+
+    public static void GuardarConfiguracionSmtpCorreo(ConfiguracionSmtpCorreo cfg)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        void SetVal(string k, string v)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT OR REPLACE INTO ConfiguracionSistema (Clave, Valor) VALUES ($k, $v);";
+            cmd.Parameters.AddWithValue("$k", k);
+            cmd.Parameters.AddWithValue("$v", v ?? string.Empty);
+            cmd.ExecuteNonQuery();
+        }
+
+        SetVal("SmtpCorreo_Activo", cfg.Activo ? "1" : "0");
+        SetVal("SmtpCorreo_Servidor", string.IsNullOrWhiteSpace(cfg.ServidorSmtp) ? "smtp.gmail.com" : cfg.ServidorSmtp.Trim());
+        SetVal("SmtpCorreo_Puerto", (cfg.PuertoSmtp > 0 ? cfg.PuertoSmtp : 587).ToString());
+        SetVal("SmtpCorreo_UsarSsl", cfg.UsarSsl ? "1" : "0");
+        SetVal("SmtpCorreo_RemitenteGmail", cfg.CorreoRemitenteGmail?.Trim() ?? string.Empty);
+        SetVal("SmtpCorreo_NombreRemitente", string.IsNullOrWhiteSpace(cfg.NombreMostrarRemitente) ? "Compras y Almacén Lebaref" : cfg.NombreMostrarRemitente.Trim());
+        SetVal("SmtpCorreo_ContrasenaApp", cfg.ContrasenaAplicacionGmail?.Replace(" ", "").Trim() ?? string.Empty);
+        SetVal("SmtpCorreo_CopiaFijaGerencia", cfg.CorreoCopiaFijaGerencia?.Trim() ?? string.Empty);
+        SetVal("SmtpCorreo_TiempoRegistro", string.IsNullOrWhiteSpace(cfg.TiempoAproxRegistroDefault) ? "24 a 48 hrs" : cfg.TiempoAproxRegistroDefault.Trim());
+        SetVal("SmtpCorreo_TiempoComparativa", string.IsNullOrWhiteSpace(cfg.TiempoAproxComparativaDefault) ? "2 a 4 días hábiles" : cfg.TiempoAproxComparativaDefault.Trim());
+        SetVal("SmtpCorreo_ImapRecepcionActiva", cfg.ImapRecepcionActiva ? "1" : "0");
+        SetVal("SmtpCorreo_ImapAutoCrearPorAsunto", cfg.ImapAutoCrearPorAsunto ? "1" : "0");
+        SetVal("SmtpCorreo_PalabrasClaveAsuntoImap", string.IsNullOrWhiteSpace(cfg.PalabrasClaveAsuntoImap) ? "SOLICITUD, COTIZAR, COTIZACION, PEDIDO, REQUERIMIENTO" : cfg.PalabrasClaveAsuntoImap.Trim());
+
+        tx.Commit();
+    }
+
+    public static bool YaSeEnvioNotificacionEtapa(string solicitudFolio, string etapaClave)
+    {
+        if (string.IsNullOrWhiteSpace(solicitudFolio) || string.IsNullOrWhiteSpace(etapaClave))
+            return false;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+SELECT COUNT(*) FROM NotificacionesCorreo
+WHERE UPPER(TRIM(SolicitudFolio)) = UPPER(TRIM($fol))
+  AND UPPER(TRIM(EtapaClave)) = UPPER(TRIM($et));";
+        cmd.Parameters.AddWithValue("$fol", solicitudFolio.Trim());
+        cmd.Parameters.AddWithValue("$et", etapaClave.Trim());
+        return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+    }
+
+    public static List<RegistroNotificacionCorreo> ObtenerNotificacionesCorreo(string? filtroFolio = null)
+    {
+        var list = new List<RegistroNotificacionCorreo>();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+SELECT Id, FechaHora, SolicitudFolio, OrdenCompraFolio, EtapaClave, EtapaNombre,
+       GerenteNombre, CorreoDestino, Asunto, MensajePrincipal, CuerpoHtml,
+       TiempoOLugarTexto, EstadoEnvio, DetalleResultado
+FROM NotificacionesCorreo
+WHERE ($f IS NULL OR SolicitudFolio LIKE '%' || $f || '%' OR OrdenCompraFolio LIKE '%' || $f || '%' OR GerenteNombre LIKE '%' || $f || '%')
+ORDER BY Id DESC
+LIMIT 300;";
+        cmd.Parameters.AddWithValue("$f", string.IsNullOrWhiteSpace(filtroFolio) ? DBNull.Value : filtroFolio.Trim());
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new RegistroNotificacionCorreo
+            {
+                Id = r.GetInt32(0),
+                FechaHora = r.GetString(1),
+                SolicitudFolio = r.GetString(2),
+                OrdenCompraFolio = r.GetString(3),
+                EtapaClave = r.GetString(4),
+                EtapaNombre = r.GetString(5),
+                GerenteNombre = r.GetString(6),
+                CorreoDestino = r.GetString(7),
+                Asunto = r.GetString(8),
+                MensajePrincipal = r.GetString(9),
+                CuerpoHtml = r.GetString(10),
+                TiempoOLugarTexto = r.GetString(11),
+                EstadoEnvio = r.GetString(12),
+                DetalleResultado = r.GetString(13)
+            });
+        }
+        return list;
+    }
+
+    public static RegistroNotificacionCorreo? NotificarCambioEstadoCotizacionGerente(
+        int solicitudId,
+        string? folioOcRelacionado,
+        string etapaClave,
+        string? tiempoAproxPersonalizado = null,
+        string? lugarEntregaPersonalizado = null)
+    {
+        try
+        {
+            var sol = ObtenerSolicitudes().FirstOrDefault(s => s.Id == solicitudId);
+            if (sol == null && !string.IsNullOrWhiteSpace(folioOcRelacionado))
+            {
+                var ocRef = ObtenerOrdenesCompra().FirstOrDefault(o => string.Equals(o.Folio, folioOcRelacionado, StringComparison.OrdinalIgnoreCase));
+                if (ocRef != null && ocRef.SolicitudId > 0)
+                    sol = ObtenerSolicitudes().FirstOrDefault(s => s.Id == ocRef.SolicitudId);
+            }
+
+            string folioSol = sol?.Folio ?? (!string.IsNullOrWhiteSpace(folioOcRelacionado) ? folioOcRelacionado! : "SOL-S/N");
+            var cfg = ObtenerConfiguracionSmtpCorreo();
+            var encargados = ObtenerEncargados();
+            Encargado? gerente = null;
+            if (sol != null && sol.EncargadoId > 0)
+                gerente = encargados.FirstOrDefault(e => e.Id == sol.EncargadoId);
+            if (gerente == null && sol != null && !string.IsNullOrWhiteSpace(sol.EncargadoNombre))
+                gerente = encargados.FirstOrDefault(e => string.Equals(e.Nombre, sol.EncargadoNombre, StringComparison.OrdinalIgnoreCase));
+
+            string gerenteNombre = gerente?.Nombre ?? sol?.EncargadoNombre ?? "Gerente Solicitante";
+            string correoGerente = gerente?.Correo?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(correoGerente) && !string.IsNullOrWhiteSpace(cfg.CorreoCopiaFijaGerencia))
+                correoGerente = cfg.CorreoCopiaFijaGerencia.Trim();
+
+            string etapaNombre;
+            string tiempoOLugar;
+            string fraseExacta;
+
+            switch (etapaClave)
+            {
+                case "1_CREADA":
+                {
+                    etapaNombre = "1. Cotización / Solicitud Creada";
+                    bool esUrgente = (sol?.Notas ?? string.Empty).Contains("Urgente", StringComparison.OrdinalIgnoreCase);
+                    tiempoOLugar = !string.IsNullOrWhiteSpace(tiempoAproxPersonalizado)
+                        ? tiempoAproxPersonalizado.Trim()
+                        : (esUrgente ? "4 a 12 hrs (Prioridad Urgente)" : cfg.TiempoAproxRegistroDefault);
+                    fraseExacta = $"Tu cotización folio {folioSol} registrada, tiempo aprox de {tiempoOLugar}";
+                    break;
+                }
+                case "2_COMPARATIVA":
+                {
+                    etapaNombre = "2. En Cuadro Comparativo";
+                    tiempoOLugar = !string.IsNullOrWhiteSpace(tiempoAproxPersonalizado)
+                        ? tiempoAproxPersonalizado.Trim()
+                        : cfg.TiempoAproxComparativaDefault;
+                    fraseExacta = $"Tu cotización folio {folioSol} está recibiendo avances, tiempo aprox de entrega {tiempoOLugar}";
+                    break;
+                }
+                case "3_OC_EMITIDA":
+                {
+                    etapaNombre = "3. Órdenes de Compra Emitidas (Esperando Pago)";
+                    tiempoOLugar = !string.IsNullOrWhiteSpace(folioOcRelacionado) ? $"OC: {folioOcRelacionado}" : "En espera de liberación de pago";
+                    fraseExacta = $"Tu cotización folio {folioSol} está esperando pago";
+                    break;
+                }
+                case "4_PAGADA":
+                {
+                    etapaNombre = "4. Pago Realizado";
+                    tiempoOLugar = !string.IsNullOrWhiteSpace(tiempoAproxPersonalizado)
+                        ? tiempoAproxPersonalizado.Trim()
+                        : "2 a 3 días hábiles";
+                    fraseExacta = $"La cotización {folioSol} ya fue pagada, tiempo aprox de entrega {tiempoOLugar}";
+                    break;
+                }
+                case "5_CONCLUIDA":
+                default:
+                {
+                    etapaNombre = "5. Material Recibido / Folio Concluido";
+                    tiempoOLugar = !string.IsNullOrWhiteSpace(lugarEntregaPersonalizado)
+                        ? lugarEntregaPersonalizado.Trim()
+                        : "Almacén General";
+                    fraseExacta = $"El folio {folioSol} ya fue concluido con entrega en {tiempoOLugar}";
+                    break;
+                }
+            }
+
+            string asunto = $"[Compras Lebaref] {fraseExacta}";
+            string htmlBody = ConstruirHtmlNotificacionGerente(sol, folioOcRelacionado, etapaNombre, fraseExacta, gerenteNombre, tiempoOLugar);
+
+            var reg = new RegistroNotificacionCorreo
+            {
+                FechaHora = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                SolicitudFolio = folioSol,
+                OrdenCompraFolio = folioOcRelacionado ?? string.Empty,
+                EtapaClave = etapaClave,
+                EtapaNombre = etapaNombre,
+                GerenteNombre = gerenteNombre,
+                CorreoDestino = correoGerente,
+                Asunto = asunto,
+                MensajePrincipal = fraseExacta,
+                CuerpoHtml = htmlBody,
+                TiempoOLugarTexto = tiempoOLugar,
+                EstadoEnvio = "En proceso...",
+                DetalleResultado = string.Empty
+            };
+
+            using (var conn = new SqliteConnection(ConnectionString))
+            {
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+INSERT INTO NotificacionesCorreo (
+    FechaHora, SolicitudFolio, OrdenCompraFolio, EtapaClave, EtapaNombre,
+    GerenteNombre, CorreoDestino, Asunto, MensajePrincipal, CuerpoHtml,
+    TiempoOLugarTexto, EstadoEnvio, DetalleResultado
+) VALUES (
+    $fh, $sfol, $ocfol, $ecl, $enom,
+    $gnom, $cdes, $asu, $msj, $html,
+    $tlug, $est, $det
+);
+SELECT last_insert_rowid();";
+                cmd.Parameters.AddWithValue("$fh", reg.FechaHora);
+                cmd.Parameters.AddWithValue("$sfol", reg.SolicitudFolio);
+                cmd.Parameters.AddWithValue("$ocfol", reg.OrdenCompraFolio);
+                cmd.Parameters.AddWithValue("$ecl", reg.EtapaClave);
+                cmd.Parameters.AddWithValue("$enom", reg.EtapaNombre);
+                cmd.Parameters.AddWithValue("$gnom", reg.GerenteNombre);
+                cmd.Parameters.AddWithValue("$cdes", reg.CorreoDestino);
+                cmd.Parameters.AddWithValue("$asu", reg.Asunto);
+                cmd.Parameters.AddWithValue("$msj", reg.MensajePrincipal);
+                cmd.Parameters.AddWithValue("$html", reg.CuerpoHtml);
+                cmd.Parameters.AddWithValue("$tlug", reg.TiempoOLugarTexto);
+                cmd.Parameters.AddWithValue("$est", reg.EstadoEnvio);
+                cmd.Parameters.AddWithValue("$det", reg.DetalleResultado);
+                reg.Id = Convert.ToInt32(cmd.ExecuteScalar());
+            }
+
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await EnviarNotificacionCorreoSmtpInternoAsync(reg, cfg);
+            });
+
+            return reg;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string ConstruirHtmlNotificacionGerente(
+        Solicitud? sol,
+        string? folioOcRelacionado,
+        string etapaNombre,
+        string fraseExacta,
+        string gerenteNombre,
+        string tiempoOLugar)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<!DOCTYPE html><html><head><meta charset='utf-8'></head>");
+        sb.AppendLine("<body style='font-family: Segoe UI, Arial, sans-serif; color: #1E293B; background-color: #F8FAFC; padding: 18px;'>");
+        sb.AppendLine("<div style='max-width: 640px; margin: 0 auto; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden;'>");
+        sb.AppendLine("<div style='background: #0F172A; color: #FFFFFF; padding: 14px 18px;'>");
+        sb.AppendLine($"<div style='font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #93C5FD;'>Sistema de Compras y Almacén · {System.Net.WebUtility.HtmlEncode(etapaNombre)}</div>");
+        sb.AppendLine($"<div style='font-size: 17px; font-weight: 700; margin-top: 4px;'>{System.Net.WebUtility.HtmlEncode(fraseExacta)}</div>");
+        sb.AppendLine("</div>");
+        sb.AppendLine("<div style='padding: 18px;'>");
+        sb.AppendLine($"<p style='margin: 0 0 12px 0; font-size: 14px;'>Hola <strong>{System.Net.WebUtility.HtmlEncode(gerenteNombre)}</strong>,</p>");
+        sb.AppendLine($"<div style='background: #EFF6FF; border-left: 4px solid #2563EB; padding: 12px 14px; margin-bottom: 16px; font-size: 14.5px; font-weight: 600; color: #1E3A8A;'>{System.Net.WebUtility.HtmlEncode(fraseExacta)}</div>");
+
+        sb.AppendLine("<table style='width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px;'>");
+        sb.AppendLine($"<tr><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; color: #64748B; width: 38%;'>Folio de Cotización / Solicitud:</td><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; font-weight: 600;'>{System.Net.WebUtility.HtmlEncode(sol?.Folio ?? "N/A")}</td></tr>");
+        if (!string.IsNullOrWhiteSpace(folioOcRelacionado))
+            sb.AppendLine($"<tr><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; color: #64748B;'>Orden(es) de Compra:</td><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; font-weight: 600;'>{System.Net.WebUtility.HtmlEncode(folioOcRelacionado)}</td></tr>");
+        if (sol != null)
+        {
+            sb.AppendLine($"<tr><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; color: #64748B;'>Departamento:</td><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0;'>{System.Net.WebUtility.HtmlEncode(sol.DepartamentoNombre)}</td></tr>");
+            sb.AppendLine($"<tr><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; color: #64748B;'>Obra / Proyecto Destino:</td><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0;'>{System.Net.WebUtility.HtmlEncode(sol.ProyectoMostrar)}</td></tr>");
+        }
+        sb.AppendLine($"<tr><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; color: #64748B;'>Tiempo Aprox. / Ubicación Entrega:</td><td style='padding: 6px 8px; border-bottom: 1px solid #E2E8F0; font-weight: 600; color: #047857;'>{System.Net.WebUtility.HtmlEncode(tiempoOLugar)}</td></tr>");
+        sb.AppendLine("</table>");
+
+        if (sol != null && sol.Partidas.Count > 0)
+        {
+            sb.AppendLine("<div style='font-size: 12.5px; font-weight: 700; margin-bottom: 6px; color: #334155;'>Artículos en la Cotización / Solicitud:</div>");
+            sb.AppendLine("<table style='width: 100%; border-collapse: collapse; font-size: 12px;'>");
+            sb.AppendLine("<tr style='background: #F1F5F9; text-align: left;'><th style='padding: 6px;'>Cant.</th><th style='padding: 6px;'>Unidad</th><th style='padding: 6px;'>Artículo / Concepto</th></tr>");
+            foreach (var p in sol.Partidas.Take(20))
+            {
+                sb.AppendLine($"<tr><td style='padding: 5px 6px; border-bottom: 1px solid #F1F5F9; font-weight: 600;'>{p.CantidadSolicitada:0.##}</td><td style='padding: 5px 6px; border-bottom: 1px solid #F1F5F9;'>{System.Net.WebUtility.HtmlEncode(p.UnidadCompra)}</td><td style='padding: 5px 6px; border-bottom: 1px solid #F1F5F9;'>{System.Net.WebUtility.HtmlEncode(p.ProductoNombre)}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+        }
+
+        sb.AppendLine($"<div style='margin-top: 16px; font-size: 11px; color: #94A3B8;'>Mensaje automático generado el {DateTime.Now:dd/MM/yyyy HH:mm} por el Sistema de Compras y Almacén Lebaref.</div>");
+        sb.AppendLine("</div></div></body></html>");
+        return sb.ToString();
+    }
+
+    public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> EnviarNotificacionCorreoSmtpInternoAsync(
+        RegistroNotificacionCorreo reg,
+        ConfiguracionSmtpCorreo? cfgOverride = null)
+    {
+        var cfg = cfgOverride ?? ObtenerConfiguracionSmtpCorreo();
+        string nuevoEstado;
+        string detalle;
+        bool exito = false;
+
+        if (!cfg.Activo)
+        {
+            nuevoEstado = "En Bitácora (Envío pausado)";
+            detalle = "El envío automático SMTP está desactivado en la configuración.";
+        }
+        else if (string.IsNullOrWhiteSpace(reg.CorreoDestino))
+        {
+            nuevoEstado = "Sin Correo de Gerente";
+            detalle = $"El gerente '{reg.GerenteNombre}' no tiene correo corporativo asignado en Directorios -> Personal y Departamentos.";
+        }
+        else if (!cfg.TieneCredencialesCompletas)
+        {
+            nuevoEstado = "Pendiente Configurar Gmail";
+            detalle = "Configure su cuenta Gmail remitente y Contraseña de Aplicación en 'Configurar Correo a Gerentes'.";
+        }
+        else
+        {
+            try
+            {
+                using var mail = new System.Net.Mail.MailMessage();
+                mail.From = new System.Net.Mail.MailAddress(cfg.CorreoRemitenteGmail.Trim(), cfg.NombreMostrarRemitente);
+                foreach (var dest in reg.CorreoDestino.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string dTrim = dest.Trim();
+                    if (dTrim.Contains('@'))
+                        mail.To.Add(dTrim);
+                }
+
+                if (!string.IsNullOrWhiteSpace(cfg.CorreoCopiaFijaGerencia))
+                {
+                    foreach (var cc in cfg.CorreoCopiaFijaGerencia.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string ccTrim = cc.Trim();
+                        if (ccTrim.Contains('@') && !mail.To.Any(x => string.Equals(x.Address, ccTrim, StringComparison.OrdinalIgnoreCase)))
+                            mail.CC.Add(ccTrim);
+                    }
+                }
+
+                mail.Subject = reg.Asunto;
+                mail.Body = reg.CuerpoHtml;
+                mail.IsBodyHtml = true;
+                mail.BodyEncoding = System.Text.Encoding.UTF8;
+                mail.SubjectEncoding = System.Text.Encoding.UTF8;
+
+                using var smtp = new System.Net.Mail.SmtpClient(cfg.ServidorSmtp.Trim(), cfg.PuertoSmtp > 0 ? cfg.PuertoSmtp : 587)
+                {
+                    EnableSsl = cfg.UsarSsl,
+                    DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network,
+                    UseDefaultCredentials = false,
+                    Credentials = new System.Net.NetworkCredential(
+                        cfg.CorreoRemitenteGmail.Trim(),
+                        cfg.ContrasenaAplicacionGmail.Replace(" ", "").Trim()),
+                    Timeout = 15000
+                };
+
+                await smtp.SendMailAsync(mail);
+                nuevoEstado = "Enviado (Gmail SMTP)";
+                detalle = $"Enviado desde {cfg.CorreoRemitenteGmail} hacia {reg.CorreoDestino} el {DateTime.Now:HH:mm:ss}.";
+                exito = true;
+            }
+            catch (Exception ex)
+            {
+                nuevoEstado = "Error SMTP";
+                string passLimpia = (cfg.ContrasenaAplicacionGmail ?? string.Empty).Replace(" ", "").Trim();
+                bool esGmail = (cfg.ServidorSmtp ?? string.Empty).Contains("gmail", StringComparison.OrdinalIgnoreCase);
+                bool parecePasswordNormal = passLimpia.Length != 16 || passLimpia.Any(c => !char.IsLetter(c));
+
+                if (esGmail && (ex.Message.Contains("5.7.0") || ex.Message.Contains("5.7.8") || ex.Message.Contains("Authentication", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (parecePasswordNormal)
+                    {
+                        detalle = $"Google rechazó el acceso (535 5.7.8 BadCredentials) porque se ingresó la contraseña normal de la cuenta ({passLimpia.Length} caracteres). Gmail exige una 'Contraseña de Aplicación' de 16 letras (sin números ni símbolos) generada en https://myaccount.google.com/apppasswords";
+                    }
+                    else
+                    {
+                        detalle = $"Google rechazó la Contraseña de Aplicación de 16 letras ({ex.Message}). Verifique que pertenezca a {cfg.CorreoRemitenteGmail} y que la Verificación en 2 pasos siga activa en https://myaccount.google.com/apppasswords";
+                    }
+                }
+                else
+                {
+                    detalle = ex.Message;
+                }
+            }
+        }
+
+        reg.EstadoEnvio = nuevoEstado;
+        reg.DetalleResultado = detalle;
+
+        if (reg.Id > 0)
+        {
+            try
+            {
+                using var conn = new SqliteConnection(ConnectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "UPDATE NotificacionesCorreo SET EstadoEnvio = $est, DetalleResultado = $det, CorreoDestino = $cor WHERE Id = $id;";
+                cmd.Parameters.AddWithValue("$est", nuevoEstado);
+                cmd.Parameters.AddWithValue("$det", detalle);
+                cmd.Parameters.AddWithValue("$cor", reg.CorreoDestino ?? string.Empty);
+                cmd.Parameters.AddWithValue("$id", reg.Id);
+                cmd.ExecuteNonQuery();
+            }
+            catch
+            {
+                // Ignorar error secundario de actualización de bitácora
+            }
+        }
+
+        try
+        {
+            OnNotificacionCorreoProcesada?.Invoke(reg);
+        }
+        catch
+        {
+            // Ignorar excepción de suscriptor UI
+        }
+
+        return (exito, detalle);
+    }
+
+    public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> ProbarConexionSmtpGmailAsync(
+        ConfiguracionSmtpCorreo cfg,
+        string correoDestinoPrueba)
+    {
+        if (!cfg.TieneCredencialesCompletas)
+            return (false, "Escriba el correo Gmail remitente y su Contraseña de Aplicación de 16 letras de Google.");
+
+        string destino = string.IsNullOrWhiteSpace(correoDestinoPrueba) ? cfg.CorreoRemitenteGmail.Trim() : correoDestinoPrueba.Trim();
+        var regPrueba = new RegistroNotificacionCorreo
+        {
+            FechaHora = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+            SolicitudFolio = "SOL-PRUEBA",
+            OrdenCompraFolio = "OC-PRUEBA",
+            EtapaClave = "1_CREADA",
+            EtapaNombre = "Prueba de Conexión Gmail -> Correo Corporativo",
+            GerenteNombre = "Gerente (Prueba)",
+            CorreoDestino = destino,
+            Asunto = $"[Compras Lebaref] Tu cotización folio SOL-PRUEBA registrada, tiempo aprox de {cfg.TiempoAproxRegistroDefault}",
+            MensajePrincipal = $"Tu cotización folio SOL-PRUEBA registrada, tiempo aprox de {cfg.TiempoAproxRegistroDefault}",
+            CuerpoHtml = ConstruirHtmlNotificacionGerente(null, "OC-PRUEBA", "Prueba de Configuración Gmail SMTP", $"Tu cotización folio SOL-PRUEBA registrada, tiempo aprox de {cfg.TiempoAproxRegistroDefault}", "Gerente (Prueba)", cfg.TiempoAproxRegistroDefault),
+            TiempoOLugarTexto = cfg.TiempoAproxRegistroDefault,
+            EstadoEnvio = "En proceso...",
+            DetalleResultado = string.Empty
+        };
+
+        try
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+INSERT INTO NotificacionesCorreo (
+    FechaHora, SolicitudFolio, OrdenCompraFolio, EtapaClave, EtapaNombre,
+    GerenteNombre, CorreoDestino, Asunto, MensajePrincipal, CuerpoHtml,
+    TiempoOLugarTexto, EstadoEnvio, DetalleResultado
+) VALUES (
+    $fh, $sfol, $ocfol, $ecl, $enom,
+    $gnom, $cdes, $asu, $msj, $html,
+    $tlug, $est, $det
+);
+SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$fh", regPrueba.FechaHora);
+            cmd.Parameters.AddWithValue("$sfol", regPrueba.SolicitudFolio);
+            cmd.Parameters.AddWithValue("$ocfol", regPrueba.OrdenCompraFolio);
+            cmd.Parameters.AddWithValue("$ecl", regPrueba.EtapaClave);
+            cmd.Parameters.AddWithValue("$enom", regPrueba.EtapaNombre);
+            cmd.Parameters.AddWithValue("$gnom", regPrueba.GerenteNombre);
+            cmd.Parameters.AddWithValue("$cdes", regPrueba.CorreoDestino);
+            cmd.Parameters.AddWithValue("$asu", regPrueba.Asunto);
+            cmd.Parameters.AddWithValue("$msj", regPrueba.MensajePrincipal);
+            cmd.Parameters.AddWithValue("$html", regPrueba.CuerpoHtml);
+            cmd.Parameters.AddWithValue("$tlug", regPrueba.TiempoOLugarTexto);
+            cmd.Parameters.AddWithValue("$est", regPrueba.EstadoEnvio);
+            cmd.Parameters.AddWithValue("$det", regPrueba.DetalleResultado);
+            regPrueba.Id = Convert.ToInt32(cmd.ExecuteScalar());
+        }
+        catch
+        {
+            // Continuar aunque falle inserción en bitácora
+        }
+
+        return await EnviarNotificacionCorreoSmtpInternoAsync(regPrueba, cfg);
+    }
+
+    // ==================== RECEPCIÓN AUTOMÁTICA DE SOLICITUDES POR CORREO (GMAIL IMAP + BANDEJA + PLANTILLA) ====================
+
+    public static event Action<CorreoEntranteSolicitud>? OnCorreoSolicitudRecibido;
+
+    public static string GenerarContenidoCsvPlantillaSolicitud()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("FORMATO ESTANDAR DE SOLICITUD DE MATERIAL E INSUMOS (CORREO / EXCEL),,,,,,");
+        sb.AppendLine("Folio Web (Opcional),SOL-CORREO,,,,,");
+        sb.AppendLine("Departamento / Area,Mantenimiento,,,,,");
+        sb.AppendLine("Nombre Solicitante,Nombre del Gerente,,,,,");
+        sb.AppendLine("Persona que Recibe,Responsable en Obra,,,,,");
+        sb.AppendLine("Proyecto / Obra Destino,Consumo Interno,,,,,");
+        sb.AppendLine($"Fecha Requerida,{DateTime.Today.AddDays(3):yyyy-MM-dd},,,,,");
+        sb.AppendLine("Nivel de Urgencia,Normal,Opciones: Normal | Urgente,,,,");
+        sb.AppendLine("Lugar de Entrega,Recoger en Almacén,Opciones: Recoger en Almacén | Entrega en Obra | Envío Foráneo,,,,");
+        sb.AppendLine("Observaciones Generales,Material requerido para actividades de la semana,,,,,");
+        sb.AppendLine(",,,,,,");
+        sb.AppendLine("DescripcionArticulo,EspecificacionMedida,MarcaModeloRef,Cantidad,UnidadMedida,PrecioRefSinIva,NotasUso");
+        sb.AppendLine("\"Tubo de cobre rígido\",\"Tipo L de 1/2 pulg x 6.10 m\",\"IUSA o Nacobre\",4,Tramo,480.00,\"Línea principal\"");
+        sb.AppendLine("\"Cable de uso rudo\",\"Calibre 12 AWG 3 hilos 600V\",\"Condumex\",1,Rollo,2150.00,\"Alimentación equipo\"");
+        sb.AppendLine("\"Guante de nitrilo anticorte\",\"Talla Grande (L) Nivel 5\",\"Truper\",6,Par,85.00,\"EPP cuadrilla\"");
+        return sb.ToString();
+    }
+
+    public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> EnviarPlantillaSolicitudAGerentesPorCorreoAsync(List<string>? correosEspecificos = null)
+    {
+        var cfg = ObtenerConfiguracionSmtpCorreo();
+        if (!cfg.TieneCredencialesCompletas)
+            return (false, "Configure primero su cuenta Gmail y Contraseña de Aplicación de 16 letras.");
+
+        var destinos = (correosEspecificos ?? ObtenerEncargados()
+            .Where(e => !string.IsNullOrWhiteSpace(e.Correo) && e.Correo.Contains('@'))
+            .Select(e => e.Correo.Trim()))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (destinos.Count == 0 && !string.IsNullOrWhiteSpace(cfg.CorreoCopiaFijaGerencia))
+            destinos.Add(cfg.CorreoCopiaFijaGerencia.Trim());
+
+        if (destinos.Count == 0)
+            return (false, "No hay gerentes con correo corporativo registrado en Directorios -> Personal y Departamentos.");
+
+        try
+        {
+            using var mail = new System.Net.Mail.MailMessage();
+            mail.From = new System.Net.Mail.MailAddress(cfg.CorreoRemitenteGmail.Trim(), cfg.NombreMostrarRemitente);
+            foreach (var d in destinos)
+            {
+                foreach (var sub in d.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (sub.Trim().Contains('@'))
+                        mail.To.Add(sub.Trim());
+                }
+            }
+
+            mail.Subject = "Plantilla e Instrucciones para Enviar Solicitudes de Compra por Correo — Compras Lebaref";
+            mail.IsBodyHtml = true;
+            mail.BodyEncoding = System.Text.Encoding.UTF8;
+            mail.SubjectEncoding = System.Text.Encoding.UTF8;
+
+            var sbHtml = new System.Text.StringBuilder();
+            sbHtml.AppendLine("<html><body style='font-family: Segoe UI, Arial, sans-serif; color: #1E293B; background: #F8FAFC; padding: 18px;'>");
+            sbHtml.AppendLine("<div style='max-width: 660px; margin: 0 auto; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; overflow: hidden;'>");
+            sbHtml.AppendLine("<div style='background: #0F172A; color: #FFFFFF; padding: 14px 20px;'>");
+            sbHtml.AppendLine("<div style='font-size: 16px; font-weight: 700;'>Guía Rápida: Cómo enviar Solicitudes de Compra por Correo</div>");
+            sbHtml.AppendLine("<div style='font-size: 12px; opacity: 0.85;'>Sistema Automatizado de Compras y Almacén Lebaref</div>");
+            sbHtml.AppendLine("</div>");
+            sbHtml.AppendLine("<div style='padding: 20px; font-size: 13.5px; line-height: 1.55;'>");
+            sbHtml.AppendLine($"<p>Ahora puede enviar sus requerimientos de material directamente al correo <b>{System.Net.WebUtility.HtmlEncode(cfg.CorreoRemitenteGmail)}</b> y el sistema creará su folio <b>SOL-xxxx</b> automáticamente enviándole su confirmación y avances en cada etapa.</p>");
+            sbHtml.AppendLine("<div style='background: #EFF6FF; border-left: 4px solid #2563EB; padding: 12px 14px; border-radius: 6px; margin: 14px 0;'>");
+            sbHtml.AppendLine("<b>Regla en el Asunto del Correo:</b><br/>");
+            sbHtml.AppendLine("Inicie el asunto con la palabra <b>SOLICITUD</b> (o <b>COTIZAR</b> / <b>PEDIDO</b>) seguido del Proyecto u Obra.<br/>");
+            sbHtml.AppendLine("<i>Ejemplo de Asunto:</i> <code>SOLICITUD - Obra Norte</code>");
+            sbHtml.AppendLine("</div>");
+            sbHtml.AppendLine("<p><b>Opción 1 (Rápida en el cuerpo del correo, igual que por WhatsApp):</b><br/>Escriba un artículo por renglón indicando Cantidad, Unidad y Descripción:</p>");
+            sbHtml.AppendLine("<pre style='background: #F1F5F9; padding: 10px 14px; border-radius: 6px; font-size: 12.5px;'>Proyecto: Obra Norte\nUrgencia: Normal\n\n5 Pieza Tubo de cobre rígido 1/2\n2 Rollo Cable THW calibre 12 negro\n6 Par Guante de nitrilo anticorte talla L</pre>");
+            sbHtml.AppendLine("<p><b>Opción 2 (Con la Plantilla Excel / CSV adjunta a este correo):</b><br/>Abra en Excel el archivo adjunto <code>Plantilla_Solicitud_Compras_Lebaref.csv</code>, capture los artículos, guárdelo y adjúntelo a su correo con el asunto <code>SOLICITUD - [Proyecto]</code>.</p>");
+            sbHtml.AppendLine("</div></div></body></html>");
+            mail.Body = sbHtml.ToString();
+
+            byte[] csvBytes = new System.Text.UTF8Encoding(true).GetBytes(GenerarContenidoCsvPlantillaSolicitud());
+            using var ms = new MemoryStream(csvBytes);
+            var attachment = new System.Net.Mail.Attachment(ms, "Plantilla_Solicitud_Compras_Lebaref.csv", "text/csv");
+            mail.Attachments.Add(attachment);
+
+            using var smtp = new System.Net.Mail.SmtpClient(cfg.ServidorSmtp.Trim(), cfg.PuertoSmtp > 0 ? cfg.PuertoSmtp : 587)
+            {
+                EnableSsl = cfg.UsarSsl,
+                DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network,
+                UseDefaultCredentials = false,
+                Credentials = new System.Net.NetworkCredential(
+                    cfg.CorreoRemitenteGmail.Trim(),
+                    cfg.ContrasenaAplicacionGmail.Replace(" ", "").Trim()),
+                Timeout = 15000
+            };
+
+            await smtp.SendMailAsync(mail);
+            return (true, $"Plantilla e instrucciones enviadas a {mail.To.Count} correo(s): {string.Join(", ", mail.To.Select(x => x.Address))}");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>Envía la tabla comparativa por correo (tabla HTML en el cuerpo y/o PDF adjunto) usando la cuenta Gmail configurada.</summary>
+    public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> EnviarComparativaPorCorreoAsync(
+        string destinatarios,
+        string copia,
+        string asunto,
+        string mensajeIntro,
+        string htmlTabla,
+        byte[]? pdfAdjunto,
+        string nombrePdf)
+    {
+        var cfg = ObtenerConfiguracionSmtpCorreo();
+        if (!cfg.TieneCredencialesCompletas)
+            return (false, "Configure primero su cuenta Gmail y Contraseña de Aplicación de 16 letras (Herramientas → Notificaciones por Correo a Gerentes).");
+
+        static IEnumerable<string> Separar(string? s) =>
+            (s ?? string.Empty).Split(new[] { ',', ';', ' ', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Contains('@'));
+
+        var para = Separar(destinatarios).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (para.Count == 0)
+            return (false, "Indique al menos un correo destinatario válido.");
+
+        try
+        {
+            using var mail = new System.Net.Mail.MailMessage();
+            mail.From = new System.Net.Mail.MailAddress(cfg.CorreoRemitenteGmail.Trim(), cfg.NombreMostrarRemitente);
+            foreach (var d in para) mail.To.Add(d);
+            foreach (var c in Separar(copia).Distinct(StringComparer.OrdinalIgnoreCase)) mail.CC.Add(c);
+
+            mail.Subject = asunto;
+            mail.SubjectEncoding = System.Text.Encoding.UTF8;
+            mail.BodyEncoding = System.Text.Encoding.UTF8;
+            mail.IsBodyHtml = true;
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("<html><body style='font-family:Segoe UI,Arial,sans-serif;color:#1E293B;background:#FFFFFF;padding:12px;'>");
+            if (!string.IsNullOrWhiteSpace(mensajeIntro))
+            {
+                string intro = System.Net.WebUtility.HtmlEncode(mensajeIntro).Replace("\r\n", "<br/>").Replace("\n", "<br/>");
+                sb.Append($"<p style='font-size:13.5px;line-height:1.5;margin:0 0 14px 0;'>{intro}</p>");
+            }
+            if (!string.IsNullOrWhiteSpace(htmlTabla))
+                sb.Append(htmlTabla);
+            else if (pdfAdjunto != null)
+                sb.Append("<p style='font-size:13px;'>Se adjunta el Cuadro Comparativo en PDF.</p>");
+            sb.Append($"<p style='font-size:11px;color:#94A3B8;margin-top:18px;'>Enviado desde el Sistema de Compras y Almacén — {System.Net.WebUtility.HtmlEncode(cfg.NombreMostrarRemitente)}</p>");
+            sb.Append("</body></html>");
+            mail.Body = sb.ToString();
+
+            MemoryStream? msPdf = null;
+            if (pdfAdjunto != null && pdfAdjunto.Length > 0)
+            {
+                msPdf = new MemoryStream(pdfAdjunto);
+                mail.Attachments.Add(new System.Net.Mail.Attachment(msPdf, nombrePdf, "application/pdf"));
+            }
+
+            using var smtp = new System.Net.Mail.SmtpClient(cfg.ServidorSmtp.Trim(), cfg.PuertoSmtp > 0 ? cfg.PuertoSmtp : 587)
+            {
+                EnableSsl = cfg.UsarSsl,
+                DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network,
+                UseDefaultCredentials = false,
+                Credentials = new System.Net.NetworkCredential(
+                    cfg.CorreoRemitenteGmail.Trim(),
+                    cfg.ContrasenaAplicacionGmail.Replace(" ", "").Trim()),
+                Timeout = 30000
+            };
+
+            await smtp.SendMailAsync(mail);
+            msPdf?.Dispose();
+
+            string dest = string.Join(", ", mail.To.Select(x => x.Address));
+            if (mail.CC.Count > 0) dest += $" (CC: {string.Join(", ", mail.CC.Select(x => x.Address))})";
+            return (true, $"Comparativa enviada a: {dest}");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.InnerException != null ? $"{ex.Message}\n{ex.InnerException.Message}" : ex.Message);
+        }
+    }
+
+    public static List<CorreoEntranteSolicitud> ObtenerCorreosEntrantesSolicitud(string? filtro = null)
+    {
+        var list = new List<CorreoEntranteSolicitud>();
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        if (string.IsNullOrWhiteSpace(filtro) || string.Equals(filtro, "TODOS", StringComparison.OrdinalIgnoreCase))
+        {
+            cmd.CommandText = @"
+SELECT Id, UidImap, FechaCorreo, RemitenteNombre, RemitenteCorreo, Asunto, CuerpoTexto,
+       NombreAdjuntoCsv, ContenidoAdjuntoCsv, CoincidePalabraClaveAsunto,
+       EncargadoDetectadoId, EncargadoDetectadoNombre, DepartamentoDetectadoId, DepartamentoDetectadoNombre,
+       ProyectoDetectadoId, ProyectoDetectadoNombre, PartidasDetectadasCount, ResumenPartidas,
+       EstadoBandeja, SolicitudCreadaId, SolicitudCreadaFolio
+FROM CorreosEntrantesSolicitud
+ORDER BY Id DESC LIMIT 250;";
+        }
+        else if (string.Equals(filtro, "PENDIENTES", StringComparison.OrdinalIgnoreCase))
+        {
+            cmd.CommandText = @"
+SELECT Id, UidImap, FechaCorreo, RemitenteNombre, RemitenteCorreo, Asunto, CuerpoTexto,
+       NombreAdjuntoCsv, ContenidoAdjuntoCsv, CoincidePalabraClaveAsunto,
+       EncargadoDetectadoId, EncargadoDetectadoNombre, DepartamentoDetectadoId, DepartamentoDetectadoNombre,
+       ProyectoDetectadoId, ProyectoDetectadoNombre, PartidasDetectadasCount, ResumenPartidas,
+       EstadoBandeja, SolicitudCreadaId, SolicitudCreadaFolio
+FROM CorreosEntrantesSolicitud
+WHERE EstadoBandeja = 'En Bandeja (Por Revisar)' AND SolicitudCreadaId <= 0
+ORDER BY Id DESC LIMIT 250;";
+        }
+        else if (string.Equals(filtro, "PROCESADOS", StringComparison.OrdinalIgnoreCase))
+        {
+            cmd.CommandText = @"
+SELECT Id, UidImap, FechaCorreo, RemitenteNombre, RemitenteCorreo, Asunto, CuerpoTexto,
+       NombreAdjuntoCsv, ContenidoAdjuntoCsv, CoincidePalabraClaveAsunto,
+       EncargadoDetectadoId, EncargadoDetectadoNombre, DepartamentoDetectadoId, DepartamentoDetectadoNombre,
+       ProyectoDetectadoId, ProyectoDetectadoNombre, PartidasDetectadasCount, ResumenPartidas,
+       EstadoBandeja, SolicitudCreadaId, SolicitudCreadaFolio
+FROM CorreosEntrantesSolicitud
+WHERE SolicitudCreadaId > 0
+ORDER BY Id DESC LIMIT 250;";
+        }
+        else
+        {
+            cmd.CommandText = @"
+SELECT Id, UidImap, FechaCorreo, RemitenteNombre, RemitenteCorreo, Asunto, CuerpoTexto,
+       NombreAdjuntoCsv, ContenidoAdjuntoCsv, CoincidePalabraClaveAsunto,
+       EncargadoDetectadoId, EncargadoDetectadoNombre, DepartamentoDetectadoId, DepartamentoDetectadoNombre,
+       ProyectoDetectadoId, ProyectoDetectadoNombre, PartidasDetectadasCount, ResumenPartidas,
+       EstadoBandeja, SolicitudCreadaId, SolicitudCreadaFolio
+FROM CorreosEntrantesSolicitud
+WHERE Asunto LIKE $f OR RemitenteNombre LIKE $f OR RemitenteCorreo LIKE $f OR SolicitudCreadaFolio LIKE $f OR ResumenPartidas LIKE $f
+ORDER BY Id DESC LIMIT 250;";
+            cmd.Parameters.AddWithValue("$f", $"%{filtro.Trim()}%");
+        }
+
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new CorreoEntranteSolicitud
+            {
+                Id = r.GetInt32(0),
+                UidImap = r.GetString(1),
+                FechaCorreo = r.GetString(2),
+                RemitenteNombre = r.GetString(3),
+                RemitenteCorreo = r.GetString(4),
+                Asunto = r.GetString(5),
+                CuerpoTexto = r.GetString(6),
+                NombreAdjuntoCsv = r.GetString(7),
+                ContenidoAdjuntoCsv = r.GetString(8),
+                CoincidePalabraClaveAsunto = r.GetInt32(9) != 0,
+                EncargadoDetectadoId = r.GetInt32(10),
+                EncargadoDetectadoNombre = r.GetString(11),
+                DepartamentoDetectadoId = r.GetInt32(12),
+                DepartamentoDetectadoNombre = r.GetString(13),
+                ProyectoDetectadoId = r.GetInt32(14),
+                ProyectoDetectadoNombre = r.GetString(15),
+                PartidasDetectadasCount = r.GetInt32(16),
+                ResumenPartidas = r.GetString(17),
+                EstadoBandeja = r.GetString(18),
+                SolicitudCreadaId = r.GetInt32(19),
+                SolicitudCreadaFolio = r.GetString(20)
+            });
+        }
+        return list;
+    }
+
+    public static void DescartarCorreoEntranteSolicitud(int correoId)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE CorreosEntrantesSolicitud SET EstadoBandeja = 'Descartado (No es solicitud)' WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", correoId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static (List<SolicitudPartida> Partidas, int DepartamentoId, string DepartamentoNombre, int EncargadoId, string EncargadoNombre, int ProyectoId, string ProyectoNombre, string NotasDetectadas)
+        ExtraerPartidasYMetadatosDeCorreo(string asunto, string remitenteCorreo, string remitenteNombre, string cuerpoTexto, string contenidoCsvAdjunto)
+    {
+        var departamentos = ObtenerDepartamentos();
+        var encargados = ObtenerEncargados();
+        var proyectos = ObtenerProyectos();
+        var productos = ObtenerProductos();
+
+        Encargado? encMatch = null;
+        if (!string.IsNullOrWhiteSpace(remitenteCorreo))
+        {
+            encMatch = encargados.FirstOrDefault(e =>
+                !string.IsNullOrWhiteSpace(e.Correo) &&
+                e.Correo.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Any(c => string.Equals(c.Trim(), remitenteCorreo.Trim(), StringComparison.OrdinalIgnoreCase)));
+        }
+        if (encMatch == null && !string.IsNullOrWhiteSpace(remitenteNombre))
+        {
+            encMatch = encargados.FirstOrDefault(e =>
+                remitenteNombre.Contains(e.Nombre, StringComparison.OrdinalIgnoreCase) ||
+                e.Nombre.Contains(remitenteNombre, StringComparison.OrdinalIgnoreCase));
+        }
+
+        Departamento? depMatch = encMatch != null
+            ? departamentos.FirstOrDefault(d => d.Id == encMatch.DepartamentoId)
+            : null;
+
+        Proyecto? proyMatch = null;
+        string textoCombinadoMeta = $"{asunto}\n{cuerpoTexto}";
+        foreach (var pr in proyectos.OrderByDescending(x => x.Nombre.Length))
+        {
+            if ((!string.IsNullOrWhiteSpace(pr.Nombre) && textoCombinadoMeta.Contains(pr.Nombre, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(pr.Codigo) && textoCombinadoMeta.Contains(pr.Codigo, StringComparison.OrdinalIgnoreCase)))
+            {
+                proyMatch = pr;
+                break;
+            }
+        }
+
+        var partidas = new List<SolicitudPartida>();
+        string notasExtra = $"Recibido por correo: \"{asunto}\" ({remitenteCorreo})";
+
+        void AgregarPartidaDetectada(string descRaw, decimal cantidad, string unidadRaw, string notaPartida)
+        {
+            string descLimpia = (descRaw ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(descLimpia) || descLimpia.Length < 2) return;
+            if (cantidad <= 0m) cantidad = 1m;
+            string unidadNorm = NormalizarUnidadMedida(string.IsNullOrWhiteSpace(unidadRaw) ? "Pieza" : unidadRaw.Trim());
+
+            var palabras = descLimpia.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length >= 2)
+                .ToList();
+
+            var mejorProd = productos
+                .Select(p => new
+                {
+                    Producto = p,
+                    Exacto = string.Equals(p.Nombre, descLimpia, StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(p.CodigoInterno, descLimpia, StringComparison.OrdinalIgnoreCase),
+                    Score = palabras.Count(w =>
+                        p.Nombre.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                        p.CodigoInterno.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                        p.Marca.Contains(w, StringComparison.OrdinalIgnoreCase) ||
+                        p.Modelo.Contains(w, StringComparison.OrdinalIgnoreCase))
+                })
+                .OrderByDescending(x => x.Exacto)
+                .ThenByDescending(x => x.Score)
+                .FirstOrDefault();
+
+            if (mejorProd != null && (mejorProd.Exacto || (palabras.Count > 0 && mejorProd.Score >= Math.Max(2, palabras.Count))))
+            {
+                var p = mejorProd.Producto;
+                partidas.Add(new SolicitudPartida
+                {
+                    ProductoId = p.Id,
+                    ProductoCodigo = p.CodigoInterno,
+                    ProductoNombre = p.Nombre,
+                    DescripcionLibre = p.Nombre,
+                    Familia = p.Familia,
+                    UnidadCompra = string.IsNullOrWhiteSpace(unidadRaw) ? p.UnidadCompra : unidadNorm,
+                    CantidadSolicitada = cantidad,
+                    StockActualAlmacen = p.StockActual,
+                    NotasPartida = notaPartida,
+                    IncluirEnCotizacion = true
+                });
+            }
+            else
+            {
+                partidas.Add(new SolicitudPartida
+                {
+                    ProductoId = 0,
+                    ProductoCodigo = "CONCEPTO-LIBRE",
+                    ProductoNombre = descLimpia,
+                    DescripcionLibre = descLimpia,
+                    Familia = "Conceptos por Cotizar",
+                    UnidadCompra = unidadNorm,
+                    CantidadSolicitada = cantidad,
+                    NotasPartida = notaPartida,
+                    IncluirEnCotizacion = true
+                });
+            }
+        }
+
+        // 1. Si hay CSV adjunto o plantilla CSV en el cuerpo
+        string csvAnalizar = !string.IsNullOrWhiteSpace(contenidoCsvAdjunto)
+            ? contenidoCsvAdjunto
+            : (cuerpoTexto.Contains("DescripcionArticulo", StringComparison.OrdinalIgnoreCase) ? cuerpoTexto : string.Empty);
+
+        if (!string.IsNullOrWhiteSpace(csvAnalizar))
+        {
+            var lineasCsv = csvAnalizar.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
+            char delim = lineasCsv.Take(15).Sum(l => l.Count(c => c == ';')) > lineasCsv.Take(15).Sum(l => l.Count(c => c == ',')) ? ';' : ',';
+            bool enTabla = false;
+            foreach (var rawLine in lineasCsv)
+            {
+                var cols = rawLine.Split(delim).Select(x => x.Trim().Trim('"')).ToList();
+                if (cols.Count == 0 || string.IsNullOrWhiteSpace(cols[0])) continue;
+                string c0 = cols[0];
+                if (c0.Equals("DescripcionArticulo", StringComparison.OrdinalIgnoreCase) ||
+                    c0.Equals("Descripcion", StringComparison.OrdinalIgnoreCase) ||
+                    c0.Equals("Descripción", StringComparison.OrdinalIgnoreCase))
+                {
+                    enTabla = true;
+                    continue;
+                }
+                if (!enTabla)
+                {
+                    string val = cols.Count > 1 ? cols[1] : string.Empty;
+                    if (c0.Contains("Departamento", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        var d = departamentos.FirstOrDefault(x => x.Nombre.Contains(val, StringComparison.OrdinalIgnoreCase) || x.Codigo.Contains(val, StringComparison.OrdinalIgnoreCase));
+                        if (d != null) depMatch = d;
+                    }
+                    else if (c0.Contains("Solicitante", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        var e = encargados.FirstOrDefault(x => x.Nombre.Contains(val, StringComparison.OrdinalIgnoreCase));
+                        if (e != null) encMatch = e;
+                    }
+                    else if ((c0.Contains("Proyecto", StringComparison.OrdinalIgnoreCase) || c0.Contains("Obra", StringComparison.OrdinalIgnoreCase)) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        var pr = proyectos.FirstOrDefault(x => x.Nombre.Contains(val, StringComparison.OrdinalIgnoreCase) || x.Codigo.Contains(val, StringComparison.OrdinalIgnoreCase));
+                        if (pr != null) proyMatch = pr;
+                    }
+                    else if (c0.Contains("Urgencia", StringComparison.OrdinalIgnoreCase) && val.Contains("Urgente", StringComparison.OrdinalIgnoreCase))
+                    {
+                        notasExtra += " | Prioridad: Urgente";
+                    }
+                    continue;
+                }
+
+                string descArt = c0;
+                string espec = cols.Count > 1 ? cols[1] : string.Empty;
+                string marca = cols.Count > 2 ? cols[2] : string.Empty;
+                decimal.TryParse(cols.Count > 3 ? cols[3] : "1", NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cantCsv);
+                if (cantCsv <= 0m) cantCsv = 1m;
+                string uniCsv = cols.Count > 4 && !string.IsNullOrWhiteSpace(cols[4]) ? cols[4] : "Pieza";
+                string descComp = descArt;
+                if (!string.IsNullOrWhiteSpace(espec)) descComp += $" ({espec})";
+                if (!string.IsNullOrWhiteSpace(marca)) descComp += $" [Ref: {marca}]";
+                AgregarPartidaDetectada(descComp, cantCsv, uniCsv, "Plantilla Correo CSV");
+            }
+        }
+
+        // 2. Si no hubo partidas por CSV, analizar renglones del cuerpo del correo (formato lista WhatsApp / tabla)
+        if (partidas.Count == 0 && !string.IsNullOrWhiteSpace(cuerpoTexto))
+        {
+            string[] unidadesConocidas =
+            {
+                "pza", "pzas", "pieza", "piezas", "tramo", "tramos", "metro", "metros", "m", "ml",
+                "rollo", "rollos", "saco", "sacos", "bulto", "bultos", "caja", "cajas", "par", "pares",
+                "juego", "juegos", "kit", "kits", "litro", "litros", "lt", "galon", "galones", "cubeta", "cubetas",
+                "kg", "kilo", "kilos", "servicio", "servicios", "lote", "paquete", "paquetes"
+            };
+
+            var lineas = cuerpoTexto.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var raw in lineas)
+            {
+                string l = raw.Trim();
+                if (string.IsNullOrWhiteSpace(l)) continue;
+                if (l.StartsWith(">") || l.StartsWith("De:", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("From:", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Enviado", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Saludos", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Atentamente", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Quedo ", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Buen día", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Buenos días", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Buenas tardes", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Hola", StringComparison.OrdinalIgnoreCase) ||
+                    l.StartsWith("Favor de ", StringComparison.OrdinalIgnoreCase) ||
+                    l.Contains("escribió:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Metadatos clave: valor en el cuerpo del correo
+                if (l.StartsWith("Proyecto:", StringComparison.OrdinalIgnoreCase) || l.StartsWith("Obra:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string valP = l[(l.IndexOf(':') + 1)..].Trim();
+                    var pr = proyectos.FirstOrDefault(x => x.Nombre.Contains(valP, StringComparison.OrdinalIgnoreCase) || x.Codigo.Contains(valP, StringComparison.OrdinalIgnoreCase));
+                    if (pr != null) proyMatch = pr;
+                    continue;
+                }
+                if (l.StartsWith("Departamento:", StringComparison.OrdinalIgnoreCase) || l.StartsWith("Área:", StringComparison.OrdinalIgnoreCase) || l.StartsWith("Area:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string valD = l[(l.IndexOf(':') + 1)..].Trim();
+                    var dp = departamentos.FirstOrDefault(x => x.Nombre.Contains(valD, StringComparison.OrdinalIgnoreCase) || x.Codigo.Contains(valD, StringComparison.OrdinalIgnoreCase));
+                    if (dp != null) depMatch = dp;
+                    continue;
+                }
+                if (l.StartsWith("Urgencia:", StringComparison.OrdinalIgnoreCase) || l.StartsWith("Prioridad:", StringComparison.OrdinalIgnoreCase))
+                {
+                    string valU = l[(l.IndexOf(':') + 1)..].Trim();
+                    if (valU.Contains("Urgente", StringComparison.OrdinalIgnoreCase))
+                        notasExtra += " | Prioridad: Urgente";
+                    continue;
+                }
+
+                // Quitar viñetas iniciales (- , * , • )
+                string limpia = System.Text.RegularExpressions.Regex.Replace(l, @"^[\-\*\•\u2022]+\s*", "").Trim();
+
+                // Caso A: Empieza con cantidad numérica (ej. "5 pza Tubo de cobre 1/2" o "4 tornillo inox")
+                var mCant = System.Text.RegularExpressions.Regex.Match(limpia, @"^(\d+(?:[\.,]\d+)?)\s+(?:x\s+)?(.+)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (mCant.Success)
+                {
+                    decimal.TryParse(mCant.Groups[1].Value.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cant);
+                    string resto = mCant.Groups[2].Value.Trim();
+                    string unidad = "Pieza";
+
+                    var partesResto = resto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (partesResto.Length >= 2)
+                    {
+                        string primeraPalabra = partesResto[0].TrimEnd('.', ',').ToLowerInvariant();
+                        if (unidadesConocidas.Contains(primeraPalabra))
+                        {
+                            unidad = NormalizarUnidadMedida(primeraPalabra);
+                            resto = string.Join(" ", partesResto.Skip(1)).Trim();
+                            if (resto.StartsWith("de ", StringComparison.OrdinalIgnoreCase))
+                                resto = resto[3..].Trim();
+                        }
+                    }
+
+                    AgregarPartidaDetectada(resto, cant > 0 ? cant : 1m, unidad, $"Correo: {limpia}");
+                }
+            }
+        }
+
+        if (depMatch == null && encMatch != null)
+            depMatch = departamentos.FirstOrDefault(d => d.Id == encMatch.DepartamentoId);
+        if (depMatch == null)
+            depMatch = departamentos.FirstOrDefault();
+        if (encMatch == null && depMatch != null)
+            encMatch = encargados.FirstOrDefault(e => e.DepartamentoId == depMatch.Id) ?? encargados.FirstOrDefault();
+
+        return (
+            partidas,
+            depMatch?.Id ?? 0,
+            depMatch?.Nombre ?? "Por Asignar",
+            encMatch?.Id ?? 0,
+            encMatch?.Nombre ?? (!string.IsNullOrWhiteSpace(remitenteNombre) ? remitenteNombre : remitenteCorreo),
+            proyMatch?.Id ?? 0,
+            proyMatch?.Nombre ?? "Consumo Interno / General",
+            notasExtra
+        );
+    }
+
+    public static Solicitud? ConvertirCorreoBandejaEnSolicitud(
+        int correoId,
+        int? depOverrideId = null,
+        int? encOverrideId = null,
+        int? proyOverrideId = null,
+        string? cuerpoOverride = null,
+        bool notificarEtapa1AlGerente = true)
+    {
+        var correo = ObtenerCorreosEntrantesSolicitud().FirstOrDefault(c => c.Id == correoId);
+        if (correo == null) return null;
+
+        string textoUsar = !string.IsNullOrWhiteSpace(cuerpoOverride) ? cuerpoOverride : correo.CuerpoTexto;
+        var extraido = ExtraerPartidasYMetadatosDeCorreo(
+            correo.Asunto,
+            correo.RemitenteCorreo,
+            correo.RemitenteNombre,
+            textoUsar,
+            correo.ContenidoAdjuntoCsv);
+
+        var partidas = extraido.Partidas;
+        if (partidas.Count == 0 && !string.IsNullOrWhiteSpace(textoUsar))
+        {
+            // Si el texto era formato libre sin cantidades numéricas explícitas, convertir cada línea útil en 1 pieza
+            foreach (var rawLine in textoUsar.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string lin = rawLine.Trim();
+                if (lin.Length >= 3 && !lin.StartsWith(">") && !lin.StartsWith("Saludos", StringComparison.OrdinalIgnoreCase))
+                {
+                    partidas.Add(new SolicitudPartida
+                    {
+                        ProductoId = 0,
+                        ProductoCodigo = "CONCEPTO-LIBRE",
+                        ProductoNombre = lin,
+                        DescripcionLibre = lin,
+                        Familia = "Conceptos por Cotizar",
+                        UnidadCompra = "Pieza",
+                        CantidadSolicitada = 1m,
+                        NotasPartida = "Correo formato libre",
+                        IncluirEnCotizacion = true
+                    });
+                }
+            }
+        }
+
+        if (partidas.Count == 0)
+            return null;
+
+        int depId = depOverrideId.HasValue && depOverrideId.Value > 0 ? depOverrideId.Value : extraido.DepartamentoId;
+        int encId = encOverrideId.HasValue && encOverrideId.Value > 0 ? encOverrideId.Value : extraido.EncargadoId;
+        int proyId = proyOverrideId.HasValue && proyOverrideId.Value >= 0 ? proyOverrideId.Value : extraido.ProyectoId;
+
+        var sol = CrearSolicitud(
+            depId,
+            encId,
+            proyId,
+            "Correo",
+            extraido.NotasDetectadas,
+            partidas,
+            "Requerimiento de Compra",
+            null,
+            null,
+            notificarEtapa1AlGerente);
+
+        using (var conn = new SqliteConnection(ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+UPDATE CorreosEntrantesSolicitud
+SET EstadoBandeja = $est,
+    SolicitudCreadaId = $sid,
+    SolicitudCreadaFolio = $sfol,
+    PartidasDetectadasCount = $cnt
+WHERE Id = $id;";
+            cmd.Parameters.AddWithValue("$est", $"Solicitud Creada ({sol.Folio})");
+            cmd.Parameters.AddWithValue("$sid", sol.Id);
+            cmd.Parameters.AddWithValue("$sfol", sol.Folio);
+            cmd.Parameters.AddWithValue("$cnt", partidas.Count);
+            cmd.Parameters.AddWithValue("$id", correo.Id);
+            cmd.ExecuteNonQuery();
+        }
+
+        return sol;
+    }
+
+    private static string DecodificarHeaderRfc2047(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        try
+        {
+            return System.Text.RegularExpressions.Regex.Replace(
+                raw,
+                @"=\?([^?]+)\?([BbQq])\?([^?]*)\?=",
+                m =>
+                {
+                    string charset = m.Groups[1].Value;
+                    string mode = m.Groups[2].Value.ToUpperInvariant();
+                    string data = m.Groups[3].Value;
+                    System.Text.Encoding enc;
+                    try { enc = System.Text.Encoding.GetEncoding(charset); }
+                    catch { enc = System.Text.Encoding.UTF8; }
+
+                    if (mode == "B")
+                    {
+                        byte[] bytes = Convert.FromBase64String(data);
+                        return enc.GetString(bytes);
+                    }
+                    else
+                    {
+                        var bytes = new List<byte>();
+                        for (int i = 0; i < data.Length; i++)
+                        {
+                            if (data[i] == '_')
+                                bytes.Add((byte)' ');
+                            else if (data[i] == '=' && i + 2 < data.Length &&
+                                     byte.TryParse(data.Substring(i + 1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
+                            {
+                                bytes.Add(b);
+                                i += 2;
+                            }
+                            else
+                                bytes.Add((byte)data[i]);
+                        }
+                        return enc.GetString(bytes.ToArray());
+                    }
+                });
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+
+    private static string DecodificarTransferEncoding(string body, string encoding, string charset = "utf-8")
+    {
+        if (string.IsNullOrEmpty(body)) return string.Empty;
+        System.Text.Encoding enc;
+        try { enc = System.Text.Encoding.GetEncoding(string.IsNullOrWhiteSpace(charset) ? "utf-8" : charset.Trim().Trim('"')); }
+        catch { enc = System.Text.Encoding.UTF8; }
+
+        string mode = (encoding ?? string.Empty).Trim().ToLowerInvariant();
+        try
+        {
+            if (mode == "base64")
+            {
+                string cleanB64 = System.Text.RegularExpressions.Regex.Replace(body, @"\s+", "");
+                byte[] bytes = Convert.FromBase64String(cleanB64);
+                return enc.GetString(bytes);
+            }
+            if (mode == "quoted-printable")
+            {
+                string softRemoved = body.Replace("=\r\n", "").Replace("=\n", "");
+                var bytes = new List<byte>(softRemoved.Length);
+                for (int i = 0; i < softRemoved.Length; i++)
+                {
+                    if (softRemoved[i] == '=' && i + 2 < softRemoved.Length &&
+                        byte.TryParse(softRemoved.Substring(i + 1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
+                    {
+                        bytes.Add(b);
+                        i += 2;
+                    }
+                    else
+                    {
+                        bytes.Add((byte)softRemoved[i]);
+                    }
+                }
+                return enc.GetString(bytes.ToArray());
+            }
+        }
+        catch
+        {
+            // Fallback al texto original
+        }
+        return body;
+    }
+
+    private static string LimpiarHtmlATextoConSaltos(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+        string s = System.Text.RegularExpressions.Regex.Replace(html, @"<(script|style)[^>]*>[\s\S]*?</\1>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"<(br|p|div|tr|li|h[1-6])[^>]*>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"<td[^>]*>", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"<[^>]+>", "");
+        s = System.Net.WebUtility.HtmlDecode(s);
+        return s.Trim();
+    }
+
+    private static (string Asunto, string RemitenteNombre, string RemitenteCorreo, string FechaStr, string CuerpoTexto, string NombreCsv, string ContenidoCsv)
+        ParsearMensajeMimeRfc822(string rawMime)
+    {
+        string asunto = string.Empty;
+        string remNombre = string.Empty;
+        string remCorreo = string.Empty;
+        string fechaStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        string nombreCsv = string.Empty;
+        string contenidoCsv = string.Empty;
+        var textosPlain = new List<string>();
+        var textosHtml = new List<string>();
+
+        int splitIdx = rawMime.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+        int sepLen = 4;
+        if (splitIdx < 0)
+        {
+            splitIdx = rawMime.IndexOf("\n\n", StringComparison.Ordinal);
+            sepLen = 2;
+        }
+        if (splitIdx < 0) return (asunto, remNombre, remCorreo, fechaStr, rawMime, nombreCsv, contenidoCsv);
+
+        string headersRaw = rawMime[..splitIdx];
+        string bodyRaw = rawMime[(splitIdx + sepLen)..];
+
+        // Unfold multiline headers
+        string headersUnfolded = System.Text.RegularExpressions.Regex.Replace(headersRaw, @"\r?\n[ \t]+", " ");
+        string contentType = "text/plain";
+        string transferEnc = "";
+
+        foreach (var hLine in headersUnfolded.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            int colon = hLine.IndexOf(':');
+            if (colon <= 0) continue;
+            string hName = hLine[..colon].Trim();
+            string hVal = hLine[(colon + 1)..].Trim();
+
+            if (hName.Equals("Subject", StringComparison.OrdinalIgnoreCase))
+                asunto = DecodificarHeaderRfc2047(hVal).Trim();
+            else if (hName.Equals("From", StringComparison.OrdinalIgnoreCase))
+            {
+                string fromDec = DecodificarHeaderRfc2047(hVal).Trim();
+                var mMail = System.Text.RegularExpressions.Regex.Match(fromDec, @"<([^>]+@[^>]+)>");
+                if (mMail.Success)
+                {
+                    remCorreo = mMail.Groups[1].Value.Trim();
+                    remNombre = fromDec[..mMail.Index].Trim().Trim('"', '\'');
+                }
+                else
+                {
+                    remCorreo = fromDec.Trim();
+                    remNombre = fromDec.Trim();
+                }
+            }
+            else if (hName.Equals("Date", StringComparison.OrdinalIgnoreCase))
+            {
+                if (DateTimeOffset.TryParse(hVal, out var dto))
+                    fechaStr = dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+            }
+            else if (hName.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
+                contentType = hVal;
+            else if (hName.Equals("Content-Transfer-Encoding", StringComparison.OrdinalIgnoreCase))
+                transferEnc = hVal;
+        }
+
+        void ProcesarParteMime(string ctHeader, string cteHeader, string cdHeader, string partBody)
+        {
+            var mBoundary = System.Text.RegularExpressions.Regex.Match(ctHeader, @"boundary=""?([^"";\r\n]+)""?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (ctHeader.Contains("multipart/", StringComparison.OrdinalIgnoreCase) && mBoundary.Success)
+            {
+                string boundary = "--" + mBoundary.Groups[1].Value.Trim();
+                var subParts = partBody.Split(new[] { boundary }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var sp in subParts)
+                {
+                    string spTrim = sp.TrimStart('\r', '\n');
+                    if (spTrim.StartsWith("--") || string.IsNullOrWhiteSpace(spTrim)) continue;
+                    int sIdx = spTrim.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                    int sLen = 4;
+                    if (sIdx < 0)
+                    {
+                        sIdx = spTrim.IndexOf("\n\n", StringComparison.Ordinal);
+                        sLen = 2;
+                    }
+                    if (sIdx < 0) continue;
+
+                    string subHeaders = System.Text.RegularExpressions.Regex.Replace(spTrim[..sIdx], @"\r?\n[ \t]+", " ");
+                    string subBody = spTrim[(sIdx + sLen)..];
+                    string subCt = "text/plain", subCte = "", subCd = "";
+                    foreach (var sh in subHeaders.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        int cIdx = sh.IndexOf(':');
+                        if (cIdx <= 0) continue;
+                        string k = sh[..cIdx].Trim();
+                        string v = sh[(cIdx + 1)..].Trim();
+                        if (k.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)) subCt = v;
+                        else if (k.Equals("Content-Transfer-Encoding", StringComparison.OrdinalIgnoreCase)) subCte = v;
+                        else if (k.Equals("Content-Disposition", StringComparison.OrdinalIgnoreCase)) subCd = v;
+                    }
+                    ProcesarParteMime(subCt, subCte, subCd, subBody);
+                }
+                return;
+            }
+
+            string charset = "utf-8";
+            var mChar = System.Text.RegularExpressions.Regex.Match(ctHeader, @"charset=""?([^"";\s]+)""?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (mChar.Success) charset = mChar.Groups[1].Value;
+
+            string decoded = DecodificarTransferEncoding(partBody, cteHeader, charset);
+
+            // Detectar adjunto CSV
+            string fileMeta = $"{ctHeader} {cdHeader}";
+            if (fileMeta.Contains(".csv", StringComparison.OrdinalIgnoreCase) || ctHeader.Contains("text/csv", StringComparison.OrdinalIgnoreCase))
+            {
+                var mFn = System.Text.RegularExpressions.Regex.Match(fileMeta, @"(?:filename|name)=""?([^"";\r\n]+\.csv)""?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                nombreCsv = mFn.Success ? DecodificarHeaderRfc2047(mFn.Groups[1].Value) : "Solicitud_Adjunta.csv";
+                contenidoCsv = decoded.Trim();
+                return;
+            }
+
+            if (ctHeader.Contains("text/plain", StringComparison.OrdinalIgnoreCase))
+                textosPlain.Add(decoded.Trim());
+            else if (ctHeader.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+                textosHtml.Add(LimpiarHtmlATextoConSaltos(decoded));
+        }
+
+        ProcesarParteMime(contentType, transferEnc, "", bodyRaw);
+        string cuerpoFinal = textosPlain.Count > 0
+            ? string.Join("\n", textosPlain.Where(x => !string.IsNullOrWhiteSpace(x)))
+            : string.Join("\n", textosHtml.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+        return (asunto, remNombre, remCorreo, fechaStr, cuerpoFinal.Trim(), nombreCsv, contenidoCsv);
+    }
+
+    public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje, int NuevosEnBandeja, int SolicitudesAutoCreadas)> SincronizarCorreosEntrantesImapAsync()
+    {
+        var cfg = ObtenerConfiguracionSmtpCorreo();
+        if (!cfg.TieneCredencialesCompletas)
+            return (false, "Configure primero su cuenta Gmail y Contraseña de Aplicación de 16 letras.", 0, 0);
+
+        return await System.Threading.Tasks.Task.Run(() =>
+        {
+            int nuevosBandeja = 0;
+            int autoCreadas = 0;
+            try
+            {
+                var uidsExistentes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                using (var connChk = new SqliteConnection(ConnectionString))
+                {
+                    connChk.Open();
+                    using var cmdChk = connChk.CreateCommand();
+                    cmdChk.CommandText = "SELECT UidImap FROM CorreosEntrantesSolicitud;";
+                    using var rChk = cmdChk.ExecuteReader();
+                    while (rChk.Read())
+                        uidsExistentes.Add(rChk.GetString(0));
+                }
+
+                string hostImap = cfg.ServidorSmtp.Contains("gmail", StringComparison.OrdinalIgnoreCase)
+                    ? "imap.gmail.com"
+                    : cfg.ServidorSmtp.Replace("smtp.", "imap.", StringComparison.OrdinalIgnoreCase);
+
+                using var tcp = new System.Net.Sockets.TcpClient();
+                tcp.ReceiveTimeout = 15000;
+                tcp.SendTimeout = 15000;
+                tcp.Connect(hostImap, 993);
+
+                using var ssl = new System.Net.Security.SslStream(tcp.GetStream(), false);
+                ssl.AuthenticateAsClient(hostImap);
+                using var reader = new StreamReader(ssl, System.Text.Encoding.Latin1, false, 8192, leaveOpen: true);
+                using var writer = new StreamWriter(ssl, new System.Text.UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = true, NewLine = "\r\n" };
+
+                // Leer saludo inicial IMAP
+                _ = reader.ReadLine();
+
+                string EnviarComandoImap(string tag, string cmdTexto)
+                {
+                    writer.WriteLine($"{tag} {cmdTexto}");
+                    var sbResp = new System.Text.StringBuilder();
+                    while (true)
+                    {
+                        string? line = reader.ReadLine();
+                        if (line == null) break;
+                        sbResp.AppendLine(line);
+                        if (line.StartsWith($"{tag} OK", StringComparison.OrdinalIgnoreCase) ||
+                            line.StartsWith($"{tag} NO", StringComparison.OrdinalIgnoreCase) ||
+                            line.StartsWith($"{tag} BAD", StringComparison.OrdinalIgnoreCase))
+                        {
+                            break;
+                        }
+                    }
+                    return sbResp.ToString();
+                }
+
+                string userClean = cfg.CorreoRemitenteGmail.Trim();
+                string passClean = cfg.ContrasenaAplicacionGmail.Replace(" ", "").Trim();
+                string respLogin = EnviarComandoImap("A01", $"LOGIN \"{userClean}\" \"{passClean}\"");
+                if (!respLogin.Contains("A01 OK", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (false, "No se pudo autenticar en IMAP (imap.gmail.com:993). Verifique su Contraseña de Aplicación de 16 letras.", 0, 0);
+                }
+
+                _ = EnviarComandoImap("A02", "SELECT INBOX");
+
+                string fechaSince = DateTime.Today.AddDays(-7).ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+                string respSearch = EnviarComandoImap("A03", $"UID SEARCH SINCE {fechaSince}");
+
+                var uidsNuevos = new List<string>();
+                foreach (var line in respSearch.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (line.StartsWith("* SEARCH", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var partes = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var p in partes.Skip(2))
+                        {
+                            if (long.TryParse(p, out _) && !uidsExistentes.Contains(p))
+                                uidsNuevos.Add(p);
+                        }
+                    }
+                }
+
+                // Procesar los últimos 20 correos no sincronizados
+                var uidsProcesar = uidsNuevos.TakeLast(20).ToList();
+                var palabrasClave = (cfg.PalabrasClaveAsuntoImap ?? "SOLICITUD, COTIZAR, COTIZACION, PEDIDO, REQUERIMIENTO")
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(x => x.Trim())
+                    .Where(x => x.Length > 0)
+                    .ToList();
+
+                int cmdNum = 10;
+                foreach (var uid in uidsProcesar)
+                {
+                    cmdNum++;
+                    string tag = $"F{cmdNum}";
+                    writer.WriteLine($"{tag} UID FETCH {uid} (BODY.PEEK[])");
+
+                    var sbRawMsg = new System.Text.StringBuilder();
+                    while (true)
+                    {
+                        string? line = reader.ReadLine();
+                        if (line == null) break;
+                        if (line.StartsWith($"{tag} OK", StringComparison.OrdinalIgnoreCase) ||
+                            line.StartsWith($"{tag} NO", StringComparison.OrdinalIgnoreCase) ||
+                            line.StartsWith($"{tag} BAD", StringComparison.OrdinalIgnoreCase))
+                        {
+                            break;
+                        }
+                        if (line.StartsWith($"* ", StringComparison.Ordinal) && line.Contains("FETCH (", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        sbRawMsg.AppendLine(line);
+                    }
+
+                    string rawMime = sbRawMsg.ToString().TrimEnd();
+                    if (rawMime.EndsWith(")"))
+                        rawMime = rawMime[..^1].TrimEnd();
+                    if (string.IsNullOrWhiteSpace(rawMime))
+                        continue;
+
+                    var parsed = ParsearMensajeMimeRfc822(rawMime);
+
+                    // Ignorar correos automáticos salientes generados por nuestro propio sistema ("[Compras Lebaref]")
+                    if (parsed.Asunto.StartsWith("[Compras Lebaref]", StringComparison.OrdinalIgnoreCase) ||
+                        parsed.Asunto.StartsWith("Plantilla e Instrucciones para Enviar Solicitudes", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    bool coincideAsunto = palabrasClave.Any(k => parsed.Asunto.Contains(k, StringComparison.OrdinalIgnoreCase));
+                    var extraido = ExtraerPartidasYMetadatosDeCorreo(
+                        parsed.Asunto,
+                        parsed.RemitenteCorreo,
+                        parsed.RemitenteNombre,
+                        parsed.CuerpoTexto,
+                        parsed.ContenidoCsv);
+
+                    // Solo guardar en la Bandeja correos que coincidan con el asunto, o que vengan de un Gerente registrado, o tengan archivo CSV
+                    bool vieneDeGerenteRegistrado = extraido.EncargadoId > 0 &&
+                        ObtenerEncargados().Any(e => !string.IsNullOrWhiteSpace(e.Correo) &&
+                                                     e.Correo.Contains(parsed.RemitenteCorreo, StringComparison.OrdinalIgnoreCase));
+                    if (!coincideAsunto && !vieneDeGerenteRegistrado && string.IsNullOrWhiteSpace(parsed.NombreCsv))
+                        continue;
+
+                    string resumenPartidas = extraido.Partidas.Count > 0
+                        ? string.Join(", ", extraido.Partidas.Take(4).Select(p => $"{p.CantidadSolicitada:0.##} {p.UnidadCompra} {p.ProductoNombre}"))
+                        : "(Sin partidas estructuradas — Revisar texto en Bandeja)";
+
+                    var regCorreo = new CorreoEntranteSolicitud
+                    {
+                        UidImap = uid,
+                        FechaCorreo = parsed.FechaStr,
+                        RemitenteNombre = string.IsNullOrWhiteSpace(parsed.RemitenteNombre) ? extraido.EncargadoNombre : parsed.RemitenteNombre,
+                        RemitenteCorreo = parsed.RemitenteCorreo,
+                        Asunto = string.IsNullOrWhiteSpace(parsed.Asunto) ? "(Sin asunto)" : parsed.Asunto,
+                        CuerpoTexto = parsed.CuerpoTexto,
+                        NombreAdjuntoCsv = parsed.NombreCsv,
+                        ContenidoAdjuntoCsv = parsed.ContenidoCsv,
+                        CoincidePalabraClaveAsunto = coincideAsunto,
+                        EncargadoDetectadoId = extraido.EncargadoId,
+                        EncargadoDetectadoNombre = extraido.EncargadoNombre,
+                        DepartamentoDetectadoId = extraido.DepartamentoId,
+                        DepartamentoDetectadoNombre = extraido.DepartamentoNombre,
+                        ProyectoDetectadoId = extraido.ProyectoId,
+                        ProyectoDetectadoNombre = extraido.ProyectoNombre,
+                        PartidasDetectadasCount = extraido.Partidas.Count,
+                        ResumenPartidas = resumenPartidas,
+                        EstadoBandeja = "En Bandeja (Por Revisar)"
+                    };
+
+                    // Si el asunto coincide con las palabras clave y tiene partidas válidas y está activa la auto-creación: crear SOL-xxxx de inmediato
+                    if (cfg.ImapAutoCrearPorAsunto && coincideAsunto && extraido.Partidas.Count > 0 && extraido.DepartamentoId > 0 && extraido.EncargadoId > 0)
+                    {
+                        var solAuto = CrearSolicitud(
+                            extraido.DepartamentoId,
+                            extraido.EncargadoId,
+                            extraido.ProyectoId,
+                            "Correo",
+                            extraido.NotasDetectadas,
+                            extraido.Partidas,
+                            "Requerimiento de Compra",
+                            null,
+                            null,
+                            notificarCorreo: true);
+                        regCorreo.EstadoBandeja = $"Auto-Creada ({solAuto.Folio})";
+                        regCorreo.SolicitudCreadaId = solAuto.Id;
+                        regCorreo.SolicitudCreadaFolio = solAuto.Folio;
+                        autoCreadas++;
+                    }
+                    else
+                    {
+                        nuevosBandeja++;
+                    }
+
+                    using (var connIns = new SqliteConnection(ConnectionString))
+                    {
+                        connIns.Open();
+                        using var cmdIns = connIns.CreateCommand();
+                        cmdIns.CommandText = @"
+INSERT OR IGNORE INTO CorreosEntrantesSolicitud (
+    UidImap, FechaCorreo, RemitenteNombre, RemitenteCorreo, Asunto, CuerpoTexto,
+    NombreAdjuntoCsv, ContenidoAdjuntoCsv, CoincidePalabraClaveAsunto,
+    EncargadoDetectadoId, EncargadoDetectadoNombre, DepartamentoDetectadoId, DepartamentoDetectadoNombre,
+    ProyectoDetectadoId, ProyectoDetectadoNombre, PartidasDetectadasCount, ResumenPartidas,
+    EstadoBandeja, SolicitudCreadaId, SolicitudCreadaFolio
+) VALUES (
+    $uid, $fec, $rnom, $rcor, $asu, $cue,
+    $ncsv, $ccsv, $coinc,
+    $eid, $enom, $did, $dnom,
+    $pid, $pnom, $pcnt, $pres,
+    $est, $sid, $sfol
+);
+SELECT last_insert_rowid();";
+                        cmdIns.Parameters.AddWithValue("$uid", regCorreo.UidImap);
+                        cmdIns.Parameters.AddWithValue("$fec", regCorreo.FechaCorreo);
+                        cmdIns.Parameters.AddWithValue("$rnom", regCorreo.RemitenteNombre);
+                        cmdIns.Parameters.AddWithValue("$rcor", regCorreo.RemitenteCorreo);
+                        cmdIns.Parameters.AddWithValue("$asu", regCorreo.Asunto);
+                        cmdIns.Parameters.AddWithValue("$cue", regCorreo.CuerpoTexto);
+                        cmdIns.Parameters.AddWithValue("$ncsv", regCorreo.NombreAdjuntoCsv);
+                        cmdIns.Parameters.AddWithValue("$ccsv", regCorreo.ContenidoAdjuntoCsv);
+                        cmdIns.Parameters.AddWithValue("$coinc", regCorreo.CoincidePalabraClaveAsunto ? 1 : 0);
+                        cmdIns.Parameters.AddWithValue("$eid", regCorreo.EncargadoDetectadoId);
+                        cmdIns.Parameters.AddWithValue("$enom", regCorreo.EncargadoDetectadoNombre);
+                        cmdIns.Parameters.AddWithValue("$did", regCorreo.DepartamentoDetectadoId);
+                        cmdIns.Parameters.AddWithValue("$dnom", regCorreo.DepartamentoDetectadoNombre);
+                        cmdIns.Parameters.AddWithValue("$pid", regCorreo.ProyectoDetectadoId);
+                        cmdIns.Parameters.AddWithValue("$pnom", regCorreo.ProyectoDetectadoNombre);
+                        cmdIns.Parameters.AddWithValue("$pcnt", regCorreo.PartidasDetectadasCount);
+                        cmdIns.Parameters.AddWithValue("$pres", regCorreo.ResumenPartidas);
+                        cmdIns.Parameters.AddWithValue("$est", regCorreo.EstadoBandeja);
+                        cmdIns.Parameters.AddWithValue("$sid", regCorreo.SolicitudCreadaId);
+                        cmdIns.Parameters.AddWithValue("$sfol", regCorreo.SolicitudCreadaFolio);
+                        regCorreo.Id = Convert.ToInt32(cmdIns.ExecuteScalar());
+                    }
+
+                    try { OnCorreoSolicitudRecibido?.Invoke(regCorreo); } catch { }
+                }
+
+                _ = EnviarComandoImap("A99", "LOGOUT");
+                return (true, $"Sincronización completada: {autoCreadas} solicitud(es) auto-creada(s) y {nuevosBandeja} correo(s) nuevo(s) en bandeja de revisión.", nuevosBandeja, autoCreadas);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error al revisar buzón IMAP: {ex.Message}", nuevosBandeja, autoCreadas);
+            }
+        });
     }
 }
