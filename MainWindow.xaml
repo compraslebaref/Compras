@@ -1,4 +1,4 @@
-<ui:FluentWindow x:Class="SistemaComprasAlmacen.MainWindow"
+﻿<ui:FluentWindow x:Class="SistemaComprasAlmacen.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -2013,6 +2013,9 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,4">
                                         <Menu Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,6,0" MinHeight="26" Padding="0">
                                             <MenuItem Header="Herramientas ▾" Padding="8,3" FontSize="11.5" FontWeight="SemiBold">
+                                                <MenuItem Header="🌐 Abrir Catálogo ¿A quién cotizar? (Google Sheets)" Click="BtnAbrirSheetsProveedores_Click" FontWeight="Bold" />
+                                                <MenuItem Header="🔄 Sincronizar Proveedores y Categorías con Google Sheets..." Click="BtnSincronizarSheetsProveedores_Click" />
+                                                <Separator />
                                                 <MenuItem Header="Auto-Cotizar Insumos Rutinarios con Mejor Precio Histórico (Kraljic)" Click="BtnAutoAdjudicarRutinariosKraljic_Click" FontWeight="SemiBold" />
                                                 <Separator />
                                                 <MenuItem Header="Notificaciones por Correo a Gerentes (Gmail SMTP y Bitácora)" Click="BtnAbrirConfigNotificacionesCorreo_Click" />
@@ -4393,7 +4396,13 @@
                                     <TabItem Header="Proveedores">
                                     <Border Margin="0" Padding="14" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
                                         <DockPanel>
-                                            <TextBlock DockPanel.Dock="Top" Text="Proveedores Registrados" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
+                                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:Button Content="🌐 ¿A quién cotizar? (Sheets)" FontSize="11" Padding="8,4" Margin="0,0,6,0" ToolTip="Abrir en Google Sheets el catálogo de proveedores por categoría para los auxiliares" Click="BtnAbrirSheetsProveedores_Click" />
+                                                    <ui:Button Content="🔄 Sincronizar Sheets" Appearance="Primary" FontSize="11" Padding="8,4" ToolTip="Sincronizar proveedores, teléfonos y categorías entre el ERP y Google Sheets" Click="BtnSincronizarSheetsProveedores_Click" />
+                                                </StackPanel>
+                                                <TextBlock Text="Proveedores Registrados" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                                            </DockPanel>
                                             <DataGrid x:Name="DgDirProveedores"
                                                       AutoGenerateColumns="False"
                                                       IsReadOnly="True"

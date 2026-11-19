@@ -1,4 +1,4 @@
-# Tablero de Coordinación — Codex & Antigravity
+﻿# Tablero de Coordinación — Codex & Antigravity
 
 > **Propósito:** Pizarrón compartido en el repositorio para que **Codex** y **Antigravity** sincronicen avances, contratos de API y entregas sin que el usuario tenga que copiar detalles técnicos entre chats.
 > **Referencia maestra de brechas:** [`integracion_erpnext/AUDITORIA-EQUIVALENCIA.md`](integracion_erpnext/AUDITORIA-EQUIVALENCIA.md) y [`integracion_erpnext/auditoria/MATRIZ-EQUIVALENCIA.md`](integracion_erpnext/auditoria/MATRIZ-EQUIVALENCIA.md).
@@ -49,4 +49,5 @@
 
 ## Bitácora de Entregas Entre Agentes (Más reciente arriba)
 
+- **2026-11-19 — Antigravity ([CAT-03] Google Sheets ¿A quién cotizar?):** Creada y poblada la hoja maestra en Google Drive (1SDPwkexUf2IvIAGniwjtfqH2m8dv2KshrSMsJ9_EiM4 con 3 pestañas: A_Quien_Cotizar, Directorio_Proveedores y Resumen_Por_Categoria) e integrado el servicio modular Services/GoogleSheetsProveedoresService.cs + MainWindow.ProveedoresSheets.cs. *Nota para Codex en CAT-03:* asegurar que Supplier en lebaref_compras conserve phone, contact y email para mantener paridad con esta sincronización.
 - **2026-11-19 — Antigravity:** Unificación de repositorios en `C:\Users\oscar\Proyectos\Lebaref` (`app\` + worktree `codex\`), creación de `AGENTS.md`, `COORDINACION.md`, `integracion_erpnext/CONTRATO-API.md` y `integracion_erpnext/pruebas/Validar.ps1` sin alterar la lógica de negocio ni datos del entorno Docker `lebaref-pruebas`. Listo para iniciar Bloque 1 en conjunto con Codex.
