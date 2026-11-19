@@ -177,10 +177,10 @@
 - En `esquema?accion=oferta` y `esquema?accion=recibir` las unidades y el factor son de solo lectura. Ejemplos de elementos en `message.rows`, primero para oferta y después para recepción.
 
   ```json
-  {"id":"rfq-item-a","item_code":"TOR-01","qty":2.0,"rate":0,"lead_time_days":0,"uom":"Box","stock_uom":"Nos","conversion_factor":10.0}
+  {"id":"rfq-item-a","item_code":"TOR-01","qty":2.0,"rate":0,"lead_time_days":0,"uom":"Box","stock_uom":"Nos","conversion_factor":10.0,"concepto_libre":""}
   ```
   ```json
-  {"id":"po-item-a","item_code":"TOR-01","pending":2.0,"qty":0,"uom":"Box","stock_uom":"Nos","conversion_factor":10.0}
+  {"id":"po-item-a","item_code":"TOR-01","pending":2.0,"qty":0,"uom":"Box","stock_uom":"Nos","conversion_factor":10.0,"concepto_libre":""}
   ```
 
   En los POST de oferta y recepción puedes omitir estos tres campos o enviarlos tal como los devolvió el esquema. Se valida su coincidencia en renglones cotizados o recibidos. La oferta expresa `rate` por unidad de compra. Por ejemplo, para recibir una caja envía `{"rows":[{"id":"po-item-a","qty":1}]}` y obtendrás `{"message":{"folio":"MAT-PRE-2026-00001","tipo":"Purchase Receipt"}}`. Se reciben 10 unidades de inventario. Un factor inválido, una unidad sin conversión aplicable o el intento de alterar las unidades del documento de origen se rechazan con HTTP `417`.
@@ -208,9 +208,48 @@
 
 - En `GET /api/resource/Supplier/Proveedor%20A` se pueden leer los campos nativos `data.mobile_no`, `data.email_id` y `data.supplier_primary_contact`. Este último identifica el documento `Contact`. Con los permisos correspondientes, se puede consultar `GET /api/resource/Contact/<folio>` y leer `data.full_name`.
 
-## 6. Cambios de Contrato Planificados (Bloque 1)
+## 6. Solicitud con conceptos libres y datos de captura (`SOL-02`)
 
-- **`[SOL-02 / SOL-03 / SOL-05]` Solicitudes enriquecidas:**
-  - Metadatos de solicitante/gerente, departamento, notas, borrador vs. enviado, anexos, conceptos libres y aprobación de surtido desde stock.
+- `GET /api/method/lebaref_compras.operaciones.esquema?accion=solicitud` agrega `departamento`, `solicitante` y `notas` a `message.fields`, y `concepto_libre` editable a `message.columns`. En `departamento.choices` aparecen los nombres de departamentos activos visibles para la sesión. El POST exige que el departamento seleccionado pertenezca a la empresa de la solicitud. `solicitante` guarda el nombre escrito, incluso si la persona carece de cuenta en ERPNext. `notas` acepta texto multilínea. Los tres campos son opcionales.
+
+- Para crear, usa `POST /api/method/lebaref_compras.operaciones.ejecutar`, `accion=solicitud`, un UUID nuevo y un `folio` vacío. En cada renglón envía un `item_code` de catálogo o un `concepto_libre` con texto. Para el concepto libre la API usa la unidad base del artículo interno `LEBAREF-CONCEPTO-LIBRE` con factor 1. Si se envían las unidades, deben coincidir. El artículo interno es no inventariable. Su recepción conserva el concepto y la trazabilidad sin incrementar existencias. Para productos con control de stock se usa un SKU del catálogo.
+
+  ```json
+  {
+    "company":"Lebaref","schedule_date":"2026-12-01","title":"Materiales para taller",
+    "departamento":"Mantenimiento - L","solicitante":"Ana de Prueba",
+    "notas":"Entregar en taller.\nAvisar al recibir.",
+    "rows":[
+      {"item_code":"TOR-01","qty":2,"warehouse":"Central - L"},
+      {"concepto_libre":"Corte de placa a medida","qty":1,"project":"PROJ-0001","custom_lebaref_partida":"Taller"}
+    ]
+  }
+  ```
+  ```json
+  {"message":{"folio":"MAT-MR-2026-00002","tipo":"Material Request"}}
+  ```
+
+- `GET /api/method/lebaref_compras.operaciones.esquema?accion=solicitud&folio=MAT-MR-2026-00002` devuelve una solicitud existente con permiso de lectura. `message.add_rows` es `false` y las columnas son de solo lectura. Ejemplo de los datos de captura en `message.fields` y un renglón libre de `message.rows`.
+
+  ```json
+  [
+    {"name":"departamento","label":"Departamento","value":"Mantenimiento - L","choices":null,"kind":"text"},
+    {"name":"solicitante","label":"Solicitante","value":"Ana de Prueba","choices":null,"kind":"text"},
+    {"name":"notas","label":"Notas","value":"Entregar en taller.\nAvisar al recibir.","choices":null,"kind":"multiline"}
+  ]
+  ```
+  ```json
+  {"id":"mr-item-b","item_code":"","concepto_libre":"Corte de placa a medida","qty":1.0,"warehouse":null,"project":"PROJ-0001","custom_lebaref_partida":"Taller","uom":"Nos","stock_uom":"Nos","conversion_factor":1.0}
+  ```
+
+- En REST nativo, `data.custom_lebaref_departamento`, `data.custom_lebaref_solicitante` y `data.custom_lebaref_notas` son los campos de cabecera de `Material Request`. Los renglones libres incluyen `custom_lebaref_concepto` e `item_code: "LEBAREF-CONCEPTO-LIBRE"`. Los campos nativos de notas y concepto usan entidades HTML para conservar caracteres como `<` y `&`. Los esquemas y la comparativa devuelven texto plano. El concepto se conserva en petición, cotización, orden y recepción. Los esquemas de oferta y recepción lo exponen como `concepto_libre` de solo lectura (cadena vacía para renglones de catálogo); la comparativa devuelve `articulo: "Corte de placa a medida"` y `codigo: ""` para un renglón libre. Identifica el renglón por `id` al adjudicar.
+- Se rechazan con HTTP `417` los renglones sin artículo ni texto, con ambos, con el código interno ingresado directamente, con unidades incompatibles o con un departamento deshabilitado o de otra empresa. HTTP `403` si la sesión carece del permiso aplicable de escritura o selección. El alta confirma la solicitud. Se requiere ejecutar `bench --site <sitio> migrate` al desplegar para instalar los campos y el artículo interno.
+
+## 7. Cambios de Contrato Planificados (Bloque 1)
+
+- **`[SOL-03 / SOL-05]` Flujo de solicitudes:**
+  - Estado borrador, anexos, origen de captura y aprobación de surtido desde stock.
+- **`[SOL-02 / CAT-04]` Equivalencia pendiente:**
+  - Vínculo posterior de un concepto libre a un SKU definitivo y selección del solicitante desde un directorio.
 - **`[COM-04 / COM-07]` Impuestos, flete y condiciones de pago:**
   - Exponer tasa de IVA, cargo por flete/envío, condición de pago y fecha programada en `oferta`, `comparativa.consultar` y `Purchase Order`.

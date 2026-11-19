@@ -18,7 +18,14 @@ def configure_purchase_fields():
                 "label": "Partida de obra",
                 "fieldtype": "Data",
                 "insert_after": "description",
-            }
+            },
+            {
+                "fieldname": "custom_lebaref_concepto",
+                "label": "Concepto libre",
+                "fieldtype": "Small Text",
+                "insert_after": "custom_lebaref_partida",
+                "read_only": 1,
+            },
         ]
         for doctype in PURCHASE_ITEM_TYPES
     }
@@ -36,12 +43,19 @@ def configure_purchase_fields():
             {"fieldname": "custom_lebaref_operacion", "label": "Operación Windows", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
             {"fieldname": "custom_lebaref_huella", "label": "Huella de operación", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
         ]
+    fields["Material Request"].extend([
+        {"fieldname": "custom_lebaref_departamento", "label": "Departamento", "fieldtype": "Link", "options": "Department"},
+        {"fieldname": "custom_lebaref_solicitante", "label": "Solicitante", "fieldtype": "Data"},
+        {"fieldname": "custom_lebaref_notas", "label": "Notas", "fieldtype": "Small Text"},
+    ])
     fields["Stock Entry"].append({"fieldname": "custom_lebaref_origen", "label": "Entrega de origen", "fieldtype": "Link", "options": "Stock Entry", "read_only": 1, "no_copy": 1})
     fields["Stock Entry Detail"] = [
         {"fieldname": "custom_lebaref_partida", "label": "Partida de obra", "fieldtype": "Data"},
         {"fieldname": "custom_lebaref_renglon", "label": "Renglón de entrega", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
     ]
     create_custom_fields(fields)
+    from lebaref_compras.solicitudes import configurar as configurar_solicitudes
+    configurar_solicitudes()
     configure_cfdi()
     from lebaref_compras.equipos_setup import configurar
     configurar()

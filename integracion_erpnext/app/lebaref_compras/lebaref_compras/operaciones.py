@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import proveedores, unidades
+from lebaref_compras import proveedores, solicitudes, unidades
 from lebaref_compras.unidades import numero
 
 TARGETS = {"solicitud": "Material Request", "peticion": "Request for Quotation",
@@ -58,7 +58,7 @@ def esquema(accion, folio=""):
     from lebaref_compras import equipos
     if accion in equipos.TARGETS:
         return equipos.esquema(accion, folio)
-    if accion in ("articulo", "proveedor") and folio:
+    if accion in ("articulo", "proveedor", "solicitud") and folio:
         doc = frappe.get_doc(TARGETS[accion], folio)
         doc.check_permission("read")
     else:
@@ -96,9 +96,38 @@ def esquema(accion, folio=""):
         fields = [campo("warehouse_name", "Nombre del almacén"), campo("company", "Empresa", choices=catalogo("Company")), campo("parent_warehouse", "Almacén agrupador", choices=catalogo("Warehouse", {"is_group": 1}))]
         note = "Crea un almacén operativo bajo el agrupador de su empresa."
     elif accion == "solicitud":
-        fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("schedule_date", "Fecha requerida", add_days(today(), 7), kind="date"), campo("title", "Descripción")]
-        columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"disabled": 0})), columna("qty", "Cantidad"), columna("warehouse", "Almacén", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), columna("project", "Obra", choices=catalogo("Project")), columna("custom_lebaref_partida", "Partida")]
+        fields = [
+            campo("company", "Empresa", doc.company if doc else "", catalogo("Company")),
+            campo("schedule_date", "Fecha requerida", doc.schedule_date if doc else add_days(today(), 7), kind="date"),
+            campo("title", "Descripción", doc.title if doc else ""),
+        ]
+        values = solicitudes.valores_cabecera(doc) if doc else {}
+        fields.extend(
+            campo(key, label, values.get(key, ""),
+                  choices=solicitudes.departamentos() if key == "departamento" and not doc else None,
+                  kind="multiline" if key == "notas" else "text")
+            for key, label, _ in solicitudes.CAMPOS
+        )
+        columns = [
+            columna("item_code", "Artículo", choices=catalogo("Item", {"disabled": 0, "name": ["!=", solicitudes.ARTICULO_LIBRE]}) if not doc else None),
+            columna("concepto_libre", "Concepto libre"), columna("qty", "Cantidad"),
+            columna("warehouse", "Almacén", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0}) if not doc else None),
+            columna("project", "Obra", choices=catalogo("Project") if not doc else None),
+            columna("custom_lebaref_partida", "Partida"),
+        ]
         columns.extend(columna(key, label, editable=key == "uom") for key, label in unidades.CAMPOS)
+        if doc:
+            for column in columns:
+                column["editable"] = False
+            rows = [
+                dict(id=r.name, item_code="" if r.custom_lebaref_concepto else r.item_code,
+                     concepto_libre=solicitudes.concepto_visible(r), qty=r.qty, warehouse=r.warehouse,
+                     project=r.project, custom_lebaref_partida=r.custom_lebaref_partida, **unidades.valores(r))
+                for r in doc.items
+            ]
+            note = "Consulta de la solicitud guardada."
+        else:
+            note = "Por renglón, selecciona un artículo o captura un concepto libre. Guardar confirma la solicitud."
     elif accion == "peticion":
         fields = [campo("suppliers", "Proveedores (uno por línea)", kind="multiline")]
         note = "Copia nombres exactos del catálogo de proveedores. Se registra la petición; no se envían correos."
@@ -106,7 +135,9 @@ def esquema(accion, folio=""):
         fields = [campo("supplier", "Proveedor", choices=[s.supplier for s in doc.suppliers]), campo("valid_till", "Vigente hasta", add_days(today(), 30), kind="date")]
         columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False), columna("qty", "Cantidad", False), columna("rate", "Precio unitario sin impuestos"), columna("lead_time_days", "Días de entrega")]
         columns.extend(columna(key, label, False) for key, label in unidades.CAMPOS)
-        rows = [dict(id=r.name, item_code=r.item_code, qty=r.qty, rate=0, lead_time_days=0, **unidades.valores(r)) for r in doc.items]
+        columns.append(columna("concepto_libre", "Concepto libre", False))
+        rows = [dict(id=r.name, item_code=r.item_code, qty=r.qty, rate=0, lead_time_days=0,
+                     concepto_libre=solicitudes.concepto_visible(r), **unidades.valores(r)) for r in doc.items]
         note = "Captura al menos un precio en la moneda de la empresa. Deja en blanco o en cero los renglones sin cotizar."
     elif accion == "autorizar":
         doc.check_permission("submit")
@@ -117,7 +148,10 @@ def esquema(accion, folio=""):
     elif accion == "recibir":
         columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False), columna("pending", "Pendiente", False), columna("qty", "Recibir ahora")]
         columns.extend(columna(key, label, False) for key, label in unidades.CAMPOS)
-        rows = [dict(id=r.name, item_code=r.item_code, pending=max(0, r.qty-r.received_qty), qty=0, **unidades.valores(r)) for r in doc.items if r.qty > r.received_qty]
+        columns.append(columna("concepto_libre", "Concepto libre", False))
+        rows = [dict(id=r.name, item_code=r.item_code, pending=max(0, r.qty-r.received_qty), qty=0,
+                     concepto_libre=solicitudes.concepto_visible(r), **unidades.valores(r))
+                for r in doc.items if r.qty > r.received_qty]
         note = "Escribe solo lo recibido físicamente. Cero omite el renglón. Se conserva el almacén de la orden."
     elif accion == "entregar":
         fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("from_warehouse", "Almacén origen", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("to_warehouse", "Almacén de obra", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("project", "Obra", choices=catalogo("Project")), campo("remarks", "Recibe / referencia")]
@@ -133,7 +167,7 @@ def esquema(accion, folio=""):
     elif accion == "cfdi":
         fields = [campo("xml", "Archivo XML CFDI", kind="file")]
         note = "Archiva el XML contra esta recepción, valida UUID y RFC, y evita duplicados. No crea póliza/factura contable ni verifica el estado SAT."
-    return dict(fields=fields, columns=columns, rows=rows, add_rows=accion in ("solicitud", "entregar"), note=note)
+    return dict(fields=fields, columns=columns, rows=rows, add_rows=accion == "entregar" or (accion == "solicitud" and not folio), note=note)
 
 
 def elegidos(data, available):
@@ -185,16 +219,23 @@ def ejecutar(accion, datos, operacion, folio=""):
         allowed = {"articulo": ("item_code", "item_name", "item_group", "stock_uom"), "proveedor": ("supplier_name", "supplier_group", "tax_id"), "obra": ("project_name", "company"), "almacen": ("warehouse_name", "company", "parent_warehouse")}[accion]
         doc = frappe.get_doc(dict(doctype=TARGETS[accion], **{key: data.get(key) for key in allowed}))
         if accion == "articulo":
+            if doc.item_code == solicitudes.ARTICULO_LIBRE:
+                frappe.throw("El código está reservado para conceptos libres.")
             doc.is_stock_item = 1
             unidades.configurar_articulo(doc, data)
         if accion == "proveedor":
             doc.supplier_type = "Company"
             proveedores.configurar(doc, data)
     elif accion == "solicitud":
-        items = []
-        for r in data.get("rows", []):
-            items.append(dict(item_code=r.get("item_code"), qty=numero(r.get("qty")), warehouse=r.get("warehouse"), project=r.get("project") or None, custom_lebaref_partida=r.get("custom_lebaref_partida"), schedule_date=data.get("schedule_date"), **unidades.datos_solicitud(r)))
-        doc = frappe.get_doc(dict(doctype="Material Request", material_request_type="Purchase", company=data.get("company"), title=data.get("title"), transaction_date=today(), schedule_date=data.get("schedule_date"), items=items))
+        headers = solicitudes.cabecera(data)
+        schedule_date = data.get("schedule_date")
+        rows = data.get("rows")
+        if not isinstance(rows, list) or not rows:
+            frappe.throw("Captura al menos un renglón válido.")
+        items = [solicitudes.renglon(row, schedule_date) for row in rows]
+        doc = frappe.get_doc(dict(doctype="Material Request", material_request_type="Purchase",
+                                  company=data.get("company"), title=data.get("title"), transaction_date=today(),
+                                  schedule_date=schedule_date, items=items, **headers))
     elif accion == "peticion":
         from erpnext.stock.doctype.material_request.material_request import make_request_for_quotation
         doc = make_request_for_quotation(source.name)

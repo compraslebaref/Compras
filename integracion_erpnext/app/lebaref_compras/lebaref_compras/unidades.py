@@ -58,10 +58,10 @@ def verificar_referencia(data, expected):
             frappe.throw("La unidad o el factor no coincide con el documento de origen. Actualiza la captura.")
 
 
-def datos_solicitud(row):
+def datos_solicitud(row, item_code):
     if all(row.get(key) in (None, "") for key, _ in CAMPOS):
         return {}
-    item = frappe.get_doc("Item", row.get("item_code"))
+    item = frappe.get_doc("Item", item_code)
     item.check_permission("read")
     data = datos_articulo(item, row.get("uom"))
     verificar_referencia(row, data)

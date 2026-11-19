@@ -50,8 +50,8 @@
     "estado": "Parcial",
     "prioridad": "P1",
     "original": "Directorios relacionados por identificadores.",
-    "integracion": "Sin directorios nativos; en préstamos responsable/departamento son texto; solicitud no los captura.",
-    "evidencia": "Esquemas solicitud y préstamo.",
+    "integracion": "La solicitud vincula un Department de ERPNext y guarda el nombre del solicitante como texto. En préstamos se mantiene la captura de responsable y departamento como texto.",
+    "evidencia": "Validar.ps1: captura y consulta de departamento, solicitante y notas en Material Request, con permiso de selección de Department.",
     "criterio_cierre": "Seleccionar personal y departamento; conservar trazabilidad hasta entrega y reportes.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
@@ -107,12 +107,12 @@
   {
     "id": "SOL-02",
     "capacidad": "Conceptos libres y conversión a SKU",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Descripción y unidad libre, después vincular o crear producto.",
-    "integracion": "Windows exige artículo catalogado.",
-    "evidencia": "CrearSolicitud inserta DescripcionLibre; esquema nuevo solo item_code.",
-    "criterio_cierre": "Solicitar concepto aún sin SKU y vincularlo sin perder su historial.",
+    "integracion": "La API captura conceptos libres con un artículo interno no inventariable y conserva su descripción desde solicitud hasta recepción. Pendiente enlazar a un SKU definitivo y conectar WPF.",
+    "evidencia": "Validar.ps1: solicitud mixta con dos conceptos libres diferentes, oferta parcial, orden y recepción sin incrementar existencias.",
+    "criterio_cierre": "Conectar la captura en WPF y verificar el vínculo posterior a un SKU definitivo sin perder historial.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 2788

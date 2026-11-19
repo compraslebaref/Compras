@@ -30,7 +30,8 @@ def copiar_obra_y_partida(doc, method=None):
                 continue
             project_field = "custom_lebaref_obra" if doctype == "Request for Quotation Item" else "project"
             source = frappe.db.get_value(
-                doctype, row_name, ("parent", project_field, "custom_lebaref_partida"), as_dict=True
+                doctype, row_name, ("parent", project_field, "custom_lebaref_partida", "custom_lebaref_concepto"),
+                as_dict=True
             )
             if not source:
                 continue
@@ -40,6 +41,9 @@ def copiar_obra_y_partida(doc, method=None):
                     f"Renglón {item.idx}: la referencia {row_name} no pertenece a {expected_parent}."
                 )
             item.custom_lebaref_partida = source.custom_lebaref_partida
+            if source.custom_lebaref_concepto:
+                item.custom_lebaref_concepto = source.custom_lebaref_concepto
+                item.description = source.custom_lebaref_concepto
             if source.get(project_field):
                 item.set(target_project, source.get(project_field))
             break
