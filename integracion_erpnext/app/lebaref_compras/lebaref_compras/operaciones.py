@@ -83,7 +83,7 @@ def esquema(accion, folio=""):
         fields = [campo("supplier", "Proveedor", choices=[s.supplier for s in doc.suppliers]), campo("valid_till", "Vigente hasta", add_days(today(), 30), kind="date")]
         columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False), columna("qty", "Cantidad", False), columna("rate", "Precio unitario sin impuestos"), columna("lead_time_days", "Días de entrega")]
         rows = [dict(id=r.name, item_code=r.item_code, qty=r.qty, rate=0, lead_time_days=0) for r in doc.items]
-        note = "Registra todos los precios en la moneda de la empresa. Impuestos/condiciones especiales se revisan en ERPNext antes de autorizar."
+        note = "Captura al menos un precio en la moneda de la empresa. Deja en blanco o en cero los renglones sin cotizar."
     elif accion == "autorizar":
         doc.check_permission("submit")
         fields = [campo("confirmar", "Confirmación", choices=["", "AUTORIZAR"])]
@@ -190,15 +190,36 @@ def ejecutar(accion, datos, operacion, folio=""):
         from erpnext.buying.doctype.request_for_quotation.request_for_quotation import make_supplier_quotation_from_rfq
         if data.get("supplier") not in [r.supplier for r in source.suppliers]:
             frappe.throw("El proveedor no está invitado en esta petición.")
+        rows = data.get("rows", [])
+        if not isinstance(rows, list):
+            frappe.throw("Envía los renglones de la oferta como una lista.")
+        available = {r.name for r in source.items}
+        seen = set()
+        quoted = {}
+        for row in rows:
+            key = row.get("id") if isinstance(row, dict) else None
+            if not isinstance(key, str) or key not in available or key in seen:
+                frappe.throw("El renglón no pertenece a la petición o está repetido.")
+            seen.add(key)
+            rate = row.get("rate")
+            if rate is None or (isinstance(rate, str) and not rate.strip()):
+                continue
+            if isinstance(rate, bool):
+                frappe.throw("Escribe un precio numérico válido.")
+            rate = numero(rate, zero=True)
+            if rate > 0:
+                quoted[key] = (rate, numero(row.get("lead_time_days", 0), zero=True))
+        if not quoted:
+            frappe.throw("Captura al menos un precio unitario mayor que cero.")
+
         doc = make_supplier_quotation_from_rfq(source.name, for_supplier=data["supplier"])
         doc.valid_till = data.get("valid_till")
-        values = {r.get("id"): r for r in data.get("rows", [])}
-        if len(values) != len(data.get("rows", [])) or set(values) != {r.name for r in source.items}:
-            frappe.throw("Cotiza todos los renglones de la petición una sola vez.")
-        for r in doc.items:
-            value = values[r.request_for_quotation_item]
-            r.rate = numero(value.get("rate"))
-            r.lead_time_days = numero(value.get("lead_time_days", 0), zero=True)
+        items = [r for r in doc.items if r.request_for_quotation_item in quoted]
+        if {r.request_for_quotation_item for r in items} != quoted.keys():
+            frappe.throw("Algunos renglones cotizados ya no están disponibles. Actualiza la petición.")
+        for r in items:
+            r.rate, r.lead_time_days = quoted[r.request_for_quotation_item]
+        doc.set("items", items)
     elif accion == "autorizar":
         source.check_permission("submit")
         if data.get("confirmar") != "AUTORIZAR":
