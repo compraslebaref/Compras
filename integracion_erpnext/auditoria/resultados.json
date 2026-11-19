@@ -1,0 +1,212 @@
+{
+  "alcance": "Sitio local ficticio; rollback en todas las pruebas",
+  "suites": {
+    "verificar_integracion": {
+      "correcto": true,
+      "pruebas": [
+        "Alta de art\u00edculo/obra por responsable; auxiliares sin alta de cat\u00e1logo ni archivo CFDI desde Almac\u00e9n",
+        "Solicitud confirmada y reintento sin duplicados",
+        "Petici\u00f3n \u2192 oferta \u2192 comparativa \u2192 orden en borrador",
+        "Auxiliar no autoriza; responsable s\u00ed",
+        "Recepci\u00f3n parcial, saldo, trazabilidad, reintento y exceso rechazado",
+        "Entrega y retorno: existencias cuadran y exceso de devoluci\u00f3n rechazado",
+        "XML privado registrado y UUID sin duplicaci\u00f3n (validaci\u00f3n estructural, no SAT)"
+      ],
+      "datos": "Revertidos al finalizar"
+    },
+    "verificar_equipos": {
+      "correcto": true,
+      "pruebas": [
+        "Roles correctos; pr\u00e9stamo exclusivo; repetici\u00f3n sin duplicado; edici\u00f3n directa y borrado rechazados",
+        "Retorno parcial y con da\u00f1o; rechazo del retorno repetido; recuperaci\u00f3n por responsable e historial",
+        "Placas \u00fanicas; gastos sin duplicado; km/litros/importes v\u00e1lidos; revisi\u00f3n, pr\u00f3ximo servicio, seguro e historial"
+      ],
+      "datos": "Todos los registros de esta prueba se revierten"
+    },
+    "verificar_kits": {
+      "correcto": true,
+      "pruebas": [
+        "Kit \u00fanico por herramienta; pr\u00e9stamo selectivo; cambio bloqueado durante pr\u00e9stamo; retorno e historial; captura obsoleta rechazada",
+        "Garant\u00eda, fechas y permisos; mantenimiento pagado/gratuito; duplicados rechazados; anulaci\u00f3n y recaptura sin inflar acumulados"
+      ],
+      "datos": "Revertidos al finalizar"
+    }
+  },
+  "cfdi_flags": {
+    "insertado_sin_xml": false,
+    "error": "ValidationError",
+    "detalle": "Registra el CFDI mediante Archivar CFDI para validar su XML."
+  },
+  "permisos": {
+    "compras": {
+      "Purchase Order": {
+        "read": true,
+        "create": true,
+        "write": true,
+        "submit": false,
+        "cancel": false
+      },
+      "Purchase Receipt": {
+        "read": true,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Stock Entry": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Purchase Invoice": {
+        "read": true,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Payment Entry": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Stock Reconciliation": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      }
+    },
+    "autoriza": {
+      "Purchase Order": {
+        "read": true,
+        "create": true,
+        "write": true,
+        "submit": true,
+        "cancel": true
+      },
+      "Purchase Receipt": {
+        "read": true,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Stock Entry": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Purchase Invoice": {
+        "read": true,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Payment Entry": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Stock Reconciliation": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      }
+    },
+    "almacen": {
+      "Purchase Order": {
+        "read": true,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Purchase Receipt": {
+        "read": true,
+        "create": true,
+        "write": true,
+        "submit": true,
+        "cancel": true
+      },
+      "Stock Entry": {
+        "read": true,
+        "create": true,
+        "write": true,
+        "submit": true,
+        "cancel": true
+      },
+      "Purchase Invoice": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Payment Entry": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      },
+      "Stock Reconciliation": {
+        "read": false,
+        "create": false,
+        "write": false,
+        "submit": false,
+        "cancel": false
+      }
+    }
+  },
+  "erpnext_disponible": {
+    "Purchase Invoice": true,
+    "Payment Entry": true,
+    "Stock Reconciliation": true,
+    "Asset": true,
+    "Serial No": true,
+    "Batch": true,
+    "Quality Inspection": true,
+    "Department": true,
+    "Employee": true
+  },
+  "versiones": {
+    "frappe": "16.56.0",
+    "erpnext": "16.55.0"
+  },
+  "ejemplo_orden": {
+    "net_total": 400.0,
+    "total_taxes_and_charges": 0.0,
+    "grand_total": 400.0,
+    "currency": "MXN"
+  },
+  "oferta_parcial": {
+    "aceptada": false,
+    "error": "ValidationError",
+    "detalle": "Cotiza todos los renglones de la petici\u00f3n una sola vez."
+  },
+  "solicitud_campos": [
+    "company",
+    "schedule_date",
+    "title"
+  ],
+  "solicitud_columnas": [
+    "item_code",
+    "qty",
+    "warehouse",
+    "project",
+    "custom_lebaref_partida"
+  ]
+}

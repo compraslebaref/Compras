@@ -1,0 +1,9 @@
+{
+  "captura_qty": 2,
+  "unidad_compra_configurada_distinta": true,
+  "factor_compra_configurado": 10,
+  "unidad_solicitud_es_compra": true,
+  "unidad_solicitud_es_stock": false,
+  "factor_solicitud": 10.0,
+  "cantidad_stock": 20.0
+}

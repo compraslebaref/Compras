@@ -1,0 +1,827 @@
+[
+  {
+    "id": "CAT-01",
+    "capacidad": "Catálogo técnico y familias",
+    "estado": "Parcial",
+    "prioridad": "P2",
+    "original": "Marca, modelo, medidas, familias y especificaciones por categoría.",
+    "integracion": "Alta de código, nombre, grupo y unidad; sin edición técnica equivalente.",
+    "evidencia": "Código y prueba de alta básica.",
+    "criterio_cierre": "Crear y editar una ficha completa sin perder sus campos.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 1844
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "CAT-02",
+    "capacidad": "Unidades de compra y almacén",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Unidad de compra, unidad de almacén y factor editable.",
+    "integracion": "ERPNext aplica el factor configurado; Windows no permite capturarlo y oculta la unidad en la nueva solicitud.",
+    "evidencia": "Sondeo: 2 cajas con factor 10 generan stock_qty=20.",
+    "criterio_cierre": "Mostrar unidad/factor; crear configuración y probar recepción/salida/retorno con factores y decimales.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Models\\Entities.cs",
+      "linea": 74
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "CAT-03",
+    "capacidad": "Proveedores y condiciones",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Razón social, nombre comercial, RFC, contacto y condiciones de pago.",
+    "integracion": "Alta mínima de nombre, grupo y RFC.",
+    "evidencia": "Esquema proveedor.",
+    "criterio_cierre": "Mantener contactos/condiciones y propagarlos a la orden.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 1414
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "CAT-04",
+    "capacidad": "Personal, departamentos y responsables",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Directorios relacionados por identificadores.",
+    "integracion": "Sin directorios nativos; en préstamos responsable/departamento son texto; solicitud no los captura.",
+    "evidencia": "Esquemas solicitud y préstamo.",
+    "criterio_cierre": "Seleccionar personal y departamento; conservar trazabilidad hasta entrega y reportes.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 1212
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "CAT-05",
+    "capacidad": "Obras y expedientes por proyecto",
+    "estado": "Parcial",
+    "prioridad": "P2",
+    "original": "Código, área/cliente, estado y desglose de movimientos.",
+    "integracion": "Project con empresa y nombre; referencias por renglón; sin expediente equivalente.",
+    "evidencia": "Prueba de alta y trazabilidad básica.",
+    "criterio_cierre": "Consultar compras, salidas, costos y responsables de una obra.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 1297
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "CAT-06",
+    "capacidad": "Fotos, ubicación y mapa de anaqueles",
+    "estado": "Parcial",
+    "prioridad": "P2",
+    "original": "Fotos y mapa visual; ubicación por producto/herramienta.",
+    "integracion": "Texto de ubicación en herramienta/kit; sin fotos ni mapa.",
+    "evidencia": "Código y acciones del cliente.",
+    "criterio_cierre": "Adjuntar imagen y localizar/reubicar material con trazabilidad.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8019
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "SOL-01",
+    "capacidad": "Solicitud con artículos catalogados",
+    "estado": "Verificado acotado",
+    "prioridad": "P2",
+    "original": "Captura de renglones y cantidades.",
+    "integracion": "Crea Material Request confirmada con artículos, obra y partida.",
+    "evidencia": "Suite verificar_integracion aprobada.",
+    "criterio_cierre": "Mantener el caso aprobado; no implica equivalencia de metadatos o edición.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 2743
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "SOL-02",
+    "capacidad": "Conceptos libres y conversión a SKU",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Descripción y unidad libre, después vincular o crear producto.",
+    "integracion": "Windows exige artículo catalogado.",
+    "evidencia": "CrearSolicitud inserta DescripcionLibre; esquema nuevo solo item_code.",
+    "criterio_cierre": "Solicitar concepto aún sin SKU y vincularlo sin perder su historial.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 2788
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "SOL-03",
+    "capacidad": "Borradores, edición y anexos",
+    "estado": "Cambio de comportamiento",
+    "prioridad": "P1",
+    "original": "Actualizar solicitud existente y crear anexos.",
+    "integracion": "Guardar confirma inmediatamente; no hay editar/anexar desde Windows.",
+    "evidencia": "Ejecutar llama submit; Actions no incluye edición.",
+    "criterio_cierre": "Definir borrador/confirmación y corrección auditada tras cotizar.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 2813
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "SOL-04",
+    "capacidad": "Carga rápida CSV y correo entrante",
+    "estado": "No integrado",
+    "prioridad": "P2",
+    "original": "Plantilla, interpretación de correo y conversión a solicitud.",
+    "integracion": "No hay importación ni bandeja en Windows.",
+    "evidencia": "Código de plantilla y ConvertirCorreoBandejaEnSolicitud.",
+    "criterio_cierre": "Importar un archivo ejemplo con errores controlados; correo solo cuando se configure.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 11416
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "SOL-05",
+    "capacidad": "Surtir desde stock y reserva por obra",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Autorización CP-1A y carga de solicitud a salida; reserva en stock.",
+    "integracion": "Solo solicitud Purchase y transferencias sin vínculo estructurado a solicitud.",
+    "evidencia": "Checkpoint original y ejecutar entregar.",
+    "criterio_cierre": "Surtir total/parcial desde stock; saldo pendiente y autorización ligados a solicitud.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\MainWindow.Checkpoints.cs",
+      "linea": 666
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "COM-01",
+    "capacidad": "Petición y oferta completa",
+    "estado": "Verificado acotado",
+    "prioridad": "P2",
+    "original": "Cotizar renglones por proveedor.",
+    "integracion": "RFQ y Supplier Quotation mediante mapeos ERPNext.",
+    "evidencia": "Suite integral: petición/oferta confirmadas.",
+    "criterio_cierre": "Mantener caso completo; ofertas parciales se evalúan por separado.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 3864
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "COM-02",
+    "capacidad": "Proveedor cotiza solo algunos renglones",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Captura y adjudicación por renglón/proveedor.",
+    "integracion": "API exige cotizar todos los renglones y precios positivos.",
+    "evidencia": "Sondeo real rechazó 1 de 2 renglones.",
+    "criterio_cierre": "Aceptar una oferta de solo 1 de 2 artículos y adjudicar el otro a otro proveedor.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 3864
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "COM-03",
+    "capacidad": "Comparativa y órdenes por proveedor",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Ganador por artículo, 4+ proveedores, condiciones y costos.",
+    "integracion": "Selección por renglón y agrupación; una cotización vigente por proveedor.",
+    "evidencia": "Caso simple aprobado; no se acredita toda combinación comercial.",
+    "criterio_cierre": "Dos obras/partidas, tres proveedores, selección mixta y órdenes sin duplicar.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4281
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\comparativa.py"
+  },
+  {
+    "id": "COM-04",
+    "capacidad": "Flete, impuestos, descuentos y moneda",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Comparativa original suma flete y calcula 16% fijo en generación de OC.",
+    "integracion": "Windows captura precio sin impuestos; depende de configuración administrativa para extras.",
+    "evidencia": "Código original 4403; orden ejemplo neto400/impuestos0/total400.",
+    "criterio_cierre": "Caso acordado de 400 neto y 64 de impuesto debe dar464; probar flete, descuento y moneda sin reglas fiscales inventadas.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4403
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "COM-05",
+    "capacidad": "Banco de precios y sugerencias históricas",
+    "estado": "No integrado",
+    "prioridad": "P2",
+    "original": "Banco de cotizaciones, vigencia, referencias similares y auto-adjudicación.",
+    "integracion": "Ofertas vinculadas a la solicitud actual; sin análisis histórico equivalente.",
+    "evidencia": "Métodos originales y acciones nuevas.",
+    "criterio_cierre": "Consultar histórico normalizado por unidad/moneda y justificar propuesta de adjudicación.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 3674
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\comparativa.py"
+  },
+  {
+    "id": "COM-06",
+    "capacidad": "Autorización de orden",
+    "estado": "Verificado acotado",
+    "prioridad": "P1",
+    "original": "Vo.Bo. Dirección y cambios de etapa.",
+    "integracion": "Compras crea borrador; Responsable confirma; Compras no puede confirmar.",
+    "evidencia": "Suite integral y lectura actual de permisos.",
+    "criterio_cierre": "Conservar separación probada; no confundir confirmar con pagar.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4418
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "COM-07",
+    "capacidad": "Pago programado y seguimiento de pago",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Condición de pago, fecha programada y estado pagada.",
+    "integracion": "No hay operaciones Payment Entry ni seguimiento equivalente; perfiles actuales no pueden crear pagos.",
+    "evidencia": "Código original y permisos runtime.",
+    "criterio_cierre": "Registrar programación y pago con responsable y comprobante; reflejar saldo correctamente.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4562
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "COM-08",
+    "capacidad": "Cierre parcial, rechazo y reapertura",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Finiquitar parcial y acciones administrativas con motivo.",
+    "integracion": "Sin acciones nativas de cierre/reapertura; algunas acciones existen en ERPNext administrativo.",
+    "evidencia": "BtnFiniquitarOcParcial y Actions.",
+    "criterio_cierre": "Cerrar el remanente sin inventar una recepción; reabrir/corregir con autorización.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\MainWindow.Checkpoints.cs",
+      "linea": 792
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "ALM-01",
+    "capacidad": "Recepción parcial contra orden",
+    "estado": "Verificado acotado",
+    "prioridad": "P1",
+    "original": "Incrementar recibido y stock por renglón.",
+    "integracion": "Purchase Receipt, saldo por recibir y rechazo de exceso.",
+    "evidencia": "Suite integral aprobada: 2 de4 y exceso99 rechazado.",
+    "criterio_cierre": "Mantener prueba; ampliar a unidades alternativas y varios renglones.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4660
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ALM-02",
+    "capacidad": "Entrada sin OC y regularización",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Entrada por regularizar vinculable después a OC/XML.",
+    "integracion": "recibir requiere Purchase Order confirmada.",
+    "evidencia": "RegistrarEntradaDirectaSinOc y SOURCES.",
+    "criterio_cierre": "Recibir antes de la OC y regularizar sin duplicar inventario ni compra.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 3088
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ALM-03",
+    "capacidad": "Recepción directa a obra y servicios",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Persona, remisión y opción de servicio no inventariable.",
+    "integracion": "Puede recibir al almacén ya configurado de la OC, pero no reproduce esa captura/flujo; altas son inventariables.",
+    "evidencia": "Código de ambas rutas.",
+    "criterio_cierre": "Compra directa a obra sin inflar almacén central; servicio sin existencia ficticia.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8552
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ALM-04",
+    "capacidad": "Sustitución de marca/artículo al recibir",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Cambiar producto de partida y motivo.",
+    "integracion": "Recepción conserva el artículo de la OC; sin sustitución en Windows.",
+    "evidencia": "CambiarProductoEnPartidaOrdenCompra y esquema recibir.",
+    "criterio_cierre": "Recibir sustituto aprobado conservando original, motivo y costo.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8528
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ALM-05",
+    "capacidad": "Entrega versus consumo/costo de obra",
+    "estado": "Cambio de comportamiento",
+    "prioridad": "P1",
+    "original": "Salida descuenta stock y calcula costo neto consumido con devoluciones.",
+    "integracion": "Material Transfer conserva inventario en almacén de obra; no consume.",
+    "evidencia": "Código de salidas y Stock Entry; prueba transferencia aprobada.",
+    "criterio_cierre": "Acordar y probar entrega, consumo, sobrante y merma como eventos distintos.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4989
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ALM-06",
+    "capacidad": "Devolución ligada a entrega",
+    "estado": "Verificado acotado",
+    "prioridad": "P1",
+    "original": "Restituye stock y controla saldo de salida.",
+    "integracion": "Transferencia inversa con referencia al renglón y límite retornable.",
+    "evidencia": "Suite integral: almacén de prueba vuelve a cero y segunda devolución se rechaza.",
+    "criterio_cierre": "Mantener invariantes de cantidad; costo/consumo se audita en ALM-05.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 5123
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ALM-07",
+    "capacidad": "Sobrante sin salida original",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Reingreso identificado por obra/persona sin salida asociada.",
+    "integracion": "devolver exige entrega original de la nueva base.",
+    "evidencia": "RegistrarReingresoSobranteObra y origen devolver.",
+    "criterio_cierre": "Recibir sobrante histórico con autorización y origen, sin duplicar existencias migradas.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8799
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ALM-08",
+    "capacidad": "Conteo físico, ajustes y merma",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Ajuste al stock físico con motivo y bitácora.",
+    "integracion": "No hay acción Windows; Stock Reconciliation existe pero no está habilitado a estos perfiles.",
+    "evidencia": "Código y consulta de permisos.",
+    "criterio_cierre": "Ajuste positivo/negativo aprobado, razón y valoración auditables.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8869
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "ALM-09",
+    "capacidad": "Stock mínimo y reabastecimiento",
+    "estado": "No integrado",
+    "prioridad": "P2",
+    "original": "Mínimos, alertas y solicitar reabastecimiento.",
+    "integracion": "Consulta Bin; sin configuración/flujo equivalente en Windows.",
+    "evidencia": "ActualizarStockMinimoProducto y Actions.",
+    "criterio_cierre": "Bajo mínimo produce alerta y solicitud trazable sin duplicaciones.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 7468
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "ALM-10",
+    "capacidad": "Series, lotes e inspección",
+    "estado": "Sin verificar",
+    "prioridad": "P2",
+    "original": "No se acredita un flujo original completo comparable.",
+    "integracion": "DocTypes estándar existen; UI no recoge bundle/inspección especializada.",
+    "evidencia": "Inventario instalado; no prueba punta a punta.",
+    "criterio_cierre": "Probar únicamente si los artículos reales requieren series/lotes/inspección.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Models\\Entities.cs",
+      "linea": 53
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "XML-01",
+    "capacidad": "Archivo privado y UUID",
+    "estado": "Verificado acotado",
+    "prioridad": "P1",
+    "original": "Registro de comprobante por UUID.",
+    "integracion": "Archivo privado, RFC/UUID y rechazo de duplicado.",
+    "evidencia": "Suite integral y sondeo de flags: inserción sin XML rechazada.",
+    "criterio_cierre": "Mantener validaciones; esto no acredita conciliación ni estado SAT.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 6111
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "XML-02",
+    "capacidad": "Conceptos XML y conciliación",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Mapea conceptos a productos, crea proveedor/producto y sincroniza orden.",
+    "integracion": "Solo encabezado y archivo contra recepción; no valida conceptos/importes contra OC.",
+    "evidencia": "GuardarFacturaXml frente a registrar_cfdi.",
+    "criterio_cierre": "Vincular conceptos/cantidades/importes y detectar diferencias sin contabilizar dos veces.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 6111
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "XML-03",
+    "capacidad": "Compra con nota/ticket y sin factura",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Compra directa, comprobante interno y entrada opcional.",
+    "integracion": "Solo CFDI tipo I contra recepción confirmada.",
+    "evidencia": "RegistrarCompraDirectaSinFactura y TARGETS.",
+    "criterio_cierre": "Registrar nota interna diferenciada de CFDI, con gasto/compra/entrada según corresponda.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 7097
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "XML-04",
+    "capacidad": "Factura/pago contable y conexión con activos",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Registro operativo de factura/pago; no se acredita contabilidad ERP completa en el original.",
+    "integracion": "Purchase Invoice/Payment Entry/Asset existen, pero no están integrados en Windows.",
+    "evidencia": "DocTypes instalados y permisos; no ensayo contable.",
+    "criterio_cierre": "Definir alcance contable y conciliar recepción-factura-pago si se adopta; no presumir que archivar XML lo cumple.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 5979
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "HER-01",
+    "capacidad": "Fichas y vínculo con recepción",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Directorio ligado a producto; hay helper de alta desde recepción.",
+    "integracion": "Alta individual manual vinculada a Item, sin enlace a recepción/costo de compra.",
+    "evidencia": "Helper original declarado sin llamadas halladas; NO se acredita automatización original activa.",
+    "criterio_cierre": "Relacionar unidades adquiridas y fichas sin doble alta; no copiar automatismo no comprobado.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4611
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "HER-02",
+    "capacidad": "Préstamo y retorno con incidencias",
+    "estado": "Verificado acotado",
+    "prioridad": "P1",
+    "original": "Custodia por herramienta, responsable y obra.",
+    "integracion": "Préstamo exclusivo, retorno parcial, daño/extravío e historial.",
+    "evidencia": "Suite equipos aprobada; concurrencia HTTP previamente documentada.",
+    "criterio_cierre": "Mantener pruebas y validar entrega/retorno desde dos estaciones físicas.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 5258
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "HER-03",
+    "capacidad": "Kits y checklist de retorno",
+    "estado": "Parcial",
+    "prioridad": "P2",
+    "original": "Despacho de disponibles y checklist centrado en kit.",
+    "integracion": "Selección explícita, composición protegida; retorno se hace desde préstamo.",
+    "evidencia": "Suite kits aprobada; experiencia de retorno distinta.",
+    "criterio_cierre": "Kit parcialmente prestado, parte vuelve dañada y parte queda en obra, sin perder custodia.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 9176
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\kits.py"
+  },
+  {
+    "id": "HER-04",
+    "capacidad": "Garantías y mantenimiento acumulado",
+    "estado": "Verificado acotado",
+    "prioridad": "P2",
+    "original": "Acumulado y aviso de reparación >=50%.",
+    "integracion": "Eventos de garantía/mantenimiento, acumulado, aviso y anulación auditada.",
+    "evidencia": "Suite kits: anular y recapturar sin inflar costo.",
+    "criterio_cierre": "Conservar mejora de historial y validar migración del acumulado histórico.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 9790
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\kits.py"
+  },
+  {
+    "id": "HER-05",
+    "capacidad": "Etiquetas de códigos de barras",
+    "estado": "Parcial",
+    "prioridad": "P2",
+    "original": "Etiquetas/catálogo y códigos en documentos.",
+    "integracion": "Etiqueta individual herramienta/kit/vehículo; no catálogo general ni códigos en todos los formatos.",
+    "evidencia": "Decodificación independiente previa; hardware sin probar.",
+    "criterio_cierre": "Lectura e impresión física y etiquetas de artículos si se conservan del original.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Services\\BarcodePrintService.cs",
+      "linea": 1229
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\LabelForm.cs"
+  },
+  {
+    "id": "FLO-01",
+    "capacidad": "Vehículos, gastos y revisión",
+    "estado": "Parcial",
+    "prioridad": "P2",
+    "original": "Ficha, combustible/taller y checklist semanal.",
+    "integracion": "Operaciones básicas e historial; checklist y campos resumidos.",
+    "evidencia": "Suite equipos aprobada; no homologación campo por campo del checklist.",
+    "criterio_cierre": "Aprobar cada punto de inspección y corregir datos sin borrar historial.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 9386
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "FLO-02",
+    "capacidad": "Rendimiento, CPK y proyección de servicio",
+    "estado": "No integrado",
+    "prioridad": "P2",
+    "original": "Costo/km, km/litro, gasto por categoría y fecha estimada de servicio.",
+    "integracion": "Total de gastos y alertas de km/seguro; sin indicadores equivalentes.",
+    "evidencia": "Models VehiculoFlotilla frente a detalle de equipos.",
+    "criterio_cierre": "Mismo conjunto de cargas/km produce cálculo documentado y separa datos insuficientes.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Models\\Entities.cs",
+      "linea": 1504
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "FLO-03",
+    "capacidad": "Corrección de gastos y revisiones",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Permite eliminar gastos/revisiones.",
+    "integracion": "Eventos protegidos sin anulación para flotilla; anulación nueva solo cubre mantenimiento de herramienta.",
+    "evidencia": "Métodos originales y TARGETS equipos/kits.",
+    "criterio_cierre": "Anular con motivo, recalcular acumulados y servicio; conservar registro original.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 9640
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "DOC-01",
+    "capacidad": "Vales, OC, comparativa, PDF y responsiva EPP",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Formatos imprimibles y descargables con metadatos/cierre.",
+    "integracion": "Windows exporta CSV y etiquetas; no reproduce esos documentos.",
+    "evidencia": "Servicios de impresión original y menú nuevo.",
+    "criterio_cierre": "Emitir OC, recepción, salida, préstamo y responsiva con folio/personas/firmas de recepción.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Services\\BarcodePrintService.cs",
+      "linea": 739
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "GES-01",
+    "capacidad": "Agenda y pendientes operativos",
+    "estado": "No integrado",
+    "prioridad": "P2",
+    "original": "Eventos manuales/automáticos, posponer, completar y navegar al folio.",
+    "integracion": "Sin agenda equivalente en Windows.",
+    "evidencia": "ObtenerEventosCalendarioUnificados y Actions.",
+    "criterio_cierre": "Pendientes por responsable, fecha, vencimiento y cierre documentado.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 7584
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "GES-02",
+    "capacidad": "Checkpoints y notificaciones internas",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "Transiciones entre áreas y notificaciones leídas/no leídas.",
+    "integracion": "Permisos e historial de documentos, sin bandeja equivalente.",
+    "evidencia": "RegistrarCheckpoint frente a cliente.",
+    "criterio_cierre": "Compras/Almacén/Responsable reciben y resuelven tareas de cada transición.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8087
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "GES-03",
+    "capacidad": "Correo saliente y adjuntos",
+    "estado": "No integrado",
+    "prioridad": "P2",
+    "original": "Plantillas, comparativa y notificaciones SMTP.",
+    "integracion": "Peticiones con send_email=0; sin envíos.",
+    "evidencia": "Código original y petición nueva.",
+    "criterio_cierre": "Configurar y aprobar destinatarios/plantillas; probar sin enviar a terceros en esta auditoría.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 10974
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\operaciones.py"
+  },
+  {
+    "id": "ANA-01",
+    "capacidad": "Históricos, ranking, Kraljic, PPV y cuadrillas",
+    "estado": "No integrado",
+    "prioridad": "P2",
+    "original": "Análisis de compras, variación de precios y consumo/merma.",
+    "integracion": "No hay reportes equivalentes en Windows.",
+    "evidencia": "Métodos originales y módulos nuevos.",
+    "criterio_cierre": "Comparar indicadores con un dataset conciliado y fórmulas explícitas.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 9844
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "SEG-01",
+    "capacidad": "Identidad y roles de usuarios",
+    "estado": "Cambio de comportamiento",
+    "prioridad": "P1",
+    "original": "Usuarios/PIN y rol operativo local.",
+    "integracion": "Sesión individual de servidor; permisos reales por DocType.",
+    "evidencia": "Sondeo runtime: Compras no autoriza; Almacén puede cancelar PR/Stock Entry.",
+    "criterio_cierre": "Aprobar matriz de roles, incluidas API y pantalla administrativa; no basta ocultar botones.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8298
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\configuracion_inicial.py"
+  },
+  {
+    "id": "SEG-02",
+    "capacidad": "Reintentos e interrupción",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "No se acredita control equivalente de idempotencia en el original.",
+    "integracion": "UUID por ventana y bloqueo de transacción; se pierde al cerrar la captura.",
+    "evidencia": "Pruebas de reintento aprobadas; cierre abrupto pendiente.",
+    "criterio_cierre": "Recuperar resultado después de cierre/corte sin duplicar; conciliar órdenes de comparativa.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 4281
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\OperationForm.cs"
+  },
+  {
+    "id": "SEG-03",
+    "capacidad": "Historial de auditoría y correcciones",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Bitácora usuario/admin consultable.",
+    "integracion": "owner/modified_by y eventos custom; sin visor unificado ni correcciones de todos los documentos.",
+    "evidencia": "Código de modelos, hooks y cliente.",
+    "criterio_cierre": "Buscar quién cambió qué, motivo y antes/después por folio.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 8417
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\app\\lebaref_compras\\lebaref_compras\\equipos.py"
+  },
+  {
+    "id": "UX-01",
+    "capacidad": "Búsquedas, filtros y exportación completa",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "Filtros y expedientes específicos en módulos originales.",
+    "integracion": "100 recientes, selectores1000; código exacto solo herramientas/vehículos/kits.",
+    "evidencia": "ErpClient.List y MainForm.SearchCode.",
+    "criterio_cierre": "Encontrar una OC antigua fuera de100; paginar y exportar todo con filtros.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 1463
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\ErpClient.cs"
+  },
+  {
+    "id": "UX-02",
+    "capacidad": "Navegación y correspondencia visual",
+    "estado": "Cambio de comportamiento",
+    "prioridad": "P2",
+    "original": "Interfaz WPF con módulos, tarjetas, expedientes y menús contextuales.",
+    "integracion": "Nueva interfaz WinForms genérica; ERPNext está detrás, no su escritorio.",
+    "evidencia": "Arquitectura y listas Actions/DocTypes.",
+    "criterio_cierre": "Recorrido autónomo por auxiliar con mismos conceptos, ayudas y acciones por contexto.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\MainWindow.xaml",
+      "linea": 1629
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\MainForm.cs"
+  },
+  {
+    "id": "OPS-01",
+    "capacidad": "Migración de datos e históricos",
+    "estado": "No integrado",
+    "prioridad": "P1",
+    "original": "SQLite y archivos propios.",
+    "integracion": "Datos ficticios ERPNext; no importador/conciliación ejecutados.",
+    "evidencia": "Documentación de entrega; baseline no leyó datos personales.",
+    "criterio_cierre": "Ensayo migración repetible; conteos, saldos y vínculos conciliados; plan de reversión.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 26
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\ENTREGA.md"
+  },
+  {
+    "id": "OPS-02",
+    "capacidad": "Respaldo/restauración versión completa",
+    "estado": "Parcial",
+    "prioridad": "P1",
+    "original": "ZIP integral y restauración local.",
+    "integracion": "Scripts de respaldo; restauración previa a módulos nuevos.",
+    "evidencia": "Ensayo documentado16nov; no se repitió restauración completa en esta auditoría.",
+    "criterio_cierre": "Restaurar versión actual en sitio aislado y verificar kits/archivos/saldos/permisos.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 6736
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\pruebas\\Respaldar.ps1"
+  },
+  {
+    "id": "OPS-03",
+    "capacidad": "Varias estaciones y acceso solo oficina",
+    "estado": "Sin verificar",
+    "prioridad": "P1",
+    "original": "No se acredita despliegue original compartido en esta auditoría.",
+    "integracion": "Servidor loopback; HTTPS admitido por cliente; red privada aún no desplegada.",
+    "evidencia": "Configuración compose y ErpClient.",
+    "criterio_cierre": "Dos estaciones físicas, usuarios nominales, acceso externo bloqueado y reconexión probada.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
+      "linea": 13
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\cliente_windows\\ErpClient.cs"
+  },
+  {
+    "id": "OPS-04",
+    "capacidad": "Aceptación por usuarios y fallos reales",
+    "estado": "Sin verificar",
+    "prioridad": "P1",
+    "original": "No se ejecutó comparación paralela del original con casos reales.",
+    "integracion": "Pruebas sintéticas; no cortes eléctricos, carga alta ni revisión manual de todas las pantallas.",
+    "evidencia": "Límites de evidencia declarados.",
+    "criterio_cierre": "Auxiliares completan escenarios acordados; incidencias resueltas y aceptación registrada.",
+    "fuente_original": {
+      "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\MainWindow.xaml",
+      "linea": 1
+    },
+    "fuente_integracion": "C:\\Users\\oscar\\Documents\\Codex\\2026-11-16\\https-github-com-frappe-erpnext-git\\work\\lebaref-integracion\\integracion_erpnext\\RESULTADO-PRUEBAS.md"
+  }
+]

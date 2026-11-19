@@ -1,0 +1,478 @@
+# Inventario de puntos de entrada del programa original
+
+Inventario estático de métodos públicos de datos y servicios, y eventos conectados en XAML. Una función declarada no demuestra que el usuario la utilice ni que esté libre de errores. Los flujos se agrupan en la matriz principal.
+
+## Data/DatabaseService.cs
+
+- L13: `public static readonly string BaseFolder = Path.Combine(`
+- L17: `public static readonly string ImagesFolder = Path.Combine(BaseFolder, "ImagenesCatalogo");`
+- L18: `public static readonly string XmlFolder = Path.Combine(BaseFolder, "FacturasXml");`
+- L19: `public static readonly string BackupsFolder = Path.Combine(BaseFolder, "Respaldos");`
+- L20: `public static readonly string LogsFolder = Path.Combine(BaseFolder, "Logs");`
+- L21: `public static readonly string DbPath = Path.Combine(BaseFolder, "compras_almacen.db");`
+- L26: `public static void Initialize()`
+- L692: `public static string NormalizarUnidadMedida(string? unidadRaw, string? claveUnidadSat = null)`
+- L801: `public static void EstandarizarUnidadesMedidaEnBaseDatos(SqliteConnection conn)`
+- L1123: `public static string GenerarSiguienteFolio(string prefijo, string tabla)`
+- L1142: `public static string GenerarSiguienteCodigoProducto(string prefijo, string tabla, string campo)`
+- L1163: `public static List<Departamento> ObtenerDepartamentos()`
+- L1183: `public static void GuardarDepartamento(string codigo, string nombre, int id = 0)`
+- L1202: `public static void EliminarDepartamento(int id)`
+- L1212: `public static List<Encargado> ObtenerEncargados(int? departamentoId = null)`
+- L1242: `public static void GuardarEncargado(int departamentoId, string nombre, string puesto, string telefono, int id = 0, string correo = "")`
+- L1264: `public static void EliminarEncargado(int id)`
+- L1274: `public static List<Proyecto> ObtenerProyectos()`
+- L1297: `public static void GuardarProyecto(string codigo, string nombre, string area, string estatus = "Activo", int id = 0)`
+- L1318: `public static void EliminarProyecto(int id)`
+- L1328: `public static List<Categoria> ObtenerCategorias()`
+- L1352: `public static void GuardarCategoria(string nombre, int id = 0, string? etiqueta1 = null, string? etiqueta2 = null, string? etiqueta3 = null)`
+- L1377: `public static void EliminarCategoria(int id)`
+- L1387: `public static List<Proveedor> ObtenerProveedores()`
+- L1414: `public static int GuardarProveedor(Proveedor p)`
+- L1451: `public static void EliminarProveedor(int id)`
+- L1463: `public static List<Producto> ObtenerProductos(string? filtro = null, int? categoriaId = null)`
+- L1525: `public static List<string> ObtenerFamiliasProductos()`
+- L1603: `public static void GuardarFamiliaPersonalizada(string? familia)`
+- L1634: `public static int RenombrarFamiliaMasivo(string familiaActual, string nuevaFamilia)`
+- L1673: `public static string ExtraerFamiliaSugerida(string? nombreRaw)`
+- L1768: `public static Producto? BuscarProductoPorCodigo(string codigo)`
+- L1844: `public static int GuardarProducto(Producto p)`
+- L2038: `public static void SincronizarHerramientasCatalogoConDirectorio(SqliteConnection? connExterna = null)`
+- L2246: `public static (int CategoriaId, string Marca, string Modelo, string Medidas, string CapacidadElectrica, string Especificacion1, string Especificacion2)`
+- L2479: `public static List<HerramientaActivo> ObtenerHerramientasIndividuales() => ObtenerHerramientas();`
+- L2481: `public static List<HerramientaActivo> ObtenerHerramientas()`
+- L2521: `public static void GuardarHerramientaActivo(HerramientaActivo h)`
+- L2566: `public static void EliminarHerramientaActivo(int id)`
+- L2576: `public static void EliminarProducto(int id)`
+- L2601: `public static List<Solicitud> ObtenerSolicitudes()`
+- L2743: `public static Solicitud CrearSolicitud(`
+- L2813: `public static Solicitud ActualizarSolicitudExistente(`
+- L2967: `public static void ActualizarTipoYEstatusSolicitud(int solicitudId, string tipoSolicitud, string estatus)`
+- L2980: `public static void ActualizarEstatusSolicitud(int solicitudId, string estatus)`
+- L2992: `public static void AsignarPartidaAArticulo(int solicitudId, int articuloId, string nombrePartida)`
+- L3009: `public static void ActualizarUnidadPartidaEnSolicitud(int solicitudPartidaId, int solicitudId, int productoId, string? descripcionLibre, string nuevaUnidad)`
+- L3041: `public static void EliminarPartidaEspecificaDeSolicitud(int solicitudPartidaId, int solicitudId, int productoId, string? descripcionLibre)`
+- L3088: `public static EntradaAlmacen RegistrarEntradaDirectaSinOc(`
+- L3153: `public static Solicitud AgregarOIncrementarPartidaEnSolicitud(int solicitudId, int productoId, decimal cantidadAgregar, string notasPartida = "", string nombrePartida = "")`
+- L3220: `public static Solicitud QuitarPartidaDeSolicitud(int solicitudId, int productoId)`
+- L3251: `public static void EliminarSolicitud(int solicitudId)`
+- L3290: `public static List<OrdenCompra> ObtenerOrdenesCompra()`
+- L3418: `public static void EstablecerEsperandoRespuesta(bool esOrdenCompra, int id, string quien)`
+- L3432: `public static void EstablecerConcluidoManual(bool esOrdenCompra, int id, bool concluido)`
+- L3444: `public static List<ReferenciaSimilarHistorica> ObtenerReferenciasSimilaresParaComparativa(int productoId, string? nombreOConcepto = null, string? familia = null)`
+- L3674: `public static (List<(int proveedorId, decimal precioSinIva, int diasEntrega, string notaSugerida)> opciones, string referenciaHistorica) ObtenerSugerenciasCotizacionPorProducto(int productoId, string? nombreOConcepto = null, string? familia = null)`
+- L3704: `public static List<CotizacionProveedorExtra> ObtenerProveedoresExtraPartida(int solicitudPartidaId)`
+- L3742: `public static void GuardarProveedorExtraPartida(CotizacionProveedorExtra extra)`
+- L3798: `public static void EliminarProveedorExtraPartida(int extraId)`
+- L3809: `public static void RegistrarPrecioEnBancoHistorico(`
+- L3864: `public static void GuardarCotizacionPartida(CotizacionRenglonComparativo r, string origenFolio = "COT")`
+- L3954: `public static string CalcularTiempoRelativoEntregaComparativa(IEnumerable<CotizacionRenglonComparativo>? renglones)`
+- L3994: `public static void GuardarBorradorComparativa(`
+- L4036: `public static List<RegistroCotizacionVigencia> ObtenerCotizacionesBancoHistorico(int? productoId = null, int? proveedorId = null, string? filtroTexto = null)`
+- L4184: `public static int VincularLineaAbiertaAProductoCatalogo(int productoIdDestino, int? solicitudPartidaId = null, int? bancoPrecioId = null, string? descripcionConcepto = null)`
+- L4281: `public static List<OrdenCompra> GenerarOrdenesDesdeComparativa(`
+- L4550: `public static string CalcularTiempoRelativoEntregaOc(OrdenCompra? oc, string? fechaProgramadaPago = null)`
+- L4562: `public static void ActualizarEstatusYCondicionOrdenCompra(`
+- L4611: `public static List<string> GenerarActivosHerramientaDesdeRecepcion(int productoId, int cantidad, string marcaModelo, string ubicacion = "Gabinete H-1")`
+- L4660: `public static EntradaAlmacen RegistrarRecepcionOrdenCompra(`
+- L4883: `public static List<EntradaAlmacen> ObtenerEntradasAlmacen()`
+- L4946: `public static decimal ConvertirCantidadSolicitudAUnidadAlmacen(SolicitudPartida part, Producto prod)`
+- L4964: `public static Dictionary<int, decimal> ObtenerCantidadesEntregadasPorFolioEnSalidas(string? folioReferencia)`
+- L4989: `public static SalidaAlmacen RegistrarSalidaAlmacen(`
+- L5056: `public static List<SalidaAlmacen> ObtenerSalidasAlmacen()`
+- L5123: `public static (SalidaAlmacen SalidaActualizada, EntradaAlmacen EntradaDevolucion) RegistrarDevolucionMaterialSalida(`
+- L5258: `public static PrestamoHerramienta RegistrarPrestamoHerramienta(`
+- L5332: `public static void DevolverHerramientaPartida(int prestamoPartidaId, int herramientaId, int prestamoId, string estadoRetorno, string observaciones)`
+- L5407: `public static List<PrestamoHerramienta> ObtenerPrestamosHerramienta()`
+- L5479: `public static int ObtenerProyectoStockGeneralId()`
+- L5490: `public static int AsegurarProveedorPorRfc(string emisorRfc, string emisorNombre)`
+- L5541: `public static int? BuscarProductoVinculadoXml(string emisorRfc, string noIdentificacion, string descripcion)`
+- L5565: `public static Producto? BuscarProductoExistenteParaConceptoXml(string emisorRfc, string noIdentificacion, string descripcion)`
+- L5616: `public static Producto CrearProductoDesdeConceptoXml(string emisorRfc, string serieFolio, FacturaConcepto c)`
+- L5680: `public static void GuardarMapaProductoProveedor(string emisorRfc, string clave, string descripcion, int productoId, decimal ultimoPrecioSinIva)`
+- L5715: `public static void SincronizarOrdenCompraConSusFacturas(int ordenCompraId, int? proyectoIdPreferido = null)`
+- L5979: `public static (int ocId, string ocFolio) CrearOrdenCompraDesdeFactura(FacturaXml factura, int proveedorId, int proyectoId)`
+- L6032: `public static void RegularizarEntradaSinOcConOrdenCompra(int entradaId, int ordenCompraId, string? facturaUuid = null)`
+- L6111: `public static FacturaXml GuardarFacturaXml(`
+- L6335: `public static void SincronizarFacturasYOrdenesExistentes()`
+- L6478: `public static void ActualizarConceptoFacturaRegistrada(int facturaId, int conceptoId, int nuevoProductoId)`
+- L6518: `public static void ActualizarProyectoYOrdenFacturaRegistrada(int facturaId, int proyectoId, int? ordenCompraId)`
+- L6573: `public static List<FacturaXml> ObtenerFacturasXml()`
+- L6662: `public static void EliminarFacturaXml(int facturaId)`
+- L6731: `public static string CrearRespaldoBaseDatos()`
+- L6736: `public static string CrearRespaldoIntegralZip(string? rutaZipPersonalizada = null)`
+- L6813: `public static void RestaurarRespaldoIntegralZip(string rutaZipOrigen)`
+- L6891: `public static string ObtenerPinAdministrador()`
+- L6901: `public static bool ValidarPinAdministrador(string pinIngresado)`
+- L6918: `public static void CambiarPinAdministrador(string nuevoPin)`
+- L6931: `public static void RegistrarBitacoraAdmin(string accion, string referencia, string motivo)`
+- L6948: `public static void ForzarEstatusOrdenCompraAdmin(int ordenCompraId, string modoAccion, string motivoAdmin, string recibidoPor = "Administrador")`
+- L7045: `public static FacturaXml LiquidarOrdenCompraSinFactura(int ordenCompraId, string folioNota, string fechaNota, string notasAdicionales)`
+- L7097: `public static (FacturaXml Comprobante, string FolioOc, string FolioEntrada) RegistrarCompraDirectaSinFactura(`
+- L7298: `public static void GuardarEventoCalendario(EventoCalendario ev)`
+- L7316: `public static void AlternarCompletadoEventoCalendario(int eventoId, bool completado)`
+- L7328: `public static void EliminarEventoCalendario(int eventoId)`
+- L7339: `public static void AlternarCompletadoEventoUnificado(EventoCalendario ev)`
+- L7352: `public static void EliminarODescartarEventoUnificado(EventoCalendario ev)`
+- L7364: `public static void PosponerOEditarEventoUnificado(EventoCalendario ev, int diasExtra = 0, string? nuevaFechaFija = null, string? nuevoTitulo = null, string? nuevaPrioridad = null, string? nuevaDescripcion = null)`
+- L7447: `public static int LimpiarEventosCompletadosCalendario()`
+- L7468: `public static void ActualizarStockMinimoProducto(int productoId, decimal nuevoStockMinimo)`
+- L7480: `public static List<PendienteOperativoCompra> ObtenerPendientesOperativosCompras()`
+- L7557: `public static void DescartarAlertaVigenciaCotizacion(int bancoPrecioId)`
+- L7568: `public static void MarcarEntradaXmlResueltaManual(int entradaId, string referenciaXmlONota)`
+- L7584: `public static List<EventoCalendario> ObtenerEventosCalendarioUnificados(string? filtroFecha = null)`
+- L7823: `public static List<PuntoHistorialCompraProducto> ObtenerHistorialComprasProductoParaAnalisis(int productoId)`
+- L7900: `public static List<MaterialRankingAnalisis> ObtenerRankingMaterialesConcurrentes()`
+- L8019: `public static void ActualizarUbicacionProducto(int productoId, string ubicacion, bool sincronizarHerramientas = true)`
+- L8042: `public static void ActualizarUbicacionHerramientaIndividual(int herramientaId, string ubicacion)`
+- L8055: `public static string ObtenerRolOperativoActivo()`
+- L8074: `public static void GuardarRolOperativoActivo(string rol)`
+- L8087: `public static void RegistrarCheckpoint(`
+- L8130: `public static void EnviarNotificacionEntreUsuarios(`
+- L8160: `public static List<NotificacionCheckpoint> ObtenerNotificacionesCheckpoint(string? rolFiltro = null, int limite = 80, string? usuarioFiltro = null)`
+- L8226: `public static int ContarNotificacionesNoLeidas(string rolDestino)`
+- L8240: `public static void MarcarNotificacionesLeidas(string? rolDestino = null)`
+- L8298: `public static List<UsuarioSistema> ObtenerUsuariosSistema(bool soloActivos = false)`
+- L8324: `public static UsuarioSistema ObtenerUsuarioActivo()`
+- L8347: `public static void GuardarUsuarioActivo(int usuarioId)`
+- L8359: `public static int GuardarUsuarioSistema(UsuarioSistema u, string? nuevoPinPlano = null)`
+- L8417: `public static void RegistrarBitacoraUsuario(string modulo, string accion, string? folioReferencia, string? detalle)`
+- L8445: `public static List<RegistroBitacoraUsuario> ObtenerBitacoraUsuarios(int? usuarioIdFiltro = null, string? textoFiltro = null, int limite = 250)`
+- L8485: `public static List<ResumenFamiliaCatalogo> ObtenerResumenFamiliasCatalogo()`
+- L8528: `public static void CambiarProductoEnPartidaOrdenCompra(int ordenCompraPartidaId, Producto nuevoProducto, string motivo = "Cambio de marca/sustituto en recepción")`
+- L8552: `public static (EntradaAlmacen entrada, SalidaAlmacen? salida) RegistrarRecepcionDirectaAObra(`
+- L8799: `public static EntradaAlmacen RegistrarReingresoSobranteObra(`
+- L8869: `public static EntradaAlmacen RegistrarAjusteInventarioAlmacen(`
+- L8982: `public static List<KitHerramienta> ObtenerKitsHerramientas()`
+- L9075: `public static string GenerarSiguienteCodigoKit()`
+- L9093: `public static int GuardarKitHerramienta(KitHerramienta kit)`
+- L9137: `public static void AgregarHerramientaAKit(int kitId, int herramientaActivoId)`
+- L9151: `public static void QuitarHerramientaDeKit(int kitId, int herramientaActivoId)`
+- L9163: `public static void EliminarKitHerramienta(int kitId)`
+- L9176: `public static PrestamoHerramienta? DespacharKitHerramientaEnUnClic(`
+- L9240: `public static (int devueltasOk, int siguenEnObra, int conIncidencia) RegistrarChecklistRegresoKit(`
+- L9386: `public static List<VehiculoFlotilla> ObtenerVehiculosFlotilla()`
+- L9510: `public static string GenerarSiguienteCodigoVehiculo()`
+- L9528: `public static string GenerarSiguienteFolioRevisionVehiculo()`
+- L9546: `public static int GuardarVehiculoFlotilla(VehiculoFlotilla v)`
+- L9626: `public static void EliminarVehiculoFlotilla(int vehiculoId)`
+- L9640: `public static void EliminarGastoVehiculo(int gastoId)`
+- L9651: `public static void EliminarRevisionSemanalVehiculo(int revisionId)`
+- L9662: `public static void RegistrarGastoVehiculo(RegistroGastoVehiculo g)`
+- L9725: `public static RevisionSemanalVehiculo RegistrarRevisionSemanalVehiculo(RevisionSemanalVehiculo rev)`
+- L9790: `public static void RegistrarMantenimientoGarantiaHerramienta(`
+- L9844: `public static List<ItemMatrizKraljic> ObtenerAnalisisMatrizKraljic()`
+- L9998: `public static List<ItemVariacionPrecioPpv> ObtenerAnalisisPpvEInflacionInterna()`
+- L10110: `public static List<ItemAuditoriaCuadrilla> ObtenerAuditoriaConsumoYMermaPorCuadrilla()`
+- L10235: `public static (int PartidasAdjudicadas, decimal MontoTotalEstimadoConIva) AutoAdjudicarRutinariosMejorPrecioHistorico(int solicitudId)`
+- L10330: `public static ConfiguracionSmtpCorreo ObtenerConfiguracionSmtpCorreo()`
+- L10388: `public static void GuardarConfiguracionSmtpCorreo(ConfiguracionSmtpCorreo cfg)`
+- L10421: `public static bool YaSeEnvioNotificacionEtapa(string solicitudFolio, string etapaClave)`
+- L10438: `public static List<RegistroNotificacionCorreo> ObtenerNotificacionesCorreo(string? filtroFolio = null)`
+- L10477: `public static RegistroNotificacionCorreo? NotificarCambioEstadoCotizacionGerente(`
+- L10674: `public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> EnviarNotificacionCorreoSmtpInternoAsync(`
+- L10803: `public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> ProbarConexionSmtpGmailAsync(`
+- L10871: `public static string GenerarContenidoCsvPlantillaSolicitud()`
+- L10892: `public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> EnviarPlantillaSolicitudAGerentesPorCorreoAsync(List<string>? correosEspecificos = null)`
+- L10974: `public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje)> EnviarComparativaPorCorreoAsync(`
+- L11054: `public static List<CorreoEntranteSolicitud> ObtenerCorreosEntrantesSolicitud(string? filtro = null)`
+- L11140: `public static void DescartarCorreoEntranteSolicitud(int correoId)`
+- L11150: `public static (List<SolicitudPartida> Partidas, int DepartamentoId, string DepartamentoNombre, int EncargadoId, string EncargadoNombre, int ProyectoId, string ProyectoNombre, string NotasDetectadas)`
+- L11416: `public static Solicitud? ConvertirCorreoBandejaEnSolicitud(`
+- L11735: `public static async System.Threading.Tasks.Task<(bool Exito, string Mensaje, int NuevosEnBandeja, int SolicitudesAutoCreadas)> SincronizarCorreosEntrantesImapAsync()`
+
+## Services/BarcodePrintService.cs
+
+- L36: `public static DrawingImage CrearImagenCodigoBarras(string texto)`
+- L86: `public static void MostrarVistaPreviaEImprimirSolicitud(Window owner, Solicitud sol, bool soloDescargar = false)`
+- L134: `public static void MostrarVistaPreviaEImprimirExpedienteSolicitud(`
+- L285: `public static void MostrarVistaPreviaEImprimirComparativa(Window owner, Solicitud sol, List<CotizacionRenglonComparativo> renglones, bool soloDescargar = false)`
+- L299: `public static byte[] GenerarPdfBytes(FrameworkElement contenidoHojaCarta)`
+- L314: `public static string GenerarHtmlTablasDocumento(FrameworkElement contenidoHojaCarta)`
+- L392: `public static FrameworkElement ConstruirHojaComparativa(Solicitud sol, List<CotizacionRenglonComparativo> renglones)`
+- L739: `public static void MostrarVistaPreviaEImprimirOrdenCompra(Window owner, OrdenCompra oc, bool soloDescargar = false)`
+- L794: `public static void MostrarVistaPreviaEImprimirEntrada(Window owner, EntradaAlmacen ent, bool soloDescargar = false)`
+- L850: `public static void MostrarVistaPreviaEImprimirSalida(Window owner, SalidaAlmacen sal, bool soloDescargar = false)`
+- L934: `public static void MostrarVistaPreviaEImprimirCartaResponsabilidadEpp(Window owner, SalidaAlmacen sal, bool soloDescargar = false)`
+- L1007: `public static void MostrarVistaPreviaEImprimirDevolucionMaterial(Window owner, SalidaAlmacen sal, EntradaAlmacen entDevolucion, bool soloDescargar = false)`
+- L1066: `public static void MostrarVistaPreviaEImprimirPrestamo(Window owner, PrestamoHerramienta pre, bool soloDescargar = false)`
+- L1131: `public static void MostrarVistaPreviaEImprimirRevisionSemanalVehiculo(`
+- L1229: `public static void MostrarVistaPreviaCatalogoCodigosCarta(Window owner, List<Producto> productos, List<HerramientaActivo> herramientas)`
+- L2228: `public static void GuardarDocumentoEnArchivo(Window owner, string nombreBase, FrameworkElement contenidoHojaCarta)`
+
+## Services/XmlCfdiService.cs
+
+- L14: `public static FacturaXml LeerArchivoCfdiXml(string rutaXml)`
+- L118: `public static string GenerarFacturaXmlDemoEnCarpeta()`
+
+## Services/ImageStandardizerService.cs
+
+- L17: `public static string? GuardarDesdePortapapeles(string codigoProducto)`
+- L29: `public static string? GuardarDesdeArchivo(string rutaOrigen, string codigoProducto)`
+- L100: `public static ImageSource? ObtenerMiniaturaCacheada(string? ruta)`
+- L129: `public static ImageSource? CargarImagenSegura(string? ruta)`
+
+## Eventos Click conectados en MainWindow.xaml
+
+260 nombres únicos. No incluyen todos los eventos de teclado, menús generados en C# ni ventanas secundarias.
+
+- `BtnAbrirAuditoriaCuadrillas_Click`
+- `BtnAbrirBandejaCorreosSolicitud_Click`
+- `BtnAbrirConfigNotificacionesCorreo_Click`
+- `BtnAbrirDevolucionGrupoPrestamo_Click`
+- `BtnAbrirEconomiaKraljic_Click`
+- `BtnAbrirEconomiaPpv_Click`
+- `BtnAbrirExpedienteSolicitudContext_Click`
+- `BtnAbrirFlotillaYGarantias_Click`
+- `BtnAbrirGarantiasEquipos_Click`
+- `BtnAbrirGestorKitsHerramientas_Click`
+- `BtnAbrirMapaAnaqueles_Click`
+- `BtnAbrirModalRecepcionOc_Click`
+- `BtnAbrirOrdenSeleccionada_Click`
+- `BtnAbrirSolicitudSeleccionada_Click`
+- `BtnActualizarFlujoOc_Click`
+- `BtnAdjudicarOfertaArticulo_Click`
+- `BtnAdjudicarTodoHojaProveedor_Click`
+- `BtnAgregarConceptoLibreSolicitud_Click`
+- `BtnAgregarEventoCalendario_Click`
+- `BtnAgregarHerramientaAPrestamo_Click`
+- `BtnAgregarOpcionProveedorComp_Click`
+- `BtnAgregarPartidaSalidaPos_Click`
+- `BtnAgregarPartidaSinFactura_Click`
+- `BtnAgregarPartidaSolicitud_Click`
+- `BtnAgregarPorFamiliaGenericaSolicitud_Click`
+- `BtnAgregarProductoCarrito_Click`
+- `BtnAjusteInventarioMerma_Click`
+- `BtnAplicarCondicionesGeneralesHoja_Click`
+- `BtnAplicarReferenciaSimilarNuevaOp_Click`
+- `BtnAplicarReferenciaSimilarOp1_Click`
+- `BtnAprobarSurtirStockSolicitud_Click`
+- `BtnAsociarLineaAbiertaDirProv_Click`
+- `BtnAtenderPendienteCompra_Click`
+- `BtnAumentarPartidaSalidaPos_Click`
+- `BtnAumentarPartidaSolicitud_Click`
+- `BtnAutoAdjudicarRutinariosKraljic_Click`
+- `BtnAutocompletarFichaProducto_Click`
+- `BtnBuscarAlmacen_Click`
+- `BtnCambiarPinAdmin_Click`
+- `BtnCargarHistoricoProveedorHoja_Click`
+- `BtnCargarKitEnPrestamoActual_Click`
+- `BtnCargarMaterialOcActualEnSalida_Click`
+- `BtnCargarMaterialOcRecibidaEnSalida_Click`
+- `BtnCargarMaterialSolicitudEnSalida_Click`
+- `BtnChecklistRegresoKitRapido_Click`
+- `BtnCompAnterior_Click`
+- `BtnCompSiguiente_Click`
+- `BtnCompletarEventoCalendario_Click`
+- `BtnConfigurarHerramientaCatalogo_Click`
+- `BtnConvertirPresupuestoEnCompra_Click`
+- `BtnCopiarListaParaCotizar_Click`
+- `BtnCrearAnexoSolicitud_Click`
+- `BtnCrearCarritoEIrCatalogo_Click`
+- `BtnCrearProductoDesdeConceptoXml_Click`
+- `BtnDashboardAlertaDescartar_Click`
+- `BtnDashboardAlertaPedir_Click`
+- `BtnDashboardOcAccionPrincipal_Click`
+- `BtnDashboardOcCerrarPendiente_Click`
+- `BtnDescargarComparativaArchivo_Click`
+- `BtnDescargarEntradaSeleccionada_Click`
+- `BtnDescargarMovimientoAlmacen_Click`
+- `BtnDescargarOcSeleccionada_Click`
+- `BtnDescargarSolicitudArchivo_Click`
+- `BtnDescargarValePrestamo_Click`
+- `BtnDescartarPendienteCompra_Click`
+- `BtnDevolverMaterialSalida_Click`
+- `BtnDisminuirPartidaSalidaPos_Click`
+- `BtnDisminuirPartidaSolicitud_Click`
+- `BtnEditarCamionetaSeleccionadaFlotilla_Click`
+- `BtnElegirGanador1_Click`
+- `BtnElegirGanador2_Click`
+- `BtnElegirGanador3_Click`
+- `BtnElegirProveedorExtraGanador_Click`
+- `BtnEliminarCamionetaSeleccionadaFlotilla_Click`
+- `BtnEliminarCategoriaDir_Click`
+- `BtnEliminarDepartamento_Click`
+- `BtnEliminarEncargado_Click`
+- `BtnEliminarEventoCalendario_Click`
+- `BtnEliminarFacturaXml_Click`
+- `BtnEliminarGastoSeleccionadoFlotilla_Click`
+- `BtnEliminarHerramientaDir_Click`
+- `BtnEliminarProducto_Click`
+- `BtnEliminarProveedorExtra_Click`
+- `BtnEliminarProveedor_Click`
+- `BtnEliminarProyecto_Click`
+- `BtnEliminarRevisionSemanalFlotilla_Click`
+- `BtnEliminarSolicitud_Click`
+- `BtnEntradaRegistrarOc_Click`
+- `BtnEntradaSinOcAlmacen_Click`
+- `BtnEnviarAvisoPagoOcManual_Click`
+- `BtnEnviarCarritoASolicitud_Click`
+- `BtnEnviarComparativaPorCorreo_Click`
+- `BtnEnviarPlantillaCorreoAGerentes_Click`
+- `BtnEnviarRankingASolicitud_Click`
+- `BtnEnviarSolicitudAComparativa_Click`
+- `BtnExpImprimirExpedienteConsolidado_Click`
+- `BtnExpIrAOc_Click`
+- `BtnExpReimprimirComparativa_Click`
+- `BtnExpReimprimirEntrada_Click`
+- `BtnExpReimprimirOc_Click`
+- `BtnExpReimprimirSalida_Click`
+- `BtnExportarExistenciasCatalogo_Click`
+- `BtnExportarFlotillaCsv_Click`
+- `BtnExportarPlantillaSolicitud_Click`
+- `BtnFichaAgregarSolicitud_Click`
+- `BtnFichaEditar_Click`
+- `BtnFichaEnviarSalida_Click`
+- `BtnFichaHistorial_Click`
+- `BtnFichaMapa_Click`
+- `BtnFichaOcConcluir_Click`
+- `BtnFichaOcEsperando_Click`
+- `BtnFichaOcReabrir_Click`
+- `BtnFichaOcSiguientePaso_Click`
+- `BtnFichaSolConcluir_Click`
+- `BtnFichaSolEsperando_Click`
+- `BtnFichaSolReabrir_Click`
+- `BtnFichaSolSiguientePaso_Click`
+- `BtnFiniquitarOcParcial_Click`
+- `BtnForzarEstatusOcAdmin_Click`
+- `BtnGenerarOrdenesDesdeComparativa_Click`
+- `BtnGenerarSalidaStockSolicitud_Click`
+- `BtnGestionarFamilias_Click`
+- `BtnGuardarBorradorComparativa_Click`
+- `BtnGuardarCategoriaDir_Click`
+- `BtnGuardarDepartamento_Click`
+- `BtnGuardarEncargado_Click`
+- `BtnGuardarFacturaXml_Click`
+- `BtnGuardarHerramientaDir_Click`
+- `BtnGuardarProducto_Click`
+- `BtnGuardarProveedor_Click`
+- `BtnGuardarProyecto_Click`
+- `BtnGuardarSolicitud_Click`
+- `BtnHojaAgregarSlotProveedor_Click`
+- `BtnHojaSlot1_Click`
+- `BtnHojaSlot2_Click`
+- `BtnHojaSlot3_Click`
+- `BtnImportarPlantillaSolicitud_Click`
+- `BtnImprimirCartaResponsivaEpp_Click`
+- `BtnImprimirCatalogoCodigos_Click`
+- `BtnImprimirChecklistSemanalFlotilla_Click`
+- `BtnImprimirComparativa_Click`
+- `BtnImprimirEntradaSeleccionada_Click`
+- `BtnImprimirMovimientoAlmacen_Click`
+- `BtnImprimirOcSeleccionada_Click`
+- `BtnImprimirSolicitud_Click`
+- `BtnInterpretarWhatsapp_Click`
+- `BtnIrAlmacenPos_Click`
+- `BtnIrCatalogoConSolicitud_Click`
+- `BtnIrDocumentoEventoCalendario_Click`
+- `BtnIrRecepciones_Click`
+- `BtnLimpiarBusquedaAlmacen_Click`
+- `BtnLimpiarCantidadesRecepcionOc_Click`
+- `BtnLimpiarCompletadosAgenda_Click`
+- `BtnLimpiarCompraSinFactura_Click`
+- `BtnLimpiarGanadorProductoActual_Click`
+- `BtnLimpiarListaPrestamo_Click`
+- `BtnLimpiarPartidasSolicitud_Click`
+- `BtnLimpiarSalidaPos_Click`
+- `BtnLiquidarOcSinFactura_Click`
+- `BtnMarcarConceptoComoNuevo_Click`
+- `BtnModalCargaGasolinaFlotilla_Click`
+- `BtnModalChecklistSemanalFlotilla_Click`
+- `BtnModalGastoTallerFlotilla_Click`
+- `BtnModalNuevaCamionetaFlotilla_Click`
+- `BtnModalRespaldoZip_Click`
+- `BtnNotificacionesCheckpoints_Click`
+- `BtnNotificarAvanceComparativa_Click`
+- `BtnNuevaCategoriaDir_Click`
+- `BtnNuevaHerramientaDir_Click`
+- `BtnNuevaHerramientaIndividual_Click`
+- `BtnNuevaSolicitudVacia_Click`
+- `BtnNuevoDepartamento_Click`
+- `BtnNuevoEncargado_Click`
+- `BtnNuevoProducto_Click`
+- `BtnNuevoProveedorDesdeComp_Click`
+- `BtnNuevoProveedorRapidoComp_Click`
+- `BtnNuevoProveedor_Click`
+- `BtnNuevoProyecto_Click`
+- `BtnOpcionesOrdenFila_Click`
+- `BtnOpcionesSolicitudFila_Click`
+- `BtnPegarImagenPortapapeles_Click`
+- `BtnPerfilAdmin_Click`
+- `BtnPrestarHerramienta_Click`
+- `BtnProcesarOmniScanner_Click`
+- `BtnQuitarHerramientaDePrestamo_Click`
+- `BtnQuitarOpcion2Comp_Click`
+- `BtnQuitarOpcion3Comp_Click`
+- `BtnQuitarPartidaSalidaPos_Click`
+- `BtnQuitarPartidaSinFactura_Click`
+- `BtnQuitarPartidaSolicitud_Click`
+- `BtnReabastecerTodasAlertasStock_Click`
+- `BtnRecibirTodoPendienteOc_Click`
+- `BtnRefrescarEconomiaIndustrial_Click`
+- `BtnRegistrarCompraSinFactura_Click`
+- `BtnRegistrarDevolucionHerramienta_Click`
+- `BtnRegistrarRecepcionDirectaObraOc_Click`
+- `BtnRegistrarRecepcionOc_Click`
+- `BtnRegistrarSalidaAlmacen_Click`
+- `BtnReimprimirRevisionSemanalFlotilla_Click`
+- `BtnReimprimirValePrestamo_Click`
+- `BtnReingresoSobranteObra_Click`
+- `BtnRespaldarDb_Click`
+- `BtnRolOperativo_Click`
+- `BtnSelectorUbicacionDirHer_Click`
+- `BtnSelectorUbicacionProducto_Click`
+- `BtnSubirArchivoXml_Click`
+- `BtnSubirImagenArchivo_Click`
+- `BtnSustituirProductoEnRecepcionOc_Click`
+- `BtnToggleEditorCatalogo_Click`
+- `BtnToggleSidebar_Click`
+- `BtnToggleTablaAnalisisPaso3_Click`
+- `BtnToggleWhatsappSolicitud_Click`
+- `BtnVerExpedienteSolicitudDetalle_Click`
+- `BtnVerTodasFechasCalendario_Click`
+- `BtnVincularConceptoXmlConProducto_Click`
+- `BtnVincularLineaAbiertaComp_Click`
+- `BtnVolverCatalogoDesdeHistorial_Click`
+- `BtnVolverListaOrdenes_Click`
+- `BtnVolverListaSolicitudes_Click`
+- `ChkProdEsHerramienta_Click`
+- `CtxAgendaCompletar_Click`
+- `CtxAgendaEditar_Click`
+- `CtxAgendaEliminar_Click`
+- `CtxAgendaIrDocumento_Click`
+- `CtxAgendaPosponer1_Click`
+- `CtxAgendaPosponer3_Click`
+- `CtxAgendaPosponer7_Click`
+- `CtxAlertaStockAgregarSolicitud_Click`
+- `CtxAlertaStockEditar_Click`
+- `CtxAlertaStockMapa_Click`
+- `CtxCardAbrirFichaHerramienta_Click`
+- `CtxCardAbrirMapaUbicacion_Click`
+- `CtxCardAgregarCarrito_Click`
+- `CtxCardCopiarCodigo_Click`
+- `CtxCardEditarProducto_Click`
+- `CtxCardEliminarProducto_Click`
+- `CtxCardEnviarSalida_Click`
+- `CtxCardVerAnalisisPrecio_Click`
+- `CtxDashboardOcCopiarFolio_Click`
+- `CtxDashboardOcImprimir_Click`
+- `CtxDashboardOcRecibir_Click`
+- `CtxDirHerCopiarCodigo_Click`
+- `CtxDirHerMarcarDanada_Click`
+- `CtxDirHerMarcarDisponible_Click`
+- `CtxDirHerPrestar_Click`
+- `CtxDirHerReubicarMapa_Click`
+- `CtxOrdenCompraCopiarFolio_Click`
+- `CtxRankingAbrirMapa_Click`
+- `CtxRankingEditarProducto_Click`
+- `MenuIrAnalisisGraficas_Click`
+- `MenuIrAnalisisRanking_Click`
+- `MenuIrCatalogo_Click`
+- `MenuIrComparativa_Click`
+- `MenuIrDirectorioHerramientas_Click`
+- `MenuIrDirectorios_Click`
+- `MenuIrFacturasXml_Click`
+- `MenuNuevaSolicitud_Click`
+- `MenuNuevoProductoCatalogo_Click`
+- `MenuRefrescarSistema_Click`
+- `NavButton_Click`

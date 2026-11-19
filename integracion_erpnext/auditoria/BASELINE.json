@@ -1,0 +1,104 @@
+{
+  "fecha": "2026-11-19",
+  "original": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen",
+  "integracion_commit_auditado": "6822b9034ce0cf9d4fc56f8774e2fd6ca566f946",
+  "rama": "integracion/erpnext",
+  "archivos_originales": [
+    {
+      "archivo": "App.xaml",
+      "sha256": "65bd46cf9d72477798ad2353d97f4aed3d981ca66ecff6d549c030890a0e824d",
+      "lineas": 355
+    },
+    {
+      "archivo": "App.xaml.cs",
+      "sha256": "656980203fed9bed93fc5cf01bbc3cc7f0409c7b6abf9dc91a957314817398c0",
+      "lineas": 148
+    },
+    {
+      "archivo": "MainWindow.Catalogo.cs",
+      "sha256": "46594735b6fc862d90efe3dde445e0cc6923204d101a3880df134cd5889983f1",
+      "lineas": 345
+    },
+    {
+      "archivo": "MainWindow.Checkpoints.cs",
+      "sha256": "da2c3d7ceb7832de24bda80118d46a4d5ef0e4a69bb8e58f199aff04da4942a9",
+      "lineas": 8281
+    },
+    {
+      "archivo": "MainWindow.Comparativa.cs",
+      "sha256": "1789e70b374d587c4ab9122ac6ef9e44018bd731662e5a750e0dd3c90a1c828c",
+      "lineas": 252
+    },
+    {
+      "archivo": "MainWindow.Responsivo.cs",
+      "sha256": "281c0220669c062032fe89d3e5b3a4e5a445f3fe67b5c95789621c3cd72ccd6b",
+      "lineas": 59
+    },
+    {
+      "archivo": "MainWindow.xaml",
+      "sha256": "e150bce7ec1f2fb398bba86298fbc2fff0805891cb3100b78c357bb0ae53e2b3",
+      "lineas": 5214
+    },
+    {
+      "archivo": "MainWindow.xaml.cs",
+      "sha256": "e5ef3aedee37f5acef6e118bc8251d792033a2094831b7009b1faaf116f2c35b",
+      "lineas": 14010
+    },
+    {
+      "archivo": "NuevaSolicitudCaptura.xaml",
+      "sha256": "dc7a34f9b8972c1975ec43e4c6beb33c29ed6830dad3392cf75c14cafedae760",
+      "lineas": 56
+    },
+    {
+      "archivo": "NuevaSolicitudCaptura.xaml.cs",
+      "sha256": "0566789f0b224f090290b346395d7f8b0fcbede7629747a86d65c2dd15192adb",
+      "lineas": 355
+    },
+    {
+      "archivo": "SistemaComprasAlmacen.csproj",
+      "sha256": "f56eece6e835fba4622b37d9677bb3f9eeb1554f35f8419f029f165d44c51acb",
+      "lineas": 24
+    },
+    {
+      "archivo": "Data/DatabaseService.cs",
+      "sha256": "54b7a50317f579076ea3bf99b9d75d7cf6856d889f32f4bc3726b59f7a18cae9",
+      "lineas": 11986
+    },
+    {
+      "archivo": "Models/Entities.cs",
+      "sha256": "16bc43ac841250d9b528296005407c750534b1d2a4f8d29198d6a05dfede7273",
+      "lineas": 2168
+    },
+    {
+      "archivo": "Models/HistorialProducto.cs",
+      "sha256": "e86d5098afa96dd7fb8302e42d5bcbdfee20f3f8411bf9038618f47896a3856b",
+      "lineas": 36
+    },
+    {
+      "archivo": "Services/AppMediator.cs",
+      "sha256": "45f664cb2bf7c210a8cf01072cddeace758082292827c344859656d58ba652d2",
+      "lineas": 165
+    },
+    {
+      "archivo": "Services/BarcodePrintService.cs",
+      "sha256": "ae8b23794b43405169fb7136564e05af24f6f27a27c3a84272161664eb185ff7",
+      "lineas": 2491
+    },
+    {
+      "archivo": "Services/DialogoFluent.cs",
+      "sha256": "263afee2b587916c5d3e50eedb09aecd1772c6df3ca48e9311ab892cbb3b41dd",
+      "lineas": 172
+    },
+    {
+      "archivo": "Services/ImageStandardizerService.cs",
+      "sha256": "30d38573d185afca877f6bce82f689d02ccc8b15c616f18e2fb7ae434260d60e",
+      "lineas": 150
+    },
+    {
+      "archivo": "Services/XmlCfdiService.cs",
+      "sha256": "9b7ac9f1101a09b9c67066b895f482e906d22f43f7805813bd5ef75c3b169af3",
+      "lineas": 179
+    }
+  ],
+  "nota": "Solo lectura de fuentes. No se abrió ni modificó SQLite; no se copiaron credenciales ni contenido de correo. No se acredita ejecución del original."
+}

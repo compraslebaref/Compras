@@ -7,6 +7,12 @@ Cada auxiliar usará su propia cuenta. Para limitar el acceso a estaciones
 autorizadas, el servidor deberá aceptar conexiones solo desde esas estaciones
 o desde su segmento de red dedicado.
 
+## Dictamen de equivalencia
+
+La auditoría del 19 de noviembre encontró brechas que impiden sustituir todavía
+el programa original. Consulta [AUDITORIA-EQUIVALENCIA.md](AUDITORIA-EQUIVALENCIA.md)
+y su matriz de 55 capacidades antes de planificar la puesta en marcha.
+
 ## Integración operativa de pruebas
 
 Consulta [ENTREGA.md](ENTREGA.md) para el alcance verificado, pasos de uso,
