@@ -23,9 +23,9 @@ Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cam
 **Parcial · P1**
 
 - Original: Unidad de compra, unidad de almacén y factor editable.
-- Integración: ERPNext aplica el factor configurado; Windows no permite capturarlo y oculta la unidad en la nueva solicitud.
-- Evidencia: Sondeo: 2 cajas con factor 10 generan stock_qty=20.
-- Criterio para cerrar: Mostrar unidad/factor; crear configuración y probar recepción/salida/retorno con factores y decimales.
+- Integración: La API expone unidad de compra, unidad de inventario y factor en artículo, solicitud, oferta y recepción. Pendiente conectar la captura en WPF.
+- Evidencia: Validar.ps1: 2 cajas con factor 10 generan stock_qty=20 y recibir 1 caja ingresa 10 unidades de inventario.
+- Criterio para cerrar: Verificar en WPF la captura y visualización del factor y las unidades. Probar salida y retorno con factores y decimales.
 - Fuentes: [original L74](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Models/Entities.cs:74) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## CAT-03 · Proveedores y condiciones

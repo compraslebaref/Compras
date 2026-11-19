@@ -60,6 +60,57 @@ def _verificar_ofertas_parciales(data, item_code, supplier, second_supplier):
     }
 
 
+def _verificar_unidades(seed, supplier):
+    base = seed.items[0]
+    frappe.set_user("Administrator")
+    uom = "Caja prueba " + uuid.uuid4().hex[:8]
+    frappe.get_doc({"doctype": "UOM", "uom_name": uom}).insert()
+    item_group = frappe.db.get_value("Item", base.item_code, "item_group")
+    units = {"uom": uom, "stock_uom": base.stock_uom, "conversion_factor": 10}
+    frappe.set_user("autoriza@lebaref.test")
+    sku = "TEST-UOM-" + uuid.uuid4().hex[:8]
+    item = ejecutar("articulo", dict(units, item_code=sku, item_name="Artículo por caja", item_group=item_group), str(uuid.uuid4()))["folio"]
+
+    frappe.set_user("compras@lebaref.test")
+    fields = {f["name"]: f["value"] for f in esquema("articulo", item)["fields"]}
+    assert all(fields[key] == value for key, value in units.items())
+    data = {
+        "company": seed.company, "schedule_date": add_days(today(), 7), "title": "Prueba de compra por caja",
+        "rows": [dict(units, item_code=item, qty=2, warehouse=base.warehouse)],
+    }
+    request = ejecutar("solicitud", data, str(uuid.uuid4()))["folio"]
+    row = frappe.get_doc("Material Request", request).items[0]
+    assert row.qty == 2 and row.stock_qty == 20
+    assert all(row.get(key) == value for key, value in units.items())
+
+    rfq = ejecutar("peticion", {"suppliers": supplier}, str(uuid.uuid4()), request)["folio"]
+    row = esquema("oferta", rfq)["rows"][0]
+    assert all(row[key] == value for key, value in units.items())
+    quote_data = {"supplier": supplier, "valid_till": add_days(today(), 10), "rows": [dict(row, rate=100)]}
+    try:
+        invalid = dict(quote_data, rows=[dict(row, rate=100, conversion_factor=20)])
+        ejecutar("oferta", invalid, str(uuid.uuid4()), rfq)
+    except frappe.ValidationError as error:
+        assert "no coincide con el documento de origen" in str(error)
+    else:
+        raise AssertionError("La oferta cambió el factor de la petición")
+    quote = ejecutar("oferta", quote_data, str(uuid.uuid4()), rfq)["folio"]
+    quoted = frappe.get_doc("Supplier Quotation", quote).items[0]
+    assert quoted.stock_qty == 20 and all(quoted.get(key) == value for key, value in units.items())
+    comparison = consultar(request)["renglones"][0]
+    order = generar_ordenes(request, {comparison["id"]: comparison["opciones"][0]["id"]})[0]["folio"]
+    frappe.set_user("autoriza@lebaref.test")
+    ejecutar("autorizar", {"confirmar": "AUTORIZAR"}, str(uuid.uuid4()), order)
+
+    frappe.set_user("almacen@lebaref.test")
+    row = esquema("recibir", order)["rows"][0]
+    assert row["pending"] == 2 and all(row[key] == value for key, value in units.items())
+    receipt = ejecutar("recibir", {"rows": [dict(row, qty=1)]}, str(uuid.uuid4()), order)["folio"]
+    received = frappe.get_doc("Purchase Receipt", receipt).items[0]
+    assert received.qty == 1 and all(received.get(key) == value for key, value in units.items())
+    assert frappe.db.get_value("Bin", {"item_code": item, "warehouse": base.warehouse}, "actual_qty") == 10
+
+
 def verificar():
     if frappe.local.site != "lebaref-pruebas.local":
         raise RuntimeError("Solo se permite en el entorno de pruebas.")
@@ -157,6 +208,8 @@ def verificar():
         else:
             raise AssertionError("Se registró CFDI sin pasar por la validación del XML")
         results.append("XML privado registrado y UUID sin duplicación (validación estructural, no SAT)")
+        _verificar_unidades(seed, supplier.name)
+        results.append("CAT-02: dos cajas son 20 unidades de inventario y recibir una caja ingresa 10")
         return {"correcto": True, "pruebas": results, "datos": "Revertidos al finalizar"}
     finally:
         frappe.db.rollback()

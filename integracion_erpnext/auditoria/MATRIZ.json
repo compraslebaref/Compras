@@ -20,9 +20,9 @@
     "estado": "Parcial",
     "prioridad": "P1",
     "original": "Unidad de compra, unidad de almacén y factor editable.",
-    "integracion": "ERPNext aplica el factor configurado; Windows no permite capturarlo y oculta la unidad en la nueva solicitud.",
-    "evidencia": "Sondeo: 2 cajas con factor 10 generan stock_qty=20.",
-    "criterio_cierre": "Mostrar unidad/factor; crear configuración y probar recepción/salida/retorno con factores y decimales.",
+    "integracion": "La API expone unidad de compra, unidad de inventario y factor en artículo, solicitud, oferta y recepción. Pendiente conectar la captura en WPF.",
+    "evidencia": "Validar.ps1: 2 cajas con factor 10 generan stock_qty=20 y recibir 1 caja ingresa 10 unidades de inventario.",
+    "criterio_cierre": "Verificar en WPF la captura y visualización del factor y las unidades. Probar salida y retorno con factores y decimales.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Models\\Entities.cs",
       "linea": 74
