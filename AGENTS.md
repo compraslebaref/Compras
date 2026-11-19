@@ -1,10 +1,13 @@
 # AGENTS.md — Guía Oficial de Colaboración Multi-Agente (Codex + Antigravity)
 
-Este repositorio unifica el sistema de **Compras, Almacén y Flotilla de Lebaref** (cliente nativo Windows + integración con servidor ERPNext 16.55 / Frappe 16.56).
+## Decisión Estratégica Rectora (Confirmada por el Usuario)
 
-En este proyecto colaboran **dos agentes en paralelo**:
-- **Codex** (especialista en Backend ERPNext/Frappe, reglas transaccionales, seguridad/permisos, migración de datos y suites de verificación).
-- **Antigravity** (especialista en Cliente Windows UX/UI, vistas operativas, formatos imprimibles Carta/PDF con códigos de barras, conciliación visual CFDI y automatización de correo).
+El sistema oficial para integrar en la empresa es **ERPNext 16 directo** (aprovechando tanto **sus procesos transaccionales establecidos** como **su propio diseño e interfaz web oficial Frappe Desk en español**), amoldándolo por dentro mediante la app [`lebaref_compras`](integracion_erpnext/app/lebaref_compras) con las herramientas operativas propias de Lebaref.
+
+- **NO se desarrollarán más interfaces de escritorio paralelas en C#:**
+  - El proyecto WPF (`SistemaComprasAlmacen.csproj`) se conserva únicamente como **referencia viva del molde funcional de Lebaref** (formatos Carta, códigos de barras, mapa 3×3, reglas de negocio y catálogo histórico).
+  - El proyecto WinForms (`integracion_erpnext/cliente_windows/`) se conserva únicamente como **arnés ligero de humo de API** en `Validar.ps1`.
+- **Cómo operan el usuario y sus auxiliares:** Entrando directamente a **ERPNext (`http://127.0.0.1:8186/app/lebaref` en pruebas, o `https://<servidor-oficina>/app/lebaref` en red local)**, abriéndolo como ventana dedicada de aplicación (`Abrir_ERPNext_Lebaref.cmd` / PWA) con su usuario y contraseña individuales.
 
 Antes de editar cualquier archivo, **ambos agentes DEBEN leer [`COORDINACION.md`](COORDINACION.md) y [`integracion_erpnext/CONTRATO-API.md`](integracion_erpnext/CONTRATO-API.md)**.
 
@@ -12,61 +15,43 @@ Antes de editar cualquier archivo, **ambos agentes DEBEN leer [`COORDINACION.md`
 
 ## 1. Topología de Carpetas y Ramas (`git worktree`)
 
-La carpeta maestra vive en `C:\Users\oscar\Proyectos\Lebaref\` dividida en dos *worktrees* conectados al **mismo repositorio Git**:
-
 | Carpeta | Agente propietario | Rama habitual | Regla |
 |---|---|---|---|
-| `C:\Users\oscar\Proyectos\Lebaref\app` | **Antigravity** y **ÚNICA carpeta que abre/usa el usuario** | `integracion/erpnext` (o `agy/<id-tarea>`) | **Codex NO edita ni compila dentro de `app\`.** |
-| `C:\Users\oscar\Proyectos\Lebaref\codex` | **Codex** (taller interno exclusivo de backend) | `codex/erpnext` (o `codex/<id-tarea>`) | **Antigravity NO edita ni compila dentro de `codex\`. Nunca pedir al usuario abrir ejecutables desde `codex\`.** |
+| `C:\Users\oscar\Proyectos\Lebaref\app` | **Antigravity** (y carpeta principal del usuario) | `integracion/erpnext` | **Codex NO edita dentro de `app\`.** |
+| `C:\Users\oscar\Proyectos\Lebaref\codex` | **Codex** (taller de backend y pruebas) | `codex/erpnext` | **Antigravity NO edita dentro de `codex\`.** |
 
-Al compartir el mismo `.git`, todo `git commit` hecho en `codex\` es inmediatamente visible desde `app\` (`git log codex/erpnext`, `git diff`, `git merge --no-ff`) y viceversa, sin bloquear binarios `.exe`/`.dll` ni ensuciar el árbol de trabajo del otro agente.
-
-### Regla de Oro sobre el Cliente Windows Oficial (Cero Trabajo Doble)
-- **ÚNICA aplicación oficial para el usuario final y sus auxiliares:** **`SistemaComprasAlmacen.csproj`** (aplicación completa Windows 11 WPF `.NET 8` en la raíz de `C:\Users\oscar\Proyectos\Lebaref\app`, iniciada con `Iniciar_Lebaref.exe`).
-- **Estado de `integracion_erpnext/cliente_windows/` (`Lebaref-Integrado.exe`):** Queda **congelado únicamente como arnés ligero de verificación técnica de API**. **NO** se desarrollan nuevas pantallas para usuario final en WinForms (`cliente_windows`) ni se le indica al usuario usar `Lebaref-Integrado.exe` como sistema operativo diario. Todo desarrollo de interfaz de usuario ocurre exclusivamente en el proyecto WPF `.NET 8` consumiendo `Services/ErpNextApiClient.cs`.
-- **Sincronización al iniciar turno:** Antes de editar `COORDINACION.md` o iniciar una nueva tarea, **Codex debe ejecutar `git merge --no-ff integracion/erpnext`** en `codex\`, y **Antigravity debe ejecutar `git merge --no-ff codex/erpnext`** en `app\`, para que ambos partan siempre del mismo estado conciliado.
+**Regla de sincronización al iniciar turno:** Antes de editar archivos o actualizar `COORDINACION.md`, ejecutar `git merge --no-ff` contra la rama del otro agente (`integracion/erpnext` ↔ `codex/erpnext`) para partir siempre del estado conciliado.
 
 ---
 
-## 2. Fronteras de Propiedad de Archivos (Cero Conflictos)
+## 2. Fronteras de Propiedad de Archivos dentro de ERPNext (`lebaref_compras`)
 
-Salvo acuerdo explícito anotado en `COORDINACION.md`, cada agente edita únicamente su zona:
+Para trabajar en paralelo sobre ERPNext **sin conflictos de Git**, cada agente es propietario exclusivo de sus módulos:
 
-### Zona de Codex (Backend, Infraestructura, Auditoría y Pruebas de Servidor)
-- `integracion_erpnext/app/lebaref_compras/**` (`operaciones.py`, `comparativa.py`, `equipos.py`, `kits.py`, `setup.py`, `configuracion_inicial.py`, `trazabilidad.py`, `verificar_*.py`, hooks y parches).
-- `integracion_erpnext/pruebas/**` (Docker/WSL, respaldos, scripts de migración SQLite → ERPNext y validadores de API).
-- `integracion_erpnext/auditoria/**` (`MATRIZ-EQUIVALENCIA.md`, `MATRIZ.json`, scripts de verificación de equivalencia).
+### Zona de Codex (Motor Transaccional, Procesos, Permisos, Impuestos, Inventario y Verificación)
+- Módulos transaccionales Python en `integracion_erpnext/app/lebaref_compras/lebaref_compras/`:
+  - `operaciones.py`, `comparativa.py`, `solicitudes.py`, `unidades.py`, `proveedores.py`, `equipos.py`, `equipos_setup.py`, `kits.py`, `setup.py`, `configuracion_inicial.py`, `trazabilidad.py`, `demo.py`, `verificar_*.py` y `patches.txt`.
+- Infraestructura y auditoría: `integracion_erpnext/pruebas/**` y `integracion_erpnext/auditoria/**`.
 
-### Zona de Antigravity (Cliente Windows, UX, Impresión Carta/PDF, CFDI Visual y Correo)
-- Proyecto WPF `.NET 8` en raíz (`MainWindow*.cs`, `MainWindow.xaml`, `NuevaSolicitudCaptura.*`, `Services/**`, `Models/**`, `Data/**`).
-- Cliente Windows conectado a ERPNext (`integracion_erpnext/cliente_windows/**` y nuevos módulos C# modulares de cliente ERPNext).
+### Zona de Antigravity (Experiencia Visual en ERPNext Desk, Formatos Carta, Mapa A–F, Google Sheets y Correo)
+- Scripts y estilos de interfaz nativa Frappe Desk:
+  - `integracion_erpnext/app/lebaref_compras/lebaref_compras/public/js/**` (botones guiados *Siguiente paso*, diálogos rápidos en Desk para Solicitudes, Peticiones, Ofertas parciales, Comparativa visual enriquecida, Recepción, Salidas/Sobrantes, Herramientas `HER`, Kits `KIT` y Flotilla `VEH`).
+  - `integracion_erpnext/app/lebaref_compras/lebaref_compras/public/css/**`.
+- Módulos Python exclusivos de presentación, impresión e integraciones externas en `integracion_erpnext/app/lebaref_compras/lebaref_compras/`:
+  - `desk_ui.py` (Workspace ejecutivo Lebaref por rol, indicadores KPI y vistas de mapa de anaqueles A–F).
+  - `impresion_carta.py` (Print Formats Tamaño Carta / PDF limpios con código de barras Code 128 para Solicitud, Comparativa dinámica, OC, Recepción, Salida, Préstamo, Check-list vehicular y Responsiva EPP).
+  - `sheets_proveedores.py` (sincronización del directorio `Supplier` de ERPNext con la hoja oficial de Google Sheets *¿A quién cotizar?* `1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I`).
+- Lanzadores de acceso directo para el usuario (`Abrir_ERPNext_Lebaref.cmd`).
 
-### Archivos Compartidos de Coordinación (Lectura/Escritura por ambos en turnos limpios)
-- `COORDINACION.md`: tablero activo de tareas, asignaciones, bloqueos y entregas listas para integrar.
-- `integracion_erpnext/CONTRATO-API.md`: fuente de verdad de endpoints HTTP/JSON entre Python (`@frappe.whitelist`) y C# (`ErpClient`).
-
----
-
-## 3. Flujo de Trabajo entre Codex y Antigravity
-
-1. **Tomar tarea:** Revisar `COORDINACION.md` y elegir un ítem de la matriz ([`integracion_erpnext/auditoria/MATRIZ-EQUIVALENCIA.md`](integracion_erpnext/auditoria/MATRIZ-EQUIVALENCIA.md), p. ej. `COM-02`, `SOL-02`, `DOC-01`). Marcarlo `EN CURSO (Codex)` o `EN CURSO (Antigravity)`.
-2. **Acordar el contrato antes o al entregar el backend:** Si una capacidad requiere cambios en servidor y cliente:
-   - Codex implementa/ajusta el método en `lebaref_compras`, lo prueba en `lebaref-pruebas.local` y documenta el JSON exacto de entrada/salida en `integracion_erpnext/CONTRATO-API.md`.
-   - Antigravity consume exactamente ese contrato en C# sin adivinar nombres de campos.
-3. **Commits atómicos y trazables:**
-   - Formato de mensaje: `[ID-MATRIZ] Descripción breve en español` (ejemplo: `[COM-02] Permitir ofertas parciales por renglon en Supplier Quotation`).
-4. **Verificación obligatoria antes de declarar terminado:**
-   - Ejecutar `powershell -ExecutionPolicy Bypass -File .\integracion_erpnext\pruebas\Validar.ps1` (o las suites correspondientes).
-   - Prohibido declarar cerrada una brecha de `MATRIZ-EQUIVALENCIA.md` sin evidencia reproducible.
-5. **Integración (`merge`):**
-   - Cuando Codex deja commits verificados en `codex/erpnext`, lo anota en `COORDINACION.md` con el hash del commit. Antigravity (o Codex cuando integra cambios de UI en su rama) sincroniza con `git merge --no-ff` manteniendo el historial limpio.
+### Archivos Compartidos (Coordinación ordenada)
+- `integracion_erpnext/app/lebaref_compras/lebaref_compras/hooks.py`: ediciones mínimas y declarativas (`doctype_js`, `app_include_js`, `after_migrate`) documentadas en `COORDINACION.md`.
+- `COORDINACION.md` e `integracion_erpnext/CONTRATO-API.md`.
 
 ---
 
-## 4. Reglas Inquebrantables de Seguridad y Calidad
+## 3. Reglas Inquebrantables de Calidad y Puesta en Marcha
 
-- **Aislamiento de datos:** Jamás modificar ni sobrescribir la base real del usuario (`%LocalAppData%\SistemaComprasAlmacen\compras_almacen.db`) durante pruebas o migraciones; trabajar siempre sobre copias aisladas y contra el sitio ficticio `lebaref-pruebas.local` (`http://127.0.0.1:8186`).
-- **Cero envíos accidentales de correo en pruebas automatizadas:** En suites automáticas mantener `send_email=0` o destinatarios de prueba controlados; nunca disparar correos reales a proveedores o gerentes desde scripts de verificación.
-- **Idempotencia y permisos reales:** Toda escritura hacia ERPNext debe conservar control de idempotencia (`operacion` UUID + huella SHA-256) y validar permisos reales en servidor (`frappe.has_permission` / `check_permission`), nunca depender solo de ocultar botones en Windows.
-- **Archivos secretos fuera de Git:** Nunca versionar `.env`, `Accesos-Lebaref-Pruebas.txt`, contraseñas de aplicación Gmail ni respaldos `.sql.gz`/`.tgz`.
-- **Modularidad en C# y Python:** Evitar seguir inflando archivos monolíticos; las piezas nuevas de integración Windows ↔ ERPNext deben crearse en clases pequeñas y enfocadas por dominio.
+1. **Adoptar procesos maduros de ERPNext primero:** Usar los flujos nativos probados de ERPNext (impuestos mediante plantillas fiscales, multi-almacén *Central ↔ Obra* diferenciado de *Consumo*, permisos `Role Profile` + `Custom DocPerm`, paginación/filtros nativos de Desk) y extender únicamente lo específico de Lebaref.
+2. **Operación cómoda desde ERPNext Desk:** Toda operación de `lebaref_compras` (incluidos `Lebaref Herramienta`, `Lebaref Kit`, `Lebaref Vehiculo` y `Lebaref CFDI`, que tienen candado `_writing` en `equipos.py`) debe poder operarse limpiamente desde la interfaz web de ERPNext mediante botones/diálogos en Desk que invoquen los endpoints validados `@frappe.whitelist`.
+3. **Aislamiento de secretos y datos:** Nunca versionar `.env`, `Accesos-Lebaref-Pruebas.txt`, contraseñas ni respaldos `.sql.gz`/`.tgz`; nunca alterar destructivamente `%LocalAppData%\SistemaComprasAlmacen\compras_almacen.db`.
+4. **Verificación reproducible:** Toda entrega debe pasar `Validar.ps1` y reconstruir/migrar el contenedor local cuando cambie código de `lebaref_compras`.
