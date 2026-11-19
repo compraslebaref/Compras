@@ -35,6 +35,10 @@ public partial class LoginWindow : FluentWindow
 
         Loaded += async (_, _) =>
         {
+            Activate();
+            Topmost = true;
+            Topmost = false;
+            Focus();
             TxtUrlServidor.Text = ErpNextApiClient.ObtenerUrlServidorConfigurada();
             CargarUsuariosRegistrados();
             await VerificarEstadoServidorAsync();

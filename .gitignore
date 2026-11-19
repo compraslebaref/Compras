@@ -26,5 +26,7 @@ publish/
 integracion_erpnext/pruebas/.mantener-wsl.sh
 lebaref-servidor.txt
 Accesos-Lebaref-Pruebas.txt
+Iniciar_Lebaref.cmd
+Iniciar_Lebaref.exe
 *.sql.gz
 *.tgz
