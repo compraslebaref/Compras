@@ -1,4 +1,4 @@
-# Herramientas y flotilla en Lebaref Windows
+﻿# Herramientas y flotilla en Lebaref Windows
 
 Actualización del 17 de noviembre de 2026. Usa `Iniciar-Lebaref.exe` y las mismas
 cuentas del entorno local. No se importaron datos del programa anterior.
@@ -101,5 +101,8 @@ uso desde dos computadoras físicas, carga elevada ni migración del histórico.
 Los listados muestran hasta 100 registros recientes y los selectores hasta 1,000
 referencias. El detalle muestra hasta 100 eventos recientes por tipo; el total
 de gastos del vehículo incluye todos sus gastos visibles para el usuario.
-No se implementaron aún kits, fotos, códigos de barras, costos/garantías de
-herramientas, depreciación ni firmas. La instalación sigue siendo local de pruebas.
+Kits, costos/garantías, mantenimiento de herramientas y etiquetas ya están
+integrados; consulta KITS-GARANTIAS-ETIQUETAS.md. Siguen pendientes fotos,
+depreciación y firmas. La instalación sigue siendo local de pruebas.
+La búsqueda por código exacto permite localizar herramientas, vehículos y kits
+aunque no aparezcan entre los 100 registros recientes.

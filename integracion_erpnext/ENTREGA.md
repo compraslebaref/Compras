@@ -1,6 +1,6 @@
-# Lebaref + ERPNext: entrega integrada para pruebas
+﻿# Lebaref + ERPNext: entrega integrada para pruebas
 
-Actualización: 17 de noviembre de 2026. Rama: `integracion/erpnext`.
+Actualización: 19 de noviembre de 2026. Rama: `integracion/erpnext`.
 
 ## Resultado
 
@@ -26,6 +26,9 @@ No se importó ni modificó la base SQLite original.
 | Conexión interrumpida | Identificador por operación y reintento de la misma captura sin duplicar movimientos |
 | Herramientas | Fichas individuales, préstamos por responsable/obra, retorno parcial, incidencias y recuperación por responsable |
 | Flotilla | Vehículos, gastos de combustible/mantenimiento, revisiones, estado, seguro e historial |
+| Kits | Composición con historial, préstamo selectivo y disponibilidad por herramienta |
+| Garantías y mantenimiento | Costo de adquisición, vigencia, trabajos gratuitos/pagados, acumulados y anulación con motivo |
+| Etiquetas | Code 128, vista previa, PNG, impresión y búsqueda por código exacto |
 
 El uso de estos nuevos módulos y los ejemplos disponibles están en
 [HERRAMIENTAS-FLOTILLA.md](HERRAMIENTAS-FLOTILLA.md).
@@ -100,9 +103,9 @@ MAT-MR-2026-00005, que puede haber sido modificada por el usuario.
   no genera factura contable ni contabiliza impuestos. No se inventa IVA.
   Actualmente cada UUID se vincula a una recepción, no a varias.
 - Herramientas y flotilla ya tienen control operativo en esta interfaz. Faltan
-  kits, costos/garantías de herramientas, integración contable de activos,
+  integración contable de activos,
   correo entrante, automatizaciones de correo, cuadros de análisis avanzados,
-  fotos y códigos de barras del sistema anterior. El histórico original sigue separado.
+  fotos y firmas. El histórico original sigue separado.
 - No se migraron proveedores, saldos, compras, CFDI ni documentos reales.
 - No se ha probado concurrencia desde dos estaciones físicas ni cortes reales
   de energía. Sí se probaron dos sesiones HTTP simultáneas para préstamos,
@@ -161,3 +164,14 @@ wsl -d Ubuntu --cd .\pruebas --exec docker compose exec -T backend bench --site 
 La prueba de cliente .NET está en `pruebas/VerificarIntegracionWindows.cs`.
 Recibe un JSON local con cuentas ficticias. Sí crea registros de prueba y debe
 ejecutarse exclusivamente contra el entorno local.
+
+## Ampliación del 19 de noviembre de 2026
+
+Ya están integrados kits con préstamo selectivo, historial de composición,
+costo de adquisición y garantías, mantenimientos de herramientas y anulación
+con motivo. Los acumulados excluyen gastos anulados y permiten recapturar el
+comprobante corregido sin duplicar el costo.
+
+Herramientas, vehículos y kits incluyen búsqueda por código exacto y etiquetas
+Code 128: vista previa, guardar PNG e impresión desde Windows. Consulta
+[KITS-GARANTIAS-ETIQUETAS.md](KITS-GARANTIAS-ETIQUETAS.md) para utilizarlos.

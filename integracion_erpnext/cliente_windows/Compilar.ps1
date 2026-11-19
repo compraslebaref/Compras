@@ -1,4 +1,4 @@
-﻿param([string]$Destino = (Join-Path $PSScriptRoot 'bin\Lebaref-Escritorio.exe'))
+param([string]$Destino = (Join-Path $PSScriptRoot 'bin\Lebaref-Integrado.exe'))
 
 $ErrorActionPreference = 'Stop'
 $framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319'
@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Destino) | Out-Nu
 
 & $csc /nologo /codepage:65001 /target:winexe /platform:anycpu "/out:$Destino" `
     "/reference:$framework\System.Net.Http.dll" "/reference:$framework\System.Web.Extensions.dll" `
-    (Join-Path $PSScriptRoot 'ErpClient.cs') (Join-Path $PSScriptRoot 'MainForm.cs') (Join-Path $PSScriptRoot 'ComparisonForm.cs') (Join-Path $PSScriptRoot 'OperationForm.cs')
+    (Join-Path $PSScriptRoot 'ErpClient.cs') (Join-Path $PSScriptRoot 'MainForm.cs') (Join-Path $PSScriptRoot 'ComparisonForm.cs') (Join-Path $PSScriptRoot 'OperationForm.cs') (Join-Path $PSScriptRoot 'LabelForm.cs')
 if ($LASTEXITCODE -ne 0) { throw "El compilador devolvió el código $LASTEXITCODE." }
 Write-Host "Ejecutable creado en $Destino"
 $launcher = Join-Path (Split-Path -Parent $Destino) 'Iniciar-Lebaref.exe'

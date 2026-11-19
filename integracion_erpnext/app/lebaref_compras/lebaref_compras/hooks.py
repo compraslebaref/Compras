@@ -20,3 +20,5 @@ doctype_js = {"Material Request": "public/js/material_request.js"}
 doc_events["Lebaref CFDI"] = {"validate": "lebaref_compras.operaciones.validar_archivo"}
 for name in ("Lebaref Herramienta", "Lebaref Prestamo", "Lebaref Retorno", "Lebaref Estado Herramienta", "Lebaref Vehiculo", "Lebaref Gasto Vehiculo", "Lebaref Revision Vehiculo", "Lebaref Estado Vehiculo"):
     doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}
+for name in ("Lebaref Kit", "Lebaref Composicion Kit", "Lebaref Garantia Herramienta", "Lebaref Mantenimiento Herramienta", "Lebaref Anulacion Mantenimiento"):
+    doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}

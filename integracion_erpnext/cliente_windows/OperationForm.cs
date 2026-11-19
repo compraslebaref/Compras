@@ -47,7 +47,8 @@ namespace Lebaref.Windows
                 if (choices != null)
                 {
                     var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-                    combo.Items.AddRange(choices); if (combo.Items.Count > 0) combo.SelectedIndex = 0;
+                    combo.Items.AddRange(choices);
+                    if (combo.Items.Count > 0) { int initial = combo.FindStringExact(ErpClient.Value(field, "value")); combo.SelectedIndex = initial >= 0 ? initial : 0; }
                     input = combo;
                 }
                 else if (kind == "date")

@@ -20,6 +20,8 @@ def schemas():
             field("estado", "Estado", "Select", options="Disponible\nPrestada\nDañada\nIncompleta\nExtraviada\nBaja", reqd=1),
             field("responsable", "Responsable actual"), link("obra", "Obra actual", "Project"),
             link("prestamo", "Préstamo actual", "Lebaref Prestamo"), field("notas", "Notas", "Small Text"),
+            field("fecha_compra", "Fecha de compra", "Date"), field("fin_garantia", "Garantía hasta", "Date"),
+            link("moneda", "Moneda", "Currency"), field("costo_adquisicion", "Costo de adquisición", "Currency", options="moneda"),
         ],
         "Lebaref Prestamo Item": [
             link("herramienta", "Herramienta", "Lebaref Herramienta", reqd=1),
@@ -33,6 +35,7 @@ def schemas():
             link("obra", "Obra", "Project", reqd=1), field("estado", "Estado", reqd=1),
             field("items", "Herramientas", "Table", options="Lebaref Prestamo Item", reqd=1),
             field("notas", "Notas", "Small Text"),
+            link("kit", "Kit de origen", "Lebaref Kit"),
         ],
         "Lebaref Retorno Item": [
             field("renglon", "Renglón de préstamo", reqd=1), link("herramienta", "Herramienta", "Lebaref Herramienta", reqd=1),
@@ -80,6 +83,38 @@ def schemas():
             field("responsable", "Responsable", reqd=1), field("seguro", "Seguro vigente hasta", "Date", reqd=1),
             field("motivo", "Motivo", "Small Text", reqd=1),
         ],
+        "Lebaref Kit Item": [link("herramienta", "Herramienta", "Lebaref Herramienta", reqd=1)],
+        "Lebaref Kit": [
+            field("codigo", "Código", reqd=1, unique=1), field("nombre", "Nombre", reqd=1),
+            link("company", "Empresa", "Company", reqd=1), field("especialidad", "Especialidad"),
+            field("ubicacion", "Ubicación", reqd=1), field("items", "Contenido", "Table", options="Lebaref Kit Item"),
+            link("ultimo_prestamo", "Último préstamo", "Lebaref Prestamo"),
+        ],
+        "Lebaref Composicion Kit": [
+            link("kit", "Kit", "Lebaref Kit", reqd=1), field("fecha", "Fecha", "Date", reqd=1),
+            field("motivo", "Motivo", "Small Text", reqd=1), field("anterior", "Contenido anterior", "Small Text"),
+            field("items", "Nuevo contenido", "Table", options="Lebaref Kit Item"),
+        ],
+        "Lebaref Garantia Herramienta": [
+            link("herramienta", "Herramienta", "Lebaref Herramienta", reqd=1), field("fecha", "Registrado el", "Date", reqd=1),
+            field("fecha_compra", "Fecha de compra", "Date", reqd=1), field("fin_garantia", "Garantía hasta", "Date"),
+            link("moneda", "Moneda", "Currency", reqd=1), field("costo_adquisicion", "Costo de adquisición", "Currency", options="moneda"),
+            field("referencia", "Referencia / comprobante", reqd=1), field("motivo", "Motivo", "Small Text", reqd=1),
+            field("anterior", "Datos anteriores", "Small Text"),
+        ],
+        "Lebaref Mantenimiento Herramienta": [
+            link("herramienta", "Herramienta", "Lebaref Herramienta", reqd=1), field("fecha", "Fecha", "Date", reqd=1),
+            field("proveedor", "Proveedor / taller", reqd=1), field("referencia", "Folio de comprobante", reqd=1),
+            field("clave_referencia", "Clave comprobante", hidden=1, unique=1),
+            link("moneda", "Moneda", "Currency", reqd=1), field("monto", "Costo pagado", "Currency", options="moneda"),
+            field("bajo_garantia", "Atendido bajo garantía", "Select", options="No\nSí", reqd=1),
+            field("motivo", "Trabajo / motivo", "Small Text", reqd=1), field("anulado", "Anulado", "Check", default="0"),
+        ],
+        "Lebaref Anulacion Mantenimiento": [
+            link("mantenimiento", "Mantenimiento", "Lebaref Mantenimiento Herramienta", reqd=1),
+            link("herramienta", "Herramienta", "Lebaref Herramienta", reqd=1), field("fecha", "Fecha", "Date", reqd=1),
+            field("motivo", "Motivo de anulación", "Small Text", reqd=1),
+        ],
     }
 
 
@@ -95,13 +130,13 @@ def configurar():
         child = name.endswith(" Item")
         if not child:
             fields = fields + [field("operacion", "Operación", unique=1, read_only=1, no_copy=1), field("huella", "Huella", hidden=1, read_only=1)]
-            doc.autoname = "field:codigo" if name in ("Lebaref Herramienta", "Lebaref Vehiculo") else "hash"
+            doc.autoname = "field:codigo" if name in ("Lebaref Herramienta", "Lebaref Vehiculo", "Lebaref Kit") else "hash"
             doc.track_changes = 1
-            masters = name in ("Lebaref Herramienta", "Lebaref Vehiculo")
-            manager_only = masters or name.startswith("Lebaref Estado")
+            masters = name in ("Lebaref Herramienta", "Lebaref Vehiculo", "Lebaref Kit")
+            manager_only = masters or name.startswith("Lebaref Estado") or name in ("Lebaref Composicion Kit", "Lebaref Garantia Herramienta", "Lebaref Anulacion Mantenimiento")
             doc.set("permissions", [
                 dict(role=role, read=1, select=1, create=int(role in ("Purchase Manager", "System Manager") or (role == "Stock User" and not manager_only)),
-                     write=int(role in ("Purchase Manager", "System Manager", "Stock User") and name in ("Lebaref Herramienta", "Lebaref Vehiculo", "Lebaref Prestamo")),
+                     write=int((role in ("Purchase Manager", "System Manager", "Stock User") and name in ("Lebaref Herramienta", "Lebaref Vehiculo", "Lebaref Prestamo", "Lebaref Kit")) or (role in ("Purchase Manager", "System Manager") and name == "Lebaref Mantenimiento Herramienta")),
                      delete=0, submit=0, cancel=0, amend=0, export=1, **{"import": 0})
                 for role in ("Purchase User", "Purchase Manager", "Stock User", "System Manager")
             ])

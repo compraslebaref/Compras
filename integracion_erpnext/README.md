@@ -1,4 +1,4 @@
-# Compras y Almacén de Lebaref sobre ERPNext
+﻿# Compras y Almacén de Lebaref sobre ERPNext
 
 La interfaz de los auxiliares será una aplicación nativa de Windows que se
 comunica con ERPNext por HTTPS. Una instancia de ERPNext en la red privada de
@@ -13,6 +13,8 @@ Consulta [ENTREGA.md](ENTREGA.md) para el alcance verificado, pasos de uso,
 permisos, respaldo y condiciones para instalar en la oficina. El flujo central
 se realiza desde Windows: catálogos, solicitud, petición, oferta, comparativa,
 orden, autorización, recepción parcial, entrega a obra, retorno y archivo XML.
+También incluye herramientas, flotilla, kits, garantías, mantenimientos y
+etiquetas: consulta [KITS-GARANTIAS-ETIQUETAS.md](KITS-GARANTIAS-ETIQUETAS.md).
 Esta entrega no equivale a migrar todas las funciones del programa SQLite.
 
 El primer ajuste agrega la partida de obra a cada renglón de una solicitud de

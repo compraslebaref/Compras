@@ -1,4 +1,4 @@
-# Resultado de verificación de la integración
+﻿# Resultado de verificación de la integración
 
 16 de noviembre de 2026. Entorno aislado `lebaref-pruebas.local`, ERPNext/Frappe
 16.55.0, Windows/.NET Framework y Docker en Ubuntu WSL.
@@ -71,3 +71,31 @@ restaurado es el generado antes del último permiso de lectura de unidades; la
 configuración de permisos de la versión entregada se aplica con `Configurar`.
 No se realizó una migración del histórico de SQLite. La guía ENTREGA.md enumera
 las funciones del sistema anterior que aún no están migradas.
+
+
+### Actualización del 19 de noviembre de 2026
+
+- Las tres suites `verificar_integracion.verificar`, `verificar_equipos.verificar`
+  y `verificar_kits.verificar` finalizaron con `correcto: true`; sus movimientos
+  transaccionales se revierten al terminar.
+- Kits: exclusividad de pertenencia, préstamo selectivo, bloqueo de composición
+  durante préstamo, retorno, historial y rechazo de capturas obsoletas.
+- Garantías/mantenimiento: fechas, permisos, costo pagado/gratuito, rechazo de
+  comprobantes duplicados e importes no finitos, anulación y recaptura sin inflar
+  el acumulado. Los reintentos del mismo identificador no duplican la anulación.
+- `VerificarKitsWindows.cs`: recorrido HTTP con tres cuentas y código de salida 0.
+  Conserva el ejemplo KIT-DEMO-1119104521, préstamo activo 32l3f47307 y costo
+  corregido de 200 MXN frente a adquisición de 1,000 MXN.
+- Cliente e iniciador compilados. Imagen Docker reconstruida y desplegada;
+  migración finalizada, servidor responde `pong` y tarea de permanencia WSL activa.
+- Revisión visual del cliente nativo: búsqueda por código con Enter recupera el
+  kit, muestra disponibilidad 1/2 y abre su vista previa de etiqueta en español.
+- Cuatro imágenes generadas por `VerificarEtiquetas.cs` se decodificaron con
+  zxing-cpp 3.1.1, independiente del generador: código corto, kit, máximo de
+  30 caracteres y signos ASCII. Los cuatro contenidos coinciden exactamente.
+  También se decodificó el PNG entregado, KIT-DEMO-1119104521. Códigos vacíos,
+  con acentos, salto de línea o más de 30 caracteres fueron rechazados.
+- La comprobación visual no envió impresiones; impresora y lector físicos
+  siguen sin probarse. El decodificador es una dependencia de pruebas, no del cliente.
+- Respaldo previo a la ampliación creado el 19 de noviembre. La restauración
+  ensayada el 16 de noviembre no cubre las tablas incorporadas posteriormente.

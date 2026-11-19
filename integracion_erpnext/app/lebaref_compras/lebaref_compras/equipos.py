@@ -13,9 +13,13 @@ TARGETS = {
     "herramienta": "Lebaref Herramienta", "prestamo": "Lebaref Prestamo", "retorno_herramienta": "Lebaref Retorno",
     "estado_herramienta": "Lebaref Estado Herramienta", "vehiculo": "Lebaref Vehiculo", "gasto_vehiculo": "Lebaref Gasto Vehiculo",
     "revision_vehiculo": "Lebaref Revision Vehiculo", "estado_vehiculo": "Lebaref Estado Vehiculo",
+    "kit": "Lebaref Kit", "composicion_kit": "Lebaref Composicion Kit", "prestamo_kit": "Lebaref Prestamo",
+    "garantia_herramienta": "Lebaref Garantia Herramienta", "mantenimiento_herramienta": "Lebaref Mantenimiento Herramienta",
+    "anular_mantenimiento": "Lebaref Anulacion Mantenimiento",
 }
 SOURCES = {"retorno_herramienta": "Lebaref Prestamo", "estado_herramienta": "Lebaref Herramienta",
            "gasto_vehiculo": "Lebaref Vehiculo", "revision_vehiculo": "Lebaref Vehiculo", "estado_vehiculo": "Lebaref Vehiculo"}
+SOURCES.update({"composicion_kit": "Lebaref Kit", "prestamo_kit": "Lebaref Kit", "garantia_herramienta": "Lebaref Herramienta", "mantenimiento_herramienta": "Lebaref Herramienta", "anular_mantenimiento": "Lebaref Mantenimiento Herramienta"})
 CONDITIONS = ["Bueno", "Dañada", "Incompleta", "Extraviada"]
 EXPENSES = ["Combustible", "Mantenimiento preventivo", "Reparación", "Llantas / refacciones", "Seguro / peajes"]
 CHECKS = ["OK", "Atención", "Falla"]
@@ -83,6 +87,9 @@ def proyecto(name, company, required=True):
 def esquema(accion, folio=""):
     permiso(accion)
     doc = obtener(SOURCES[accion], folio) if accion in SOURCES else None
+    from lebaref_compras import kits
+    if accion in kits.ACTIONS:
+        return kits.esquema(accion, doc)
     fields, columns, rows = [], [], []
     note = "El registro se guarda en ERPNext con el usuario y la fecha."
     if accion == "herramienta":
@@ -98,7 +105,7 @@ def esquema(accion, folio=""):
         rows = [dict(id=r.name, herramienta=r.herramienta, estado="Pendiente", observaciones="") for r in doc.items if r.estado == "Pendiente"]
         note = "Pendiente omite el renglón. Las incidencias requieren observación y no dejan la herramienta disponible."
     elif accion == "estado_herramienta":
-        fields = [campo("estado", "Estado", choices=["Disponible", "Dañada", "Incompleta", "Extraviada", "Baja"]), campo("ubicacion", "Ubicación", doc.ubicacion), campo("motivo", "Motivo / reparación", kind="multiline")]
+        fields = [campo("estado", "Estado", doc.estado, choices=["Disponible", "Dañada", "Incompleta", "Extraviada", "Baja"]), campo("ubicacion", "Ubicación", doc.ubicacion), campo("motivo", "Motivo / reparación", kind="multiline")]
         note = "Solo responsable. No se cambia una herramienta prestada: primero registra su retorno o extravío en el préstamo."
     elif accion == "vehiculo":
         fields = [campo("codigo", "Código del vehículo"), campo("placas", "Placas"), campo("company", "Empresa", choices=catalogo("Company")), campo("marca_modelo", "Marca y modelo"), campo("responsable", "Responsable habitual"), campo("km", "Kilometraje inicial", "0"), campo("fecha", "Fecha de lectura", today(), kind="date"), campo("intervalo", "Intervalo servicio (km)", "10000"), campo("proximo_servicio", "Próximo servicio (km)"), campo("capacidad", "Tanque (litros)", "60"), campo("combustible", "Combustible", choices=["Gasolina Regular", "Gasolina Premium", "Diésel"]), campo("seguro", "Seguro vigente hasta", today(), kind="date")]
@@ -111,7 +118,7 @@ def esquema(accion, folio=""):
         fields += [campo("observaciones", "Observaciones", kind="multiline")]
         note = "Registra lo observado. Una falla requiere descripción; la revisión no autoriza la circulación del vehículo."
     elif accion == "estado_vehiculo":
-        fields = [campo("estado", "Estado", choices=["Activo", "En taller", "Fuera de servicio"]), campo("responsable", "Responsable", doc.responsable), campo("seguro", "Seguro vigente hasta", str(doc.seguro), kind="date"), campo("motivo", "Motivo / referencia", kind="multiline")]
+        fields = [campo("estado", "Estado", doc.estado, choices=["Activo", "En taller", "Fuera de servicio"]), campo("responsable", "Responsable", doc.responsable), campo("seguro", "Seguro vigente hasta", str(doc.seguro), kind="date"), campo("motivo", "Motivo / referencia", kind="multiline")]
     return dict(fields=fields, columns=columns, rows=rows, add_rows=accion == "prestamo", note=note)
 
 
@@ -140,6 +147,9 @@ def ejecutar(accion, datos, operacion, folio=""):
     source = obtener(SOURCES[accion], folio, lock=True) if accion in SOURCES else None
     doc = frappe.new_doc(TARGETS[accion])
     doc.operacion, doc.huella = token, signature
+    from lebaref_compras import kits
+    if accion in kits.ACTIONS:
+        return kits.aplicar(accion, data, source, doc)
     if accion == "herramienta":
         company = texto(data, "company")
         obtener("Company", company)
@@ -148,22 +158,8 @@ def ejecutar(accion, datos, operacion, folio=""):
             frappe.throw("El artículo está deshabilitado.")
         doc.update(dict(codigo=texto(data, "codigo").upper(), company=company, articulo=item.name, serie=texto(data, "serie", False), marca_modelo=texto(data, "marca_modelo", False), ubicacion=texto(data, "ubicacion"), estado="Disponible"))
     elif accion == "prestamo":
-        company = texto(data, "company")
-        obtener("Company", company)
-        proyecto(data.get("obra"), company)
-        if fecha(data.get("compromiso")) < getdate(today()):
-            frappe.throw("La fecha compromiso no puede ser anterior a hoy.")
         keys = [texto(row, "herramienta") for row in data.get("rows", [])]
-        if not keys or len(keys) != len(set(keys)):
-            frappe.throw("Selecciona herramientas sin repetirlas.")
-        tools = [obtener("Lebaref Herramienta", key, lock=True) for key in sorted(keys)]
-        if any(t.estado != "Disponible" or t.prestamo or t.company != company for t in tools):
-            frappe.throw("Una herramienta ya está prestada, no está disponible o pertenece a otra empresa.")
-        doc.update(dict(company=company, obra=data["obra"], fecha=today(), compromiso=fecha(data["compromiso"]), responsable=texto(data, "responsable"), recibe=texto(data, "recibe"), departamento=texto(data, "departamento", False), notas=texto(data, "notas", False), estado="Activo", items=[dict(herramienta=key, estado="Pendiente") for key in keys]))
-        guardar(doc)
-        for tool in tools:
-            tool.update(dict(estado="Prestada", prestamo=doc.name, responsable=doc.responsable, obra=doc.obra))
-            guardar(tool)
+        crear_prestamo(doc, data, keys)
         return dict(folio=doc.name, tipo=doc.doctype)
     elif accion == "retorno_herramienta":
         origins = {r.name: r for r in source.items}
@@ -261,6 +257,24 @@ def ejecutar(accion, datos, operacion, folio=""):
     return dict(folio=doc.name, tipo=doc.doctype)
 
 
+def crear_prestamo(doc, data, keys):
+    company = texto(data, "company")
+    obtener("Company", company)
+    proyecto(data.get("obra"), company)
+    if fecha(data.get("compromiso")) < getdate(today()):
+        frappe.throw("La fecha compromiso no puede ser anterior a hoy.")
+    if not keys or len(keys) != len(set(keys)):
+        frappe.throw("Selecciona herramientas sin repetirlas.")
+    tools = [obtener("Lebaref Herramienta", key, lock=True) for key in sorted(keys)]
+    if any(t.estado != "Disponible" or t.prestamo or t.company != company for t in tools):
+        frappe.throw("Una herramienta ya está prestada, no está disponible o pertenece a otra empresa.")
+    doc.update(dict(company=company, obra=data["obra"], fecha=today(), compromiso=fecha(data["compromiso"]), responsable=texto(data, "responsable"), recibe=texto(data, "recibe"), departamento=texto(data, "departamento", False), notas=texto(data, "notas", False), estado="Activo", items=[dict(herramienta=key, estado="Pendiente") for key in keys]))
+    guardar(doc)
+    for tool in tools:
+        tool.update(dict(estado="Prestada", prestamo=doc.name, responsable=doc.responsable, obra=doc.obra))
+        guardar(tool)
+
+
 @frappe.whitelist(methods=["GET"])
 def detalle(tipo, folio):
     if tipo not in set(TARGETS.values()):
@@ -299,4 +313,6 @@ def detalle(tipo, folio):
             row("Gasto "+expense.name, f"{expense.monto} {expense.moneda}", f"{expense.fecha} | {expense.tipo} | {expense.referencia}")
         for review in frappe.get_list("Lebaref Revision Vehiculo", filters={"vehiculo": doc.name}, fields=["name", "fecha", "inspector", "observaciones"], order_by="fecha desc, creation desc", limit_page_length=100):
             row("Revisión "+review.name, str(review.fecha), f"{review.inspector} | {review.observaciones or ''}")
+    from lebaref_compras.kits import agregar_detalle
+    agregar_detalle(doc, row)
     return dict(columns=[columna("campo", "Dato / evento", False), columna("valor", "Valor / estado", False), columna("detalle", "Detalle", False)], rows=rows, note=doc.name)
