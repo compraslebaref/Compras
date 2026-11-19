@@ -4,6 +4,8 @@ import frappe
 from erpnext.buying.doctype.supplier_quotation.supplier_quotation import make_purchase_order
 from frappe.utils import flt, getdate, today
 
+from lebaref_compras.solicitudes import concepto_visible
+
 
 def _solicitud(nombre, bloquear=False):
     request = frappe.get_doc("Material Request", nombre, for_update=bloquear)
@@ -82,8 +84,8 @@ def consultar(solicitud):
         "renglones": [
             {
                 "id": item.name,
-                "articulo": item.item_name,
-                "codigo": item.item_code,
+                "articulo": concepto_visible(item) or item.item_name,
+                "codigo": "" if item.custom_lebaref_concepto else item.item_code,
                 "partida": item.custom_lebaref_partida,
                 "obra": item.project,
                 "cantidad": item.qty,

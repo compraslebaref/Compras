@@ -2,7 +2,7 @@
 
 Fecha: 19 de noviembre de 2026. Capacidades agrupadas del código inspeccionado; no es un porcentaje de avance del producto.
 
-Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cambio de comportamiento: 4; Sin verificar: 3.
+Total: 55 capacidades. Parcial: 18; Verificado acotado: 8; No integrado: 22; Cambio de comportamiento: 4; Sin verificar: 3.
 
 **Verificado acotado:** el caso descrito pasó; no certifica variantes no ensayadas. **Parcial:** existe una parte pero faltan datos, acciones o pruebas. **No integrado:** no está disponible como flujo equivalente en el cliente entregado, aunque ERPNext tenga piezas estándar. **Cambio de comportamiento:** requiere homologar reglas/experiencia; no es necesariamente un error. **Sin verificar:** no hay evidencia suficiente.
 
@@ -23,9 +23,9 @@ Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cam
 **Parcial · P1**
 
 - Original: Unidad de compra, unidad de almacén y factor editable.
-- Integración: ERPNext aplica el factor configurado; Windows no permite capturarlo y oculta la unidad en la nueva solicitud.
-- Evidencia: Sondeo: 2 cajas con factor 10 generan stock_qty=20.
-- Criterio para cerrar: Mostrar unidad/factor; crear configuración y probar recepción/salida/retorno con factores y decimales.
+- Integración: La API expone unidad de compra, unidad de inventario y factor en artículo, solicitud, oferta y recepción. Pendiente conectar la captura en WPF.
+- Evidencia: Validar.ps1: 2 cajas con factor 10 generan stock_qty=20 y recibir 1 caja ingresa 10 unidades de inventario.
+- Criterio para cerrar: Verificar en WPF la captura y visualización del factor y las unidades. Probar salida y retorno con factores y decimales.
 - Fuentes: [original L74](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Models/Entities.cs:74) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## CAT-03 · Proveedores y condiciones
@@ -33,9 +33,9 @@ Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cam
 **Parcial · P1**
 
 - Original: Razón social, nombre comercial, RFC, contacto y condiciones de pago.
-- Integración: Alta mínima de nombre, grupo y RFC.
-- Evidencia: Esquema proveedor.
-- Criterio para cerrar: Mantener contactos/condiciones y propagarlos a la orden.
+- Integración: La API de proveedor guarda teléfono, persona de contacto y correo mediante Supplier y Contact de ERPNext.
+- Evidencia: Validar.ps1: creación del contacto principal, consulta por Compras, alta con solo nombre de contacto y reintento idempotente.
+- Criterio para cerrar: Verificar en WPF los datos de contacto guardados en ERPNext y completar condiciones de compra en la orden.
 - Fuentes: [original L1414](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:1414) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## CAT-04 · Personal, departamentos y responsables
@@ -43,8 +43,8 @@ Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cam
 **Parcial · P1**
 
 - Original: Directorios relacionados por identificadores.
-- Integración: Sin directorios nativos; en préstamos responsable/departamento son texto; solicitud no los captura.
-- Evidencia: Esquemas solicitud y préstamo.
+- Integración: La solicitud vincula un Department de ERPNext y guarda el nombre del solicitante como texto. En préstamos se mantiene la captura de responsable y departamento como texto.
+- Evidencia: Validar.ps1: captura y consulta de departamento, solicitante y notas en Material Request, con permiso de selección de Department.
 - Criterio para cerrar: Seleccionar personal y departamento; conservar trazabilidad hasta entrega y reportes.
 - Fuentes: [original L1212](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:1212) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/equipos.py)
 
@@ -80,12 +80,12 @@ Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cam
 
 ## SOL-02 · Conceptos libres y conversión a SKU
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Descripción y unidad libre, después vincular o crear producto.
-- Integración: Windows exige artículo catalogado.
-- Evidencia: CrearSolicitud inserta DescripcionLibre; esquema nuevo solo item_code.
-- Criterio para cerrar: Solicitar concepto aún sin SKU y vincularlo sin perder su historial.
+- Integración: La API captura conceptos libres con un artículo interno no inventariable y conserva su descripción desde solicitud hasta recepción. Pendiente enlazar a un SKU definitivo y conectar WPF.
+- Evidencia: Validar.ps1: solicitud mixta con dos conceptos libres diferentes, oferta parcial, orden y recepción sin incrementar existencias.
+- Criterio para cerrar: Conectar la captura en WPF y verificar el vínculo posterior a un SKU definitivo sin perder historial.
 - Fuentes: [original L2788](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:2788) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## SOL-03 · Borradores, edición y anexos

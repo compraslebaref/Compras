@@ -60,6 +60,164 @@ def _verificar_ofertas_parciales(data, item_code, supplier, second_supplier):
     }
 
 
+def _verificar_unidades(seed, supplier):
+    base = seed.items[0]
+    frappe.set_user("Administrator")
+    uom = "Caja prueba " + uuid.uuid4().hex[:8]
+    frappe.get_doc({"doctype": "UOM", "uom_name": uom}).insert()
+    item_group = frappe.db.get_value("Item", base.item_code, "item_group")
+    units = {"uom": uom, "stock_uom": base.stock_uom, "conversion_factor": 10}
+    frappe.set_user("autoriza@lebaref.test")
+    sku = "TEST-UOM-" + uuid.uuid4().hex[:8]
+    item = ejecutar("articulo", dict(units, item_code=sku, item_name="Artículo por caja", item_group=item_group), str(uuid.uuid4()))["folio"]
+
+    frappe.set_user("compras@lebaref.test")
+    fields = {f["name"]: f["value"] for f in esquema("articulo", item)["fields"]}
+    assert all(fields[key] == value for key, value in units.items())
+    data = {
+        "company": seed.company, "schedule_date": add_days(today(), 7), "title": "Prueba de compra por caja",
+        "rows": [dict(units, item_code=item, qty=2, warehouse=base.warehouse)],
+    }
+    request = ejecutar("solicitud", data, str(uuid.uuid4()))["folio"]
+    row = frappe.get_doc("Material Request", request).items[0]
+    assert row.qty == 2 and row.stock_qty == 20
+    assert all(row.get(key) == value for key, value in units.items())
+
+    rfq = ejecutar("peticion", {"suppliers": supplier}, str(uuid.uuid4()), request)["folio"]
+    row = esquema("oferta", rfq)["rows"][0]
+    assert all(row[key] == value for key, value in units.items())
+    quote_data = {"supplier": supplier, "valid_till": add_days(today(), 10), "rows": [dict(row, rate=100)]}
+    try:
+        invalid = dict(quote_data, rows=[dict(row, rate=100, conversion_factor=20)])
+        ejecutar("oferta", invalid, str(uuid.uuid4()), rfq)
+    except frappe.ValidationError as error:
+        assert "no coincide con el documento de origen" in str(error)
+    else:
+        raise AssertionError("La oferta cambió el factor de la petición")
+    quote = ejecutar("oferta", quote_data, str(uuid.uuid4()), rfq)["folio"]
+    quoted = frappe.get_doc("Supplier Quotation", quote).items[0]
+    assert quoted.stock_qty == 20 and all(quoted.get(key) == value for key, value in units.items())
+    comparison = consultar(request)["renglones"][0]
+    order = generar_ordenes(request, {comparison["id"]: comparison["opciones"][0]["id"]})[0]["folio"]
+    frappe.set_user("autoriza@lebaref.test")
+    ejecutar("autorizar", {"confirmar": "AUTORIZAR"}, str(uuid.uuid4()), order)
+
+    frappe.set_user("almacen@lebaref.test")
+    row = esquema("recibir", order)["rows"][0]
+    assert row["pending"] == 2 and all(row[key] == value for key, value in units.items())
+    receipt = ejecutar("recibir", {"rows": [dict(row, qty=1)]}, str(uuid.uuid4()), order)["folio"]
+    received = frappe.get_doc("Purchase Receipt", receipt).items[0]
+    assert received.qty == 1 and all(received.get(key) == value for key, value in units.items())
+    assert frappe.db.get_value("Bin", {"item_code": item, "warehouse": base.warehouse}, "actual_qty") == 10
+
+
+def _verificar_proveedor():
+    frappe.set_user("autoriza@lebaref.test")
+    data = {
+        "supplier_name": "Contacto prueba " + uuid.uuid4().hex[:8],
+        "supplier_group": frappe.db.get_value("Supplier Group", {"is_group": 0}),
+        "tax_id": "AAA010101AAA", "telefono": "+52 55 1234 5678",
+        "contacto": "Ana de Prueba", "correo": "cotizaciones@lebaref.test",
+    }
+    token = str(uuid.uuid4())
+    supplier = ejecutar("proveedor", data, token)["folio"]
+    assert ejecutar("proveedor", data, token)["repetida"]
+    doc = frappe.get_doc("Supplier", supplier)
+    contact = frappe.get_doc("Contact", doc.supplier_primary_contact)
+    assert (contact.full_name, contact.mobile_no, contact.email_id) == (data["contacto"], data["telefono"], data["correo"])
+    assert [(r.link_doctype, r.link_name) for r in contact.links] == [("Supplier", supplier)]
+    assert len(contact.email_ids) == len(contact.phone_nos) == 1
+
+    only_name = dict(data, supplier_name=data["supplier_name"] + " Sin canales", telefono="", correo="")
+    named_supplier = ejecutar("proveedor", only_name, str(uuid.uuid4()))["folio"]
+    fields = {f["name"]: f["value"] for f in esquema("proveedor", named_supplier)["fields"]}
+    assert fields["contacto"] == data["contacto"] and not fields["correo"] and not fields["telefono"]
+
+    frappe.set_user("compras@lebaref.test")
+    fields = {f["name"]: f["value"] for f in esquema("proveedor", supplier)["fields"]}
+    assert all(fields[key] == data[key] for key in ("telefono", "contacto", "correo"))
+
+
+def _verificar_conceptos_libres(seed, supplier):
+    from html import escape
+
+    from lebaref_compras.solicitudes import ARTICULO_LIBRE
+
+    frappe.set_user("Administrator")
+    department = frappe.get_doc({
+        "doctype": "Department", "department_name": "Depto prueba " + uuid.uuid4().hex[:8], "company": seed.company,
+    }).insert()
+    base = seed.items[0]
+    concepts = ["Corte de placa <A> & montaje", "Rectificado de soporte"]
+    headers = {"departamento": department.name, "solicitante": "Ana de Prueba", "notas": "Entregar en taller <A>.\nAvisar al recibir."}
+    data = dict(headers, company=seed.company, schedule_date=add_days(today(), 7), title="Solicitud mixta", rows=[
+        *(dict(concepto_libre=concept, qty=1, project=base.project, custom_lebaref_partida="Taller") for concept in concepts),
+        dict(item_code=base.item_code, qty=1, warehouse=base.warehouse),
+    ])
+
+    frappe.set_user("compras@lebaref.test")
+    schema = esquema("solicitud")
+    fields = {f["name"]: f for f in schema["fields"]}
+    assert department.name in fields["departamento"]["choices"]
+    catalog = next(c["choices"] for c in schema["columns"] if c["name"] == "item_code")
+    assert ARTICULO_LIBRE not in catalog
+    for invalid, message in (
+        (dict(data, rows=[{"qty": 1}]), "Selecciona un artículo de catálogo o escribe un concepto libre."),
+        (dict(data, rows=[dict(data["rows"][0], item_code=base.item_code)]), "Selecciona un artículo de catálogo o escribe un concepto libre."),
+        (dict(data, company="Empresa ajena"), "Selecciona un departamento activo de la empresa de la solicitud."),
+    ):
+        try:
+            ejecutar("solicitud", invalid, str(uuid.uuid4()))
+        except frappe.ValidationError as error:
+            assert str(error) == message
+        else:
+            raise AssertionError("Se aceptó una solicitud inválida")
+
+    token = str(uuid.uuid4())
+    request = ejecutar("solicitud", data, token)["folio"]
+    assert ejecutar("solicitud", data, token)["repetida"]
+    doc = frappe.get_doc("Material Request", request)
+    assert doc.docstatus == 1 and doc.custom_lebaref_departamento == department.name
+    stored_concepts = [escape(concept) for concept in concepts]
+    assert [r.custom_lebaref_concepto for r in doc.items[:2]] == stored_concepts
+    assert [r.description for r in doc.items[:2]] == stored_concepts
+    assert all(r.item_code == ARTICULO_LIBRE for r in doc.items[:2])
+    assert doc.items[2].item_code == base.item_code and not doc.items[2].custom_lebaref_concepto
+    saved = esquema("solicitud", request)
+    assert not saved["add_rows"] and not any(c["editable"] for c in saved["columns"])
+    values = {f["name"]: f["value"] for f in saved["fields"]}
+    assert all(values[key] == value for key, value in headers.items())
+    assert [(r["item_code"], r["concepto_libre"]) for r in saved["rows"]] == [
+        ("", concepts[0]), ("", concepts[1]), (base.item_code, ""),
+    ]
+
+    rfq = ejecutar("peticion", {"suppliers": supplier}, str(uuid.uuid4()), request)["folio"]
+    rows = esquema("oferta", rfq)["rows"]
+    assert [r["concepto_libre"] for r in rows] == concepts + [""]
+    offer = {"supplier": supplier, "valid_till": add_days(today(), 10), "rows": [dict(r, rate=100) for r in rows[:2]]}
+    quote = ejecutar("oferta", offer, str(uuid.uuid4()), rfq)["folio"]
+    quote_items = frappe.get_doc("Supplier Quotation", quote).items
+    assert [r.custom_lebaref_concepto for r in quote_items] == stored_concepts
+    assert [r.description for r in quote_items] == stored_concepts
+    comparison = consultar(request)["renglones"]
+    assert [(r["codigo"], r["articulo"]) for r in comparison[:2]] == [("", concept) for concept in concepts]
+    assert comparison[2]["opciones"] == []
+    orders = generar_ordenes(request, {r["id"]: r["opciones"][0]["id"] for r in comparison[:2]})
+    assert len(orders) == 1
+    order = orders[0]["folio"]
+    assert [r.custom_lebaref_concepto for r in frappe.get_doc("Purchase Order", order).items] == stored_concepts
+
+    frappe.set_user("autoriza@lebaref.test")
+    ejecutar("autorizar", {"confirmar": "AUTORIZAR"}, str(uuid.uuid4()), order)
+    frappe.set_user("almacen@lebaref.test")
+    rows = esquema("recibir", order)["rows"]
+    assert [r["concepto_libre"] for r in rows] == concepts
+    receipt = ejecutar("recibir", {"rows": [dict(rows[0], qty=1)]}, str(uuid.uuid4()), order)["folio"]
+    received = frappe.get_doc("Purchase Receipt", receipt).items[0]
+    assert received.custom_lebaref_concepto == received.description == stored_concepts[0]
+    assert not frappe.db.exists("Bin", {"item_code": ARTICULO_LIBRE})
+
+
 def verificar():
     if frappe.local.site != "lebaref-pruebas.local":
         raise RuntimeError("Solo se permite en el entorno de pruebas.")
@@ -157,6 +315,12 @@ def verificar():
         else:
             raise AssertionError("Se registró CFDI sin pasar por la validación del XML")
         results.append("XML privado registrado y UUID sin duplicación (validación estructural, no SAT)")
+        _verificar_unidades(seed, supplier.name)
+        results.append("CAT-02: dos cajas son 20 unidades de inventario y recibir una caja ingresa 10")
+        _verificar_proveedor()
+        results.append("CAT-03: teléfono, contacto y correo en el proveedor, consulta con permisos y reintento")
+        _verificar_conceptos_libres(seed, supplier.name)
+        results.append("SOL-02: encabezado y dos conceptos libres en solicitud mixta; cotización y recepción trazables sin movimiento de inventario")
         return {"correcto": True, "pruebas": results, "datos": "Revertidos al finalizar"}
     finally:
         frappe.db.rollback()
