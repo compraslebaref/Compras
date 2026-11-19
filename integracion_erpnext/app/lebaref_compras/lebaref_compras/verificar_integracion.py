@@ -4,6 +4,7 @@ import frappe
 from frappe.utils import add_days, today
 from lebaref_compras.operaciones import esquema, ejecutar
 from lebaref_compras.comparativa import consultar, generar_ordenes
+from lebaref_compras.verificar_comercial import verificar_comercial
 
 
 def _verificar_ofertas_parciales(data, item_code, supplier, second_supplier):
@@ -321,6 +322,8 @@ def verificar():
         results.append("CAT-03: teléfono, contacto y correo en el proveedor, consulta con permisos y reintento")
         _verificar_conceptos_libres(seed, supplier.name)
         results.append("SOL-02: encabezado y dos conceptos libres en solicitud mixta; cotización y recepción trazables sin movimiento de inventario")
+        verificar_comercial(seed, supplier.name)
+        results.append("COM-04 / COM-07: IVA 16 %, exento, flete y traslados nativos de condición y fecha de pago")
         return {"correcto": True, "pruebas": results, "datos": "Revertidos al finalizar"}
     finally:
         frappe.db.rollback()

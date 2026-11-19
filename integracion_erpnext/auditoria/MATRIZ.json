@@ -215,9 +215,9 @@
     "estado": "Parcial",
     "prioridad": "P1",
     "original": "Comparativa original suma flete y calcula 16% fijo en generación de OC.",
-    "integracion": "Windows captura precio sin impuestos; depende de configuración administrativa para extras.",
-    "evidencia": "Código original 4403; orden ejemplo neto400/impuestos0/total400.",
-    "criterio_cierre": "Caso acordado de 400 neto y 64 de impuesto debe dar464; probar flete, descuento y moneda sin reglas fiscales inventadas.",
+    "integracion": "ERPNext aplica plantillas fiscales y reglas de flete en cotización y orden. La comparativa expone el desglose de la oferta.",
+    "evidencia": "Validar.ps1: neto 400 más IVA 64 da 464, exento con flete 40 da 440, e IVA con flete da 504 desde el mapper nativo.",
+    "criterio_cierre": "Verificar descuentos, moneda y las plantillas fiscales configuradas para la empresa.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 4403
@@ -257,11 +257,11 @@
   {
     "id": "COM-07",
     "capacidad": "Pago programado y seguimiento de pago",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Condición de pago, fecha programada y estado pagada.",
-    "integracion": "No hay operaciones Payment Entry ni seguimiento equivalente; perfiles actuales no pueden crear pagos.",
-    "evidencia": "Código original y permisos runtime.",
+    "integracion": "Las cotizaciones registran condición y fecha programada. La orden hereda ambas y ERPNext calcula el calendario nativo. El pago efectivo queda en el flujo financiero.",
+    "evidencia": "Validar.ps1: vencimiento a 30 días, fecha programada e importe de cuota tanto en órdenes de la comparativa como en el mapper nativo.",
     "criterio_cierre": "Registrar programación y pago con responsable y comprobante; reflejar saldo correctamente.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",

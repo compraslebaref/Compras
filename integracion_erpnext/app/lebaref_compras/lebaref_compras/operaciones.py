@@ -1,4 +1,4 @@
-"""API del cliente Windows. Siempre aplica permisos y validación de ERPNext."""
+"""Operaciones transaccionales de Lebaref con permisos de ERPNext."""
 import hashlib
 import json
 import re
@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import proveedores, solicitudes, unidades
+from lebaref_compras import comercial, proveedores, solicitudes, unidades
 from lebaref_compras.unidades import numero
 
 TARGETS = {"solicitud": "Material Request", "peticion": "Request for Quotation",
@@ -133,6 +133,12 @@ def esquema(accion, folio=""):
         note = "Copia nombres exactos del catálogo de proveedores. Se registra la petición; no se envían correos."
     elif accion == "oferta":
         fields = [campo("supplier", "Proveedor", choices=[s.supplier for s in doc.suppliers]), campo("valid_till", "Vigente hasta", add_days(today(), 30), kind="date")]
+        fields.extend([
+            campo("taxes_and_charges", "Plantilla de impuestos", choices=comercial.opciones(comercial.IMPUESTOS, {"company": doc.company, "disabled": 0})),
+            campo("shipping_rule", "Regla de flete", choices=comercial.opciones(comercial.ENVIO, {"company": doc.company, "disabled": 0, "shipping_rule_type": "Buying"})),
+            campo("payment_terms_template", "Condición de pago", choices=comercial.opciones(comercial.PAGO)),
+            campo("fecha_programada_pago", "Fecha programada de pago", kind="date"),
+        ])
         columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False), columna("qty", "Cantidad", False), columna("rate", "Precio unitario sin impuestos"), columna("lead_time_days", "Días de entrega")]
         columns.extend(columna(key, label, False) for key, label in unidades.CAMPOS)
         columns.append(columna("concepto_libre", "Concepto libre", False))
@@ -279,6 +285,7 @@ def ejecutar(accion, datos, operacion, folio=""):
         for r in items:
             r.rate, r.lead_time_days = quoted[r.request_for_quotation_item]
         doc.set("items", items)
+        comercial.configurar_oferta(doc, data)
     elif accion == "autorizar":
         source.check_permission("submit")
         if data.get("confirmar") != "AUTORIZAR":

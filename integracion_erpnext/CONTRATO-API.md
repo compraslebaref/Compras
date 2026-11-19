@@ -1,6 +1,6 @@
-# Contrato de API — Servidor ERPNext (`lebaref_compras`) ↔ Cliente Windows
+# Contrato de API — ERPNext 16, Frappe Desk y `lebaref_compras`
 
-> **Regla de colaboración:** Cada vez que **Codex** agregue o modifique un endpoint `@frappe.whitelist` en `integracion_erpnext/app/lebaref_compras/`, debe actualizar este documento con los parámetros de entrada, estructura JSON de respuesta y errores de validación. **Antigravity** usará este contrato como única fuente de verdad al programar las pantallas en C#.
+> **Regla de colaboración:** Cada vez que **Codex** agregue o modifique un endpoint `@frappe.whitelist` en `integracion_erpnext/app/lebaref_compras/`, debe actualizar este documento con los parámetros de entrada, estructura JSON de respuesta y errores de validación. **Antigravity** usará este contrato al conectar los diálogos y botones guiados de Frappe Desk.
 
 ---
 
@@ -245,11 +245,57 @@
 - En REST nativo, `data.custom_lebaref_departamento`, `data.custom_lebaref_solicitante` y `data.custom_lebaref_notas` son los campos de cabecera de `Material Request`. Los renglones libres incluyen `custom_lebaref_concepto` e `item_code: "LEBAREF-CONCEPTO-LIBRE"`. Los campos nativos de notas y concepto usan entidades HTML para conservar caracteres como `<` y `&`. Los esquemas y la comparativa devuelven texto plano. El concepto se conserva en petición, cotización, orden y recepción. Los esquemas de oferta y recepción lo exponen como `concepto_libre` de solo lectura (cadena vacía para renglones de catálogo); la comparativa devuelve `articulo: "Corte de placa a medida"` y `codigo: ""` para un renglón libre. Identifica el renglón por `id` al adjudicar.
 - Se rechazan con HTTP `417` los renglones sin artículo ni texto, con ambos, con el código interno ingresado directamente, con unidades incompatibles o con un departamento deshabilitado o de otra empresa. HTTP `403` si la sesión carece del permiso aplicable de escritura o selección. El alta confirma la solicitud. Se requiere ejecutar `bench --site <sitio> migrate` al desplegar para instalar los campos y el artículo interno.
 
-## 7. Cambios de Contrato Planificados (Bloque 1)
+## 7. Impuestos, flete y programación de pago (`COM-04 / COM-07`)
+
+En Desk, la cotización y la orden utilizan **Purchase Taxes and Charges Template**, **Shipping Rule** de tipo `Buying` y sus cuentas existentes. Configura por empresa las plantillas de IVA 16 % y de exención con Contabilidad. Para plantillas simples, usa un renglón `On Net Total` con tasa `16` o `0`, respectivamente. ERPNext calcula las líneas y totales. La regla de envío se calcula por orden con las partidas adjudicadas. Una regla fija agrega su importe a cada orden. La posición y el tipo de cargo en la tabla nativa determinan la base del impuesto. En el ejemplo de envío nativo, el IVA sobre los artículos es 64 y el flete fijo de 40 se agrega por separado.
+
+`esquema?accion=oferta&folio=PUR-RFQ-2026-00001` agrega opciones para `taxes_and_charges`, `shipping_rule`, `payment_terms_template` y el campo de fecha `fecha_programada_pago`. Los cuatro son opcionales en el POST de `ejecutar` con `accion=oferta`. Se deben enviar los identificadores de los maestros accesibles para la sesión. Si se omite un campo, se aplica el comportamiento habitual de ERPNext. Para una oferta exenta selecciona la plantilla exenta de la empresa.
+
+```json
+{
+  "supplier":"Proveedor A",
+  "valid_till":"2026-12-15",
+  "taxes_and_charges":"IVA compras 16 % - L",
+  "shipping_rule":"Flete fijo compras",
+  "payment_terms_template":"Crédito 30 días",
+  "fecha_programada_pago":"2026-12-12",
+  "rows":[{"id":"rfq-item-a","rate":100}]
+}
+```
+
+```json
+{"message":{"folio":"PUR-SQTN-2026-00002","tipo":"Supplier Quotation"}}
+```
+
+Cada elemento de `message.renglones[].opciones` de `comparativa.consultar` incorpora el objeto `comercial`. Los importes representan la cotización completa en `moneda`. Para los renglones adjudicados, la orden calcula sus propios importes.
+
+```json
+{
+  "neto":400.0,"impuestos_y_cargos":104.0,"total":504.0,
+  "taxes_and_charges":"IVA compras 16 % - L","shipping_rule":"Flete fijo compras",
+  "payment_terms_template":"Crédito 30 días","fecha_programada_pago":"2026-12-12",
+  "cargos":[
+    {"descripcion":"IVA 16%","tipo_calculo":"On Net Total","importe":64.0},
+    {"descripcion":"Flete fijo compras","tipo_calculo":"Actual","importe":40.0}
+  ]
+}
+```
+
+En REST nativo, **Supplier Quotation** guarda la condición en `custom_lebaref_condicion_pago` y la fecha en `custom_lebaref_fecha_programada_pago`. La orden guarda `payment_terms_template`, genera `payment_schedule` con vencimientos e importes a partir de su total, y conserva `custom_lebaref_fecha_programada_pago` para el seguimiento operativo. Una orden nativa con una sola cotización como origen hereda la condición cuando el campo está vacío. Una orden creada desde la comparativa usa la condición de la cotización adjudicada. Consultar la orden por `GET /api/resource/Purchase%20Order/<folio>`. Campos representativos en `data` para una orden del 19 de noviembre con crédito a 30 días.
+
+```json
+{
+  "net_total":400.0,"total_taxes_and_charges":104.0,"grand_total":504.0,
+  "payment_terms_template":"Crédito 30 días","custom_lebaref_fecha_programada_pago":"2026-12-12",
+  "payment_schedule":[{"payment_term":"Crédito 30 días","due_date":"2026-12-19","invoice_portion":100.0,"payment_amount":504.0}]
+}
+```
+
+HTTP `417` para una fecha con formato inválido, una plantilla fiscal deshabilitada o de otra empresa, o una regla de flete deshabilitada, de venta o de otra empresa. HTTP `403` para maestros sin acceso. El registro de un pago efectivo corresponde al flujo financiero nativo.
+
+## 8. Cambios de Contrato Planificados (Bloque 1)
 
 - **`[SOL-03 / SOL-05]` Flujo de solicitudes:**
   - Estado borrador, anexos, origen de captura y aprobación de surtido desde stock.
 - **`[SOL-02 / CAT-04]` Equivalencia pendiente:**
   - Vínculo posterior de un concepto libre a un SKU definitivo y selección del solicitante desde un directorio.
-- **`[COM-04 / COM-07]` Impuestos, flete y condiciones de pago:**
-  - Exponer tasa de IVA, cargo por flete/envío, condición de pago y fecha programada en `oferta`, `comparativa.consultar` y `Purchase Order`.

@@ -2,7 +2,7 @@
 
 Fecha: 19 de noviembre de 2026. Capacidades agrupadas del código inspeccionado; no es un porcentaje de avance del producto.
 
-Total: 55 capacidades. Parcial: 18; Verificado acotado: 8; No integrado: 22; Cambio de comportamiento: 4; Sin verificar: 3.
+Total: 55 capacidades. Parcial: 19; Verificado acotado: 8; No integrado: 21; Cambio de comportamiento: 4; Sin verificar: 3.
 
 **Verificado acotado:** el caso descrito pasó; no certifica variantes no ensayadas. **Parcial:** existe una parte pero faltan datos, acciones o pruebas. **No integrado:** no está disponible como flujo equivalente en el cliente entregado, aunque ERPNext tenga piezas estándar. **Cambio de comportamiento:** requiere homologar reglas/experiencia; no es necesariamente un error. **Sin verificar:** no hay evidencia suficiente.
 
@@ -153,9 +153,9 @@ Total: 55 capacidades. Parcial: 18; Verificado acotado: 8; No integrado: 22; Cam
 **Parcial · P1**
 
 - Original: Comparativa original suma flete y calcula 16% fijo en generación de OC.
-- Integración: Windows captura precio sin impuestos; depende de configuración administrativa para extras.
-- Evidencia: Código original 4403; orden ejemplo neto400/impuestos0/total400.
-- Criterio para cerrar: Caso acordado de 400 neto y 64 de impuesto debe dar464; probar flete, descuento y moneda sin reglas fiscales inventadas.
+- Integración: ERPNext aplica plantillas fiscales y reglas de flete en cotización y orden. La comparativa expone el desglose de la oferta.
+- Evidencia: Validar.ps1: neto 400 más IVA 64 da 464, exento con flete 40 da 440, e IVA con flete da 504 desde el mapper nativo.
+- Criterio para cerrar: Verificar descuentos, moneda y las plantillas fiscales configuradas para la empresa.
 - Fuentes: [original L4403](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:4403) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## COM-05 · Banco de precios y sugerencias históricas
@@ -180,11 +180,11 @@ Total: 55 capacidades. Parcial: 18; Verificado acotado: 8; No integrado: 22; Cam
 
 ## COM-07 · Pago programado y seguimiento de pago
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Condición de pago, fecha programada y estado pagada.
-- Integración: No hay operaciones Payment Entry ni seguimiento equivalente; perfiles actuales no pueden crear pagos.
-- Evidencia: Código original y permisos runtime.
+- Integración: Las cotizaciones registran condición y fecha programada. La orden hereda ambas y ERPNext calcula el calendario nativo. El pago efectivo queda en el flujo financiero.
+- Evidencia: Validar.ps1: vencimiento a 30 días, fecha programada e importe de cuota tanto en órdenes de la comparativa como en el mapper nativo.
 - Criterio para cerrar: Registrar programación y pago con responsable y comprobante; reflejar saldo correctamente.
 - Fuentes: [original L4562](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:4562) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/cliente_windows/MainForm.cs)
 
