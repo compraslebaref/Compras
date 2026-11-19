@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,6 +11,16 @@
     <RootNamespace>SistemaComprasAlmacen</RootNamespace>
     <UseAppHost>false</UseAppHost>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="integracion_erpnext\**\*.cs" />
+    <None Remove="integracion_erpnext\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="integracion_erpnext\**\*.cs" />
+    <None Remove="integracion_erpnext\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="3.0.5" />
