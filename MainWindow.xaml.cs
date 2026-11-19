@@ -809,35 +809,27 @@ public partial class MainWindow : FluentWindow
 
     private void BtnPerfilAdmin_Click(object sender, RoutedEventArgs e)
     {
-        if (_sesionAdminActiva)
+        if (SesionUsuarioService.Permisos.EsAdministrador)
         {
-            var resp = DialogoFluent.Show(this,
-                "La sesión de Perfil Administrador se encuentra ACTIVA (desbloqueada).\n\n¿Desea bloquear nuevamente la sesión de Administrador para que vuelva a solicitar el PIN en acciones críticas?",
-                "Perfil Administrador Activo",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (resp == System.Windows.MessageBoxResult.Yes)
-            {
-                _sesionAdminActiva = false;
-                if (BtnPerfilAdmin != null)
-                {
-                    BtnPerfilAdmin.Content = "Perfil: Administrador";
-                    BtnPerfilAdmin.Appearance = ControlAppearance.Secondary;
-                }
-            }
+            MostrarVentanaAdministracionUsuarios();
             return;
         }
+        MostrarDialogoSesionYCuenta();
+    }
 
-        if (SolicitarAutorizacionAdmin("Activar sesión de Perfil Administrador", false))
-        {
-            _sesionAdminActiva = true;
-            if (BtnPerfilAdmin != null)
-            {
-                BtnPerfilAdmin.Content = "Admin Activo";
-                BtnPerfilAdmin.Appearance = ControlAppearance.Primary;
-            }
-        }
+    private void MenuAdministrarUsuarios_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarVentanaAdministracionUsuarios();
+    }
+
+    private void MenuSincronizarErpNext_Click(object sender, RoutedEventArgs e)
+    {
+        MostrarVentanaSincronizacionErpNext();
+    }
+
+    private async void MenuCerrarSesion_Click(object sender, RoutedEventArgs e)
+    {
+        await CerrarSesionYVolverALoginAsync();
     }
 
     private void BtnCambiarPinAdmin_Click(object sender, RoutedEventArgs e)
@@ -6565,6 +6557,10 @@ public partial class MainWindow : FluentWindow
 
     private void BtnGenerarOrdenesDesdeComparativa_Click(object sender, RoutedEventArgs e)
     {
+        if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeGenerarBorradorOc,
+                "Generar Órdenes de Compra desde el Cuadro Comparativo", "Responsable de Compras o Auxiliar de Compras"))
+            return;
+
         if (CboCompSolicitud.SelectedItem is not Solicitud sol || _renglonesComparativa.Count == 0)
             return;
 
@@ -6745,6 +6741,12 @@ public partial class MainWindow : FluentWindow
 
     private void BtnActualizarFlujoOc_Click(object sender, RoutedEventArgs e)
     {
+        if (!ValidarPermisoAccion(
+                SesionUsuarioService.Permisos.PuedeAutorizarOc || SesionUsuarioService.Permisos.PuedeProgramarPagosOc,
+                "Autorizar Órdenes de Compra o modificar su estatus financiero",
+                "Responsable de Compras, Dirección o Finanzas"))
+            return;
+
         if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
         {
             DialogoFluent.Show(this, "Seleccione primero una Orden de Compra de la tabla.", "OC no seleccionada", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -6827,6 +6829,10 @@ public partial class MainWindow : FluentWindow
 
     private void BtnRegistrarRecepcionOc_Click(object sender, RoutedEventArgs e)
     {
+        if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeRecibirAlmacen,
+                "Registrar entrada física de mercancía a Almacén", "Auxiliar de Almacén o Responsable de Compras"))
+            return;
+
         if (DgOrdenesCompra.SelectedItem is not OrdenCompra oc)
             return;
 
@@ -7410,8 +7416,10 @@ public partial class MainWindow : FluentWindow
         TxtEntradaOcSinHistorial.Visibility = entradas.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
 
         bool pendiente = oc.Partidas.Any(p => p.CantidadPendiente > 0);
-        BtnEntradaRegistrarOc.IsEnabled = pendiente;
-        BtnEntradaRegistrarOc.Content = pendiente ? "📥 Registrar entrada de esta OC" : "✓ Esta OC ya se recibió completa";
+        BtnEntradaRegistrarOc.IsEnabled = pendiente && SesionUsuarioService.Permisos.PuedeRecibirAlmacen;
+        BtnEntradaRegistrarOc.Content = !SesionUsuarioService.Permisos.PuedeRecibirAlmacen
+            ? "🔒 Recepción reservada a Almacén"
+            : (pendiente ? "📥 Registrar entrada de esta OC" : "✓ Esta OC ya se recibió completa");
     }
 
     private void DgEntradaOcsPendientes_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -7441,6 +7449,10 @@ public partial class MainWindow : FluentWindow
 
     private void BtnEntradaRegistrarOc_Click(object sender, RoutedEventArgs e)
     {
+        if (!ValidarPermisoAccion(SesionUsuarioService.Permisos.PuedeRecibirAlmacen,
+                "Registrar entrada física de mercancía a Almacén", "Auxiliar de Almacén o Responsable de Compras"))
+            return;
+
         if (DgEntradaOcsPendientes.SelectedItem is not OrdenCompra oc) return;
         int id = oc.Id;
         MostrarModalRecepcionOrdenCompraAgrupada(oc);
@@ -9229,7 +9241,7 @@ public partial class MainWindow : FluentWindow
             }
 
             bool tienePendientes = oc.Partidas.Any(x => x.CantidadPendiente > 0m) && oc.Estatus != "Cancelada";
-            btnConfirmar.IsEnabled = tienePendientes;
+            btnConfirmar.IsEnabled = tienePendientes && SesionUsuarioService.Permisos.PuedeRecibirAlmacen;
 
             if (!tienePendientes)
             {

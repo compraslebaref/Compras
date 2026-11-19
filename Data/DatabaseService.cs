@@ -597,7 +597,9 @@ CREATE TABLE IF NOT EXISTS CorreosEntrantesSolicitud (
         AsegurarColumnaExiste(conn, "BitacoraGastosVehiculo", "LitrosCargados", "REAL NOT NULL DEFAULT 0");
         AsegurarColumnaExiste(conn, "BitacoraGastosVehiculo", "PrecioPorLitro", "REAL NOT NULL DEFAULT 0");
         AsegurarColumnaExiste(conn, "BitacoraGastosVehiculo", "TanqueLleno", "INTEGER NOT NULL DEFAULT 1");
+        AsegurarColumnaExiste(conn, "UsuariosSistema", "CorreoErp", "TEXT NOT NULL DEFAULT ''");
         SeedUsuariosSistemaSiVacio(conn);
+        MigrarUsuariosYRolesBase(conn);
         SeedKitsHerramientasSiVacio(conn);
         SeedVehiculosFlotillaYGarantiasSiVacio(conn);
 
@@ -8270,28 +8272,88 @@ WHERE Leida=0 AND (RolesDestino LIKE $rol OR RolesDestino LIKE '%Todos%' OR ($un
 
         string fechaHoy = DateTime.Now.ToString("yyyy-MM-dd");
         string pinDefault = CalcularHashPinAdministrador("1234");
-        var iniciales = new (string user, string nombre, string puesto, string rol)[]
+        var iniciales = new (string user, string nombre, string puesto, string rol, string correoErp)[]
         {
-            ("oscar", "Oscar (Jefe de Compras)", "Responsable de Compras y Abastecimiento", "Compras"),
-            ("almacen", "Operador de Almacén", "Recepción y Despacho de Bodega", "Almacén"),
-            ("operativo", "Cuadrilla Operativa / Obra", "Técnicos e Instaladores de Proyecto", "Almacén"),
-            ("direccion", "Dirección General", "Autorización Vo.Bo. de Proyectos", "Compras"),
-            ("finanzas", "Finanzas y Tesorería", "Programación de Pagos y Facturación", "Compras")
+            ("oscar", "Oscar (Jefe de Compras)", "Responsable de Compras y Abastecimiento", "Responsable de Compras", "autoriza@lebaref.test"),
+            ("auxiliar", "Auxiliar de Compras", "Cotizaciones y Seguimiento de Compras", "Auxiliar de Compras", "compras@lebaref.test"),
+            ("almacen", "Auxiliar de Almacén", "Recepción y Despacho de Bodega", "Auxiliar de Almacén", "almacen@lebaref.test"),
+            ("operativo", "Solicitante / Residente de Obra", "Técnicos e Instaladores de Proyecto", "Solicitante", ""),
+            ("direccion", "Dirección General", "Autorización Vo.Bo. de Proyectos", "Dirección", ""),
+            ("finanzas", "Finanzas y Tesorería", "Programación de Pagos y Facturación", "Finanzas", "")
         };
 
         foreach (var u in iniciales)
         {
             using var ins = conn.CreateCommand();
             ins.CommandText = @"
-INSERT INTO UsuariosSistema (Username, NombreCompleto, Puesto, Rol, PinHash, Activo, FechaAlta)
-VALUES ($usr, $nom, $pue, $rol, $pin, 1, $fec);";
+INSERT INTO UsuariosSistema (Username, NombreCompleto, Puesto, Rol, PinHash, Activo, FechaAlta, CorreoErp)
+VALUES ($usr, $nom, $pue, $rol, $pin, 1, $fec, $erp);";
             ins.Parameters.AddWithValue("$usr", u.user);
             ins.Parameters.AddWithValue("$nom", u.nombre);
             ins.Parameters.AddWithValue("$pue", u.puesto);
             ins.Parameters.AddWithValue("$rol", u.rol);
             ins.Parameters.AddWithValue("$pin", pinDefault);
             ins.Parameters.AddWithValue("$fec", fechaHoy);
+            ins.Parameters.AddWithValue("$erp", u.correoErp);
             ins.ExecuteNonQuery();
+        }
+    }
+
+    private static void MigrarUsuariosYRolesBase(SqliteConnection conn)
+    {
+        string pinDefault = CalcularHashPinAdministrador("1234");
+        string fechaHoy = DateTime.Now.ToString("yyyy-MM-dd");
+        var actuales = new List<(int id, string usr, string puesto, string rol, string pin, string erp)>();
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT Id, Username, Puesto, Rol, COALESCE(PinHash, ''), COALESCE(CorreoErp, '') FROM UsuariosSistema;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                actuales.Add((r.GetInt32(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5)));
+            }
+        }
+
+        bool existeAuxiliarCompras = false;
+        foreach (var u in actuales)
+        {
+            string rolNorm = UsuarioSistema.NormalizarTipoUsuario(u.rol, u.usr, u.puesto);
+            if (string.Equals(rolNorm, "Auxiliar de Compras", StringComparison.OrdinalIgnoreCase))
+                existeAuxiliarCompras = true;
+
+            string erpSug = u.erp;
+            if (string.IsNullOrWhiteSpace(erpSug))
+            {
+                if (u.usr.Equals("oscar", StringComparison.OrdinalIgnoreCase)) erpSug = "autoriza@lebaref.test";
+                else if (u.usr.Equals("almacen", StringComparison.OrdinalIgnoreCase)) erpSug = "almacen@lebaref.test";
+                else if (u.usr.Equals("auxiliar", StringComparison.OrdinalIgnoreCase)) erpSug = "compras@lebaref.test";
+            }
+
+            string pinFinal = string.IsNullOrWhiteSpace(u.pin) ? pinDefault : u.pin;
+            if (!string.Equals(u.rol, rolNorm, StringComparison.Ordinal) ||
+                !string.Equals(u.pin, pinFinal, StringComparison.Ordinal) ||
+                !string.Equals(u.erp, erpSug, StringComparison.Ordinal))
+            {
+                using var upd = conn.CreateCommand();
+                upd.CommandText = "UPDATE UsuariosSistema SET Rol=$rol, PinHash=$pin, CorreoErp=$erp WHERE Id=$id;";
+                upd.Parameters.AddWithValue("$rol", rolNorm);
+                upd.Parameters.AddWithValue("$pin", pinFinal);
+                upd.Parameters.AddWithValue("$erp", erpSug);
+                upd.Parameters.AddWithValue("$id", u.id);
+                upd.ExecuteNonQuery();
+            }
+        }
+
+        if (!existeAuxiliarCompras && !actuales.Any(x => x.usr.Equals("auxiliar", StringComparison.OrdinalIgnoreCase)))
+        {
+            using var insAux = conn.CreateCommand();
+            insAux.CommandText = @"
+INSERT INTO UsuariosSistema (Username, NombreCompleto, Puesto, Rol, PinHash, Activo, FechaAlta, CorreoErp)
+VALUES ('auxiliar', 'Auxiliar de Compras', 'Cotizaciones y Seguimiento de Compras', 'Auxiliar de Compras', $pin, 1, $fec, 'compras@lebaref.test');";
+            insAux.Parameters.AddWithValue("$pin", pinDefault);
+            insAux.Parameters.AddWithValue("$fec", fechaHoy);
+            insAux.ExecuteNonQuery();
         }
     }
 
@@ -8302,20 +8364,24 @@ VALUES ($usr, $nom, $pue, $rol, $pin, 1, $fec);";
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = soloActivos
-            ? "SELECT Id, Username, NombreCompleto, Puesto, Rol, Activo, FechaAlta FROM UsuariosSistema WHERE Activo=1 ORDER BY Id ASC"
-            : "SELECT Id, Username, NombreCompleto, Puesto, Rol, Activo, FechaAlta FROM UsuariosSistema ORDER BY Id ASC";
+            ? "SELECT Id, Username, NombreCompleto, Puesto, Rol, Activo, FechaAlta, COALESCE(CorreoErp, '') FROM UsuariosSistema WHERE Activo=1 ORDER BY Id ASC"
+            : "SELECT Id, Username, NombreCompleto, Puesto, Rol, Activo, FechaAlta, COALESCE(CorreoErp, '') FROM UsuariosSistema ORDER BY Id ASC";
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
+            string usr = r.GetString(1);
+            string puesto = r.GetString(3);
+            string rolRaw = r.GetString(4);
             list.Add(new UsuarioSistema
             {
                 Id = r.GetInt32(0),
-                Username = r.GetString(1),
+                Username = usr,
                 NombreCompleto = r.GetString(2),
-                Puesto = r.GetString(3),
-                Rol = r.GetString(4),
+                Puesto = puesto,
+                Rol = UsuarioSistema.NormalizarTipoUsuario(rolRaw, usr, puesto),
                 Activo = r.GetInt32(5) != 0,
-                FechaAlta = r.GetString(6)
+                FechaAlta = r.GetString(6),
+                CorreoErp = r.GetString(7)
             });
         }
         return list;
@@ -8340,7 +8406,7 @@ VALUES ($usr, $nom, $pue, $rol, $pin, 1, $fec);";
 
         var encontrado = usuarios.FirstOrDefault(u => u.Id == idGuardado && u.Activo)
                          ?? usuarios.FirstOrDefault(u => u.Activo)
-                         ?? new UsuarioSistema { Id = 1, Username = "oscar", NombreCompleto = "Oscar (Jefe de Compras)", Rol = "Compras", Activo = true };
+                         ?? new UsuarioSistema { Id = 1, Username = "oscar", NombreCompleto = "Oscar (Jefe de Compras)", Rol = "Responsable de Compras", Activo = true };
         return encontrado;
     }
 
@@ -8362,6 +8428,9 @@ ON CONFLICT(Clave) DO UPDATE SET Valor=$v;";
         if (string.IsNullOrWhiteSpace(usrClean))
             usrClean = $"usr_{DateTime.Now:HHmmss}";
 
+        string rolLimpio = UsuarioSistema.NormalizarTipoUsuario(u.Rol, usrClean, u.Puesto);
+        string correoErp = (u.CorreoErp ?? string.Empty).Trim().ToLowerInvariant();
+
         using var conn = new SqliteConnection(ConnectionString);
         conn.Open();
 
@@ -8370,18 +8439,19 @@ ON CONFLICT(Clave) DO UPDATE SET Valor=$v;";
             string pinHash = CalcularHashPinAdministrador(string.IsNullOrWhiteSpace(nuevoPinPlano) ? "1234" : nuevoPinPlano.Trim());
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-INSERT INTO UsuariosSistema (Username, NombreCompleto, Puesto, Rol, PinHash, Activo, FechaAlta)
-VALUES ($usr, $nom, $pue, $rol, $pin, $act, $fec);
+INSERT INTO UsuariosSistema (Username, NombreCompleto, Puesto, Rol, PinHash, Activo, FechaAlta, CorreoErp)
+VALUES ($usr, $nom, $pue, $rol, $pin, $act, $fec, $erp);
 SELECT last_insert_rowid();";
             cmd.Parameters.AddWithValue("$usr", usrClean);
             cmd.Parameters.AddWithValue("$nom", u.NombreCompleto.Trim());
             cmd.Parameters.AddWithValue("$pue", u.Puesto?.Trim() ?? string.Empty);
-            cmd.Parameters.AddWithValue("$rol", string.IsNullOrWhiteSpace(u.Rol) ? "Compras" : u.Rol.Trim());
+            cmd.Parameters.AddWithValue("$rol", rolLimpio);
             cmd.Parameters.AddWithValue("$pin", pinHash);
             cmd.Parameters.AddWithValue("$act", u.Activo ? 1 : 0);
             cmd.Parameters.AddWithValue("$fec", DateTime.Now.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("$erp", correoErp);
             int nuevoId = Convert.ToInt32(cmd.ExecuteScalar());
-            RegistrarBitacoraUsuario("Usuarios", "Alta de Usuario", $"@{usrClean}", $"Se creó el usuario '{u.NombreCompleto}' con rol {u.Rol}");
+            RegistrarBitacoraUsuario("Usuarios", "Alta de Usuario", $"@{usrClean}", $"Se creó el usuario '{u.NombreCompleto}' con tipo '{rolLimpio}'");
             return nuevoId;
         }
         else
@@ -8391,7 +8461,7 @@ SELECT last_insert_rowid();";
             {
                 cmd.CommandText = @"
 UPDATE UsuariosSistema
-SET Username=$usr, NombreCompleto=$nom, Puesto=$pue, Rol=$rol, Activo=$act, PinHash=$pin
+SET Username=$usr, NombreCompleto=$nom, Puesto=$pue, Rol=$rol, Activo=$act, PinHash=$pin, CorreoErp=$erp
 WHERE Id=$id;";
                 cmd.Parameters.AddWithValue("$pin", CalcularHashPinAdministrador(nuevoPinPlano.Trim()));
             }
@@ -8399,19 +8469,174 @@ WHERE Id=$id;";
             {
                 cmd.CommandText = @"
 UPDATE UsuariosSistema
-SET Username=$usr, NombreCompleto=$nom, Puesto=$pue, Rol=$rol, Activo=$act
+SET Username=$usr, NombreCompleto=$nom, Puesto=$pue, Rol=$rol, Activo=$act, CorreoErp=$erp
 WHERE Id=$id;";
             }
             cmd.Parameters.AddWithValue("$usr", usrClean);
             cmd.Parameters.AddWithValue("$nom", u.NombreCompleto.Trim());
             cmd.Parameters.AddWithValue("$pue", u.Puesto?.Trim() ?? string.Empty);
-            cmd.Parameters.AddWithValue("$rol", string.IsNullOrWhiteSpace(u.Rol) ? "Compras" : u.Rol.Trim());
+            cmd.Parameters.AddWithValue("$rol", rolLimpio);
             cmd.Parameters.AddWithValue("$act", u.Activo ? 1 : 0);
+            cmd.Parameters.AddWithValue("$erp", correoErp);
             cmd.Parameters.AddWithValue("$id", u.Id);
             cmd.ExecuteNonQuery();
-            RegistrarBitacoraUsuario("Usuarios", "Edición de Usuario", $"@{usrClean}", $"Se actualizó el usuario '{u.NombreCompleto}' (Rol: {u.Rol}, Activo: {u.Activo})");
+            RegistrarBitacoraUsuario("Usuarios", "Edición de Usuario", $"@{usrClean}", $"Se actualizó el usuario '{u.NombreCompleto}' (Tipo: {rolLimpio}, Activo: {u.Activo})");
             return u.Id;
         }
+    }
+
+    public static (bool Exito, UsuarioSistema? Usuario, string MensajeError) AutenticarUsuarioLocal(string usuarioOCorreo, string passwordPlano)
+    {
+        string identificador = (usuarioOCorreo ?? string.Empty).Trim().ToLowerInvariant();
+        if (identificador.StartsWith("@", StringComparison.Ordinal))
+            identificador = identificador[1..];
+
+        if (string.IsNullOrWhiteSpace(identificador))
+            return (false, null, "Escriba su nombre de usuario o correo.");
+
+        if (string.IsNullOrWhiteSpace(passwordPlano))
+            return (false, null, "Escriba su contraseña.");
+
+        string hashEsperado = CalcularHashPinAdministrador(passwordPlano.Trim());
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+SELECT Id, Username, NombreCompleto, Puesto, Rol, COALESCE(PinHash, ''), Activo, FechaAlta, COALESCE(CorreoErp, '')
+FROM UsuariosSistema
+WHERE LOWER(Username) = $id OR (CorreoErp <> '' AND LOWER(CorreoErp) = $id)
+LIMIT 1;";
+        cmd.Parameters.AddWithValue("$id", identificador);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+            return (false, null, "No se encontró ninguna cuenta registrada con ese usuario o correo.");
+
+        int uid = r.GetInt32(0);
+        string usr = r.GetString(1);
+        string nom = r.GetString(2);
+        string puesto = r.GetString(3);
+        string rolRaw = r.GetString(4);
+        string pinHashDb = r.GetString(5);
+        bool activo = r.GetInt32(6) != 0;
+        string fechaAlta = r.GetString(7);
+        string correoErp = r.GetString(8);
+
+        if (!activo)
+            return (false, null, "Esta cuenta de usuario se encuentra inactiva. Solicite apoyo al Responsable de Compras.");
+
+        bool coincide = string.Equals(pinHashDb, hashEsperado, StringComparison.Ordinal) ||
+                        (!pinHashDb.StartsWith("SHA256:", StringComparison.Ordinal) && string.Equals(pinHashDb, passwordPlano.Trim(), StringComparison.Ordinal));
+
+        if (!coincide)
+            return (false, null, "Contraseña incorrecta. Verifique sus datos e inténtelo de nuevo.");
+
+        var usuario = new UsuarioSistema
+        {
+            Id = uid,
+            Username = usr,
+            NombreCompleto = nom,
+            Puesto = puesto,
+            Rol = UsuarioSistema.NormalizarTipoUsuario(rolRaw, usr, puesto),
+            Activo = true,
+            FechaAlta = fechaAlta,
+            CorreoErp = correoErp
+        };
+        return (true, usuario, string.Empty);
+    }
+
+    public static void CambiarPasswordUsuario(int usuarioId, string nuevoPasswordPlano)
+    {
+        if (usuarioId <= 0 || string.IsNullOrWhiteSpace(nuevoPasswordPlano))
+            return;
+
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE UsuariosSistema SET PinHash=$pin WHERE Id=$id;";
+        cmd.Parameters.AddWithValue("$pin", CalcularHashPinAdministrador(nuevoPasswordPlano.Trim()));
+        cmd.Parameters.AddWithValue("$id", usuarioId);
+        cmd.ExecuteNonQuery();
+    }
+
+    public static UsuarioSistema SincronizarUsuarioDesdeErpNext(
+        string identidadErp,
+        string nombreCompleto,
+        string tipoUsuarioLebaref,
+        string puesto,
+        string passwordPlano)
+    {
+        string correoOLogin = (identidadErp ?? string.Empty).Trim().ToLowerInvariant();
+        string baseUsername = correoOLogin.Contains('@') ? correoOLogin.Split('@')[0] : correoOLogin;
+        baseUsername = System.Text.RegularExpressions.Regex.Replace(baseUsername, @"[^a-z0-9._-]", "_");
+        if (string.IsNullOrWhiteSpace(baseUsername)) baseUsername = "erp_user";
+
+        var todos = ObtenerUsuariosSistema(soloActivos: false);
+        var existente = todos.FirstOrDefault(u =>
+            (!string.IsNullOrWhiteSpace(u.CorreoErp) && string.Equals(u.CorreoErp, correoOLogin, StringComparison.OrdinalIgnoreCase)) ||
+            string.Equals(u.Username, correoOLogin, StringComparison.OrdinalIgnoreCase) ||
+            (correoOLogin == "administrator" && u.Username.Equals("oscar", StringComparison.OrdinalIgnoreCase)));
+
+        if (existente != null)
+        {
+            existente.CorreoErp = correoOLogin;
+            if (!string.IsNullOrWhiteSpace(nombreCompleto) && !existente.Username.Equals("oscar", StringComparison.OrdinalIgnoreCase))
+                existente.NombreCompleto = nombreCompleto.Trim();
+            existente.Rol = tipoUsuarioLebaref;
+            existente.Activo = true;
+            GuardarUsuarioSistema(existente, nuevoPinPlano: passwordPlano);
+            return ObtenerUsuariosSistema(soloActivos: false).First(u => u.Id == existente.Id);
+        }
+
+        string usrUnico = baseUsername;
+        int suf = 2;
+        while (todos.Any(u => string.Equals(u.Username, usrUnico, StringComparison.OrdinalIgnoreCase)))
+        {
+            usrUnico = $"{baseUsername}{suf++}";
+        }
+
+        var nuevo = new UsuarioSistema
+        {
+            Username = usrUnico,
+            NombreCompleto = string.IsNullOrWhiteSpace(nombreCompleto) ? correoOLogin : nombreCompleto.Trim(),
+            Puesto = string.IsNullOrWhiteSpace(puesto) ? tipoUsuarioLebaref : puesto.Trim(),
+            Rol = tipoUsuarioLebaref,
+            CorreoErp = correoOLogin,
+            Activo = true
+        };
+        int idNuevo = GuardarUsuarioSistema(nuevo, nuevoPinPlano: passwordPlano);
+        return ObtenerUsuariosSistema(soloActivos: false).First(u => u.Id == idNuevo);
+    }
+
+    public static string ObtenerConfiguracionTexto(string clave, string valorPorDefecto = "")
+    {
+        try
+        {
+            using var conn = new SqliteConnection(ConnectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT Valor FROM ConfiguracionSistema WHERE Clave=$k LIMIT 1;";
+            cmd.Parameters.AddWithValue("$k", clave);
+            var val = cmd.ExecuteScalar()?.ToString();
+            return val ?? valorPorDefecto;
+        }
+        catch
+        {
+            return valorPorDefecto;
+        }
+    }
+
+    public static void GuardarConfiguracionTexto(string clave, string valor)
+    {
+        using var conn = new SqliteConnection(ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO ConfiguracionSistema (Clave, Valor) VALUES ($k, $v)
+ON CONFLICT(Clave) DO UPDATE SET Valor=$v;";
+        cmd.Parameters.AddWithValue("$k", clave);
+        cmd.Parameters.AddWithValue("$v", valor ?? string.Empty);
+        cmd.ExecuteNonQuery();
     }
 
     public static void RegistrarBitacoraUsuario(string modulo, string accion, string? folioReferencia, string? detalle)

@@ -9,13 +9,8 @@
     <ApplicationTitle>Sistema de Compras y Almacén</ApplicationTitle>
     <AssemblyName>SistemaComprasAlmacen</AssemblyName>
     <RootNamespace>SistemaComprasAlmacen</RootNamespace>
-    <UseAppHost>false</UseAppHost>
+    <UseAppHost>true</UseAppHost>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Remove="integracion_erpnext\**\*.cs" />
-    <None Remove="integracion_erpnext\**" />
-  </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="integracion_erpnext\**\*.cs" />
@@ -28,7 +23,7 @@
   </ItemGroup>
 
   <Target Name="LiberarBinariosEnUso" BeforeTargets="CopyFilesToOutputDirectory">
-    <Exec Command="powershell -NoProfile -Command &quot;$out = '$(OutDir)'; $obj = '$(IntermediateOutputPath)'; Get-ChildItem -Path $out -Filter '*.old*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; $ts = [DateTime]::UtcNow.Ticks; if (Test-Path (Join-Path $out 'SistemaComprasAlmacen.dll')) { Move-Item -Force (Join-Path $out 'SistemaComprasAlmacen.dll') (Join-Path $out ('SistemaComprasAlmacen.dll.old_' + $ts)) -ErrorAction SilentlyContinue }; if ((Test-Path (Join-Path $obj 'apphost.exe')) -and -not (Test-Path (Join-Path $out 'SistemaComprasAlmacen.exe'))) { Copy-Item -Force (Join-Path $obj 'apphost.exe') (Join-Path $out 'SistemaComprasAlmacen.exe') -ErrorAction SilentlyContinue }&quot;" IgnoreExitCode="true" />
+    <Exec Command="powershell -NoProfile -Command &quot;$out = '$(OutDir)'; Get-ChildItem -Path $out -Filter '*.old*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; $ts = [DateTime]::UtcNow.Ticks; foreach ($f in @('SistemaComprasAlmacen.dll','SistemaComprasAlmacen.exe')) { if (Test-Path (Join-Path $out $f)) { Move-Item -Force (Join-Path $out $f) (Join-Path $out ($f + '.old_' + $ts)) -ErrorAction SilentlyContinue } }&quot;" IgnoreExitCode="true" />
   </Target>
 
 </Project>

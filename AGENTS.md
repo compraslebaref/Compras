@@ -16,10 +16,15 @@ La carpeta maestra vive en `C:\Users\oscar\Proyectos\Lebaref\` dividida en dos *
 
 | Carpeta | Agente propietario | Rama habitual | Regla |
 |---|---|---|---|
-| `C:\Users\oscar\Proyectos\Lebaref\app` | **Antigravity** (y Workspace principal del usuario) | `integracion/erpnext` (o `agy/<id-tarea>`) | **Codex NO edita ni compila dentro de `app\`.** |
-| `C:\Users\oscar\Proyectos\Lebaref\codex` | **Codex** | `codex/erpnext` (o `codex/<id-tarea>`) | **Antigravity NO edita ni compila dentro de `codex\`.** |
+| `C:\Users\oscar\Proyectos\Lebaref\app` | **Antigravity** y **ÚNICA carpeta que abre/usa el usuario** | `integracion/erpnext` (o `agy/<id-tarea>`) | **Codex NO edita ni compila dentro de `app\`.** |
+| `C:\Users\oscar\Proyectos\Lebaref\codex` | **Codex** (taller interno exclusivo de backend) | `codex/erpnext` (o `codex/<id-tarea>`) | **Antigravity NO edita ni compila dentro de `codex\`. Nunca pedir al usuario abrir ejecutables desde `codex\`.** |
 
 Al compartir el mismo `.git`, todo `git commit` hecho en `codex\` es inmediatamente visible desde `app\` (`git log codex/erpnext`, `git diff`, `git merge --no-ff`) y viceversa, sin bloquear binarios `.exe`/`.dll` ni ensuciar el árbol de trabajo del otro agente.
+
+### Regla de Oro sobre el Cliente Windows Oficial (Cero Trabajo Doble)
+- **ÚNICA aplicación oficial para el usuario final y sus auxiliares:** **`SistemaComprasAlmacen.csproj`** (aplicación completa Windows 11 WPF `.NET 8` en la raíz de `C:\Users\oscar\Proyectos\Lebaref\app`, iniciada con `Iniciar_Lebaref.exe`).
+- **Estado de `integracion_erpnext/cliente_windows/` (`Lebaref-Integrado.exe`):** Queda **congelado únicamente como arnés ligero de verificación técnica de API**. **NO** se desarrollan nuevas pantallas para usuario final en WinForms (`cliente_windows`) ni se le indica al usuario usar `Lebaref-Integrado.exe` como sistema operativo diario. Todo desarrollo de interfaz de usuario ocurre exclusivamente en el proyecto WPF `.NET 8` consumiendo `Services/ErpNextApiClient.cs`.
+- **Sincronización al iniciar turno:** Antes de editar `COORDINACION.md` o iniciar una nueva tarea, **Codex debe ejecutar `git merge --no-ff integracion/erpnext`** en `codex\`, y **Antigravity debe ejecutar `git merge --no-ff codex/erpnext`** en `app\`, para que ambos partan siempre del mismo estado conciliado.
 
 ---
 

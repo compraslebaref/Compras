@@ -10,6 +10,8 @@ namespace SistemaComprasAlmacen;
 
 public partial class App : Application
 {
+    private bool _cambiandoSesionUsuario;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         DispatcherUnhandledException += (_, ex) =>
@@ -26,6 +28,41 @@ public partial class App : Application
         DatabaseService.Initialize();
         XmlCfdiService.GenerarFacturaXmlDemoEnCarpeta();
         RegistrarEstabilizadorGlobalComboBoxes();
+        MostrarLoginYAbrirSistema();
+    }
+
+    public void MostrarLoginYAbrirSistema()
+    {
+        var login = new LoginWindow();
+        if (login.ShowDialog() == true)
+        {
+            var main = new MainWindow();
+            MainWindow = main;
+            main.Closed += (_, _) =>
+            {
+                if (!_cambiandoSesionUsuario)
+                    Shutdown();
+            };
+            main.Show();
+        }
+        else
+        {
+            Shutdown();
+        }
+    }
+
+    public void CambiarUsuarioReabriendoLogin(Window ventanaActual)
+    {
+        _cambiandoSesionUsuario = true;
+        try
+        {
+            ventanaActual.Close();
+        }
+        finally
+        {
+            _cambiandoSesionUsuario = false;
+        }
+        MostrarLoginYAbrirSistema();
     }
 
     private static void RegistrarEstabilizadorGlobalComboBoxes()

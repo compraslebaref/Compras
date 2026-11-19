@@ -1342,16 +1342,75 @@ public class UsuarioSistema
         set => NombreCompleto = value;
     }
     public string Puesto { get; set; } = string.Empty;
-    public string Rol { get; set; } = "Compras"; // Compras, Almacén, Operativo, Dirección, Finanzas, Administrador
+    public string Rol { get; set; } = "Responsable de Compras"; // Responsable de Compras, Auxiliar de Compras, Auxiliar de Almacén, Dirección, Finanzas, Solicitante
+    public string CorreoErp { get; set; } = string.Empty;
     public string RolPredeterminado
     {
-        get => Rol;
+        get => VistaOperativaBase;
         set => Rol = value;
     }
     public bool Activo { get; set; } = true;
     public string FechaAlta { get; set; } = string.Empty;
     public string EstadoTexto => Activo ? "Activo" : "Inactivo";
-    public override string ToString() => $"{NombreCompleto} (@{Username} · {Rol})";
+    public string CorreoErpMostrar => string.IsNullOrWhiteSpace(CorreoErp) ? "Solo local" : CorreoErp;
+
+    public string TipoUsuarioNormalizado => NormalizarTipoUsuario(Rol, Username, Puesto);
+
+    public string VistaOperativaBase => TipoUsuarioNormalizado switch
+    {
+        "Auxiliar de Almacén" => "Almacén",
+        "Solicitante" => "Almacén",
+        _ => "Compras"
+    };
+
+    public static string NormalizarTipoUsuario(string? rolRaw, string? username = null, string? puesto = null)
+    {
+        string r = (rolRaw ?? string.Empty).Trim();
+        string u = (username ?? string.Empty).Trim().ToLowerInvariant();
+        string p = (puesto ?? string.Empty).Trim();
+
+        if (r.Equals("Responsable de Compras", StringComparison.OrdinalIgnoreCase) ||
+            r.Equals("Administrador", StringComparison.OrdinalIgnoreCase) ||
+            r.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            return "Responsable de Compras";
+
+        if (r.Equals("Auxiliar de Compras", StringComparison.OrdinalIgnoreCase))
+            return "Auxiliar de Compras";
+
+        if (r.Equals("Auxiliar de Almacén", StringComparison.OrdinalIgnoreCase) ||
+            r.Equals("Auxiliar de Almacen", StringComparison.OrdinalIgnoreCase))
+            return "Auxiliar de Almacén";
+
+        if (r.Equals("Dirección", StringComparison.OrdinalIgnoreCase) ||
+            r.Equals("Direccion", StringComparison.OrdinalIgnoreCase))
+            return "Dirección";
+
+        if (r.Equals("Finanzas", StringComparison.OrdinalIgnoreCase))
+            return "Finanzas";
+
+        if (r.Equals("Solicitante", StringComparison.OrdinalIgnoreCase) ||
+            r.Equals("Operativo", StringComparison.OrdinalIgnoreCase))
+            return "Solicitante";
+
+        // Compatibilidad con registros heredados ("Compras" / "Almacén")
+        if (r.Equals("Almacén", StringComparison.OrdinalIgnoreCase) || r.Equals("Almacen", StringComparison.OrdinalIgnoreCase))
+        {
+            if (u == "operativo" || p.Contains("Cuadrilla", StringComparison.OrdinalIgnoreCase) || p.Contains("Solicitante", StringComparison.OrdinalIgnoreCase))
+                return "Solicitante";
+            return "Auxiliar de Almacén";
+        }
+
+        if (u == "direccion" || p.Contains("Dirección", StringComparison.OrdinalIgnoreCase) || p.Contains("Direccion", StringComparison.OrdinalIgnoreCase))
+            return "Dirección";
+        if (u == "finanzas" || p.Contains("Finanzas", StringComparison.OrdinalIgnoreCase) || p.Contains("Tesorer", StringComparison.OrdinalIgnoreCase))
+            return "Finanzas";
+        if (u == "oscar" || p.Contains("Responsable", StringComparison.OrdinalIgnoreCase) || p.Contains("Jefe", StringComparison.OrdinalIgnoreCase) || p.Contains("Admin", StringComparison.OrdinalIgnoreCase))
+            return "Responsable de Compras";
+
+        return "Auxiliar de Compras";
+    }
+
+    public override string ToString() => $"{NombreCompleto} (@{Username} · {TipoUsuarioNormalizado})";
 }
 
 public class RegistroBitacoraUsuario
