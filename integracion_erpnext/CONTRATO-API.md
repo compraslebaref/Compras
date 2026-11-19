@@ -32,7 +32,7 @@
 
 ### 2.2 Operaciones de Compras, Almacén y Catálogos (`lebaref_compras.operaciones`)
 - **`GET /api/method/lebaref_compras.operaciones.esquema?accion=<accion>&folio=<folio>`**
-  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `peticion`, `oferta`, `autorizar`, `recibir`, `entregar`, `devolver`, `cfdi`.
+  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `recibir`, `entregar`, `devolver`, `cfdi`.
   - Delega automáticamente a `lebaref_compras.equipos.esquema` cuando `accion` pertenece a herramientas/flotilla/kits (`herramienta`, `prestamo`, `retorno_herramienta`, `estado_herramienta`, `vehiculo`, `gasto_vehiculo`, `revision_vehiculo`, `estado_vehiculo`, `kit`, `composicion_kit`, `prestamo_kit`, `garantia_herramienta`, `mantenimiento_herramienta`, `anular_mantenimiento`).
   - Respuesta `message`:
     ```json
@@ -293,9 +293,68 @@ En REST nativo, **Supplier Quotation** guarda la condición en `custom_lebaref_c
 
 HTTP `417` para una fecha con formato inválido, una plantilla fiscal deshabilitada o de otra empresa, o una regla de flete deshabilitada, de venta o de otra empresa. HTTP `403` para maestros sin acceso. El registro de un pago efectivo corresponde al flujo financiero nativo.
 
-## 8. Cambios de Contrato Planificados (Bloque 1)
+## 8. Anexos, enmiendas y surtido de solicitudes (`SOL-03 / SOL-05 / CAT-04`)
 
-- **`[SOL-03 / SOL-05]` Flujo de solicitudes:**
-  - Estado borrador, anexos, origen de captura y aprobación de surtido desde stock.
-- **`[SOL-02 / CAT-04]` Equivalencia pendiente:**
-  - Vínculo posterior de un concepto libre a un SKU definitivo y selección del solicitante desde un directorio.
+Todas las escrituras usan `POST /api/method/lebaref_compras.operaciones.ejecutar` con `accion`, `folio` de origen, `operacion` UUID y `datos`. Un reintento idéntico devuelve el mismo folio con `repetida: true`. La consulta `esquema?accion=<accion>&folio=<folio>` devuelve los campos de captura. Las acciones aplican los permisos nativos sobre el documento de origen y sobre los documentos que generan.
+
+### Anexo de solicitud
+
+`accion=anexo` crea un **Material Request** en borrador. Hereda empresa y tipo de la solicitud confirmada. Usa renglones nuevos y permite actualizar `departamento`, `solicitante` y `notas`. Los valores omitidos de esos campos se heredan. Una transferencia requiere `from_warehouse` y `warehouse` en cada renglón. El borrador se puede editar y confirmar en Desk con el permiso nativo de envío. `data.custom_lebaref_solicitud_origen` muestra el folio de origen en la lectura nativa.
+
+```json
+{"title":"Anexo de consumibles","schedule_date":"2026-12-04","rows":[{"item_code":"TOR-01","qty":2,"warehouse":"Central - L"}]}
+```
+
+```json
+{"message":{"folio":"MAT-MR-2026-00003","tipo":"Material Request"}}
+```
+
+### Conversión de concepto libre a SKU
+
+`accion=convertir_concepto` aplica a una solicitud de compra vigente y confirmada, antes de que tenga peticiones, cotizaciones, órdenes o recepciones activas. Selecciona `renglon` por el ID del **Material Request Item** y proporciona `item_code` de un SKU existente o `articulo` con los datos de alta de §4. Crear un SKU requiere permiso de alta de `Item`. El SKU debe estar activo, ser inventariable y estar habilitado para compras. La cantidad conserva su valor numérico y se interpreta en la unidad de compra del SKU, o en la `uom` que selecciones. Puedes indicar `warehouse` para el renglón.
+
+```json
+{"renglon":"mr-item-b","item_code":"TOR-01","uom":"Box","warehouse":"Central - L"}
+```
+
+```json
+{"renglon":"mr-item-b","articulo":{"item_code":"CORTE-001","item_name":"Placa a medida","item_group":"Products","stock_uom":"Nos"},"warehouse":"Central - L"}
+```
+
+```json
+{"message":{"folio":"MAT-MR-2026-00004-1","tipo":"Material Request"}}
+```
+
+La operación cancela el original y confirma su enmienda en una transacción. La enmienda conserva `data.amended_from` y cada renglón conserva `custom_lebaref_renglon_origen`. El concepto original se consulta en esa versión cancelada. Las dependencias activas se rechazan con HTTP `417`. La sesión necesita permisos de anulación y enmienda del original, y de creación y envío del nuevo documento.
+
+### Surtido desde stock
+
+Para un **Material Request** nativo de tipo `Material Issue` (consumo) o `Material Transfer` (traslado a otro almacén), usa `accion=surtir`. Para una solicitud de compra confirmada sin dependencias activas, usa primero `accion=canalizar_stock`. Esta acción confirma una enmienda con el tipo nativo de inventario. Exige que todos los renglones tengan un SKU inventariable activo. La confirmación de la solicitud prepara el surtido. El inventario se mueve al confirmar el **Stock Entry**.
+
+```json
+{"modo":"transferencia","almacen_origen":"Central - L","almacen_destino":"Obra Norte - L"}
+```
+
+Para consumo usa `{"modo":"salida","almacen_origen":"Central - L"}`. La respuesta devuelve el folio de la enmienda.
+
+```json
+{"message":{"folio":"MAT-MR-2026-00005-1","tipo":"Material Request"}}
+```
+
+`esquema?accion=surtir&folio=MAT-MR-2026-00005-1` devuelve los renglones con saldo. Ejemplo de `message.rows[0]` para una transferencia:
+
+```json
+{"id":"mr-stock-item-a","item_code":"TOR-01","pending":4.0,"qty":0,"s_warehouse":"Central - L","t_warehouse":"Obra Norte - L","uom":"Nos","stock_uom":"Nos","conversion_factor":1.0}
+```
+
+Envía las cantidades parciales o totales en la unidad del renglón. ERPNext valida existencias y mantiene el saldo mediante `Stock Entry Detail.material_request` y `material_request_item`. Se requieren permisos de creación y envío de **Stock Entry**. Un renglón sin saldo o una cantidad superior al saldo devuelve HTTP `417`.
+
+```json
+{"rows":[{"id":"mr-stock-item-a","qty":2}]}
+```
+
+```json
+{"message":{"folio":"MAT-STE-2026-00001","tipo":"Stock Entry"}}
+```
+
+La instalación de los campos de procedencia requiere `bench --site <sitio> migrate`. El surtido corresponde al movimiento físico. La reserva previa de existencias y la selección del solicitante desde un directorio quedan pendientes.

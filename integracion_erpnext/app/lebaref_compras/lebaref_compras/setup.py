@@ -43,7 +43,13 @@ def configure_purchase_fields():
             {"fieldname": "custom_lebaref_operacion", "label": "Operación Windows", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
             {"fieldname": "custom_lebaref_huella", "label": "Huella de operación", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
         ]
+    fields["Material Request Item"].append({
+        "fieldname": "custom_lebaref_renglon_origen", "label": "Referencia del renglón enmendado",
+        "fieldtype": "Data", "read_only": 1, "no_copy": 1, "insert_after": "custom_lebaref_concepto",
+    })
     fields["Material Request"].extend([
+        {"fieldname": "custom_lebaref_solicitud_origen", "label": "Solicitud de origen del anexo",
+         "fieldtype": "Link", "options": "Material Request", "read_only": 1, "insert_after": "amended_from"},
         {"fieldname": "custom_lebaref_departamento", "label": "Departamento", "fieldtype": "Link", "options": "Department"},
         {"fieldname": "custom_lebaref_solicitante", "label": "Solicitante", "fieldtype": "Data"},
         {"fieldname": "custom_lebaref_notas", "label": "Notas", "fieldtype": "Small Text"},

@@ -110,9 +110,9 @@
     "estado": "Parcial",
     "prioridad": "P1",
     "original": "Descripción y unidad libre, después vincular o crear producto.",
-    "integracion": "La API captura conceptos libres con un artículo interno no inventariable y conserva su descripción desde solicitud hasta recepción. Pendiente enlazar a un SKU definitivo y conectar WPF.",
-    "evidencia": "Validar.ps1: solicitud mixta con dos conceptos libres diferentes, oferta parcial, orden y recepción sin incrementar existencias.",
-    "criterio_cierre": "Conectar la captura en WPF y verificar el vínculo posterior a un SKU definitivo sin perder historial.",
+    "integracion": "La API conserva la trazabilidad de conceptos libres y permite resolverlos a un SKU mediante una enmienda nativa antes de crear documentos de compra.",
+    "evidencia": "La suite integral conservó dos conceptos libres hasta recepción y verificó la conversión a un SKU existente o nuevo con historial. Rechazó la conversión con dependencias activas.",
+    "criterio_cierre": "Verificar en Desk la captura y la conversión a SKU. Definir el tratamiento de conceptos con documentos de compra activos.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 2788
@@ -122,12 +122,12 @@
   {
     "id": "SOL-03",
     "capacidad": "Borradores, edición y anexos",
-    "estado": "Cambio de comportamiento",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Actualizar solicitud existente y crear anexos.",
-    "integracion": "Guardar confirma inmediatamente; no hay editar/anexar desde Windows.",
-    "evidencia": "Ejecutar llama submit; Actions no incluye edición.",
-    "criterio_cierre": "Definir borrador/confirmación y corrección auditada tras cotizar.",
+    "integracion": "El backend crea un anexo en borrador vinculado a la solicitud. Desk permite editar, confirmar y consultar su documento de origen.",
+    "evidencia": "La suite integral verificó el anexo vinculado en borrador, la herencia de cabecera, el reintento y la confirmación nativa.",
+    "criterio_cierre": "Verificar en Desk la edición de borradores y el tratamiento de cambios cuando hay compras activas.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 2813
@@ -152,12 +152,12 @@
   {
     "id": "SOL-05",
     "capacidad": "Surtir desde stock y reserva por obra",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Autorización CP-1A y carga de solicitud a salida; reserva en stock.",
-    "integracion": "Solo solicitud Purchase y transferencias sin vínculo estructurado a solicitud.",
-    "evidencia": "Checkpoint original y ejecutar entregar.",
-    "criterio_cierre": "Surtir total/parcial desde stock; saldo pendiente y autorización ligados a solicitud.",
+    "integracion": "La enmienda cambia una compra sin dependencias a salida o traslado desde stock. Las Stock Entry nativas conservan el vínculo con la solicitud y su renglón.",
+    "evidencia": "La suite integral verificó el saldo tras una salida parcial, el traslado completo, las existencias y los rechazos de excedentes. Los reintentos devolvieron el folio original.",
+    "criterio_cierre": "Validar el flujo guiado de autorización y definir la reserva previa de existencias por obra.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\MainWindow.Checkpoints.cs",
       "linea": 666

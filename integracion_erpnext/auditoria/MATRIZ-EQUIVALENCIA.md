@@ -2,7 +2,7 @@
 
 Fecha: 19 de noviembre de 2026. Capacidades agrupadas del código inspeccionado; no es un porcentaje de avance del producto.
 
-Total: 55 capacidades. Parcial: 19; Verificado acotado: 8; No integrado: 21; Cambio de comportamiento: 4; Sin verificar: 3.
+Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cambio de comportamiento: 3; Sin verificar: 3.
 
 **Verificado acotado:** el caso descrito pasó; no certifica variantes no ensayadas. **Parcial:** existe una parte pero faltan datos, acciones o pruebas. **No integrado:** no está disponible como flujo equivalente en el cliente entregado, aunque ERPNext tenga piezas estándar. **Cambio de comportamiento:** requiere homologar reglas/experiencia; no es necesariamente un error. **Sin verificar:** no hay evidencia suficiente.
 
@@ -83,19 +83,19 @@ Total: 55 capacidades. Parcial: 19; Verificado acotado: 8; No integrado: 21; Cam
 **Parcial · P1**
 
 - Original: Descripción y unidad libre, después vincular o crear producto.
-- Integración: La API captura conceptos libres con un artículo interno no inventariable y conserva su descripción desde solicitud hasta recepción. Pendiente enlazar a un SKU definitivo y conectar WPF.
-- Evidencia: Validar.ps1: solicitud mixta con dos conceptos libres diferentes, oferta parcial, orden y recepción sin incrementar existencias.
-- Criterio para cerrar: Conectar la captura en WPF y verificar el vínculo posterior a un SKU definitivo sin perder historial.
+- Integración: La API conserva la trazabilidad de conceptos libres y permite resolverlos a un SKU mediante una enmienda nativa antes de crear documentos de compra.
+- Evidencia: La suite integral conservó dos conceptos libres hasta recepción y verificó la conversión a un SKU existente o nuevo con historial. Rechazó la conversión con dependencias activas.
+- Criterio para cerrar: Verificar en Desk la captura y la conversión a SKU. Definir el tratamiento de conceptos con documentos de compra activos.
 - Fuentes: [original L2788](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:2788) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## SOL-03 · Borradores, edición y anexos
 
-**Cambio de comportamiento · P1**
+**Parcial · P1**
 
 - Original: Actualizar solicitud existente y crear anexos.
-- Integración: Guardar confirma inmediatamente; no hay editar/anexar desde Windows.
-- Evidencia: Ejecutar llama submit; Actions no incluye edición.
-- Criterio para cerrar: Definir borrador/confirmación y corrección auditada tras cotizar.
+- Integración: El backend crea un anexo en borrador vinculado a la solicitud. Desk permite editar, confirmar y consultar su documento de origen.
+- Evidencia: La suite integral verificó el anexo vinculado en borrador, la herencia de cabecera, el reintento y la confirmación nativa.
+- Criterio para cerrar: Verificar en Desk la edición de borradores y el tratamiento de cambios cuando hay compras activas.
 - Fuentes: [original L2813](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:2813) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## SOL-04 · Carga rápida CSV y correo entrante
@@ -110,12 +110,12 @@ Total: 55 capacidades. Parcial: 19; Verificado acotado: 8; No integrado: 21; Cam
 
 ## SOL-05 · Surtir desde stock y reserva por obra
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Autorización CP-1A y carga de solicitud a salida; reserva en stock.
-- Integración: Solo solicitud Purchase y transferencias sin vínculo estructurado a solicitud.
-- Evidencia: Checkpoint original y ejecutar entregar.
-- Criterio para cerrar: Surtir total/parcial desde stock; saldo pendiente y autorización ligados a solicitud.
+- Integración: La enmienda cambia una compra sin dependencias a salida o traslado desde stock. Las Stock Entry nativas conservan el vínculo con la solicitud y su renglón.
+- Evidencia: La suite integral verificó el saldo tras una salida parcial, el traslado completo, las existencias y los rechazos de excedentes. Los reintentos devolvieron el folio original.
+- Criterio para cerrar: Validar el flujo guiado de autorización y definir la reserva previa de existencias por obra.
 - Fuentes: [original L666](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/MainWindow.Checkpoints.cs:666) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## COM-01 · Petición y oferta completa

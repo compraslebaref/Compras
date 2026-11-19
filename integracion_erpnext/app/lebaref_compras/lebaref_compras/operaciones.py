@@ -7,24 +7,33 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import comercial, proveedores, solicitudes, unidades
+from lebaref_compras import comercial, proveedores, solicitudes, surtido, unidades
 from lebaref_compras.unidades import numero
 
-TARGETS = {"solicitud": "Material Request", "peticion": "Request for Quotation",
+TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
+           "convertir_concepto": "Material Request", "canalizar_stock": "Material Request",
+           "surtir": "Stock Entry", "peticion": "Request for Quotation",
            "oferta": "Supplier Quotation", "autorizar": "Purchase Order",
            "recibir": "Purchase Receipt", "entregar": "Stock Entry", "devolver": "Stock Entry",
            "cfdi": "Lebaref CFDI", "articulo": "Item", "proveedor": "Supplier", "obra": "Project", "almacen": "Warehouse"}
 MASTERS = {"articulo", "proveedor", "obra", "almacen"}
-SOURCES = {"peticion": "Material Request", "oferta": "Request for Quotation",
+ENMIENDAS = {"convertir_concepto", "canalizar_stock"}
+SOURCES = {action: "Material Request" for action in (*ENMIENDAS, "anexo", "surtir", "peticion")}
+SOURCES.update({"oferta": "Request for Quotation",
            "autorizar": "Purchase Order", "recibir": "Purchase Order",
-           "devolver": "Stock Entry", "cfdi": "Purchase Receipt"}
+           "devolver": "Stock Entry", "cfdi": "Purchase Receipt"})
 
 
 def permiso(accion):
     if accion not in TARGETS:
         frappe.throw("Operación desconocida.")
     dt = TARGETS[accion]
-    for right in (("submit",) if accion == "autorizar" else (("create",) if accion == "cfdi" or accion in MASTERS else ("create", "submit"))):
+    rights = ("create", "submit")
+    if accion == "autorizar":
+        rights = ("submit",)
+    elif accion in MASTERS or accion in ("cfdi", "anexo"):
+        rights = ("create",)
+    for right in rights:
         if not frappe.has_permission(dt, right):
             frappe.throw("Tu cuenta no tiene permiso para esta operación.", frappe.PermissionError)
 
@@ -34,7 +43,7 @@ def origen(accion, folio, lock=False):
         return None
     doc = frappe.get_doc(SOURCES[accion], folio, for_update=lock)
     doc.check_permission("read")
-    if accion != "autorizar" and doc.docstatus != 1:
+    if accion not in ENMIENDAS | {"autorizar"} and doc.docstatus != 1:
         frappe.throw("Selecciona un documento confirmado.")
     return doc
 
@@ -95,13 +104,17 @@ def esquema(accion, folio=""):
     elif accion == "almacen":
         fields = [campo("warehouse_name", "Nombre del almacén"), campo("company", "Empresa", choices=catalogo("Company")), campo("parent_warehouse", "Almacén agrupador", choices=catalogo("Warehouse", {"is_group": 1}))]
         note = "Crea un almacén operativo bajo el agrupador de su empresa."
-    elif accion == "solicitud":
+    elif accion in ("solicitud", "anexo"):
+        annex = doc if accion == "anexo" else None
+        if annex:
+            solicitudes.validar_vigente(annex, ("Purchase", *surtido.TIPOS))
+            doc = None
         fields = [
             campo("company", "Empresa", doc.company if doc else "", catalogo("Company")),
             campo("schedule_date", "Fecha requerida", doc.schedule_date if doc else add_days(today(), 7), kind="date"),
             campo("title", "Descripción", doc.title if doc else ""),
         ]
-        values = solicitudes.valores_cabecera(doc) if doc else {}
+        values = solicitudes.valores_cabecera(doc or annex) if doc or annex else {}
         fields.extend(
             campo(key, label, values.get(key, ""),
                   choices=solicitudes.departamentos() if key == "departamento" and not doc else None,
@@ -126,8 +139,38 @@ def esquema(accion, folio=""):
                 for r in doc.items
             ]
             note = "Consulta de la solicitud guardada."
+        elif annex:
+            fields[0]["value"] = annex.company
+            columns.append(columna("from_warehouse", "Almacén origen", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0, "company": annex.company})))
+            note = f"Crea un anexo en borrador vinculado a {annex.name}. Confírmalo en Desk."
         else:
             note = "Por renglón, selecciona un artículo o captura un concepto libre. Guardar confirma la solicitud."
+    elif accion == "convertir_concepto":
+        solicitudes.validar_vigente(doc, ("Purchase",))
+        fields = [campo("renglon", "Renglón", choices=[r.name for r in doc.items if r.item_code == solicitudes.ARTICULO_LIBRE]),
+                  campo("item_code", "SKU inventariable"), campo("uom", "Unidad de compra"), campo("warehouse", "Almacén")]
+        note = "Confirma una enmienda con el SKU y conserva la solicitud original en el historial."
+    elif accion == "canalizar_stock":
+        solicitudes.validar_vigente(doc, ("Purchase",))
+        warehouses = catalogo("Warehouse", {"is_group": 0, "disabled": 0, "company": doc.company})
+        fields = [campo("modo", "Movimiento", choices=["salida", "transferencia"]),
+                  campo("almacen_origen", "Almacén origen", choices=warehouses),
+                  campo("almacen_destino", "Almacén destino", choices=warehouses)]
+        note = "Confirma una enmienda con tipo de surtido desde stock. El movimiento físico se confirma por separado."
+    elif accion == "surtir":
+        surtido.validar(doc)
+        columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False),
+                   columna("s_warehouse", "Almacén origen", False), columna("t_warehouse", "Almacén destino", False),
+                   columna("pending", "Pendiente", False), columna("qty", "Surtir ahora")]
+        columns.extend(columna(key, label, False) for key, label in unidades.CAMPOS)
+        for r in doc.items:
+            pending = surtido.pendiente(r)
+            if pending > 0:
+                transfer = doc.material_request_type == "Material Transfer"
+                rows.append(dict(id=r.name, item_code=r.item_code, pending=pending, qty=0,
+                                 s_warehouse=r.from_warehouse if transfer else r.warehouse,
+                                 t_warehouse=r.warehouse if transfer else None, **unidades.valores(r)))
+        note = "Captura la cantidad en la unidad de la solicitud. Guardar confirma el movimiento de stock."
     elif accion == "peticion":
         fields = [campo("suppliers", "Proveedores (uno por línea)", kind="multiline")]
         note = "Copia nombres exactos del catálogo de proveedores. Se registra la petición; no se envían correos."
@@ -173,14 +216,18 @@ def esquema(accion, folio=""):
     elif accion == "cfdi":
         fields = [campo("xml", "Archivo XML CFDI", kind="file")]
         note = "Archiva el XML contra esta recepción, valida UUID y RFC, y evita duplicados. No crea póliza/factura contable ni verifica el estado SAT."
-    return dict(fields=fields, columns=columns, rows=rows, add_rows=accion == "entregar" or (accion == "solicitud" and not folio), note=note)
+    return dict(fields=fields, columns=columns, rows=rows,
+                add_rows=accion in ("entregar", "anexo") or (accion == "solicitud" and not folio), note=note)
 
 
 def elegidos(data, available):
     result = {}
-    for row in data.get("rows", []):
-        key = row.get("id")
-        if key not in available or key in result:
+    rows = data.get("rows", [])
+    if not isinstance(rows, list):
+        frappe.throw("Envía los renglones como una lista.")
+    for row in rows:
+        key = row.get("id") if isinstance(row, dict) else None
+        if not isinstance(key, str) or key not in available or key in result:
             frappe.throw("El renglón no pertenece al documento o está repetido.")
         result[key] = numero(row.get("qty", 0), zero=True)
     if not any(result.values()):
@@ -221,27 +268,22 @@ def ejecutar(accion, datos, operacion, folio=""):
             if prior.custom_lebaref_huella != signature:
                 frappe.throw("Este intento ya fue guardado con otros datos. Cierra y abre una nueva operación.")
             return dict(folio=prior.name, tipo=TARGETS[accion], repetida=True)
-    if accion in MASTERS:
-        allowed = {"articulo": ("item_code", "item_name", "item_group", "stock_uom"), "proveedor": ("supplier_name", "supplier_group", "tax_id"), "obra": ("project_name", "company"), "almacen": ("warehouse_name", "company", "parent_warehouse")}[accion]
+    if accion == "articulo":
+        doc = solicitudes.nuevo_articulo(data)
+    elif accion in MASTERS:
+        allowed = {"proveedor": ("supplier_name", "supplier_group", "tax_id"), "obra": ("project_name", "company"), "almacen": ("warehouse_name", "company", "parent_warehouse")}[accion]
         doc = frappe.get_doc(dict(doctype=TARGETS[accion], **{key: data.get(key) for key in allowed}))
-        if accion == "articulo":
-            if doc.item_code == solicitudes.ARTICULO_LIBRE:
-                frappe.throw("El código está reservado para conceptos libres.")
-            doc.is_stock_item = 1
-            unidades.configurar_articulo(doc, data)
         if accion == "proveedor":
             doc.supplier_type = "Company"
             proveedores.configurar(doc, data)
-    elif accion == "solicitud":
-        headers = solicitudes.cabecera(data)
-        schedule_date = data.get("schedule_date")
-        rows = data.get("rows")
-        if not isinstance(rows, list) or not rows:
-            frappe.throw("Captura al menos un renglón válido.")
-        items = [solicitudes.renglon(row, schedule_date) for row in rows]
-        doc = frappe.get_doc(dict(doctype="Material Request", material_request_type="Purchase",
-                                  company=data.get("company"), title=data.get("title"), transaction_date=today(),
-                                  schedule_date=schedule_date, items=items, **headers))
+    elif accion in ("solicitud", "anexo"):
+        doc = solicitudes.crear(data, source)
+    elif accion == "convertir_concepto":
+        doc = solicitudes.convertir(source, data)
+    elif accion == "canalizar_stock":
+        doc = surtido.canalizar(source, data)
+    elif accion == "surtir":
+        doc = surtido.surtir(source, elegidos(data, {r.name for r in source.items}))
     elif accion == "peticion":
         from erpnext.stock.doctype.material_request.material_request import make_request_for_quotation
         doc = make_request_for_quotation(source.name)
@@ -340,7 +382,7 @@ def ejecutar(accion, datos, operacion, folio=""):
     doc.insert()
     if accion == "proveedor":
         proveedores.completar(doc)
-    if accion not in MASTERS:
+    if accion not in MASTERS and accion != "anexo":
         doc.submit()
     return dict(folio=doc.name, tipo=doc.doctype)
 
