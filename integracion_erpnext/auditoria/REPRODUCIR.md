@@ -1,5 +1,21 @@
 # Reproducir los sondeos de auditoría
 
+## Suites con una imagen de backend concreta
+
+Con el entorno de pruebas activo, ejecuta desde la raíz del worktree de Codex:
+
+```powershell
+$pruebas = (Resolve-Path .\integracion_erpnext\pruebas).Path
+wsl.exe -d Ubuntu --cd $pruebas --exec docker build -f Dockerfile -t lebaref/erpnext-codex:bloque1 ..
+powershell -ExecutionPolicy Bypass -File .\integracion_erpnext\pruebas\Validar.ps1 -ImagenBackend lebaref/erpnext-codex:bloque1
+```
+
+`-ImagenBackend` usa esa imagen local en contenedores temporales para migrar y verificar
+`lebaref-pruebas.local`. Usa la red y los volúmenes del sitio de pruebas y permite
+verificar un worktree aunque el otro agente reconstruya el backend de Desk.
+
+## Sondeos de la auditoría original
+
 Ejecutar desde `integracion_erpnext` en esta PC, con el sitio ficticio existente
 encendido y sus datos de ejemplo. No usar en producción. Los scripts comprueban
 el nombre del sitio y revierten sus transacciones al terminar.
