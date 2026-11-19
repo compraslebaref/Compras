@@ -111,6 +111,33 @@ def _verificar_unidades(seed, supplier):
     assert frappe.db.get_value("Bin", {"item_code": item, "warehouse": base.warehouse}, "actual_qty") == 10
 
 
+def _verificar_proveedor():
+    frappe.set_user("autoriza@lebaref.test")
+    data = {
+        "supplier_name": "Contacto prueba " + uuid.uuid4().hex[:8],
+        "supplier_group": frappe.db.get_value("Supplier Group", {"is_group": 0}),
+        "tax_id": "AAA010101AAA", "telefono": "+52 55 1234 5678",
+        "contacto": "Ana de Prueba", "correo": "cotizaciones@lebaref.test",
+    }
+    token = str(uuid.uuid4())
+    supplier = ejecutar("proveedor", data, token)["folio"]
+    assert ejecutar("proveedor", data, token)["repetida"]
+    doc = frappe.get_doc("Supplier", supplier)
+    contact = frappe.get_doc("Contact", doc.supplier_primary_contact)
+    assert (contact.full_name, contact.mobile_no, contact.email_id) == (data["contacto"], data["telefono"], data["correo"])
+    assert [(r.link_doctype, r.link_name) for r in contact.links] == [("Supplier", supplier)]
+    assert len(contact.email_ids) == len(contact.phone_nos) == 1
+
+    only_name = dict(data, supplier_name=data["supplier_name"] + " Sin canales", telefono="", correo="")
+    named_supplier = ejecutar("proveedor", only_name, str(uuid.uuid4()))["folio"]
+    fields = {f["name"]: f["value"] for f in esquema("proveedor", named_supplier)["fields"]}
+    assert fields["contacto"] == data["contacto"] and not fields["correo"] and not fields["telefono"]
+
+    frappe.set_user("compras@lebaref.test")
+    fields = {f["name"]: f["value"] for f in esquema("proveedor", supplier)["fields"]}
+    assert all(fields[key] == data[key] for key in ("telefono", "contacto", "correo"))
+
+
 def verificar():
     if frappe.local.site != "lebaref-pruebas.local":
         raise RuntimeError("Solo se permite en el entorno de pruebas.")
@@ -210,6 +237,8 @@ def verificar():
         results.append("XML privado registrado y UUID sin duplicación (validación estructural, no SAT)")
         _verificar_unidades(seed, supplier.name)
         results.append("CAT-02: dos cajas son 20 unidades de inventario y recibir una caja ingresa 10")
+        _verificar_proveedor()
+        results.append("CAT-03: teléfono, contacto y correo en el proveedor, consulta con permisos y reintento")
         return {"correcto": True, "pruebas": results, "datos": "Revertidos al finalizar"}
     finally:
         frappe.db.rollback()

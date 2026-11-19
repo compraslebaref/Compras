@@ -33,9 +33,9 @@ Total: 55 capacidades. Parcial: 17; Verificado acotado: 8; No integrado: 23; Cam
 **Parcial · P1**
 
 - Original: Razón social, nombre comercial, RFC, contacto y condiciones de pago.
-- Integración: Alta mínima de nombre, grupo y RFC.
-- Evidencia: Esquema proveedor.
-- Criterio para cerrar: Mantener contactos/condiciones y propagarlos a la orden.
+- Integración: La API de proveedor guarda teléfono, persona de contacto y correo mediante Supplier y Contact de ERPNext.
+- Evidencia: Validar.ps1: creación del contacto principal, consulta por Compras, alta con solo nombre de contacto y reintento idempotente.
+- Criterio para cerrar: Verificar en WPF los datos de contacto guardados en ERPNext y completar condiciones de compra en la orden.
 - Fuentes: [original L1414](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:1414) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
 
 ## CAT-04 · Personal, departamentos y responsables

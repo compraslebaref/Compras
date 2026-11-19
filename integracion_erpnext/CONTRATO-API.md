@@ -185,7 +185,30 @@
 
   En los POST de oferta y recepción puedes omitir estos tres campos o enviarlos tal como los devolvió el esquema. Se valida su coincidencia en renglones cotizados o recibidos. La oferta expresa `rate` por unidad de compra. Por ejemplo, para recibir una caja envía `{"rows":[{"id":"po-item-a","qty":1}]}` y obtendrás `{"message":{"folio":"MAT-PRE-2026-00001","tipo":"Purchase Receipt"}}`. Se reciben 10 unidades de inventario. Un factor inválido, una unidad sin conversión aplicable o el intento de alterar las unidades del documento de origen se rechazan con HTTP `417`.
 
-## 5. Cambios de Contrato Planificados (Bloque 1)
+## 5. Contacto del proveedor (`CAT-03`)
+
+- En `POST /api/method/lebaref_compras.operaciones.ejecutar` con `accion=proveedor`, `telefono`, `contacto` y `correo` son textos opcionales en `datos`. Si llega al menos uno, se crea el contacto principal vinculado al proveedor en la misma transacción. Se requieren permisos de creación de `Supplier` y, para esos datos, de `Contact`. Un correo inválido o varios destinatarios se rechazan con HTTP `417`. El alta conserva la respuesta y la idempotencia de §2.2.
+
+  ```json
+  {"supplier_name":"Proveedor A","supplier_group":"Local","tax_id":"AAA010101AAA","telefono":"+52 55 1234 5678","contacto":"Ana de Prueba","correo":"cotizaciones@lebaref.test"}
+  ```
+  ```json
+  {"message":{"folio":"Proveedor A","tipo":"Supplier"}}
+  ```
+
+- En `GET /api/method/lebaref_compras.operaciones.esquema?accion=proveedor&folio=Proveedor%20A`, se exige permiso de lectura sobre el proveedor. Estas entradas de `message.fields` muestran los datos existentes. `contacto` se lee desde `Contact.full_name` con permiso de lectura de ese contacto. Cada dato ausente se devuelve como `""`. Con `folio` vacío, el esquema de alta ofrece los mismos campos vacíos.
+
+  ```json
+  [
+    {"name":"telefono","label":"Teléfono","value":"+52 55 1234 5678","choices":null,"kind":"text"},
+    {"name":"contacto","label":"Contacto","value":"Ana de Prueba","choices":null,"kind":"text"},
+    {"name":"correo","label":"Correo","value":"cotizaciones@lebaref.test","choices":null,"kind":"text"}
+  ]
+  ```
+
+- En `GET /api/resource/Supplier/Proveedor%20A` se pueden leer los campos nativos `data.mobile_no`, `data.email_id` y `data.supplier_primary_contact`. Este último identifica el documento `Contact`. Con los permisos correspondientes, se puede consultar `GET /api/resource/Contact/<folio>` y leer `data.full_name`.
+
+## 6. Cambios de Contrato Planificados (Bloque 1)
 
 - **`[SOL-02 / SOL-03 / SOL-05]` Solicitudes enriquecidas:**
   - Metadatos de solicitante/gerente, departamento, notas, borrador vs. enviado, anexos, conceptos libres y aprobación de surtido desde stock.

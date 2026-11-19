@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import unidades
+from lebaref_compras import proveedores, unidades
 from lebaref_compras.unidades import numero
 
 TARGETS = {"solicitud": "Material Request", "peticion": "Request for Quotation",
@@ -58,8 +58,8 @@ def esquema(accion, folio=""):
     from lebaref_compras import equipos
     if accion in equipos.TARGETS:
         return equipos.esquema(accion, folio)
-    if accion == "articulo" and folio:
-        doc = frappe.get_doc("Item", folio)
+    if accion in ("articulo", "proveedor") and folio:
+        doc = frappe.get_doc(TARGETS[accion], folio)
         doc.check_permission("read")
     else:
         permiso(accion)
@@ -81,8 +81,14 @@ def esquema(accion, folio=""):
             "Crea un artículo con control de inventario. El factor indica cuántas unidades de inventario contiene una unidad de compra."
         )
     elif accion == "proveedor":
-        fields = [campo("supplier_name", "Nombre"), campo("supplier_group", "Grupo", choices=catalogo("Supplier Group", {"is_group": 0})), campo("tax_id", "RFC")]
-        note = "Alta de proveedor. Verifica el RFC para vincular sus XML posteriormente."
+        values = proveedores.valores(doc) if doc else {}
+        fields = [
+            campo("supplier_name", "Nombre", doc.supplier_name if doc else ""),
+            campo("supplier_group", "Grupo", doc.supplier_group if doc else "", catalogo("Supplier Group", {"is_group": 0})),
+            campo("tax_id", "RFC", (doc.tax_id or "") if doc else ""),
+        ]
+        fields.extend(campo(key, label, values.get(key, "")) for key, label in proveedores.CAMPOS)
+        note = "Consulta los datos del proveedor." if doc else "Alta de proveedor. Verifica el RFC para vincular sus XML posteriormente."
     elif accion == "obra":
         fields = [campo("project_name", "Nombre de obra"), campo("company", "Empresa", choices=catalogo("Company"))]
         note = "Crea la obra como proyecto de ERPNext."
@@ -183,6 +189,7 @@ def ejecutar(accion, datos, operacion, folio=""):
             unidades.configurar_articulo(doc, data)
         if accion == "proveedor":
             doc.supplier_type = "Company"
+            proveedores.configurar(doc, data)
     elif accion == "solicitud":
         items = []
         for r in data.get("rows", []):
@@ -283,6 +290,8 @@ def ejecutar(accion, datos, operacion, folio=""):
     doc.custom_lebaref_operacion = token
     doc.custom_lebaref_huella = signature
     doc.insert()
+    if accion == "proveedor":
+        proveedores.completar(doc)
     if accion not in MASTERS:
         doc.submit()
     return dict(folio=doc.name, tipo=doc.doctype)

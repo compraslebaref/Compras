@@ -35,9 +35,9 @@
     "estado": "Parcial",
     "prioridad": "P1",
     "original": "Razón social, nombre comercial, RFC, contacto y condiciones de pago.",
-    "integracion": "Alta mínima de nombre, grupo y RFC.",
-    "evidencia": "Esquema proveedor.",
-    "criterio_cierre": "Mantener contactos/condiciones y propagarlos a la orden.",
+    "integracion": "La API de proveedor guarda teléfono, persona de contacto y correo mediante Supplier y Contact de ERPNext.",
+    "evidencia": "Validar.ps1: creación del contacto principal, consulta por Compras, alta con solo nombre de contacto y reintento idempotente.",
+    "criterio_cierre": "Verificar en WPF los datos de contacto guardados en ERPNext y completar condiciones de compra en la orden.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 1414
