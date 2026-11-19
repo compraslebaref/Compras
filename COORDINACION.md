@@ -29,7 +29,7 @@
 
 | ID Matriz | Capacidad / Brecha | Responsable Backend (Codex) | Responsable Windows (Antigravity) | Estado | Notas / Handoff |
 |---|---|---|---|---|---|
-| `COM-02` | **Ofertas parciales de proveedores** (cotizar 1 de N renglones sin exigir todos) | Ajustar `operaciones.py` (`oferta`) y `comparativa.py` + prueba en `verificar_integracion.py` | Permitir captura de precio en `0` / omitido por renglón y mostrar "Sin cotizar" en comparativa e impresión | `PENDIENTE` | Hoy `operaciones.py` L196 lanza `"Cotiza todos los renglones de la petición una sola vez"`. |
+| `COM-02` | **Ofertas parciales de proveedores** (cotizar 1 de N renglones sin exigir todos) | Ajustar `operaciones.py` (`oferta`) y `comparativa.py` + prueba en `verificar_integracion.py` | Permitir captura de precio en `0` / omitido por renglón y mostrar "Sin cotizar" en comparativa e impresión | `BACKEND VERIFICADO · WINDOWS PENDIENTE` | Backend `96f8082`. Captura de precios vacíos/cero y «Sin cotizar» en comparativa e impresión quedan con Antigravity. |
 | `CAT-02` | **Unidades de compra vs. almacén y factor de conversión** visibles de punta a punta | Exponer `uom`, `stock_uom` y `conversion_factor` en esquemas/consultas de `Item`, `solicitud`, `oferta` y `recibir` | Mostrar y permitir elegir unidad de compra + factor en alta/edición y renglones de solicitud/recepción | `PENDIENTE` | Servidor ya calcula `2 × 10 = 20`, falta exponerlo en API y UI. |
 | `SOL-02` / `CAT-04` | **Solicitudes completas:** conceptos libres sin SKU previo, Departamento, Solicitante, Notas y Origen | Campos custom o manejo de ítem genérico/temporal convertible a SKU + vínculos de Departamento/Solicitante en `Material Request` | Captura completa con selector de Departamento/Solicitante, conceptos abiertos y vínculo posterior a SKU | `PENDIENTE` | Crítico para no obligar a catalogar antes de pedir cotización. |
 | `SOL-03` / `SOL-05` | **Borrador/edición, Anexos (`SOL-A1`) y Aprobar Surtir desde Stock** | Soportar estado borrador vs. enviado, anexo vinculado a solicitud origen y ruta `Material Issue`/`Transfer` desde stock ligada a `Material Request` | Botones de guardar borrador, crear anexo y aprobar surtido desde stock con guía *Siguiente paso* | `PENDIENTE` | — |
@@ -48,5 +48,7 @@
 ---
 
 ## Bitácora de Entregas Entre Agentes (Más reciente arriba)
+
+- **2026-11-19 — Codex, COM-02 (`96f8082`):** Backend listo para integrar desde `codex/erpnext`. La oferta guarda los renglones con precio positivo. La comparativa conserva los renglones de solicitud y omite al proveedor de `opciones` si no cotizó ese renglón. `Validar.ps1` pasó tras reconstruir el backend, con dos proveedores y dos órdenes en borrador en `lebaref-pruebas.local`. Antigravity puede conectar la captura, comparativa e impresión con los ejemplos de [CONTRATO-API.md](integracion_erpnext/CONTRATO-API.md#3-ofertas-parciales-com-02).
 
 - **2026-11-19 — Antigravity:** Unificación de repositorios en `C:\Users\oscar\Proyectos\Lebaref` (`app\` + worktree `codex\`), creación de `AGENTS.md`, `COORDINACION.md`, `integracion_erpnext/CONTRATO-API.md` y `integracion_erpnext/pruebas/Validar.ps1` sin alterar la lógica de negocio ni datos del entorno Docker `lebaref-pruebas`. Listo para iniciar Bloque 1 en conjunto con Codex.
