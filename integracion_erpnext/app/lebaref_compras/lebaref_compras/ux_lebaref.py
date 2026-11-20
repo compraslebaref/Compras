@@ -373,8 +373,8 @@ def configurar_ux_lebaref():
             "ocultar": ["title", "material_request_type", "company", "transaction_date", "per_ordered", "per_received"],
         },
         "Item": {
-            "mostrar": ["custom_lebaref_codigo_barras", "item_name", "item_group", "custom_lebaref_ubicacion"],
-            "ocultar": ["image", "stock_uom", "is_stock_item", "has_variants", "variant_of"],
+            "mostrar": ["custom_lebaref_codigo_barras", "item_name", "custom_lebaref_ubicacion"],
+            "ocultar": ["image", "item_group", "stock_uom", "is_stock_item", "has_variants", "variant_of"],
         },
         "Supplier": {
             "mostrar": ["custom_especialidad_cotizar", "tax_id", "mobile_no"],
@@ -547,11 +547,17 @@ def ficha_producto(item_code: str):
         if s.supplier_part_no
     ]
 
+    grupos_disp = []
+    if frappe.has_permission("Item Group", "read"):
+        grupos_disp = frappe.get_list("Item Group", filters={"is_group": 0}, pluck="name", order_by="name asc", limit_page_length=200)
+
     return {
         "codigo_interno": doc.name,
         "codigo_barras": cb_render,
         "nombre": doc.item_name or doc.name,
         "categoria": doc.item_group or "—",
+        "grupos_disponibles": grupos_disp,
+        "puede_editar": bool(doc.has_permission("write")),
         "marca": doc.brand or "—",
         "modelo": doc.get("custom_lebaref_modelo") or "—",
         "medidas": doc.get("custom_lebaref_medidas") or "—",
@@ -901,3 +907,186 @@ def asignar_cliente_obra(obra: str, cliente: str = ""):
         frappe.throw("Selecciona un cliente existente.")
     prj.db_set("customer", cli or None)
     return {"ok": True, "obra": prj.name, "cliente": cli}
+
+
+@frappe.whitelist(methods=["POST"])
+def actualizar_ficha_producto(item_code: str, datos: str):
+    """Guarda los cambios de la pestaña 'Editar' en el panel derecho del Catálogo sin abandonar la lista."""
+    doc = frappe.get_doc("Item", item_code)
+    doc.check_permission("write")
+    d = frappe.parse_json(datos) if isinstance(datos, str) else datos
+    if not isinstance(d, dict):
+        frappe.throw("Datos de edición inválidos.")
+
+    nombre = (d.get("nombre") or "").strip()
+    if nombre:
+        doc.item_name = nombre[:140]
+
+    cat = (d.get("categoria") or "").strip()
+    if cat and frappe.db.exists("Item Group", cat):
+        doc.item_group = cat
+
+    marca = (d.get("marca") or "").strip()[:140]
+    if marca and marca != "—":
+        if not frappe.db.exists("Brand", marca):
+            frappe.get_doc({"doctype": "Brand", "brand": marca}).insert(ignore_permissions=True)
+        doc.brand = marca
+    elif marca == "":
+        doc.brand = None
+
+    mapa_campos = {
+        "codigo_barras": "custom_lebaref_codigo_barras",
+        "ubicacion": "custom_lebaref_ubicacion",
+        "modelo": "custom_lebaref_modelo",
+        "medidas": "custom_lebaref_medidas",
+        "capacidad": "custom_lebaref_capacidad",
+        "espec1": "custom_lebaref_especificacion_1",
+        "espec2": "custom_lebaref_especificacion_2",
+    }
+    for k_in, fn_doc in mapa_campos.items():
+        if k_in in d:
+            val = (d.get(k_in) or "").strip()
+            doc.set(fn_doc, "" if val == "—" else val[:140])
+
+    if "stock_minimo" in d:
+        doc.custom_lebaref_stock_minimo = max(0.0, flt(d.get("stock_minimo") or 0.0))
+
+    if "ultimo_costo" in d:
+        costo = max(0.0, flt(d.get("ultimo_costo") or 0.0))
+        doc.custom_lebaref_ultimo_costo = costo
+        if costo > 0:
+            pl = frappe.db.get_single_value("Buying Settings", "buying_price_list") or "Standard Buying"
+            ip_name = frappe.db.get_value("Item Price", {"item_code": doc.name, "buying": 1, "price_list": pl}, "name")
+            if ip_name:
+                frappe.db.set_value("Item Price", ip_name, "price_list_rate", costo, update_modified=False)
+
+    doc.save()
+    return ficha_producto(doc.name)
+
+
+@frappe.whitelist(methods=["POST"])
+def subir_imagen_catalogo(item_code: str, filename: str, content_base64: str):
+    """Guarda una imagen pegada (Ctrl+V) o seleccionada desde el panel lateral del Catálogo."""
+    import base64
+    from frappe.utils.file_manager import save_file
+
+    doc = frappe.get_doc("Item", item_code)
+    doc.check_permission("write")
+
+    b64 = (content_base64 or "").strip()
+    if "," in b64:
+        b64 = b64.split(",", 1)[1]
+    raw = base64.b64decode(b64)
+    if len(raw) > 8_000_000:
+        frappe.throw("La imagen supera el límite de 8 MB.")
+
+    safe_name = (filename or f"{doc.name}.png").replace("/", "_").replace("\\", "_")
+    fdoc = save_file(safe_name, raw, "Item", doc.name, is_private=0)
+    doc.db_set("image", fdoc.file_url)
+    return {"ok": True, "image": fdoc.file_url}
+
+
+@frappe.whitelist(methods=["GET"])
+def opciones_agregar_a_solicitud():
+    """Devuelve solicitudes abiertas y catálogos para agregar un artículo directamente desde el panel del Catálogo."""
+    borradores = frappe.get_list(
+        "Material Request",
+        filters={"docstatus": 0, "material_request_type": "Purchase"},
+        fields=["name", "custom_lebaref_nombre_solicitud", "title"],
+        order_by="modified desc",
+        limit_page_length=30,
+    )
+    confirmadas = frappe.get_list(
+        "Material Request",
+        filters={"docstatus": 1, "material_request_type": "Purchase", "status": ["not in", ["Stopped", "Cancelled"]]},
+        fields=["name", "custom_lebaref_nombre_solicitud", "title"],
+        order_by="modified desc",
+        limit_page_length=30,
+    )
+    obras = frappe.get_list("Project", pluck="name", order_by="name asc", limit_page_length=200)
+    deptos = frappe.get_list("Department", filters={"disabled": 0, "is_group": 0}, pluck="name", order_by="name asc", limit_page_length=100)
+    return {
+        "borradores": [
+            {"id": b.name, "etiqueta": f"{b.name} · {(b.custom_lebaref_nombre_solicitud or b.title or 'Borrador')[:65]}"}
+            for b in borradores
+        ],
+        "confirmadas": [
+            {"id": c.name, "etiqueta": f"{c.name} · {(c.custom_lebaref_nombre_solicitud or c.title or '')[:65]}"}
+            for c in confirmadas
+        ],
+        "obras": obras,
+        "departamentos": deptos,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def agregar_item_a_solicitud(
+    modo: str,
+    item_code: str,
+    cantidad: float,
+    solicitud: str = "",
+    obra: str = "",
+    departamento: str = "",
+    solicitante: str = "",
+    nombre_solicitud: str = "",
+):
+    """Agrega un SKU del catálogo a un borrador existente, como anexo de solicitud activa o creando una nueva."""
+    from lebaref_compras import operaciones
+
+    qty = flt(cantidad or 0)
+    if qty <= 0:
+        frappe.throw("Indica una cantidad mayor que cero.")
+
+    item = frappe.get_doc("Item", item_code)
+    item.check_permission("read")
+    company = frappe.get_all("Company", pluck="name")[0]
+    almacen = frappe.db.get_value("Warehouse", {"company": company, "is_group": 0, "disabled": 0}, "name") or ""
+
+    if modo == "borrador" and solicitud:
+        mr = frappe.get_doc("Material Request", solicitud)
+        mr.check_permission("write")
+        if mr.docstatus != 0:
+            frappe.throw("Selecciona una solicitud en borrador.")
+        mr.append("items", {
+            "item_code": item.name,
+            "qty": qty,
+            "uom": item.purchase_uom or item.stock_uom,
+            "stock_uom": item.stock_uom,
+            "conversion_factor": 1.0,
+            "schedule_date": mr.schedule_date or today(),
+            "warehouse": almacen,
+            "project": obra or None,
+        })
+        mr.save()
+        return {"folio": mr.name, "tipo": "Material Request"}
+
+    if modo == "anexo" and solicitud:
+        res = operaciones.ejecutar(
+            "anexo",
+            json.dumps({
+                "title": f"Anexo {solicitud} ({item.item_name[:40]})",
+                "schedule_date": today(),
+                "rows": [{"item_code": item.name, "qty": qty, "warehouse": almacen, "project": obra}],
+            }, ensure_ascii=False),
+            str(uuid.uuid4()),
+            solicitud,
+        )
+        return res
+
+    # Nueva solicitud confirmada
+    nom = (nombre_solicitud or "").strip() or f"Solicitud {item.item_name[:60]}"
+    payload = {
+        "company": company,
+        "schedule_date": today(),
+        "title": nom[:140],
+        "departamento": (departamento or "").strip(),
+        "solicitante": (solicitante or "").strip(),
+        "rows": [{"item_code": item.name, "qty": qty, "warehouse": almacen, "project": (obra or "").strip()}],
+    }
+    res_new = operaciones.ejecutar(
+        "solicitud",
+        json.dumps(payload, ensure_ascii=False),
+        str(uuid.uuid4()),
+    )
+    frappe.db.set_value("Material Request", res_new["folio"], "custom_lebaref_nombre_solicitud", nom[:140], update_modified=False)
+    return res_new

@@ -62,6 +62,7 @@ def main():
 
         resumen = {
             "items_ficha_actualizados": 0,
+            "imagenes_catalogo_verificadas": 0,
             "renglones_vista_actualizados": 0,
             "solicitudes_nombradas": 0,
             "proveedores_especialidad": 0,
@@ -69,7 +70,9 @@ def main():
             "xml_adjuntos_vinculados": 0,
         }
 
-        # 1. Enriquecer los 665 Artículos con los campos exactos de la Ficha Técnica original
+        catalogo_dir = frappe.get_site_path("public", "files", "catalogo")
+
+        # 1. Enriquecer los 665 Artículos con los campos exactos e imágenes reales de la Ficha Técnica original
         for p in conn.execute("SELECT * FROM Productos ORDER BY Id"):
             code = (p["CodigoInterno"] or f"PRD-{p['Id']:04d}").strip()
             if not frappe.db.exists("Item", code):
@@ -86,6 +89,13 @@ def main():
                 "custom_lebaref_especificacion_1": ((p["Especificacion1"] or "").strip())[:140],
                 "custom_lebaref_especificacion_2": ((p["Especificacion2"] or "").strip())[:140],
             }
+            img_ruta = (p["ImagenRuta"] or "").strip()
+            if img_ruta:
+                base_img = os.path.basename(img_ruta.replace("\\", "/"))
+                if os.path.isfile(os.path.join(catalogo_dir, base_img)):
+                    valores_item["image"] = f"/files/catalogo/{base_img}"
+                    resumen["imagenes_catalogo_verificadas"] += 1
+
             frappe.db.set_value("Item", code, valores_item, update_modified=False)
             resumen["items_ficha_actualizados"] += 1
 
