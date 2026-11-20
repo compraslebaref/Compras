@@ -74,16 +74,22 @@ def _clasificar_zona_herramienta(ubicacion, articulo, estado, obra):
     return "A"
 
 
-def _clasificar_zona_bin(warehouse, item_code):
+def _clasificar_zona_bin(warehouse, item_code, anaquel="", grupo=""):
     wh = (warehouse or "").upper()
     ic = (item_code or "").upper()
+    anq = (anaquel or "").upper()
+    grp = (grupo or "").upper()
     if "OBRA" in wh or "PROY" in wh:
         return "F"
-    if any(k in ic for k in ("COBRE", "TUB", "GAS", "REFRIG", "AISLA", "HVAC", "DREN")):
-        return "D"
-    if any(k in ic for k in ("CABLE", "PASTILLA", "INTERRUP", "CONTACTO", "CANALETA", "CONDUIT")):
+    if anq.startswith("A-") or anq.startswith("A0") or "DETRAS-A" in anq:
+        return "A"
+    if "GABINETE" in anq or anq.startswith("B-"):
         return "B"
-    if any(k in ic for k in ("GUANTE", "CASCO", "LENTE", "EPP", "CHALECO", "BOTA")):
+    if "REFRIG" in grp or "HVAC" in grp or any(k in ic for k in ("COBRE", "TUB", "GAS", "REFRIG", "AISLA", "HVAC", "DREN")):
+        return "D"
+    if "ELÉCTRIC" in grp or "ELECTRIC" in grp or any(k in ic for k in ("CABLE", "PASTILLA", "INTERRUP", "CONTACTO", "CANALETA", "CONDUIT")):
+        return "B"
+    if "SEGURIDAD" in grp or "EPP" in grp or any(k in ic for k in ("GUANTE", "CASCO", "LENTE", "EPP", "CHALECO", "BOTA")):
         return "E"
     return "C"
 
@@ -439,8 +445,30 @@ def mapa_ubicaciones():
             order_by="warehouse asc, item_code asc",
             limit_page_length=1000,
         )
+        codigos_bin = [b.item_code for b in raw_bins if b.item_code]
+        info_items = {}
+        if codigos_bin and frappe.has_permission("Item", "read"):
+            for it in frappe.get_list(
+                "Item",
+                filters={"name": ["in", codigos_bin]},
+                fields=["name", "item_name", "item_group", "description"],
+                limit_page_length=1000,
+            ):
+                desc = it.get("description") or ""
+                anaquel = ""
+                if "[Anaquel:" in desc:
+                    anaquel = desc.split("[Anaquel:", 1)[1].split("]", 1)[0].strip()
+                info_items[it.name] = {
+                    "item_name": it.get("item_name") or it.name,
+                    "item_group": it.get("item_group") or "",
+                    "anaquel": anaquel,
+                }
         for b in raw_bins:
-            b["zona"] = _clasificar_zona_bin(b.get("warehouse"), b.get("item_code"))
+            meta_it = info_items.get(b.get("item_code"), {})
+            anaquel = meta_it.get("anaquel", "")
+            b["item_name"] = meta_it.get("item_name") or b.get("item_code")
+            b["anaquel"] = anaquel
+            b["zona"] = _clasificar_zona_bin(b.get("warehouse"), b.get("item_code"), anaquel, meta_it.get("item_group", ""))
             bins.append(b)
 
     kits = []

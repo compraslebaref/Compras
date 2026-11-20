@@ -332,7 +332,7 @@
             const binFiltrados = existencias.filter((b) => {
                 if (zonaActiva !== "TODAS" && b.zona !== zonaActiva) return false;
                 if (!q) return true;
-                return [b.warehouse, b.item_code].some((v) => String(v || "").toLowerCase().includes(q));
+                return [b.warehouse, b.item_code, b.item_name, b.anaquel].some((v) => String(v || "").toLowerCase().includes(q));
             });
 
             const herRows = herFiltradas.map((h) => {
@@ -348,8 +348,8 @@
 
             const binRows = binFiltrados.map((b) =>
                 `<tr>
-                    <td><b>Zona ${frappe.utils.escape_html(b.zona)}</b> · ${frappe.utils.escape_html(b.warehouse)}</td>
-                    <td><a href="/app/item/${encodeURIComponent(b.item_code)}"><b>${frappe.utils.escape_html(b.item_code)}</b></a></td>
+                    <td><b>Zona ${frappe.utils.escape_html(b.zona)}</b> · ${frappe.utils.escape_html(b.anaquel ? b.anaquel + " (" + b.warehouse + ")" : b.warehouse)}</td>
+                    <td><a href="/app/item/${encodeURIComponent(b.item_code)}"><b>${frappe.utils.escape_html(b.item_code)}</b></a> — ${frappe.utils.escape_html(b.item_name || "")}</td>
                     <td class="text-right"><b>${b.actual_qty} ${frappe.utils.escape_html(b.stock_uom || "")}</b></td>
                 </tr>`
             ).join("");
