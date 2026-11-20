@@ -351,14 +351,27 @@ FORMATO_RECEPCION = _CSS_CARTA + """
 """
 
 FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
+{% set es_sobrante_hist = doc.custom_lebaref_tipo_sobrante %}
+{% set es_consumo_obra = (doc.custom_lebaref_origen and (doc.purpose == "Material Issue" or doc.stock_entry_type == "Material Issue")) %}
+{% set es_retorno_vinc = (doc.custom_lebaref_origen and not es_consumo_obra) %}
 <div class="leb-carta">
   <div class="leb-hdr">
     <div class="leb-hdr-brand">
       {{ svg_logo_lebaref(195) }}
       <div class="leb-hdr-info">
-        <div class="leb-sub-area">Control de Bodega y Obra</div>
-        <div class="leb-doc-title">{{ "Vale de Retorno de Sobrante a Almacén" if doc.custom_lebaref_origen else "Vale de Entrega / Salida de Material a Obra" }}</div>
-        <div style="font-size:11px;color:#475569;">Fecha: {{ frappe.utils.formatdate(doc.posting_date) }} · Tipo: {{ _(doc.stock_entry_type) }}</div>
+        <div class="leb-sub-area">Control de Bodega, Resguardo y Consumo en Obra</div>
+        <div class="leb-doc-title">
+          {% if es_sobrante_hist %}
+            Acta de Sobrante Histórico ({{ doc.custom_lebaref_tipo_sobrante }}){% if doc.docstatus == 0 %} · BORRADOR{% endif %}
+          {% elif es_consumo_obra %}
+            Vale de Consumo Real de Material en Obra
+          {% elif es_retorno_vinc %}
+            Vale de Retorno de Sobrante a Almacén
+          {% else %}
+            Vale de Entrega / Resguardo de Material en Obra
+          {% endif %}
+        </div>
+        <div style="font-size:11px;color:#475569;">Fecha: {{ frappe.utils.formatdate(doc.posting_date) }} · Movimiento ERPNext: {{ _(doc.stock_entry_type) }}</div>
       </div>
     </div>
     <div>{{ svg_code128(doc.name) }}</div>
@@ -367,10 +380,23 @@ FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
     <tr>
       <td><b>Folio Movimiento:</b> {{ doc.name }}</td>
       <td><b>Obra / Proyecto:</b> {{ doc.project or "—" }}</td>
-      <td><b>Entrega Origen:</b> {{ doc.custom_lebaref_origen or "N/A (Salida Original)" }}</td>
+      <td>
+        {% if es_sobrante_hist %}
+          <b>Acta Física Origen:</b> {{ doc.custom_lebaref_referencia_sobrante or "—" }}
+        {% else %}
+          <b>Entrega Origen:</b> {{ doc.custom_lebaref_origen or "N/A (Entrega Original a Obra)" }}
+        {% endif %}
+      </td>
     </tr>
+    {% if es_sobrante_hist %}
     <tr>
-      <td colspan="3"><b>Recibe / Observaciones:</b> {{ doc.remarks or "—" }}</td>
+      <td><b>Tratamiento (ALM-07):</b> {{ doc.custom_lebaref_tipo_sobrante }}</td>
+      <td><b>Persona que entrega:</b> {{ doc.custom_lebaref_persona_sobrante or "—" }}</td>
+      <td><b>Verificación Stock:</b> {{ doc.custom_lebaref_confirmacion_sobrante or "Existencia ya contabilizada" }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td colspan="3"><b>{{ "Motivo / Actividad en Obra:" if es_consumo_obra else ("Motivo de Recuperación:" if es_sobrante_hist else "Recibe / Observaciones:") }}</b> {{ doc.remarks or "—" }}</td>
     </tr>
   </table>
   <table class="leb-tbl">
@@ -389,9 +415,15 @@ FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
       <tr>
         <td>{{ row.idx }}</td>
         <td><b>{{ row.item_code }}</b></td>
-        <td>{{ row.item_name }}{% if row.custom_lebaref_partida %}<br><small>Partida: {{ row.custom_lebaref_partida }}</small>{% endif %}</td>
+        <td>
+          {{ row.item_name }}
+          {% if row.custom_lebaref_partida %}<br><small>Partida: {{ row.custom_lebaref_partida }}</small>{% endif %}
+          {% if es_sobrante_hist == "Entrada no contabilizada" and row.basic_rate %}
+          <br><small style="color:#475569;">Valor unitario asignado: {{ frappe.utils.fmt_money(row.basic_rate, currency="MXN") }}</small>
+          {% endif %}
+        </td>
         <td>{{ row.s_warehouse or "—" }}</td>
-        <td>{{ row.t_warehouse or "—" }}</td>
+        <td>{{ row.t_warehouse or ("Consumo definitivo en obra" if es_consumo_obra else "—") }}</td>
         <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
       </tr>
       {% endfor %}
@@ -399,8 +431,8 @@ FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
   </table>
   <table class="leb-firmas">
     <tr>
-      <td><div class="leb-linea-firma">Despachó Almacén</div></td>
-      <td><div class="leb-linea-firma">Recibió Conformidad en Obra</div></td>
+      <td><div class="leb-linea-firma">{{ "Entregó Sobrante" if es_sobrante_hist else ("Registró Consumo" if es_consumo_obra else "Despachó Almacén") }}</div></td>
+      <td><div class="leb-linea-firma">{{ "Verificó Almacén" if es_sobrante_hist else "Conformidad Residente / Obra" }}</div></td>
       <td><div class="leb-linea-firma">Autorizó Responsable</div></td>
     </tr>
   </table>

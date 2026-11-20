@@ -7,12 +7,12 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import comercial, proveedores, recepciones, solicitudes, sustituciones, surtido, unidades
+from lebaref_compras import comercial, consumos, proveedores, recepciones, solicitudes, sobrantes, sustituciones, surtido, unidades
 from lebaref_compras.unidades import numero
 
 TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
            "convertir_concepto": "Material Request", "canalizar_stock": "Material Request",
-           "surtir": "Stock Entry", "peticion": "Request for Quotation",
+           "sobrante": "Stock Entry", "autorizar_sobrante": "Stock Entry", "consumir": "Stock Entry", "surtir": "Stock Entry", "peticion": "Request for Quotation",
            "oferta": "Supplier Quotation", "autorizar": "Purchase Order",
            "recibir": "Purchase Receipt", "entrada_sin_oc": "Purchase Receipt",
            "autorizar_sustitucion": "Lebaref Sustitucion", "regularizar_entrada": "Purchase Receipt", "entregar": "Stock Entry", "devolver": "Stock Entry",
@@ -22,7 +22,7 @@ ENMIENDAS = {"convertir_concepto", "canalizar_stock"}
 SOURCES = {action: "Material Request" for action in (*ENMIENDAS, "anexo", "surtir", "peticion")}
 SOURCES.update({"oferta": "Request for Quotation",
            "autorizar": "Purchase Order", "autorizar_sustitucion": "Purchase Order", "recibir": "Purchase Order",
-           "devolver": "Stock Entry", "cfdi": "Purchase Receipt", "regularizar_entrada": "Purchase Receipt"})
+           "autorizar_sobrante": "Stock Entry", "devolver": "Stock Entry", "consumir": "Stock Entry", "cfdi": "Purchase Receipt", "regularizar_entrada": "Purchase Receipt"})
 
 
 def permiso(accion):
@@ -30,7 +30,12 @@ def permiso(accion):
         frappe.throw("Operación desconocida.")
     dt = TARGETS[accion]
     rights = ("create", "submit")
-    if accion == "regularizar_entrada":
+    if accion == "sobrante":
+        rights = ("create",)
+    elif accion == "autorizar_sobrante":
+        sobrantes.comprobar_autorizacion()
+        rights = ("submit",)
+    elif accion == "regularizar_entrada":
         rights = ("write",)
     elif accion == "autorizar":
         rights = ("submit",)
@@ -46,7 +51,7 @@ def origen(accion, folio, lock=False):
         return None
     doc = frappe.get_doc(SOURCES[accion], folio, for_update=lock)
     doc.check_permission("read")
-    if accion not in ENMIENDAS | {"autorizar"} and doc.docstatus != 1:
+    if accion not in ENMIENDAS | {"autorizar", "autorizar_sobrante"} and doc.docstatus != 1:
         frappe.throw("Selecciona un documento confirmado.")
     return doc
 
@@ -226,8 +231,32 @@ def esquema(accion, folio=""):
         fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("from_warehouse", "Almacén origen", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("to_warehouse", "Almacén de obra", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("project", "Obra", choices=catalogo("Project")), campo("remarks", "Recibe / referencia")]
         columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"is_stock_item": 1, "disabled": 0})), columna("qty", "Cantidad (unidad de inventario)"), columna("custom_lebaref_partida", "Partida")]
         note = "Transferencia de inventario: la existencia pasa del almacén central al almacén de obra; no representa consumo."
+    elif accion == "sobrante":
+        fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("project", "Obra de procedencia", choices=catalogo("Project")),
+                  campo("referencia", "Acta o comprobante de origen"), campo("persona", "Persona que entrega"),
+                  campo("tipo", "Tratamiento", "Traslado", list(sobrantes.TIPOS)),
+                  campo("from_warehouse", "Almacén donde ya está registrado", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})),
+                  campo("to_warehouse", "Almacén de destino", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})),
+                  campo("motivo", "Motivo", kind="multiline"), campo("confirmacion", "Verificación para stock nuevo")]
+        columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"disabled": 0, "is_stock_item": 1})),
+                   columna("qty", "Cantidad en unidad de inventario"), columna("valor_unitario", "Valor por unidad para stock nuevo")]
+        note = "Guardar crea un borrador para autorización. Traslada las existencias ya registradas. El ingreso nuevo requiere verificar NO CONTABILIZADO."
+    elif accion == "autorizar_sobrante":
+        doc.check_permission("submit")
+        fields = [campo("confirmar", "Confirmación", choices=["", "AUTORIZAR"])]
+        columns = [columna(key, label, False) for key, label in (("item_code", "Artículo"), ("qty", "Cantidad"), ("s_warehouse", "Origen"), ("t_warehouse", "Destino"))]
+        rows = [r.as_dict() for r in doc.items]
+        note = "Revisa el acta, procedencia y verificación de existencias antes de autorizar el sobrante."
+    elif accion == "consumir":
+        consumos.validar_entrega(doc)
+        fields = [campo("remarks", "Motivo o actividad del consumo", kind="multiline")]
+        columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False),
+                   columna("pending", "Bajo resguardo", False), columna("qty", "Consumir ahora"), columna("uom", "Unidad", False)]
+        balances = consumos.saldos(doc)
+        rows = [dict(id=r.name, item_code=r.item_code, pending=balances[r.name]["saldo"], qty=0, uom=r.uom) for r in doc.items]
+        note = "Confirma el consumo desde el almacén de obra, con costo y vínculo a esta entrega."
     elif accion == "devolver":
-        if doc.stock_entry_type != "Material Transfer" or doc.custom_lebaref_origen:
+        if doc.stock_entry_type != "Material Transfer" or doc.custom_lebaref_origen or doc.get("custom_lebaref_tipo_sobrante"):
             frappe.throw("Selecciona una entrega original de tipo Transferencia de materiales.")
         columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False), columna("pending", "Máximo retornable", False), columna("qty", "Devolver ahora")]
         returned = devoluciones(doc)
@@ -254,7 +283,7 @@ def esquema(accion, folio=""):
         fields = [campo("xml", "Archivo XML CFDI", kind="file")]
         note = "Archiva el XML contra esta recepción, valida UUID y RFC, y evita duplicados. No crea póliza/factura contable ni verifica el estado SAT."
     return dict(fields=fields, columns=columns, rows=rows,
-                add_rows=accion in ("entregar", "anexo", "entrada_sin_oc") or (accion == "solicitud" and not folio), note=note)
+                add_rows=accion in ("entregar", "anexo", "entrada_sin_oc", "sobrante") or (accion == "solicitud" and not folio), note=note)
 
 
 def elegidos(data, available):
@@ -272,12 +301,9 @@ def elegidos(data, available):
     return result
 
 
-def devoluciones(doc):
-    # Internal aggregate only, after checking access to the original transfer.
-    result = {}
-    for r in frappe.get_all("Stock Entry Detail", filters={"custom_lebaref_renglon": ["in", [i.name for i in doc.items]], "docstatus": 1}, fields=["custom_lebaref_renglon", "qty"]):
-        result[r.custom_lebaref_renglon] = result.get(r.custom_lebaref_renglon, 0) + r.qty
-    return result
+def devoluciones(doc, lock=False):
+    # Quantities already consumed or returned are unavailable for another return.
+    return {key: values["consumido"] + values["devuelto"] for key, values in consumos.saldos(doc, lock=lock).items()}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -298,7 +324,7 @@ def ejecutar(accion, datos, operacion, folio=""):
     # Lock is held until the request transaction commits/rolls back.
     frappe.get_doc("User", frappe.session.user, for_update=True)
     source = origen(accion, folio, lock=True)
-    if accion not in ("autorizar", "cfdi"):
+    if accion not in ("autorizar", "autorizar_sobrante", "cfdi"):
         operation_field = "custom_lebaref_regularizacion_operacion" if accion == "regularizar_entrada" else "custom_lebaref_operacion"
         hash_field = "custom_lebaref_regularizacion_huella" if accion == "regularizar_entrada" else "custom_lebaref_huella"
         prior = frappe.db.get_value(TARGETS[accion], {operation_field: token}, ["name", hash_field], as_dict=True, for_update=True)
@@ -409,11 +435,24 @@ def ejecutar(accion, datos, operacion, folio=""):
         if not data.get("project") or data.get("from_warehouse") == data.get("to_warehouse"):
             frappe.throw("Selecciona una obra y dos almacenes distintos.")
         doc = frappe.get_doc(dict(doctype="Stock Entry", stock_entry_type="Material Transfer", company=data.get("company"), project=data.get("project"), remarks=data.get("remarks"), items=[dict(item_code=r.get("item_code"), qty=numero(r.get("qty")), s_warehouse=data.get("from_warehouse"), t_warehouse=data.get("to_warehouse"), custom_lebaref_partida=r.get("custom_lebaref_partida")) for r in data.get("rows", [])]))
+    elif accion == "sobrante":
+        doc = sobrantes.crear(data)
+    elif accion == "autorizar_sobrante":
+        source.check_permission("submit")
+        if not source.custom_lebaref_tipo_sobrante or data.get("confirmar") != "AUTORIZAR":
+            frappe.throw("Revisa el sobrante y selecciona AUTORIZAR.")
+        if source.docstatus == 0:
+            source.submit()
+        elif source.docstatus != 1:
+            frappe.throw("El sobrante está cancelado.")
+        return dict(folio=source.name, tipo=source.doctype)
+    elif accion == "consumir":
+        doc = consumos.crear(source, data, elegidos(data, {r.name for r in source.items}))
     elif accion == "devolver":
-        if source.stock_entry_type != "Material Transfer" or source.custom_lebaref_origen:
+        if source.stock_entry_type != "Material Transfer" or source.custom_lebaref_origen or source.get("custom_lebaref_tipo_sobrante"):
             frappe.throw("Selecciona una entrega original.")
         values = elegidos(data, {r.name for r in source.items})
-        returned = devoluciones(source)
+        returned = devoluciones(source, lock=True)
         items = []
         for r in source.items:
             qty = values.get(r.name, 0)
@@ -430,7 +469,7 @@ def ejecutar(accion, datos, operacion, folio=""):
     doc.insert()
     if accion == "proveedor":
         proveedores.completar(doc)
-    if accion not in MASTERS and accion != "anexo":
+    if accion not in MASTERS and accion not in ("anexo", "sobrante"):
         doc.submit()
     return dict(folio=doc.name, tipo=doc.doctype)
 

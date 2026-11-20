@@ -70,6 +70,13 @@ def configure_purchase_fields():
         {"fieldname": "custom_lebaref_regularizacion_huella", "label": "Huella de regularización", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
     ])
     fields["Stock Entry"].append({"fieldname": "custom_lebaref_origen", "label": "Entrega de origen", "fieldtype": "Link", "options": "Stock Entry", "read_only": 1, "no_copy": 1})
+    fields["Stock Entry"].extend([
+        {"fieldname": "custom_lebaref_tipo_sobrante", "label": "Tratamiento de sobrante", "fieldtype": "Select", "options": "\nTraslado\nEntrada no contabilizada", "read_only": 1},
+        {"fieldname": "custom_lebaref_referencia_sobrante", "label": "Acta de sobrante", "fieldtype": "Data", "read_only": 1},
+        {"fieldname": "custom_lebaref_clave_sobrante", "label": "Clave de acta de sobrante", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
+        {"fieldname": "custom_lebaref_persona_sobrante", "label": "Persona que entrega sobrante", "fieldtype": "Data", "read_only": 1},
+        {"fieldname": "custom_lebaref_confirmacion_sobrante", "label": "Verificación de existencias previas", "fieldtype": "Data", "read_only": 1},
+    ])
     fields["Stock Entry Detail"] = [
         {"fieldname": "custom_lebaref_partida", "label": "Partida de obra", "fieldtype": "Data"},
         {"fieldname": "custom_lebaref_renglon", "label": "Renglón de entrega", "fieldtype": "Data", "read_only": 1, "no_copy": 1},

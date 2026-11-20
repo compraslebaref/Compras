@@ -22,6 +22,7 @@
         "shipping_rule",
         "payment_terms_template",
         "almacen_destino",
+        "from_warehouse",
     ]);
 
     async function abrirOperacion(accion, folio = "", tituloPersonalizado = "", alTerminar = null) {
@@ -196,6 +197,9 @@
                                 rowObj.sustitucion = $(this).val();
                             });
                         }
+                    } else if (accion === "sobrante" && col.name === "valor_unitario" && dialog.get_value("tipo") !== "Entrada no contabilizada") {
+                        rowObj.valor_unitario = "";
+                        td.css({ background: "#f8fafc", color: "#94a3b8", verticalAlign: "middle" }).text("No aplica (Traslado)");
                     } else if (Array.isArray(col.choices) && col.choices.length) {
                         const sel = $('<select class="form-control form-control-sm">').appendTo(td);
                         if (!col.choices.includes("")) {
@@ -250,6 +254,25 @@
             };
             dialog.fields_dict.renglon.$input.on("change", sugerirPendiente);
             sugerirPendiente();
+        }
+
+        if (accion === "sobrante" && dialog.fields_dict.tipo) {
+            const syncTipoSobrante = () => {
+                const esNuevo = dialog.get_value("tipo") === "Entrada no contabilizada";
+                dialog.set_df_property("from_warehouse", "hidden", esNuevo ? 1 : 0);
+                dialog.set_df_property("confirmacion", "hidden", esNuevo ? 0 : 1);
+                if (esNuevo) {
+                    dialog.set_value("from_warehouse", "");
+                    if (dialog.fields_dict.confirmacion && dialog.fields_dict.confirmacion.$input) {
+                        dialog.fields_dict.confirmacion.$input.attr("placeholder", "Escribe exactamente: NO CONTABILIZADO");
+                    }
+                } else {
+                    dialog.set_value("confirmacion", "");
+                }
+                renderRowsTable();
+            };
+            dialog.fields_dict.tipo.$input.on("change", syncTipoSobrante);
+            setTimeout(syncTipoSobrante, 30);
         }
 
         dialog.set_primary_action("Guardar y Confirmar", async () => {
@@ -1002,9 +1025,80 @@
         else if (href === "#leb-historico") abrirArchivoHistorico("precios");
     });
 
+    async function verSaldosEntrega(folio) {
+        const { message: res } = await frappe.call({
+            method: "lebaref_compras.consumos.consultar",
+            type: "GET",
+            args: { entrega: folio },
+            freeze: true,
+            freeze_message: "Consultando saldo bajo resguardo y consumos en obra…",
+        });
+
+        const filas = (res && res.rows) || [];
+        const verCostos = Boolean(res && res.puede_ver_costos);
+        const moneda = (res && res.moneda) || "MXN";
+        const moneyFmt = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        let totalCosto = 0;
+        const trs = filas
+            .map((r) => {
+                totalCosto += Number(r.costo_consumido || 0);
+                return `<tr>
+                    <td><b>${frappe.utils.escape_html(r.item_code)}</b></td>
+                    <td>${frappe.utils.escape_html(r.warehouse || "—")}<br><small class="text-muted">${frappe.utils.escape_html(r.project || "")}</small></td>
+                    <td class="text-right">${r.entregado} ${frappe.utils.escape_html(r.uom || "")}</td>
+                    <td class="text-right" style="color:#b45309;font-weight:600;">${r.consumido} ${frappe.utils.escape_html(r.uom || "")}</td>
+                    <td class="text-right">${r.devuelto} ${frappe.utils.escape_html(r.uom || "")}</td>
+                    <td class="text-right"><b style="color:#031e34;">${r.saldo} ${frappe.utils.escape_html(r.uom || "")}</b></td>
+                    ${verCostos ? `<td class="text-right"><b>$${moneyFmt.format(r.costo_consumido || 0)} ${frappe.utils.escape_html(moneda)}</b></td>` : ""}
+                </tr>`;
+            })
+            .join("");
+
+        const html = `
+            <div class="alert alert-info py-2 px-3 mb-2" style="font-size:12px;">
+                <b>Control de Resguardo vs. Consumo Real en Obra (ALM-05)</b> · Entrega origen: <b>${frappe.utils.escape_html(folio)}</b>
+                ${verCostos ? ` · Costo total ya consumido en obra: <b>$${moneyFmt.format(totalCosto)} ${frappe.utils.escape_html(moneda)}</b>` : ""}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" style="font-size:12px;">
+                    <thead style="background:#031e34;color:#fff;">
+                        <tr>
+                            <th>Artículo</th>
+                            <th>Almacén Obra / Proyecto</th>
+                            <th class="text-right">Entregado</th>
+                            <th class="text-right">Consumido</th>
+                            <th class="text-right">Devuelto</th>
+                            <th class="text-right">Bajo Resguardo</th>
+                            ${verCostos ? `<th class="text-right">Costo Consumido</th>` : ""}
+                        </tr>
+                    </thead>
+                    <tbody>${trs || "<tr><td colspan='7' class='text-muted'>Sin partidas.</td></tr>"}</tbody>
+                </table>
+            </div>
+        `;
+
+        const d = new frappe.ui.Dialog({
+            title: `📦 Saldo Bajo Resguardo y Consumos · ${folio}`,
+            size: "extra-large",
+            fields: [{ fieldname: "_html", fieldtype: "HTML", options: html }],
+            primary_action_label: "🔨 Registrar Consumo en Obra",
+            primary_action() {
+                d.hide();
+                abrirOperacion("consumir", folio, `Registrar consumo real en obra · ${folio}`);
+            },
+        });
+        d.add_custom_action("↩️ Devolver Sobrante a Almacén", () => {
+            d.hide();
+            abrirOperacion("devolver", folio, `Devolver sobrante de ${folio}`);
+        });
+        d.show();
+    }
+
     window.lebaref = {
         abrirOperacion,
         verDetalleEquipo,
+        verSaldosEntrega,
         abrirMapaUbicaciones,
         abrirDirectorioProveedores,
         abrirArchivoHistorico,
@@ -1142,11 +1236,77 @@
     });
 
     frappe.ui.form.on("Stock Entry", {
-        refresh(frm) {
-            if (frm.doc.docstatus === 1 && frm.doc.stock_entry_type === "Material Transfer" && !frm.doc.custom_lebaref_origen) {
+        async refresh(frm) {
+            if (frm.is_new()) return;
+            const esTransferencia = frm.doc.purpose === "Material Transfer" || frm.doc.stock_entry_type === "Material Transfer";
+            const esConsumo = frm.doc.purpose === "Material Issue" || frm.doc.stock_entry_type === "Material Issue";
+
+            // ALM-07: Sobrante histórico con acta
+            if (frm.doc.custom_lebaref_tipo_sobrante) {
+                const detalleActa = `Acta: <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_referencia_sobrante || "—")}</b> · Entrega: ${frappe.utils.escape_html(frm.doc.custom_lebaref_persona_sobrante || "—")} · Tratamiento: <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_tipo_sobrante)}</b>`;
+                if (frm.doc.docstatus === 0) {
+                    frm.dashboard.set_headline_alert(
+                        `📋 Sobrante histórico en borrador pendiente de autorización (ALM-07) — ${detalleActa}`,
+                        "orange"
+                    );
+                    if (frappe.model.can_submit("Stock Entry")) {
+                        frm.add_custom_button("Autorizar sobrante histórico (ALM-07)", () =>
+                            abrirOperacion(
+                                "autorizar_sobrante",
+                                frm.doc.name,
+                                `Autorizar sobrante histórico · ${frm.doc.name}`,
+                                () => frm.reload_doc()
+                            )
+                        ).addClass("btn-primary");
+                    }
+                } else if (frm.doc.docstatus === 1) {
+                    frm.dashboard.set_headline_alert(
+                        `✅ Sobrante histórico autorizado (ALM-07) — ${detalleActa}`,
+                        "green"
+                    );
+                }
+                return;
+            }
+
+            // ALM-05: Entrega original de material bajo resguardo en obra
+            if (frm.doc.docstatus === 1 && esTransferencia && !frm.doc.custom_lebaref_origen) {
+                frm.add_custom_button("Registrar consumo en obra (ALM-05)", () =>
+                    abrirOperacion("consumir", frm.doc.name, `Registrar consumo real en obra · ${frm.doc.name}`)
+                ).addClass("btn-primary");
                 frm.add_custom_button("Devolver sobrante a almacén", () =>
                     abrirOperacion("devolver", frm.doc.name, `Devolver sobrante de ${frm.doc.name}`)
-                ).addClass("btn-primary");
+                );
+                frm.add_custom_button("📦 Ver saldo bajo resguardo y costos", () =>
+                    verSaldosEntrega(frm.doc.name)
+                );
+                try {
+                    const { message: resumen } = await frappe.call({
+                        method: "lebaref_compras.consumos.consultar",
+                        type: "GET",
+                        args: { entrega: frm.doc.name },
+                    });
+                    if (resumen && Array.isArray(resumen.rows) && resumen.rows.length) {
+                        const txt = resumen.rows
+                            .map((r) => `${frappe.utils.escape_html(r.item_code)}: resguardo <b>${r.saldo}</b> / ${r.entregado} ${frappe.utils.escape_html(r.uom || "")} (cons: ${r.consumido}, dev: ${r.devuelto})`)
+                            .join(" · ");
+                        frm.dashboard.set_headline_alert(`📦 Control de Resguardo en Obra (ALM-05): ${txt}`, "blue");
+                    }
+                } catch (e) {
+                    // Ignorar si no aplica a este traslado
+                }
+            }
+
+            // Movimientos hijos vinculados a una entrega original (Consumo ALM-05 o Retorno)
+            if (frm.doc.docstatus === 1 && frm.doc.custom_lebaref_origen) {
+                frm.dashboard.set_headline_alert(
+                    esConsumo
+                        ? `🔨 Consumo real de material en obra (ALM-05) vinculado a la entrega <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_origen)}</b>.`
+                        : `↩️ Retorno de sobrante a almacén vinculado a la entrega <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_origen)}</b>.`,
+                    esConsumo ? "blue" : "green"
+                );
+                frm.add_custom_button("Abrir entrega original", () =>
+                    frappe.set_route("Form", "Stock Entry", frm.doc.custom_lebaref_origen)
+                );
             }
         },
     });
@@ -1253,6 +1413,11 @@
             onload(listview) {
                 if (typeof prevOnload === "function") prevOnload(listview);
                 listview.page.add_inner_button(label, () => abrirOperacion(accion, "", label, () => listview.refresh()));
+                if (dt === "Stock Entry") {
+                    listview.page.add_inner_button("📋 Sobrante Histórico c/Acta (ALM-07)", () =>
+                        abrirOperacion("sobrante", "", "Registrar Sobrante Histórico con Acta (ALM-07)", () => listview.refresh())
+                    );
+                }
                 if (dt === "Supplier") {
                     listview.page.add_inner_button("📊 ¿A quién cotizar? (Directorio / Sheets)", () => abrirDirectorioProveedores());
                     listview.page.add_inner_button("📜 Histórico de Precios y CFDIs", () => abrirArchivoHistorico("precios"));

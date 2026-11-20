@@ -347,12 +347,12 @@
   {
     "id": "ALM-05",
     "capacidad": "Entrega versus consumo/costo de obra",
-    "estado": "Cambio de comportamiento",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Salida descuenta stock y calcula costo neto consumido con devoluciones.",
-    "integracion": "Material Transfer conserva inventario en almacén de obra; no consume.",
-    "evidencia": "Código de salidas y Stock Entry; prueba transferencia aprobada.",
-    "criterio_cierre": "Acordar y probar entrega, consumo, sobrante y merma como eventos distintos.",
+    "integracion": "Entrega por Material Transfer y consumo vinculado por Material Issue con costo nativo por obra. Consumo y devolución comparten el saldo bajo resguardo. Consulta de cantidades y costo según lectura de GL Entry.",
+    "evidencia": "verificar_consumos: factor 10, media caja consumida y costo/gasto por obra 50, retorno, límite con stock adicional, reintento, ruta nativa y anulación. Imagen lebaref/erpnext-codex:alm05.",
+    "criterio_cierre": "Desplegar, conectar consumo/consulta en Desk y validar impresión y recorrido operativo. Merma y ajustes físicos en ALM-08.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 4989
@@ -377,12 +377,12 @@
   {
     "id": "ALM-07",
     "capacidad": "Sobrante sin salida original",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Reingreso identificado por obra/persona sin salida asociada.",
-    "integracion": "devolver exige entrega original de la nueva base.",
-    "evidencia": "RegistrarReingresoSobranteObra y origen devolver.",
-    "criterio_cierre": "Recibir sobrante histórico con autorización y origen, sin duplicar existencias migradas.",
+    "integracion": "Borrador y autorización de sobrantes con acta única, obra, persona y motivo. Traslado de stock contabilizado o Material Receipt con verificación NO CONTABILIZADO y valor unitario.",
+    "evidencia": "verificar_sobrantes: borrador sin movimiento, permisos, traslado sin aumento total, referencia única con UUID nuevo, entrada verificada, anulación y corrección. Imagen lebaref/erpnext-codex:alm07.",
+    "criterio_cierre": "Conectar Desk e impresión, validar actas reales contra migración y revisión física por responsable del tratamiento del stock.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 8799
