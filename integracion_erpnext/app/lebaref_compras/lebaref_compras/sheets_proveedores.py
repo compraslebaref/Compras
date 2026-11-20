@@ -14,11 +14,16 @@ def directorio():
     if not frappe.has_permission("Supplier", "read"):
         frappe.throw("No tienes permiso para consultar el directorio de proveedores.", frappe.PermissionError)
 
+    tiene_esp = frappe.db.has_column("Supplier", "custom_especialidad_cotizar")
+    campos_sup = ["name", "supplier_name", "supplier_group", "tax_id", "mobile_no", "email_id", "supplier_primary_contact"]
+    if tiene_esp:
+        campos_sup.append("custom_especialidad_cotizar")
+
     proveedores = frappe.get_list(
         "Supplier",
         filters={"disabled": 0},
-        fields=["name", "supplier_name", "supplier_group", "tax_id", "mobile_no", "email_id", "supplier_primary_contact"],
-        order_by="supplier_group asc, supplier_name asc",
+        fields=campos_sup,
+        order_by="supplier_name asc",
         limit_page_length=1000,
     )
 
@@ -53,7 +58,7 @@ def directorio():
         nombre_cto = cto.get("full_name") or ""
         telefono = p.mobile_no or cto.get("mobile_no") or cto.get("phone") or ""
         correo = p.email_id or cto.get("email_id") or ""
-        grupo = p.supplier_group or "General"
+        grupo = (p.get("custom_especialidad_cotizar") or "").strip() or p.supplier_group or "General"
         nombre_prov = p.supplier_name or p.name
         rfc = p.tax_id or ""
         cots = conteo_cot.get(p.name, 0)

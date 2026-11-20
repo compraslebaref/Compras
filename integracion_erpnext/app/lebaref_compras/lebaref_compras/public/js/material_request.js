@@ -6,6 +6,10 @@
 
     frappe.ui.form.on("Material Request", {
         refresh(frm) {
+            if (!frm.is_new() && frappe.model.can_write("Material Request")) {
+                frm.add_custom_button("✏️ Asignar Nombre a Solicitud", () => abrirDialogoNombreSolicitud(frm), "Lebaref");
+            }
+
             if (frm.doc.docstatus !== 1 || frm.doc.status === "Stopped" || frm.doc.status === "Cancelled") {
                 return;
             }
@@ -18,7 +22,9 @@
 
             if (frm.doc.material_request_type === "Purchase") {
                 frm.add_custom_button("Comparativa Lebaref", () => showComparison(frm)).addClass("btn-primary");
-                frm.add_custom_button("Pedir cotización", () => abrirOp("peticion", "Pedir cotización de " + frm.doc.name), "Lebaref");
+                frm.add_custom_button("💰 Capturar Cotización de Proveedor", () =>
+                    abrirDialogoCotizacionDirecta(frm, () => frm.reload_doc())
+                );
                 frm.add_custom_button("Crear anexo vinculado (SOL-03)", () => abrirOp("anexo", "Crear anexo vinculado a " + frm.doc.name), "Lebaref");
 
                 const tieneConceptosLibres = (frm.doc.items || []).some(
@@ -29,20 +35,187 @@
                 } else {
                     frm.add_custom_button("Canalizar a surtido de almacén (SOL-05)", () => abrirOp("canalizar_stock", "Canalizar a stock · " + frm.doc.name), "Lebaref");
                 }
-
-                frm.add_custom_button("¿A quién cotizar? (Directorio / Sheets)", () => {
-                    if (window.lebaref && window.lebaref.abrirDirectorioProveedores) {
-                        window.lebaref.abrirDirectorioProveedores();
-                    } else {
-                        window.open(SHEETS_URL, "_blank", "noopener");
-                    }
-                }, "Lebaref");
             } else if (frm.doc.material_request_type === "Material Issue" || frm.doc.material_request_type === "Material Transfer") {
                 frm.add_custom_button("Surtir desde almacén (SOL-05)", () => abrirOp("surtir", "Surtir desde almacén · " + frm.doc.name)).addClass("btn-primary");
                 frm.add_custom_button("Crear anexo vinculado (SOL-03)", () => abrirOp("anexo", "Crear anexo vinculado a " + frm.doc.name), "Lebaref");
             }
         },
     });
+
+    function abrirDialogoNombreSolicitud(frm) {
+        const actual = frm.doc.custom_lebaref_nombre_solicitud || frm.doc.title || "";
+        const d = new frappe.ui.Dialog({
+            title: `✏️ Nombre / Referencia de la Solicitud · ${frm.doc.name}`,
+            fields: [
+                {
+                    fieldname: "nombre",
+                    label: "Nombre descriptivo para ubicar fácilmente esta solicitud",
+                    fieldtype: "Data",
+                    default: actual,
+                    reqd: 1,
+                },
+            ],
+            primary_action_label: "Guardar Nombre",
+            async primary_action(vals) {
+                await frappe.call({
+                    method: "lebaref_compras.ux_lebaref.guardar_nombre_solicitud",
+                    type: "POST",
+                    args: { solicitud: frm.doc.name, nombre: vals.nombre },
+                    freeze: true,
+                });
+                d.hide();
+                frappe.show_alert({ message: "Nombre de solicitud actualizado", indicator: "green" });
+                frm.reload_doc();
+            },
+        });
+        d.show();
+    }
+
+    async function abrirDialogoCotizacionDirecta(frm, alGuardar = null) {
+        const { message: info } = await frappe.call({
+            method: "lebaref_compras.ux_lebaref.esquema_cotizacion_directa",
+            type: "GET",
+            args: { solicitud: frm.doc.name },
+            freeze: true,
+            freeze_message: "Cargando partidas de la solicitud…",
+        });
+
+        const preciosEstado = (info.partidas || []).map((p) => ({
+            mr_item: p.mr_item,
+            idx: p.idx,
+            clave: p.clave,
+            descripcion: p.descripcion,
+            qty: p.qty,
+            uom: p.uom,
+            rate: "",
+            lead_time_days: "1",
+        }));
+
+        const d = new frappe.ui.Dialog({
+            title: `💰 Capturar Cotización Directa · ${frm.doc.name}`,
+            size: "extra-large",
+            fields: [
+                {
+                    fieldname: "_ayuda",
+                    fieldtype: "HTML",
+                    options: `<div class="alert alert-info py-2 px-3 mb-2" style="font-size:12px;">
+                        Captura directamente los precios unitarios <b>sin IVA</b> del proveedor para esta solicitud (admite ofertas parciales dejando en blanco lo que no cotice). Se integrará de inmediato al <b>Cuadro Comparativo</b>.
+                    </div>`,
+                },
+                {
+                    fieldname: "supplier",
+                    label: "Proveedor que cotiza",
+                    fieldtype: "Select",
+                    options: ["", ...(info.proveedores || [])].join("\n"),
+                    reqd: 1,
+                },
+                {
+                    fieldname: "taxes_and_charges",
+                    label: "Impuestos aplicables",
+                    fieldtype: "Select",
+                    options: ["", ...(info.impuestos || [])].join("\n"),
+                    default: info.default_iva || "",
+                },
+                {
+                    fieldname: "valid_till",
+                    label: "Vigente hasta",
+                    fieldtype: "Date",
+                    default: info.valid_till,
+                },
+                { fieldtype: "Column Break" },
+                {
+                    fieldname: "payment_terms_template",
+                    label: "Condición de pago",
+                    fieldtype: "Select",
+                    options: ["", ...(info.pagos || [])].join("\n"),
+                    default: "",
+                },
+                {
+                    fieldname: "shipping_rule",
+                    label: "Regla de flete (opcional)",
+                    fieldtype: "Select",
+                    options: ["", ...(info.fletes || [])].join("\n"),
+                    default: "",
+                },
+                {
+                    fieldname: "fecha_programada_pago",
+                    label: "Fecha programada de pago (opcional)",
+                    fieldtype: "Date",
+                },
+                { fieldtype: "Section Break", label: "Precios Cotizados por Partida" },
+                { fieldname: "_tabla_partidas", fieldtype: "HTML" },
+            ],
+            primary_action_label: "Guardar Cotización de Proveedor",
+            async primary_action(vals) {
+                const filasConPrecio = preciosEstado.filter((r) => Number(r.rate || 0) > 0);
+                if (!filasConPrecio.length) {
+                    frappe.msgprint("Captura al menos un precio unitario mayor que cero.");
+                    return;
+                }
+                const btn = d.get_primary_btn().prop("disabled", true);
+                try {
+                    const { message: res } = await frappe.call({
+                        method: "lebaref_compras.ux_lebaref.registrar_cotizacion_directa",
+                        type: "POST",
+                        args: {
+                            solicitud: frm.doc.name,
+                            datos: JSON.stringify({
+                                supplier: vals.supplier,
+                                valid_till: vals.valid_till,
+                                taxes_and_charges: vals.taxes_and_charges || "",
+                                shipping_rule: vals.shipping_rule || "",
+                                payment_terms_template: vals.payment_terms_template || "",
+                                fecha_programada_pago: vals.fecha_programada_pago || "",
+                                rows: filasConPrecio,
+                            }),
+                        },
+                        freeze: true,
+                        freeze_message: "Guardando cotización de proveedor…",
+                    });
+                    d.hide();
+                    frappe.show_alert({
+                        message: `Cotización registrada: ${res.folio} (${vals.supplier})`,
+                        indicator: "green",
+                    });
+                    if (typeof alGuardar === "function") alGuardar(res);
+                } finally {
+                    btn.prop("disabled", false);
+                }
+            },
+        });
+
+        const host = d.fields_dict._tabla_partidas.$wrapper;
+        const tbl = $('<table class="table table-bordered table-sm" style="font-size:12px;">').appendTo(
+            $('<div class="table-responsive">').appendTo(host)
+        );
+        $('<thead style="background:#031e34;color:#fff;"><tr><th style="width:36px;">#</th><th style="width:140px;">Código / Clave</th><th>Descripción del Artículo / Concepto</th><th class="text-right" style="width:95px;">Cantidad</th><th style="width:145px;">Precio Unit. s/IVA ($)</th><th style="width:105px;">Entrega (días)</th></tr></thead>').appendTo(tbl);
+        const tbody = $("<tbody>").appendTo(tbl);
+
+        for (const p of preciosEstado) {
+            const tr = $("<tr>").appendTo(tbody);
+            $("<td>").text(p.idx).appendTo(tr);
+            $("<td>").html(`<b>${frappe.utils.escape_html(p.clave)}</b>`).appendTo(tr);
+            $("<td>").text(p.descripcion).appendTo(tr);
+            $("<td class='text-right'>").html(`<b>${numFmt.format(p.qty)} ${frappe.utils.escape_html(p.uom)}</b>`).appendTo(tr);
+
+            const tdRate = $("<td>").appendTo(tr);
+            $('<input type="number" step="0.01" min="0" class="form-control form-control-sm" placeholder="0.00 (Sin cotizar)">')
+                .on("input", function () {
+                    p.rate = $(this).val();
+                })
+                .appendTo(tdRate);
+
+            const tdDays = $("<td>").appendTo(tr);
+            $('<input type="number" step="1" min="0" class="form-control form-control-sm">')
+                .val(p.lead_time_days)
+                .on("input", function () {
+                    p.lead_time_days = $(this).val();
+                })
+                .appendTo(tdDays);
+        }
+
+        d.show();
+    }
 
     function nuevoUuidLocal() {
         if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
@@ -237,12 +410,18 @@
                     <b>Proveedores con oferta:</b> ${suppliers.length}
                 </div>
                 <div class="d-flex flex-wrap" style="gap:6px;">
-                    <button type="button" class="btn btn-xs btn-default leb-btn-dir">📊 ¿A quién cotizar?</button>
+                    <button type="button" class="btn btn-xs btn-primary leb-btn-add-quote">➕ Capturar Cotización de Proveedor</button>
+                    <button type="button" class="btn btn-xs btn-default leb-btn-dir">📊 Proveedores por Especialidad</button>
                     <button type="button" class="btn btn-xs btn-default leb-btn-print">🖨️ Imprimir Comparativa Carta</button>
                     <button type="button" class="btn btn-xs btn-secondary leb-btn-best">★ Elegir Mejor Precio en Todo</button>
                 </div>
             </div>
         `).appendTo(wrapper);
+
+        toolbar.find(".leb-btn-add-quote").on("click", () => {
+            dialog.hide();
+            abrirDialogoCotizacionDirecta(frm, () => showComparison(frm));
+        });
 
         toolbar.find(".leb-btn-dir").on("click", () => {
             if (window.lebaref && window.lebaref.abrirDirectorioProveedores) {
@@ -256,13 +435,13 @@
         const bestRadios = [];
 
         if (!suppliers.length) {
-            wrapper.append(`
+            const emptyBox = $(`
                 <div class="alert alert-warning mb-2">
-                    Aún no hay ofertas vigentes registradas para <b>${frappe.utils.escape_html(frm.doc.name)}</b>.<br>
-                    1. Usa <b>Lebaref → Pedir cotización</b> para invitar proveedores.<br>
-                    2. En la Petición de Cotización (<code>PUR-RFQ-...</code>), haz clic en <b>Registrar oferta de proveedor</b> (admite ofertas parciales, IVA 16%/exento, flete y condición de pago).
+                    Aún no hay ofertas registradas para <b>${frappe.utils.escape_html(frm.doc.name)}</b>.<br>
+                    Haz clic en <b>➕ Capturar Cotización de Proveedor</b> aquí arriba para ingresar precios unitarios, IVA, flete y condiciones de pago directamente sobre esta solicitud.
                 </div>
-            `);
+            `).appendTo(wrapper);
+            void emptyBox;
         } else {
             const tblWrap = $('<div class="table-responsive">').appendTo(wrapper);
             const table = $('<table class="table table-bordered table-sm" style="font-size:12px;">').appendTo(tblWrap);

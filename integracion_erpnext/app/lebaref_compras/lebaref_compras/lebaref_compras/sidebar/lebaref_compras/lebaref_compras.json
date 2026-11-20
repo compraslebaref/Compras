@@ -29,15 +29,6 @@
   },
   {
    "doctype": "Sidebar Item",
-   "icon": "file-text",
-   "is_default_module": 1,
-   "label": "Peticiones de cotización",
-   "link_to": "Request for Quotation",
-   "link_type": "DocType",
-   "type": "Link"
-  },
-  {
-   "doctype": "Sidebar Item",
    "icon": "file-check",
    "is_default_module": 1,
    "label": "Cotizaciones de proveedores",
@@ -64,19 +55,9 @@
    "type": "Link"
   },
   {
-   "doctype": "Sidebar Item",
-   "icon": "external-link",
-   "is_default_module": 0,
-   "label": "¿A quién cotizar? (Sheets)",
-   "link_type": "URL",
-   "open_in_new_tab": 1,
-   "type": "Link",
-   "url": "https://docs.google.com/spreadsheets/d/1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I/edit?gid=0#gid=0"
-  },
-  {
    "collapsible": 1,
    "doctype": "Sidebar Item",
-   "label": "Almacén y Catálogos",
+   "label": "Almacén, Obras y Catálogos",
    "type": "Section Break"
   },
   {
@@ -117,10 +98,28 @@
   },
   {
    "doctype": "Sidebar Item",
+   "icon": "layers",
+   "is_default_module": 1,
+   "label": "Existencias por almacén",
+   "link_to": "Bin",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
    "icon": "truck",
    "is_default_module": 1,
    "label": "Proveedores",
    "link_to": "Supplier",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "users",
+   "is_default_module": 1,
+   "label": "Clientes",
+   "link_to": "Customer",
    "link_type": "DocType",
    "type": "Link"
   },
@@ -135,10 +134,10 @@
   },
   {
    "doctype": "Sidebar Item",
-   "icon": "layers",
+   "icon": "git-branch",
    "is_default_module": 1,
-   "label": "Existencias por almacén",
-   "link_to": "Bin",
+   "label": "Departamentos",
+   "link_to": "Department",
    "link_type": "DocType",
    "type": "Link"
   },

@@ -7,18 +7,18 @@ import frappe
 SHEETS_URL = "https://docs.google.com/spreadsheets/d/1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I/edit?gid=0#gid=0"
 
 WORKSPACE_SHORTCUTS = [
-    # 1. Abastecimiento y Compras
+    # 1. Abastecimiento y Compras (flujo directo Solicitud -> Cotización/Comparativa -> OC -> CFDI)
     {"label": "Solicitudes de material", "type": "DocType", "link_to": "Material Request", "doc_view": "List", "color": "Blue"},
-    {"label": "Peticiones de cotización", "type": "DocType", "link_to": "Request for Quotation", "doc_view": "List", "color": "Cyan"},
     {"label": "Cotizaciones de proveedores", "type": "DocType", "link_to": "Supplier Quotation", "doc_view": "List", "color": "Orange"},
     {"label": "Órdenes de compra", "type": "DocType", "link_to": "Purchase Order", "doc_view": "List", "color": "Green"},
     {"label": "CFDI 4.0 archivados", "type": "DocType", "link_to": "Lebaref CFDI", "doc_view": "List", "color": "Grey"},
-    {"label": "¿A quién cotizar? (Sheets)", "type": "URL", "url": SHEETS_URL, "color": "Green"},
-    # 2. Almacén, Obras y Catálogos Maestros (Stock Entry al final para no dejar hueco en roles sin Stock User)
+    # 2. Almacén, Obras, Clientes y Catálogos Maestros
     {"label": "Recepciones de compra", "type": "DocType", "link_to": "Purchase Receipt", "doc_view": "List", "color": "Green"},
     {"label": "Artículos (Catálogo)", "type": "DocType", "link_to": "Item", "doc_view": "List", "color": "Grey"},
     {"label": "Proveedores", "type": "DocType", "link_to": "Supplier", "doc_view": "List", "color": "Grey"},
+    {"label": "Clientes", "type": "DocType", "link_to": "Customer", "doc_view": "List", "color": "Blue"},
     {"label": "Obras / Proyectos", "type": "DocType", "link_to": "Project", "doc_view": "List", "color": "Grey"},
+    {"label": "Departamentos", "type": "DocType", "link_to": "Department", "doc_view": "List", "color": "Cyan"},
     {"label": "Existencias por almacén", "type": "DocType", "link_to": "Bin", "doc_view": "List", "color": "Cyan"},
     {"label": "Entregas y sobrantes", "type": "DocType", "link_to": "Stock Entry", "doc_view": "List", "color": "Blue"},
     # 3. Custodia de Herramientas, Kits y Flotilla
@@ -121,12 +121,12 @@ def _construir_contenido_workspace():
         },
     ]
     grupos = [
-        ("compras", ["Solicitudes de material", "Peticiones de cotización", "Cotizaciones de proveedores", "Órdenes de compra", "CFDI 4.0 archivados", "¿A quién cotizar? (Sheets)"]),
-        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Proveedores", "Obras / Proyectos", "Existencias por almacén", "Entregas y sobrantes"]),
+        ("compras", ["Solicitudes de material", "Cotizaciones de proveedores", "Órdenes de compra", "CFDI 4.0 archivados"]),
+        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Proveedores", "Clientes", "Obras / Proyectos", "Departamentos", "Existencias por almacén", "Entregas y sobrantes"]),
         ("equipos", ["Herramientas (HER)", "Préstamos (PRE)", "Maletines / Kits (KIT)", "Mantenimientos (HER)", "Flotilla vehicular (VEH)", "Gastos y combustible", "Check-list vehicular"]),
     ]
     titulos = {
-        "almacen": "<span class=\"h4\"><b>2. Almacén, Obras y Catálogos Maestros</b></span>",
+        "almacen": "<span class=\"h4\"><b>2. Almacén, Obras, Clientes y Catálogos Maestros</b></span>",
         "equipos": "<span class=\"h4\"><b>3. Custodia de Herramientas, Kits y Flotilla</b></span>",
     }
     idx = 0
@@ -134,9 +134,10 @@ def _construir_contenido_workspace():
         if clave in titulos:
             bloques.append({"id": f"spc-{clave}", "type": "spacer", "data": {"col": 12}})
             bloques.append({"id": f"hdr-{clave}", "type": "header", "data": {"text": titulos[clave], "col": 12}})
+        ancho = 3 if clave == "compras" else 3
         for etq in etiquetas:
             idx += 1
-            bloques.append({"id": f"leb-sc-{idx}", "type": "shortcut", "data": {"shortcut_name": etq, "col": 4}})
+            bloques.append({"id": f"leb-sc-{idx}", "type": "shortcut", "data": {"shortcut_name": etq, "col": ancho}})
     return json.dumps(bloques, ensure_ascii=False)
 
 
@@ -471,9 +472,11 @@ def _asegurar_enlace_assets():
 
 def configurar_todo_desk():
     from lebaref_compras.impresion_carta import configurar_formatos_impresion
+    from lebaref_compras.ux_lebaref import configurar_ux_lebaref
     _asegurar_enlace_assets()
     configurar_identidad_visual()
     configurar_plantillas_comerciales()
+    configurar_ux_lebaref()
     configurar_workspace_lebaref()
     configurar_sidebar_y_dock_lebaref()
     configurar_formatos_impresion()

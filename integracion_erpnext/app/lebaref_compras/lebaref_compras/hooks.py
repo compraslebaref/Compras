@@ -30,11 +30,16 @@ app_include_js = [
 doctype_js = {
     "Material Request": ["public/js/lebaref_desk.js", "public/js/material_request.js"],
     "Request for Quotation": "public/js/lebaref_desk.js",
+    "Supplier Quotation": "public/js/lebaref_desk.js",
     "Purchase Order": "public/js/lebaref_desk.js",
     "Purchase Receipt": "public/js/lebaref_desk.js",
     "Lebaref Sustitucion": "public/js/lebaref_desk.js",
+    "Lebaref CFDI": "public/js/lebaref_desk.js",
     "Stock Entry": "public/js/lebaref_desk.js",
     "Supplier": "public/js/lebaref_desk.js",
+    "Customer": "public/js/lebaref_desk.js",
+    "Project": "public/js/lebaref_desk.js",
+    "Department": "public/js/lebaref_desk.js",
     "Item": "public/js/lebaref_desk.js",
     "Lebaref Herramienta": "public/js/lebaref_desk.js",
     "Lebaref Mantenimiento Herramienta": "public/js/lebaref_desk.js",
@@ -45,11 +50,15 @@ doctype_js = {
 
 doctype_list_js = {
     "Material Request": "public/js/lebaref_desk.js",
+    "Supplier Quotation": "public/js/lebaref_desk.js",
     "Purchase Order": "public/js/lebaref_desk.js",
     "Purchase Receipt": "public/js/lebaref_desk.js",
     "Lebaref CFDI": "public/js/lebaref_desk.js",
     "Stock Entry": "public/js/lebaref_desk.js",
     "Supplier": "public/js/lebaref_desk.js",
+    "Customer": "public/js/lebaref_desk.js",
+    "Project": "public/js/lebaref_desk.js",
+    "Department": "public/js/lebaref_desk.js",
     "Item": "public/js/lebaref_desk.js",
     "Lebaref Herramienta": "public/js/lebaref_desk.js",
     "Lebaref Kit": "public/js/lebaref_desk.js",
@@ -65,13 +74,23 @@ jinja = {
 }
 
 doc_events = {
-    doctype: {"before_validate": "lebaref_compras.trazabilidad.copiar_obra_y_partida"}
+    doctype: {
+        "before_validate": "lebaref_compras.trazabilidad.copiar_obra_y_partida",
+        "before_save": "lebaref_compras.ux_lebaref.sincronizar_vistas_partidas",
+    }
     for doctype in (
         "Request for Quotation",
         "Supplier Quotation",
         "Purchase Order",
         "Purchase Receipt",
     )
+}
+
+doc_events["Material Request"] = {
+    "before_save": "lebaref_compras.ux_lebaref.sincronizar_vistas_partidas",
+}
+doc_events["Item"] = {
+    "before_save": "lebaref_compras.ux_lebaref.sincronizar_item",
 }
 
 doc_events["Purchase Order"]["before_validate"] = [

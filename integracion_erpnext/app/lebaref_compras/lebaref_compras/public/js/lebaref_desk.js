@@ -83,9 +83,12 @@
                     default: f.value || "",
                 });
             } else {
+                const etiquetaCampo = accion === "solicitud" && f.name === "title"
+                    ? "Nombre descriptivo de la solicitud (para ubicarla fácil en la tabla)"
+                    : f.label;
                 dialogFields.push({
                     fieldname: f.name,
-                    label: f.label,
+                    label: etiquetaCampo,
                     fieldtype: "Data",
                     default: f.value !== undefined && f.value !== null ? String(f.value) : "",
                 });
@@ -1095,6 +1098,353 @@
         d.show();
     }
 
+    async function renderizarFichaProductoEnItem(frm) {
+        if (!frm.fields_dict.custom_ficha_visual_html) return;
+        const host = frm.fields_dict.custom_ficha_visual_html.$wrapper;
+        if (frm.is_new()) {
+            host.empty();
+            return;
+        }
+        try {
+            const { message: f } = await frappe.call({
+                method: "lebaref_compras.ux_lebaref.ficha_producto",
+                type: "GET",
+                args: { item_code: frm.doc.name },
+            });
+            if (!f) return;
+
+            const esc = frappe.utils.escape_html;
+            const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const alertaBajoStock = f.es_inventariable && f.stock_minimo > 0 && f.stock_total <= f.stock_minimo;
+            const colorStock = !f.es_inventariable ? "#475569" : (alertaBajoStock ? "#b45309" : (f.stock_total > 0 ? "#059669" : "#64748b"));
+
+            const imgHtml = f.imagen
+                ? `<img src="${esc(f.imagen)}" alt="${esc(f.nombre)}" class="leb-ficha-img" style="width:176px;height:176px;object-fit:contain;border:1px solid #cbd5e1;border-radius:10px;background:#ffffff;cursor:zoom-in;padding:6px;">`
+                : `<div style="width:176px;height:176px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#64748b;font-size:12px;text-align:center;padding:10px;">Sin fotografía<br><small>Haz clic abajo para subir</small></div>`;
+
+            const convTxt = f.factor_compra > 1
+                ? `1 ${esc(f.uom_compra)} = <b>${f.factor_compra} ${esc(f.uom_almacen)}</b>`
+                : `${esc(f.uom_almacen)} (1:1)`;
+
+            const clavesXmlTxt = (f.claves_proveedores || []).length
+                ? f.claves_proveedores.map((c) => `<span class="badge badge-light mr-1" style="border:1px solid #cbd5e1;">${esc(c.proveedor)}: <b>${esc(c.clave)}</b></span>`).join(" ")
+                : `<span class="text-muted">Sin claves XML registradas aún</span>`;
+
+            host.html(`
+                <div style="border:1.5px solid #cbd5e1;border-radius:12px;background:linear-gradient(180deg,#f8fafc 0%,#ffffff 48%);padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(15,23,42,0.05);">
+                    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;">
+                        <div style="width:180px;flex-shrink:0;text-align:center;">
+                            ${imgHtml}
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-xs btn-default leb-btn-subir-foto">📷 Subir / Cambiar Foto</button>
+                            </div>
+                            <div class="mt-2 p-1" style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;">
+                                ${f.svg_barcode || ""}
+                            </div>
+                        </div>
+                        <div style="flex:1;min-width:280px;">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap" style="gap:8px;margin-bottom:6px;">
+                                <div>
+                                    <span style="background:#031e34;color:#fff;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:5px;margin-right:6px;">CLAVE: ${esc(f.codigo_barras)}</span>
+                                    <span style="background:#e2e8f0;color:#0f172a;font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;margin-right:6px;">ID: ${esc(f.codigo_interno)}</span>
+                                    <span style="background:#eff6ff;color:#0d5b94;border:1px solid #bfdbfe;font-size:11px;font-weight:700;padding:3px 9px;border-radius:5px;">📍 ${esc(f.ubicacion)}</span>
+                                </div>
+                                <span class="badge ${f.es_inventariable ? "badge-info" : "badge-secondary"}">${f.es_inventariable ? "Inventariable" : "Servicio"}</span>
+                            </div>
+                            <div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.25;margin-bottom:10px;">${esc(f.nombre)}</div>
+
+                            <div style="display:grid;grid-template-columns:repeat(4, minmax(120px, 1fr));gap:8px;margin-bottom:10px;">
+                                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;">
+                                    <div style="font-size:10.5px;color:#64748b;text-transform:uppercase;font-weight:700;">Existencia Actual</div>
+                                    <div style="font-size:15px;font-weight:800;color:${colorStock};">${f.es_inventariable ? `${f.stock_total} ${esc(f.uom_almacen)}` : "N/A"}</div>
+                                </div>
+                                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;">
+                                    <div style="font-size:10.5px;color:#64748b;text-transform:uppercase;font-weight:700;">Stock Mínimo</div>
+                                    <div style="font-size:15px;font-weight:800;color:#334155;">${f.stock_minimo} ${esc(f.uom_almacen)}</div>
+                                </div>
+                                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;">
+                                    <div style="font-size:10.5px;color:#64748b;text-transform:uppercase;font-weight:700;">Último Costo s/IVA</div>
+                                    <div style="font-size:15px;font-weight:800;color:#031e34;">$${money.format(f.ultimo_costo || 0)} MXN</div>
+                                </div>
+                                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;">
+                                    <div style="font-size:10.5px;color:#64748b;text-transform:uppercase;font-weight:700;">Unidad / Conversión</div>
+                                    <div style="font-size:12.5px;font-weight:600;color:#0f172a;margin-top:2px;">${convTxt}</div>
+                                </div>
+                            </div>
+
+                            <table class="table table-bordered table-sm mb-2" style="font-size:12px;background:#fff;">
+                                <tbody>
+                                    <tr>
+                                        <td style="width:25%;background:#f8fafc;"><b>Categoría:</b> ${esc(f.categoria)}</td>
+                                        <td style="width:25%;background:#f8fafc;"><b>Marca:</b> ${esc(f.marca)}</td>
+                                        <td style="width:25%;background:#f8fafc;"><b>Modelo:</b> ${esc(f.modelo)}</td>
+                                        <td style="width:25%;background:#f8fafc;"><b>Medidas:</b> ${esc(f.medidas)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2"><b>Capacidad Eléctrica / Uso:</b> ${esc(f.capacidad)}</td>
+                                        <td><b>Espec. 1:</b> ${esc(f.espec1)}</td>
+                                        <td><b>Espec. 2:</b> ${esc(f.espec2)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="4"><b>Claves XML de Proveedores:</b> ${clavesXmlTxt}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `);
+
+            host.find(".leb-ficha-img").on("click", () => {
+                const dlgImg = new frappe.ui.Dialog({
+                    title: `${f.codigo_barras} · ${f.nombre}`,
+                    size: "large",
+                    fields: [{
+                        fieldname: "img_full",
+                        fieldtype: "HTML",
+                        options: `<div class="text-center p-2"><img src="${esc(f.imagen)}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;"></div>`,
+                    }],
+                });
+                dlgImg.show();
+            });
+
+            host.find(".leb-btn-subir-foto").on("click", () => {
+                new frappe.ui.FileUploader({
+                    doctype: frm.doctype,
+                    docname: frm.docname,
+                    frm,
+                    folder: "Home/Attachments",
+                    restrictions: { allowed_file_types: ["image/*"] },
+                    on_success(fileDoc) {
+                        frm.set_value("image", fileDoc.file_url).then(() => frm.save());
+                    },
+                });
+            });
+        } catch (e) {
+            // Mantener formulario estándar si ocurre error
+        }
+    }
+
+    async function renderizarDirectorioEnPestanaProveedor(frm) {
+        if (!frm.fields_dict.custom_quien_cotizar_html) return;
+        const host = frm.fields_dict.custom_quien_cotizar_html.$wrapper;
+        if (host.data("loadedDir")) return;
+        host.html(`<div class="text-muted small py-2">Cargando directorio ¿A quién cotizar?…</div>`);
+        try {
+            const { message: dir } = await frappe.call({
+                method: "lebaref_compras.sheets_proveedores.directorio",
+                type: "GET",
+            });
+            host.data("loadedDir", true);
+            host.empty();
+            const bar = $(`
+                <div class="d-flex justify-content-between align-items-center mb-2 mt-2 flex-wrap" style="gap:8px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
+                    <input type="text" class="form-control form-control-sm leb-tabdir-q" placeholder="Buscar por especialidad (Eléctrico, HVAC, Plomería…), proveedor, RFC o contacto…" style="width:360px;">
+                    <div class="d-flex" style="gap:6px;">
+                        <button type="button" class="btn btn-xs btn-default leb-tabdir-copy">📋 Copiar Tabla</button>
+                        <button type="button" class="btn btn-xs btn-primary leb-tabdir-open">🌐 Abrir Google Sheet de Respaldo</button>
+                    </div>
+                </div>
+            `).appendTo(host);
+            const tblWrap = $('<div class="table-responsive" style="max-height:420px;overflow:auto;">').appendTo(host);
+            const pintar = (q = "") => {
+                const filtro = q.trim().toLowerCase();
+                const lista = (dir.proveedores || []).filter((p) => !filtro || [p.especialidad, p.proveedor, p.rfc, p.contacto, p.telefono, p.correo].some((v) => String(v || "").toLowerCase().includes(filtro)));
+                const rows = lista.map((p) => `
+                    <tr ${p.id === frm.doc.name ? 'style="background:#eff6ff;"' : ""}>
+                        <td><span class="badge badge-info">${frappe.utils.escape_html(p.especialidad)}</span></td>
+                        <td><a href="/app/supplier/${encodeURIComponent(p.id)}"><b>${frappe.utils.escape_html(p.proveedor)}</b></a></td>
+                        <td>${frappe.utils.escape_html(p.rfc || "—")}</td>
+                        <td>${frappe.utils.escape_html(p.contacto || "—")}</td>
+                        <td>${frappe.utils.escape_html(p.telefono || "—")}</td>
+                        <td>${frappe.utils.escape_html(p.correo || "—")}</td>
+                        <td class="text-right">${p.cotizaciones} / <b>${p.ordenes}</b></td>
+                    </tr>
+                `).join("");
+                tblWrap.html(`
+                    <table class="table table-bordered table-sm" style="font-size:12px;">
+                        <thead style="background:#031e34;color:#fff;">
+                            <tr><th>Especialidad</th><th>Proveedor</th><th>RFC</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th class="text-right">Cot. / OCs</th></tr>
+                        </thead>
+                        <tbody>${rows || "<tr><td colspan='7' class='text-muted'>Sin coincidencias.</td></tr>"}</tbody>
+                    </table>
+                `);
+            };
+            bar.find(".leb-tabdir-q").on("input", function () { pintar($(this).val() || ""); });
+            bar.find(".leb-tabdir-copy").on("click", async () => {
+                if (navigator.clipboard && dir.tsv) {
+                    await navigator.clipboard.writeText(dir.tsv);
+                    frappe.show_alert({ message: "Directorio copiado al portapapeles", indicator: "green" });
+                }
+            });
+            bar.find(".leb-tabdir-open").on("click", () => window.open(dir.sheets_url || SHEETS_URL, "_blank", "noopener"));
+            pintar();
+        } catch (e) {
+            host.html(`<div class="text-muted small">Guarda primero el proveedor para consultar el directorio completo.</div>`);
+        }
+    }
+
+    async function abrirDialogoBajaProveedor(frm) {
+        const { message: info } = await frappe.call({
+            method: "lebaref_compras.ux_lebaref.info_baja_proveedor",
+            type: "GET",
+            args: { proveedor: frm.doc.name },
+            freeze: true,
+        });
+
+        const c = info.conteos || {};
+        const resumenHist = `Cotizaciones: <b>${c.cotizaciones}</b> · Órdenes: <b>${c.ordenes}</b> · Recepciones: <b>${c.recepciones}</b> · CFDIs: <b>${c.cfdis}</b>`;
+        const opcionesAccion = [];
+        if (!info.tiene_historial) {
+            opcionesAccion.push("Eliminar definitivamente del sistema");
+        }
+        opcionesAccion.push("Fusionar duplicado (transferir su historial a otro proveedor y eliminar este)");
+        opcionesAccion.push(info.disabled ? "Reactivar proveedor oculto" : "Ocultar / Deshabilitar proveedor (conservar historial)");
+
+        const d = new frappe.ui.Dialog({
+            title: `🗑️ Eliminar o Depurar Proveedor · ${frm.doc.name}`,
+            fields: [
+                {
+                    fieldname: "_resumen",
+                    fieldtype: "HTML",
+                    options: `<div class="alert ${info.tiene_historial ? "alert-warning" : "alert-info"} py-2 px-3 mb-2" style="font-size:12px;">
+                        ${info.tiene_historial
+                            ? `Este proveedor ya cuenta con documentos históricos (${resumenHist}). Para no romper auditoría puedes <b>fusionarlo</b> con otro proveedor o <b>deshabilitarlo</b>.`
+                            : `Este proveedor <b>no tiene compras ni cotizaciones registradas</b> (${resumenHist}). Puedes eliminarlo definitivamente en un clic.`}
+                    </div>`,
+                },
+                {
+                    fieldname: "accion_sel",
+                    label: "¿Qué deseas hacer con este proveedor?",
+                    fieldtype: "Select",
+                    options: opcionesAccion.join("\n"),
+                    default: opcionesAccion[0],
+                    reqd: 1,
+                },
+                {
+                    fieldname: "proveedor_destino",
+                    label: "Proveedor destino (el que conservará todo el historial)",
+                    fieldtype: "Select",
+                    options: ["", ...(info.otros_proveedores || [])].join("\n"),
+                    depends_on: "eval:doc.accion_sel && doc.accion_sel.startsWith('Fusionar')",
+                },
+            ],
+            primary_action_label: "Aplicar Acción",
+            async primary_action(vals) {
+                let modo = "ocultar";
+                if (vals.accion_sel.startsWith("Eliminar")) modo = "eliminar";
+                else if (vals.accion_sel.startsWith("Fusionar")) modo = "fusionar";
+                else if (vals.accion_sel.startsWith("Reactivar")) modo = "reactivar";
+
+                if (modo === "fusionar" && !vals.proveedor_destino) {
+                    frappe.msgprint("Selecciona el proveedor destino al cual transferir el historial.");
+                    return;
+                }
+
+                await frappe.call({
+                    method: "lebaref_compras.ux_lebaref.gestionar_baja_proveedor",
+                    type: "POST",
+                    args: {
+                        proveedor: frm.doc.name,
+                        modo,
+                        proveedor_destino: vals.proveedor_destino || "",
+                    },
+                    freeze: true,
+                    freeze_message: "Aplicando cambio en catálogo de proveedores…",
+                });
+                d.hide();
+                if (modo === "eliminar") {
+                    frappe.show_alert({ message: `Proveedor ${frm.doc.name} eliminado definitivamente`, indicator: "green" });
+                    frappe.set_route("List", "Supplier");
+                } else if (modo === "fusionar") {
+                    frappe.show_alert({ message: `Proveedor fusionado dentro de ${vals.proveedor_destino}`, indicator: "green" });
+                    frappe.set_route("Form", "Supplier", vals.proveedor_destino);
+                } else {
+                    frappe.show_alert({ message: "Estado del proveedor actualizado", indicator: "green" });
+                    frm.reload_doc();
+                }
+            },
+        });
+        d.show();
+    }
+
+    function abrirDialogoNuevoCliente(alTerminar = null) {
+        const d = new frappe.ui.Dialog({
+            title: "➕ Registrar Nuevo Cliente Lebaref",
+            fields: [
+                { fieldname: "customer_name", label: "Nombre comercial o Razón Social", fieldtype: "Data", reqd: 1 },
+                { fieldname: "tax_id", label: "RFC (opcional)", fieldtype: "Data" },
+                {
+                    fieldname: "customer_group",
+                    label: "Tipo / Sector del Cliente",
+                    fieldtype: "Select",
+                    options: "Comercial / Privado\nIndustrial\nGobierno\nResidencial",
+                    default: "Comercial / Privado",
+                },
+                { fieldtype: "Column Break" },
+                { fieldname: "contacto", label: "Persona de Contacto", fieldtype: "Data" },
+                { fieldname: "telefono", label: "Teléfono / Celular", fieldtype: "Data" },
+                { fieldname: "correo", label: "Correo Electrónico", fieldtype: "Data" },
+                { fieldtype: "Section Break" },
+                { fieldname: "direccion", label: "Dirección / Ubicación Fiscal u Operativa", fieldtype: "Data" },
+                { fieldname: "ciudad", label: "Ciudad / Municipio", fieldtype: "Data", default: "Mérida" },
+            ],
+            primary_action_label: "Guardar Cliente",
+            async primary_action(vals) {
+                const { message: res } = await frappe.call({
+                    method: "lebaref_compras.ux_lebaref.crear_cliente_rapido",
+                    type: "POST",
+                    args: { datos: JSON.stringify(vals) },
+                    freeze: true,
+                    freeze_message: "Registrando cliente…",
+                });
+                d.hide();
+                frappe.show_alert({ message: `Cliente registrado: ${res.folio}`, indicator: "green" });
+                if (typeof alTerminar === "function") alTerminar(res);
+                else frappe.set_route("Form", "Customer", res.folio);
+            },
+        });
+        d.show();
+    }
+
+    function abrirDialogoClienteObra(frm) {
+        const d = new frappe.ui.Dialog({
+            title: `🏢 Vincular Cliente a Obra · ${frm.doc.name}`,
+            fields: [
+                {
+                    fieldname: "cliente",
+                    label: "Cliente de esta Obra / Proyecto",
+                    fieldtype: "Link",
+                    options: "Customer",
+                    default: frm.doc.customer || "",
+                },
+            ],
+            primary_action_label: "Guardar Vínculo",
+            async primary_action(vals) {
+                await frappe.call({
+                    method: "lebaref_compras.ux_lebaref.asignar_cliente_obra",
+                    type: "POST",
+                    args: { obra: frm.doc.name, cliente: vals.cliente || "" },
+                    freeze: true,
+                });
+                d.hide();
+                frappe.show_alert({ message: "Cliente vinculado a la obra", indicator: "green" });
+                frm.reload_doc();
+            },
+        });
+        d.add_custom_action("➕ Crear Nuevo Cliente", () => {
+            d.hide();
+            abrirDialogoNuevoCliente((res) => {
+                frappe.call({
+                    method: "lebaref_compras.ux_lebaref.asignar_cliente_obra",
+                    type: "POST",
+                    args: { obra: frm.doc.name, cliente: res.folio },
+                }).then(() => frm.reload_doc());
+            });
+        });
+        d.show();
+    }
+
     window.lebaref = {
         abrirOperacion,
         verDetalleEquipo,
@@ -1104,6 +1454,7 @@
         abrirArchivoHistorico,
         abrirImpresorCodigosCarta,
         abrirEscaneoPistola,
+        abrirDialogoNuevoCliente,
         SHEETS_URL,
     };
 
@@ -1111,6 +1462,7 @@
 
     frappe.ui.form.on("Item", {
         refresh(frm) {
+            renderizarFichaProductoEnItem(frm);
             if (frm.is_new()) return;
             frm.add_custom_button("🏷️ Imprimir Etiquetas de este SKU", () =>
                 abrirImpresorCodigosCarta("articulos", frm.doc.item_code || frm.doc.name)
@@ -1119,6 +1471,98 @@
                 abrirArchivoHistorico("precios", frm.doc.item_code || frm.doc.name), "Lebaref"
             );
             frm.add_custom_button("🗺️ Mapa Zonas A–F", () => abrirMapaUbicaciones(), "Lebaref");
+        },
+    });
+
+    frappe.ui.form.on("Supplier", {
+        refresh(frm) {
+            renderizarDirectorioEnPestanaProveedor(frm);
+            if (frm.is_new()) return;
+            if (frm.doc.disabled) {
+                frm.dashboard.set_headline_alert("🚫 Proveedor oculto / deshabilitado — No aparece en capturas nuevas.", "orange");
+            }
+            frm.add_custom_button("🗑️ Eliminar / Depurar Proveedor", () => abrirDialogoBajaProveedor(frm));
+            frm.add_custom_button("📜 Histórico de Precios y CFDIs", () => abrirArchivoHistorico("precios", frm.doc.supplier_name || frm.doc.name), "Lebaref");
+        },
+    });
+
+    frappe.ui.form.on("Department", {
+        refresh(frm) {
+            if (frm.is_new() || frm.doc.is_group) return;
+            const estaDeshab = Number(frm.doc.disabled || 0) === 1;
+            if (estaDeshab) {
+                frm.dashboard.set_headline_alert("🚫 Departamento deshabilitado — No se mostrará al crear nuevas solicitudes.", "orange");
+            }
+            if (frappe.model.can_write("Department")) {
+                frm.add_custom_button(
+                    estaDeshab ? "✅ Habilitar Departamento" : "🚫 Deshabilitar Departamento",
+                    async () => {
+                        await frappe.call({
+                            method: "lebaref_compras.ux_lebaref.alternar_estado_departamento",
+                            type: "POST",
+                            args: { departamento: frm.doc.name },
+                            freeze: true,
+                        });
+                        frappe.show_alert({
+                            message: estaDeshab ? "Departamento habilitado" : "Departamento deshabilitado",
+                            indicator: "green",
+                        });
+                        frm.reload_doc();
+                    }
+                ).addClass("btn-primary");
+            }
+        },
+    });
+
+    frappe.ui.form.on("Customer", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            frm.add_custom_button("➕ Nueva Obra para este Cliente", () =>
+                abrirOperacion("obra", "", "Nueva Obra / Proyecto", async (res) => {
+                    await frappe.call({
+                        method: "lebaref_compras.ux_lebaref.asignar_cliente_obra",
+                        type: "POST",
+                        args: { obra: res.folio, cliente: frm.doc.name },
+                    });
+                    frappe.set_route("Form", "Project", res.folio);
+                })
+            ).addClass("btn-primary");
+        },
+    });
+
+    frappe.ui.form.on("Project", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            if (frm.doc.customer) {
+                frm.dashboard.set_headline_alert(
+                    `🏢 Obra vinculada al cliente: <b>${frappe.utils.escape_html(frm.doc.customer)}</b>`,
+                    "blue"
+                );
+            }
+            if (frappe.model.can_write("Project")) {
+                frm.add_custom_button("🏢 Asignar / Cambiar Cliente", () => abrirDialogoClienteObra(frm));
+            }
+        },
+    });
+
+    frappe.ui.form.on("Lebaref CFDI", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            frm.disable_save();
+            if (frm.doc.recepcion) {
+                frm.dashboard.set_headline_alert(
+                    `🧾 CFDI 4.0 vinculado a Recepción de Almacén <b>${frappe.utils.escape_html(frm.doc.recepcion)}</b>`,
+                    "green"
+                );
+                frm.add_custom_button("Abrir Recepción", () =>
+                    frappe.set_route("Form", "Purchase Receipt", frm.doc.recepcion)
+                );
+            } else if (frm.doc.custom_oc_origen) {
+                frm.dashboard.set_headline_alert(
+                    `📜 Factura CFDI 4.0 Histórica Migrada · Serie/Folio: <b>${frappe.utils.escape_html(frm.doc.custom_serie_folio || "—")}</b> · Orden Origen: <b>${frappe.utils.escape_html(frm.doc.custom_oc_origen)}</b>`,
+                    "blue"
+                );
+            }
         },
     });
 
@@ -1449,6 +1893,29 @@
             },
         });
     }
+
+    // Lista de Clientes (Customer) y Obras / Proyectos (Project)
+    const prevCust = frappe.listview_settings["Customer"] || {};
+    const prevCustOnload = prevCust.onload;
+    frappe.listview_settings["Customer"] = Object.assign({}, prevCust, {
+        onload(listview) {
+            if (typeof prevCustOnload === "function") prevCustOnload(listview);
+            listview.page.add_inner_button("➕ Nuevo Cliente Rápido (RFC y Contacto)", () =>
+                abrirDialogoNuevoCliente(() => listview.refresh())
+            );
+        },
+    });
+
+    const prevProj = frappe.listview_settings["Project"] || {};
+    const prevProjOnload = prevProj.onload;
+    frappe.listview_settings["Project"] = Object.assign({}, prevProj, {
+        onload(listview) {
+            if (typeof prevProjOnload === "function") prevProjOnload(listview);
+            listview.page.add_inner_button("➕ Nueva Obra / Proyecto", () =>
+                abrirOperacion("obra", "", "Nueva Obra / Proyecto", () => listview.refresh())
+            );
+        },
+    });
 
     // Lista de Item (Artículos): Alta rápida, Hojas de Códigos Carta, Escaneo S30W, Mapa A–F e Histórico
     const prevItem = frappe.listview_settings["Item"] || {};

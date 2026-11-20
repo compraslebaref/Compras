@@ -123,7 +123,7 @@ FORMATO_SOLICITUD = _CSS_CARTA + """
     <tr>
       <td><b>Departamento:</b> {{ doc.custom_lebaref_departamento or "—" }}</td>
       <td><b>Solicitante:</b> {{ doc.custom_lebaref_solicitante or doc.owner }}</td>
-      <td><b>Título / Ref:</b> {{ doc.title or "—" }}</td>
+      <td><b>Nombre Solicitud:</b> {{ doc.custom_lebaref_nombre_solicitud or doc.title or "—" }}</td>
     </tr>
     {% if doc.custom_lebaref_solicitud_origen or doc.amended_from %}
     <tr>
@@ -152,8 +152,8 @@ FORMATO_SOLICITUD = _CSS_CARTA + """
       {% for row in doc.items %}
       <tr>
         <td>{{ row.idx }}</td>
-        <td><b>{{ "LIBRE" if row.custom_lebaref_concepto else row.item_code }}</b></td>
-        <td>{{ row.custom_lebaref_concepto or row.item_name or row.description }}</td>
+        <td><b>{{ row.custom_lebaref_clave_vista or ("SIN SKU" if row.custom_lebaref_concepto else row.item_code) }}</b></td>
+        <td>{{ row.custom_lebaref_descripcion_vista or row.custom_lebaref_concepto or row.item_name or row.description }}</td>
         <td>{{ row.project or "—" }}{% if row.custom_lebaref_partida %}<br><small>{{ row.custom_lebaref_partida }}</small>{% endif %}</td>
         <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }}</b></td>
         <td>{{ row.uom }}</td>
@@ -217,8 +217,8 @@ FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
       {% for row in doc.items %}
       <tr>
         <td>{{ row.idx }}</td>
-        <td><b>{{ "LIBRE" if row.custom_lebaref_concepto else row.item_code }}</b></td>
-        <td>{{ row.custom_lebaref_concepto or row.item_name or row.description }}</td>
+        <td><b>{{ row.custom_lebaref_clave_vista or ("SIN SKU" if row.custom_lebaref_concepto else row.item_code) }}</b></td>
+        <td>{{ row.custom_lebaref_descripcion_vista or row.custom_lebaref_concepto or row.item_name or row.description }}</td>
         <td>{{ row.project or "—" }}{% if row.custom_lebaref_partida %}<br><small>{{ row.custom_lebaref_partida }}</small>{% endif %}</td>
         <td class="leb-num">{{ "{:,.2f}".format(row.qty) }}</td>
         <td>{{ row.uom }}</td>
