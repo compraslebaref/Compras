@@ -6,7 +6,7 @@ from lebaref_compras.unidades import numero
 
 def validar_entrega(source):
     source.check_permission("read")
-    if source.docstatus != 1 or source.purpose != "Material Transfer" or source.custom_lebaref_origen:
+    if source.docstatus != 1 or source.purpose != "Material Transfer" or source.custom_lebaref_origen or source.get("custom_lebaref_tipo_sobrante"):
         frappe.throw("Selecciona una entrega original confirmada de material.")
 
 

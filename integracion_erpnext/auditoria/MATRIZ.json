@@ -377,12 +377,12 @@
   {
     "id": "ALM-07",
     "capacidad": "Sobrante sin salida original",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Reingreso identificado por obra/persona sin salida asociada.",
-    "integracion": "devolver exige entrega original de la nueva base.",
-    "evidencia": "RegistrarReingresoSobranteObra y origen devolver.",
-    "criterio_cierre": "Recibir sobrante histórico con autorización y origen, sin duplicar existencias migradas.",
+    "integracion": "Borrador y autorización de sobrantes con acta única, obra, persona y motivo. Traslado de stock contabilizado o Material Receipt con verificación NO CONTABILIZADO y valor unitario.",
+    "evidencia": "verificar_sobrantes: borrador sin movimiento, permisos, traslado sin aumento total, referencia única con UUID nuevo, entrada verificada, anulación y corrección. Imagen lebaref/erpnext-codex:alm07.",
+    "criterio_cierre": "Conectar Desk e impresión, validar actas reales contra migración y revisión física por responsable del tratamiento del stock.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 8799

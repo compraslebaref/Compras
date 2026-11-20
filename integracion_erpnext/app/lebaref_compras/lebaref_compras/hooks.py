@@ -92,6 +92,8 @@ doc_events["Lebaref Sustitucion"] = {
 
 
 doc_events["Stock Entry"] = {
-    "validate": "lebaref_compras.consumos.validar_movimiento",
-    "before_cancel": "lebaref_compras.consumos.antes_de_cancelar",
+    "validate": ["lebaref_compras.consumos.validar_movimiento", "lebaref_compras.sobrantes.validar"],
+    "before_cancel": ["lebaref_compras.consumos.antes_de_cancelar", "lebaref_compras.sobrantes.autorizar"],
+    "before_submit": "lebaref_compras.sobrantes.autorizar",
+    "on_cancel": "lebaref_compras.sobrantes.liberar_referencia",
 }

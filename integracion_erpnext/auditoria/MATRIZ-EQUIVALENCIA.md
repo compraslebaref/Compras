@@ -260,13 +260,13 @@ Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cam
 
 ## ALM-07 · Sobrante sin salida original
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Reingreso identificado por obra/persona sin salida asociada.
-- Integración: devolver exige entrega original de la nueva base.
-- Evidencia: RegistrarReingresoSobranteObra y origen devolver.
-- Criterio para cerrar: Recibir sobrante histórico con autorización y origen, sin duplicar existencias migradas.
-- Fuentes: [original L8799](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:8799) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: Sobrante en borrador con obra, persona, acta y motivo. El responsable confirma con permisos de Stock Entry y Stock Reconciliation. Traslada inventario ya contabilizado, o ingresa stock físicamente verificado como no contabilizado con valoración declarada y confirmación explícita.
+- Evidencia: `verificar_sobrantes` comprueba borrador sin movimiento, rechazo de autorización/cancelación por Almacén, traslado de tres unidades conservando total diez, acta normalizada única con otro UUID, entrada verificada de dos, anulación y corrección conservando referencia e historial. `Validar.ps1 -ImagenBackend lebaref/erpnext-codex:alm07`.
+- Criterio para cerrar: Conectar revisión/autorización e impresión en Desk y validar actas reales contra existencias migradas. La clasificación del material como contabilizado o pendiente de alta requiere verificación física del responsable.
+- Fuentes: `sobrantes.py`, `verificar_sobrantes.py` y §13 de CONTRATO-API.md.
 
 ## ALM-08 · Conteo físico, ajustes y merma
 

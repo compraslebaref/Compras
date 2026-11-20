@@ -32,7 +32,7 @@
 
 ### 2.2 Operaciones de Compras, Almacén y Catálogos (`lebaref_compras.operaciones`)
 - **`GET /api/method/lebaref_compras.operaciones.esquema?accion=<accion>&folio=<folio>`**
-  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `autorizar_sustitucion`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `consumir`, `devolver`, `cfdi`.
+  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `autorizar_sustitucion`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `consumir`, `sobrante`, `autorizar_sobrante`, `devolver`, `cfdi`.
   - Delega automáticamente a `lebaref_compras.equipos.esquema` cuando `accion` pertenece a herramientas/flotilla/kits (`herramienta`, `prestamo`, `retorno_herramienta`, `estado_herramienta`, `vehiculo`, `gasto_vehiculo`, `revision_vehiculo`, `estado_vehiculo`, `kit`, `composicion_kit`, `prestamo_kit`, `garantia_herramienta`, `mantenimiento_herramienta`, `anular_mantenimiento`).
   - Respuesta `message`:
     ```json
@@ -478,3 +478,41 @@ Consumos y devoluciones comparten el saldo de cada renglón. Se agregan cantidad
 Para una sesión sin ese permiso, `puede_ver_costos` es `false` y las filas omiten `costo_consumido`. La consulta resume los movimientos vinculados a esa entrega. Los movimientos generales de inventario conservan los flujos nativos existentes. El consumo directo desde una solicitud de Material Issue sigue disponible mediante `surtir` (§8).
 
 HTTP `403` por permisos insuficientes y HTTP `417` por referencia inválida, origen no confirmado o ajeno al flujo, obra o motivo ausentes, destino incoherente, o exceso del saldo compartido. El consumo conserva los controles nativos de existencias y contabilidad. Mermas y ajustes físicos se completarán en ALM-08. Antigravity debe desplegar backend y workers de la misma versión, conectar consumir y consultar en Desk y validar la impresión del consumo como Material Issue.
+
+## 13. Sobrante histórico sin entrega original (`ALM-07`)
+
+`accion=sobrante` crea un **Stock Entry en borrador**, con permiso nativo de creación. El responsable revisa procedencia, acta y existencias antes de confirmar. Captura cantidades en la unidad de inventario de cada SKU, con factor 1. La obra de procedencia, persona que entrega, motivo y referencia del acta son obligatorios.
+
+Para material ya contabilizado, incluso por la migración, usa `tipo=Traslado`, un almacén de origen donde esté registrado y un destino distinto. La confirmación mueve las existencias existentes por Material Transfer y conserva su valoración nativa.
+
+```json
+{"company":"Lebaref","project":"PROJ-0001","referencia":"ACTA-SOB-001","persona":"Ana Pérez","motivo":"Sobrante recuperado al concluir la obra","tipo":"Traslado","from_warehouse":"Obra Norte - L","to_warehouse":"Central - L","rows":[{"item_code":"TOR-01","qty":3}]}
+```
+
+```json
+{"message":{"folio":"MAT-STE-2026-00030","tipo":"Stock Entry"}}
+```
+
+Para una existencia física que quedó fuera del inventario contabilizado, usa `tipo=Entrada no contabilizada`, deja vacío el almacén de origen, proporciona `valor_unitario` positivo por unidad base en moneda de empresa y confirma exactamente `NO CONTABILIZADO`. La clasificación depende de la revisión física y conciliación con la migración por el responsable. El acta identifica el evento físico y su lote de renglones.
+
+```json
+{"company":"Lebaref","project":"PROJ-0001","referencia":"ACTA-SOB-002","persona":"Ana Pérez","motivo":"Material encontrado fuera del conteo inicial, revisado contra migración","tipo":"Entrada no contabilizada","to_warehouse":"Central - L","confirmacion":"NO CONTABILIZADO","rows":[{"item_code":"TOR-01","qty":2,"valor_unitario":20}]}
+```
+
+Guardar mantiene `docstatus=0`. `esquema?accion=autorizar_sobrante&folio=<borrador>` muestra los renglones y la confirmación. Para confirmar usa `accion=autorizar_sobrante`, el folio de borrador y estos datos.
+
+```json
+{"confirmar":"AUTORIZAR"}
+```
+
+```json
+{"message":{"folio":"MAT-STE-2026-00030","tipo":"Stock Entry"}}
+```
+
+La autorización exige permisos nativos de envío de Stock Entry y Stock Reconciliation. Los eventos de Stock Entry exigen esa autoridad también al confirmar y anular el sobrante por Desk o REST nativos. Los traslados usan Material Transfer. Las entradas no contabilizadas usan Material Receipt y sus cuentas y valoración nativas. Los almacenes deben ser activos, de detalle y de la misma empresa. Los artículos deben ser activos e inventariables.
+
+El documento conserva `custom_lebaref_tipo_sobrante`, `custom_lebaref_referencia_sobrante`, `custom_lebaref_persona_sobrante`, `custom_lebaref_confirmacion_sobrante` y `remarks`. `custom_lebaref_clave_sobrante` es una huella única por empresa y acta normalizada con espacios compactados y mayúsculas. Otro UUID con la misma referencia de un borrador o movimiento vigente se rechaza por esa restricción única. El acta debe agrupar todos sus renglones en un documento. Al anular el movimiento, ERPNext revierte inventario y contabilidad y se libera su clave para corregir el acta. El original conserva referencia e historial. La confirmación repetida conserva el folio y evita otro movimiento.
+
+Un sobrante histórico usa este flujo cuando carece de entrega original vinculada. La devolución de una entrega conocida conserva `devolver`. Si el material ya está incluido en el almacén de destino, se conserva su evidencia en el expediente existente. Los sobrantes históricos no se seleccionan como entrega original en consumir o devolver.
+
+HTTP `403` por falta de autoridad para confirmar o anular. HTTP `417` por datos de procedencia incompletos, unidad incompatible, almacenes inválidos o falta de verificación de stock nuevo. Un acta duplicada conserva el error nativo de clave única. Se conservan los errores nativos de existencias, series, lotes y contabilidad. Requiere reconstrucción y migración para instalar los campos y su índice único. Antigravity debe conectar la captura, revisión y autorización e identificar el tipo de sobrante en la impresión.
