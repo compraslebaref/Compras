@@ -1024,14 +1024,21 @@
     });
 
     // Enlaces rápidos del banner superior en el Workspace Lebaref
-    $(document).on("click", 'a[href="#leb-escanear-s30w"], a[href="#leb-codigos-carta"], a[href="#leb-mapa-af"], a[href="#leb-historico"]', function (ev) {
-        ev.preventDefault();
-        const href = $(this).attr("href");
-        if (href === "#leb-escanear-s30w") abrirEscaneoPistola();
-        else if (href === "#leb-codigos-carta") abrirImpresorCodigosCarta("articulos");
-        else if (href === "#leb-mapa-af") abrirMapaUbicaciones();
-        else if (href === "#leb-historico") abrirArchivoHistorico("precios");
-    });
+    $(document).on(
+        "click",
+        'a[href="#leb-pendientes"], a[href="#leb-minimos"], a[href="#leb-analitica"], a[href="#leb-escanear-s30w"], a[href="#leb-codigos-carta"], a[href="#leb-mapa-af"], a[href="#leb-historico"]',
+        function (ev) {
+            ev.preventDefault();
+            const href = $(this).attr("href");
+            if (href === "#leb-pendientes") abrirTableroPendientes();
+            else if (href === "#leb-minimos") abrirAlertasStockMinimo();
+            else if (href === "#leb-analitica") abrirAnaliticaEjecutiva();
+            else if (href === "#leb-escanear-s30w") abrirEscaneoPistola();
+            else if (href === "#leb-codigos-carta") abrirImpresorCodigosCarta("articulos");
+            else if (href === "#leb-mapa-af") abrirMapaUbicaciones();
+            else if (href === "#leb-historico") abrirArchivoHistorico("precios");
+        }
+    );
 
     async function verSaldosEntrega(folio) {
         const { message: res } = await frappe.call({
@@ -1450,6 +1457,744 @@
         d.show();
     }
 
+    // --- Módulos Operativos y Analíticos de Cierre de Matriz (GES-01/02, ALM-09, CAT-05, COM-08, SOL-04, FLO-02, ANA-01) ---
+
+    async function pintarFranjaPendientesWorkspace() {
+        const host = document.getElementById("leb-ws-live-strip");
+        if (!host || host.dataset.loaded === "1") return;
+        host.dataset.loaded = "1";
+        try {
+            const { message: t } = await frappe.call({
+                method: "lebaref_compras.analitica_operativa.tablero_pendientes",
+                type: "GET",
+            });
+            const c = (t && t.conteos) || {};
+            const chips = [
+                ["📝 Sin cotizar", c.solicitudes_sin_cotizar, "compras", "#0d5b94"],
+                ["⚖️ Por adjudicar", c.comparativas_listas, "compras", "#0284c7"],
+                ["✍️ OCs por autorizar", c.oc_por_autorizar, "direccion", c.oc_por_autorizar > 0 ? "#b45309" : "#475569"],
+                ["📦 OCs por recibir", c.oc_por_recibir, "almacen", "#059669"],
+                ["⚠️ Bajo stock mínimo", c.bajo_stock_minimo, "minimos", c.bajo_stock_minimo > 0 ? "#dc2626" : "#475569"],
+                ["🔧 Préstamos vencidos", c.prestamos_vencidos, "almacen", c.prestamos_vencidos > 0 ? "#b45309" : "#475569"],
+                ["🚐 Alertas flotilla", c.alertas_flotilla, "almacen", c.alertas_flotilla > 0 ? "#b45309" : "#475569"],
+            ];
+            host.innerHTML = `
+                <div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:6px;border-top:1px solid #e2e8f0;align-items:center;">
+                    <span style="font-size:11px;font-weight:700;color:#475569;margin-right:4px;">RESUMEN EN VIVO:</span>
+                    ${chips
+                        .map(
+                            ([lbl, num, dest, col]) =>
+                                `<button type="button" class="btn btn-xs btn-default leb-ws-chip" data-dest="${dest}" style="border-color:#cbd5e1;font-size:11px;">
+                                    ${lbl}: <b style="color:${col};">${Number(num || 0)}</b>
+                                </button>`
+                        )
+                        .join("")}
+                </div>
+            `;
+            $(host)
+                .find(".leb-ws-chip")
+                .on("click", function () {
+                    const dest = $(this).data("dest");
+                    if (dest === "minimos") abrirAlertasStockMinimo();
+                    else abrirTableroPendientes(dest);
+                });
+        } catch (e) {
+            // Silencioso si el perfil no tiene acceso a algún contador
+        }
+    }
+
+    async function abrirTableroPendientes(tabInicial = "compras") {
+        const { message: t } = await frappe.call({
+            method: "lebaref_compras.analitica_operativa.tablero_pendientes",
+            type: "GET",
+            freeze: true,
+            freeze_message: "Consultando pendientes y checkpoints por área…",
+        });
+        const esc = frappe.utils.escape_html;
+        const d = new frappe.ui.Dialog({
+            title: "📋 Agenda Operativa y Checkpoints por Área (GES-01 / GES-02)",
+            size: "extra-large",
+            fields: [{ fieldname: "_html", fieldtype: "HTML" }],
+        });
+
+        const wrap = d.fields_dict._html.$wrapper;
+        const c = t.conteos || {};
+        const tabsHtml = `
+            <div class="d-flex mb-3 flex-wrap" style="gap:6px;">
+                <button type="button" class="btn btn-sm btn-primary leb-pend-tab" data-tab="compras">🛒 Compras (${(c.solicitudes_sin_cotizar || 0) + (c.comparativas_listas || 0) + (c.entradas_por_regularizar || 0)})</button>
+                <button type="button" class="btn btn-sm btn-default leb-pend-tab" data-tab="direccion">✍️ Dirección y Pagos (${(c.oc_por_autorizar || 0) + (c.sobrantes_por_autorizar || 0) + (c.pagos_proximos || 0)})</button>
+                <button type="button" class="btn btn-sm btn-default leb-pend-tab" data-tab="almacen">📦 Almacén, Herramientas y Flotilla (${(c.oc_por_recibir || 0) + (c.bajo_stock_minimo || 0) + (c.prestamos_vencidos || 0) + (c.alertas_flotilla || 0)})</button>
+            </div>
+            <div class="leb-pend-body"></div>
+        `;
+        wrap.html(tabsHtml);
+
+        const renderLista = (tituloSec, lista, vacioTxt) => {
+            const filas = (lista || [])
+                .map(
+                    (it) => `<tr>
+                        <td style="width:170px;"><a href="#" class="leb-goto-doc" data-dt="${esc(it.doctype)}" data-dn="${esc(it.folio)}"><b>${esc(it.folio)}</b></a></td>
+                        <td>${esc(it.titulo || "")}</td>
+                        <td style="width:120px;" class="text-muted">${esc(it.fecha || "—")}</td>
+                    </tr>`
+                )
+                .join("");
+            return `
+                <div class="mb-3">
+                    <div style="font-weight:700;font-size:12.5px;color:#031e34;margin-bottom:4px;">${esc(tituloSec)} (${(lista || []).length})</div>
+                    <table class="table table-bordered table-sm mb-0" style="font-size:12px;">
+                        <tbody>${filas || `<tr><td class="text-muted">${esc(vacioTxt)}</td></tr>`}</tbody>
+                    </table>
+                </div>
+            `;
+        };
+
+        const pintarTab = (tab) => {
+            wrap.find(".leb-pend-tab").each(function () {
+                const act = $(this).data("tab") === tab;
+                $(this).toggleClass("btn-primary", act).toggleClass("btn-default", !act);
+            });
+            const body = wrap.find(".leb-pend-body");
+            if (tab === "compras") {
+                body.html(
+                    renderLista("1. Solicitudes confirmadas pendientes de cotizar", t.compras.solicitudes_sin_cotizar, "Todas las solicitudes activas ya tienen cotización.") +
+                    renderLista("2. Solicitudes con cotizaciones listas para Cuadro Comparativo / Adjudicar", t.compras.comparativas_listas, "Sin comparativas pendientes.") +
+                    renderLista("3. Entradas anticipadas sin OC pendientes de regularizar (ALM-02)", t.compras.entradas_por_regularizar, "Sin entradas pendientes de regularizar.")
+                );
+            } else if (tab === "direccion") {
+                body.html(
+                    renderLista("1. Órdenes de Compra en borrador pendientes de Autorización (Vo.Bo.)", t.direccion.oc_por_autorizar, "No hay órdenes en borrador pendientes de firma.") +
+                    renderLista("2. Sobrantes históricos con acta pendientes de autorizar (ALM-07)", t.direccion.sobrantes_por_autorizar, "Sin actas de sobrante pendientes.") +
+                    renderLista("3. Pagos programados vencidos o próximos en 7 días (COM-07)", t.direccion.pagos_proximos, "Sin vencimientos próximos.")
+                );
+            } else {
+                const btnMin = c.bajo_stock_minimo > 0
+                    ? `<div class="alert alert-warning py-2 px-3 mb-3 d-flex justify-content-between align-items-center" style="font-size:12px;">
+                        <span>⚠️ Hay <b>${c.bajo_stock_minimo} artículo(s)</b> por debajo del stock mínimo sin pedido abierto.</span>
+                        <button type="button" class="btn btn-xs btn-primary leb-open-min">Abrir Reabastecimiento en 1 Clic</button>
+                       </div>`
+                    : "";
+                body.html(
+                    btnMin +
+                    renderLista("1. Órdenes de Compra autorizadas pendientes de recibir en almacén", t.almacen_activos.oc_por_recibir, "Sin recepciones pendientes.") +
+                    renderLista("2. Préstamos de herramientas con fecha compromiso vencida (HER-02)", t.almacen_activos.prestamos_vencidos, "Sin préstamos vencidos.") +
+                    renderLista("3. Vehículos con servicio próximo o seguro por vencer (FLO-02)", t.almacen_activos.alertas_flotilla, "Flotilla al día.")
+                );
+                body.find(".leb-open-min").on("click", () => {
+                    d.hide();
+                    abrirAlertasStockMinimo();
+                });
+            }
+
+            body.find(".leb-goto-doc").on("click", function (ev) {
+                ev.preventDefault();
+                d.hide();
+                frappe.set_route("Form", $(this).data("dt"), $(this).data("dn"));
+            });
+        };
+
+        wrap.find(".leb-pend-tab").on("click", function () {
+            pintarTab($(this).data("tab"));
+        });
+        pintarTab(tabInicial);
+        d.show();
+    }
+
+    async function abrirAlertasStockMinimo() {
+        const { message: data } = await frappe.call({
+            method: "lebaref_compras.analitica_operativa.alertas_stock_minimo",
+            type: "GET",
+            freeze: true,
+            freeze_message: "Verificando existencias contra stock mínimo y pedidos en tránsito…",
+        });
+        const esc = frappe.utils.escape_html;
+        const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const pedir = (data && data.requieren_pedido) || [];
+        const transito = (data && data.en_transito) || [];
+
+        const seleccion = pedir.map((r) => ({
+            incluir: true,
+            item_code: r.item_code,
+            clave: r.clave,
+            nombre: r.nombre,
+            ubicacion: r.ubicacion,
+            stock_actual: r.stock_actual,
+            stock_minimo: r.stock_minimo,
+            uom_almacen: r.uom_almacen,
+            uom_compra: r.uom_compra,
+            qty: r.sugerido_compra,
+            costo: r.ultimo_costo,
+        }));
+
+        const d = new frappe.ui.Dialog({
+            title: `⚠️ Alertas de Stock Mínimo y Reabastecimiento sin Duplicados (${pedir.length} por pedir)`,
+            size: "extra-large",
+            fields: [
+                {
+                    fieldname: "titulo",
+                    label: "Nombre de la Solicitud de Reabastecimiento",
+                    fieldtype: "Data",
+                    default: `Reabastecimiento Stock Mínimo · ${frappe.datetime.get_today()}`,
+                },
+                { fieldname: "_tabla", fieldtype: "HTML" },
+            ],
+            primary_action_label: "🛒 Generar Solicitud Consolidada",
+            async primary_action(vals) {
+                const elegidos = seleccion
+                    .filter((x) => x.incluir && Number(x.qty || 0) > 0)
+                    .map((x) => ({ item_code: x.item_code, qty: Number(x.qty), uom: x.uom_compra }));
+                if (!elegidos.length) {
+                    frappe.msgprint("Marca al menos un artículo con cantidad mayor que cero.");
+                    return;
+                }
+                const { message: res } = await frappe.call({
+                    method: "lebaref_compras.analitica_operativa.generar_solicitud_reabastecimiento",
+                    type: "POST",
+                    args: {
+                        datos: JSON.stringify({
+                            titulo: vals.titulo,
+                            items: elegidos,
+                        }),
+                    },
+                    freeze: true,
+                    freeze_message: "Generando Solicitud de Reabastecimiento trazable…",
+                });
+                d.hide();
+                frappe.show_alert({ message: `Solicitud creada: ${res.folio}`, indicator: "green" });
+                frappe.set_route("Form", "Material Request", res.folio);
+            },
+        });
+
+        const host = d.fields_dict._tabla.$wrapper;
+        if (!pedir.length && !transito.length) {
+            host.html(`<div class="alert alert-success mb-0">✅ Todos los artículos con stock mínimo configurado tienen existencias suficientes.</div>`);
+            d.get_primary_btn().hide();
+        } else {
+            let html = `<div class="small text-muted mb-2">Los artículos que ya tienen una Solicitud u Orden de Compra activa se separan abajo automáticamente para <b>evitar pedidos duplicados</b> (ALM-09).</div>`;
+            if (seleccion.length) {
+                html += `<div class="table-responsive" style="max-height:360px;overflow:auto;">
+                    <table class="table table-bordered table-sm" style="font-size:12px;">
+                        <thead style="background:#031e34;color:#fff;">
+                            <tr>
+                                <th style="width:34px;"><input type="checkbox" class="leb-min-all" checked></th>
+                                <th>ID / Clave</th>
+                                <th>Artículo</th>
+                                <th>Anaquel</th>
+                                <th class="text-right">Actual / Mín.</th>
+                                <th style="width:130px;">Pedir (${esc("U. Compra")})</th>
+                                <th class="text-right">Últ. Costo</th>
+                            </tr>
+                        </thead>
+                        <tbody class="leb-min-tbody"></tbody>
+                    </table>
+                </div>`;
+            } else {
+                d.get_primary_btn().hide();
+            }
+
+            if (transito.length) {
+                const trTrans = transito
+                    .map(
+                        (t) => `<tr>
+                            <td><b>${esc(t.item_code)}</b> · ${esc(t.clave)}</td>
+                            <td>${esc(t.nombre)}</td>
+                            <td class="text-right">${t.stock_actual} / ${t.stock_minimo} ${esc(t.uom_almacen)}</td>
+                            <td class="text-right"><b>+${t.en_transito}</b></td>
+                            <td>${(t.folios_activos || []).map((f) => `<span class="badge badge-info mr-1">${esc(f)}</span>`).join("")}</td>
+                        </tr>`
+                    )
+                    .join("");
+                html += `<div class="mt-3">
+                    <div style="font-weight:700;font-size:12px;color:#0d5b94;" class="mb-1">🚚 Ya solicitados / En tránsito (${transito.length} omitidos para no duplicar):</div>
+                    <div class="table-responsive" style="max-height:170px;overflow:auto;">
+                        <table class="table table-bordered table-sm mb-0" style="font-size:11.5px;">
+                            <thead class="thead-light"><tr><th>SKU</th><th>Artículo</th><th class="text-right">Actual / Mín.</th><th class="text-right">En Tránsito</th><th>Folios Activos</th></tr></thead>
+                            <tbody>${trTrans}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+            }
+
+            host.html(html);
+            const tbody = host.find(".leb-min-tbody");
+            for (const row of seleccion) {
+                const tr = $("<tr>").appendTo(tbody);
+                const tdChk = $("<td class='text-center'>").appendTo(tr);
+                const chk = $('<input type="checkbox" checked>').on("change", function () {
+                    row.incluir = $(this).prop("checked");
+                }).appendTo(tdChk);
+                row._chk = chk;
+                $("<td>").html(`<b>${esc(row.item_code)}</b><br><small class="text-muted">${esc(row.clave)}</small>`).appendTo(tr);
+                $("<td>").text(row.nombre).appendTo(tr);
+                $("<td>").text(row.ubicacion).appendTo(tr);
+                $("<td class='text-right'>").html(`<b style="color:#dc2626;">${row.stock_actual}</b> / ${row.stock_minimo} ${esc(row.uom_almacen)}`).appendTo(tr);
+                const tdQty = $("<td>").appendTo(tr);
+                const grp = $('<div class="d-flex align-items-center" style="gap:4px;">').appendTo(tdQty);
+                $('<input type="number" step="0.01" min="0" class="form-control form-control-sm">')
+                    .val(row.qty)
+                    .on("input", function () {
+                        row.qty = $(this).val();
+                    })
+                    .appendTo(grp);
+                $("<small class='text-muted'>").text(row.uom_compra).appendTo(grp);
+                $("<td class='text-right'>").text(`$${money.format(row.costo || 0)}`).appendTo(tr);
+            }
+            host.find(".leb-min-all").on("change", function () {
+                const v = $(this).prop("checked");
+                for (const row of seleccion) {
+                    row.incluir = v;
+                    if (row._chk) row._chk.prop("checked", v);
+                }
+            });
+        }
+        d.show();
+    }
+
+    async function abrirAnaliticaEjecutiva(tabInicial = "ppv") {
+        const { message: an } = await frappe.call({
+            method: "lebaref_compras.analitica_operativa.analitica_ejecutiva",
+            type: "GET",
+            freeze: true,
+            freeze_message: "Calculando PPV, Ranking de Proveedores, Matriz Kraljic y Costos por Obra…",
+        });
+        const esc = frappe.utils.escape_html;
+        const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const r = an.resumen || {};
+
+        const d = new frappe.ui.Dialog({
+            title: "📈 Analítica Ejecutiva Lebaref · PPV, Proveedores, Familias y Obras (ANA-01)",
+            size: "extra-large",
+            fields: [{ fieldname: "_html", fieldtype: "HTML" }],
+        });
+
+        const wrap = d.fields_dict._html.$wrapper;
+        wrap.html(`
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:8px;margin-bottom:12px;">
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;">
+                    <div class="small text-muted">Resultado Neto PPV</div>
+                    <div style="font-size:16px;font-weight:800;color:${(r.ahorro_neto_ppv || 0) >= 0 ? "#059669" : "#b45309"};">
+                        ${(r.ahorro_neto_ppv || 0) >= 0 ? "+" : "-"}$${money.format(Math.abs(r.ahorro_neto_ppv || 0))} MXN
+                    </div>
+                </div>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;">
+                    <div class="small text-muted">Partidas Evaluadas PPV</div>
+                    <div style="font-size:16px;font-weight:800;color:#031e34;">${r.partidas_evaluadas_ppv || 0}</div>
+                </div>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;">
+                    <div class="small text-muted">Proveedores Activos / CFDI</div>
+                    <div style="font-size:16px;font-weight:800;color:#0d5b94;">${r.proveedores_con_movimiento || 0}</div>
+                </div>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;">
+                    <div class="small text-muted">Familias Clasificadas</div>
+                    <div style="font-size:16px;font-weight:800;color:#334155;">${r.familias_analizadas || 0}</div>
+                </div>
+            </div>
+            <div class="d-flex mb-2 flex-wrap" style="gap:6px;">
+                <button type="button" class="btn btn-xs btn-primary leb-an-tab" data-tab="ppv">📊 Variación de Precios (PPV)</button>
+                <button type="button" class="btn btn-xs btn-default leb-an-tab" data-tab="proveedores">🏆 Ranking de Proveedores</button>
+                <button type="button" class="btn btn-xs btn-default leb-an-tab" data-tab="kraljic">🧭 Matriz Kraljic / Familias</button>
+                <button type="button" class="btn btn-xs btn-default leb-an-tab" data-tab="obras">🏗️ Costo por Obra</button>
+            </div>
+            <div class="leb-an-body" style="max-height:430px;overflow:auto;"></div>
+        `);
+
+        const pintar = (tab) => {
+            wrap.find(".leb-an-tab").each(function () {
+                const act = $(this).data("tab") === tab;
+                $(this).toggleClass("btn-primary", act).toggleClass("btn-default", !act);
+            });
+            const body = wrap.find(".leb-an-body");
+            if (tab === "ppv") {
+                const trs = (an.ppv || []).map((x) => `
+                    <tr>
+                        <td><b>${esc(x.item_code)}</b> · ${esc(x.nombre)}</td>
+                        <td>${esc(x.proveedor)}<br><small class="text-muted">${esc(x.orden)} · ${esc(x.fecha)}</small></td>
+                        <td class="text-right">$${money.format(x.costo_ref)}</td>
+                        <td class="text-right"><b>$${money.format(x.precio_compra)}</b></td>
+                        <td class="text-right" style="font-weight:700;color:${x.pct_variacion <= 0 ? "#059669" : "#b45309"};">${x.pct_variacion > 0 ? "+" : ""}${x.pct_variacion}%</td>
+                        <td class="text-right" style="font-weight:700;color:${x.impacto_total <= 0 ? "#059669" : "#b45309"};">${x.impacto_total > 0 ? "+$" : "-$"}${money.format(Math.abs(x.impacto_total))}</td>
+                    </tr>
+                `).join("");
+                body.html(`<table class="table table-bordered table-sm" style="font-size:12px;">
+                    <thead style="background:#031e34;color:#fff;"><tr><th>Artículo</th><th>Proveedor / OC</th><th class="text-right">Costo Ref.</th><th class="text-right">Compra Real</th><th class="text-right">% Var.</th><th class="text-right">Impacto Total</th></tr></thead>
+                    <tbody>${trs || "<tr><td colspan='6' class='text-muted'>Sin órdenes confirmadas con variación registrada.</td></tr>"}</tbody>
+                </table>`);
+            } else if (tab === "proveedores") {
+                const trs = (an.ranking_proveedores || []).map((p, idx) => `
+                    <tr>
+                        <td><b>#${idx + 1}</b></td>
+                        <td><b>${esc(p.proveedor)}</b></td>
+                        <td><span class="badge badge-light">${esc(p.especialidad)}</span></td>
+                        <td class="text-right">${p.num_ocs} OC(s) · $${money.format(p.monto_ocs)}</td>
+                        <td class="text-right">${p.num_cfdis} XML · $${money.format(p.monto_cfdi)}</td>
+                        <td class="text-right"><b>$${money.format(p.volumen_total)} MXN</b></td>
+                    </tr>
+                `).join("");
+                body.html(`<table class="table table-bordered table-sm" style="font-size:12px;">
+                    <thead style="background:#031e34;color:#fff;"><tr><th>#</th><th>Proveedor</th><th>Especialidad</th><th class="text-right">Órdenes Activas</th><th class="text-right">CFDIs Históricos</th><th class="text-right">Volumen Acumulado</th></tr></thead>
+                    <tbody>${trs || "<tr><td colspan='6' class='text-muted'>Sin datos.</td></tr>"}</tbody>
+                </table>`);
+            } else if (tab === "kraljic") {
+                const trs = (an.kraljic || []).map((k) => `
+                    <tr>
+                        <td><b>${esc(k.familia)}</b></td>
+                        <td class="text-right">${k.skus}</td>
+                        <td class="text-right">${k.proveedores}</td>
+                        <td class="text-right"><b>$${money.format(k.valor_stock)} MXN</b></td>
+                        <td><span class="badge ${k.cuadrante.startsWith("Estratégico") ? "badge-warning" : (k.cuadrante.startsWith("Apalancamiento") ? "badge-success" : "badge-info")}">${esc(k.cuadrante)}</span></td>
+                    </tr>
+                `).join("");
+                body.html(`<table class="table table-bordered table-sm" style="font-size:12px;">
+                    <thead style="background:#031e34;color:#fff;"><tr><th>Familia / Categoría</th><th class="text-right">SKUs</th><th class="text-right">Proveedores Mapeados</th><th class="text-right">Valor en Inventario</th><th>Cuadrante Kraljic Sugerido</th></tr></thead>
+                    <tbody>${trs}</tbody>
+                </table>`);
+            } else {
+                const trs = (an.obras || []).map((o) => `
+                    <tr>
+                        <td><b>${esc(o.obra)}</b> · ${esc(o.nombre)}</td>
+                        <td>${esc(o.cliente)}</td>
+                        <td class="text-right">$${money.format(o.compras_oc)}</td>
+                        <td class="text-right">$${money.format(o.consumo_almacen)}</td>
+                        <td class="text-right"><b>$${money.format((o.compras_oc || 0) + (o.consumo_almacen || 0))} MXN</b></td>
+                    </tr>
+                `).join("");
+                body.html(`<table class="table table-bordered table-sm" style="font-size:12px;">
+                    <thead style="background:#031e34;color:#fff;"><tr><th>Obra / Proyecto</th><th>Cliente</th><th class="text-right">Compras Adjudicadas (OC)</th><th class="text-right">Consumo Real Almacén</th><th class="text-right">Total Obra</th></tr></thead>
+                    <tbody>${trs}</tbody>
+                </table>`);
+            }
+        };
+
+        wrap.find(".leb-an-tab").on("click", function () {
+            pintar($(this).data("tab"));
+        });
+        pintar(tabInicial);
+        d.show();
+    }
+
+    function abrirCargaRapidaSolicitudCsv(alTerminar = null) {
+        let ultimoTexto = "";
+        const d = new frappe.ui.Dialog({
+            title: "📥 Carga Rápida de Solicitud desde CSV o Excel (SOL-04)",
+            size: "extra-large",
+            fields: [
+                {
+                    fieldname: "_ayuda",
+                    fieldtype: "HTML",
+                    options: `<div class="d-flex justify-content-between align-items-center p-2 mb-2" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+                        <span>Pega filas directamente desde <b>Excel</b> o sube un archivo <b>.CSV</b> con columnas: <code>Código_o_Concepto, Cantidad, Unidad, Obra, Partida</code>. Si el código existe se vincula al SKU; si no, entra como <b>Concepto Libre</b>.</span>
+                        <div class="d-flex" style="gap:6px;">
+                            <button type="button" class="btn btn-xs btn-default leb-csv-tpl">📄 Descargar Plantilla CSV</button>
+                            <button type="button" class="btn btn-xs btn-default leb-csv-file-btn">📁 Cargar archivo .CSV</button>
+                            <input type="file" accept=".csv,text/csv,text/plain" class="d-none leb-csv-file">
+                        </div>
+                    </div>`,
+                },
+                {
+                    fieldname: "titulo",
+                    label: "Nombre descriptivo de la solicitud",
+                    fieldtype: "Data",
+                    default: `Pedido Masivo · ${frappe.datetime.get_today()}`,
+                    reqd: 1,
+                },
+                { fieldtype: "Column Break" },
+                {
+                    fieldname: "solicitante",
+                    label: "Solicitante (opcional)",
+                    fieldtype: "Data",
+                },
+                { fieldtype: "Section Break" },
+                {
+                    fieldname: "texto_csv",
+                    label: "Pega aquí tus filas desde Excel o CSV",
+                    fieldtype: "Small Text",
+                    reqd: 1,
+                },
+                {
+                    fieldname: "_preview",
+                    fieldtype: "HTML",
+                },
+            ],
+            primary_action_label: "Crear Solicitud Confirmada",
+            async primary_action(vals) {
+                const { message: res } = await frappe.call({
+                    method: "lebaref_compras.analitica_operativa.ejecutar_carga_masiva_solicitud",
+                    type: "POST",
+                    args: {
+                        datos: JSON.stringify({
+                            titulo: vals.titulo,
+                            solicitante: vals.solicitante || "",
+                            texto_csv: vals.texto_csv,
+                        }),
+                    },
+                    freeze: true,
+                    freeze_message: "Importando partidas y creando solicitud…",
+                });
+                d.hide();
+                frappe.show_alert({ message: `Solicitud creada por carga rápida: ${res.folio}`, indicator: "green" });
+                if (typeof alTerminar === "function") alTerminar(res);
+                frappe.set_route("Form", "Material Request", res.folio);
+            },
+        });
+
+        d.add_custom_action("🔍 Validar / Previsualizar Partidas", async () => {
+            const txt = d.get_value("texto_csv") || "";
+            if (!txt.trim()) {
+                frappe.msgprint("Pega al menos una fila antes de validar.");
+                return;
+            }
+            const { message: prev } = await frappe.call({
+                method: "lebaref_compras.analitica_operativa.previsualizar_carga_masiva_solicitud",
+                type: "POST",
+                args: { texto_csv: txt },
+                freeze: true,
+            });
+            ultimoTexto = txt;
+            void ultimoTexto;
+            const esc = frappe.utils.escape_html;
+            const errHtml = (prev.errores || []).length
+                ? `<div class="alert alert-danger py-2 px-3 mb-2" style="font-size:12px;"><b>Corrige estos errores antes de guardar:</b><br>• ${prev.errores.map(esc).join("<br>• ")}</div>`
+                : `<div class="alert alert-success py-2 px-3 mb-2" style="font-size:12px;">✅ Validación correcta: <b>${prev.total_skus} SKU(s) del catálogo</b> y <b>${prev.total_libres} concepto(s) libre(s)</b> listos para importar.</div>`;
+            const trs = (prev.filas_validas || [])
+                .map(
+                    (f) => `<tr>
+                        <td>#${f.fila}</td>
+                        <td><span class="badge ${f.es_sku ? "badge-success" : "badge-warning"}">${esc(f.coincidencia)}</span></td>
+                        <td><b>${esc(f.item_code || "CONCEPTO LIBRE")}</b> · ${esc(f.descripcion)}</td>
+                        <td class="text-right"><b>${f.qty} ${esc(f.uom)}</b></td>
+                        <td>${esc(f.obra || "—")} ${f.partida ? "· " + esc(f.partida) : ""}</td>
+                    </tr>`
+                )
+                .join("");
+            d.fields_dict._preview.$wrapper.html(`
+                ${errHtml}
+                <div class="table-responsive" style="max-height:220px;overflow:auto;">
+                    <table class="table table-bordered table-sm mb-0" style="font-size:12px;">
+                        <thead class="thead-light"><tr><th>Fila</th><th>Tipo</th><th>Artículo / Concepto</th><th class="text-right">Cantidad</th><th>Obra / Partida</th></tr></thead>
+                        <tbody>${trs || "<tr><td colspan='5' class='text-muted'>Sin filas válidas.</td></tr>"}</tbody>
+                    </table>
+                </div>
+            `);
+        });
+
+        const ayudaWrap = d.fields_dict._ayuda.$wrapper;
+        ayudaWrap.find(".leb-csv-tpl").on("click", () => {
+            const csvEjemplo = "Codigo_o_Concepto,Cantidad,Unidad,Obra,Partida\nPRD-0001,5,Nos,,Ferreteria\nTubo cobre rigido especial 3/4,2,Nos,,HVAC\n";
+            const blob = new Blob([csvEjemplo], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "Plantilla_Solicitud_Lebaref.csv";
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+        ayudaWrap.find(".leb-csv-file-btn").on("click", () => ayudaWrap.find(".leb-csv-file").trigger("click"));
+        ayudaWrap.find(".leb-csv-file").on("change", function () {
+            const f = this.files && this.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                d.set_value("texto_csv", String(ev.target.result || ""));
+            };
+            reader.readAsText(f);
+        });
+
+        d.show();
+    }
+
+    function imprimirExpedienteObraCarta(exp) {
+        const esc = frappe.utils.escape_html;
+        const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const t = exp.totales || {};
+        const trsOc = (exp.ordenes || []).map((o) => `<tr><td><b>${esc(o.folio)}</b></td><td>${esc(o.proveedor)}</td><td>${esc(o.fecha)}</td><td>${esc(o.estado)}</td><td style="text-align:right;">$${money.format(o.importe)}</td></tr>`).join("");
+        const trsAlm = (exp.movimientos_almacen || []).map((m) => `<tr><td><b>${esc(m.folio)}</b></td><td>${esc(m.fecha)}</td><td>${esc(m.tipo)}</td><td style="text-align:right;">${m.partidas}</td><td style="text-align:right;">$${money.format(m.costo)}</td></tr>`).join("");
+        const trsHer = (exp.herramientas || []).map((h) => `<tr><td><b>${esc(h.codigo)}</b></td><td>${esc(h.articulo)}</td><td>${esc(h.estado)}</td><td>${esc(h.responsable || "—")}</td></tr>`).join("");
+
+        const w = window.open("", "_blank");
+        if (!w) return;
+        w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Expediente Obra ${esc(exp.obra)}</title>
+            <style>
+                @page { size: letter portrait; margin: 12mm; }
+                body { font-family: 'Segoe UI', Arial, sans-serif; color:#0f172a; font-size:11px; }
+                .hdr { display:flex; justify-content:space-between; align-items:center; border-bottom:2.5px solid #031e34; padding-bottom:8px; margin-bottom:10px; }
+                .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
+                .kpi { border:1px solid #cbd5e1; border-radius:6px; padding:7px 10px; background:#f8fafc; }
+                h3 { margin:12px 0 4px 0; font-size:12px; color:#031e34; text-transform:uppercase; }
+                table { width:100%; border-collapse:collapse; margin-bottom:8px; }
+                th { background:#031e34; color:#fff; padding:5px 7px; text-align:left; border:1px solid #031e34; }
+                td { padding:5px 7px; border:1px solid #cbd5e1; }
+            </style></head><body>
+            <div class="hdr">
+                <img src="/files/lebaref_logo_horizontal.svg" style="height:50px;">
+                <div style="text-align:right;">
+                    <b style="font-size:14px;color:#031e34;">EXPEDIENTE OPERATIVO DE OBRA · ${esc(exp.obra)}</b><br>
+                    <span>${esc(exp.nombre_obra)} · Cliente: <b>${esc(exp.cliente)}</b></span>
+                </div>
+            </div>
+            <div class="kpis">
+                <div class="kpi"><small>Órdenes de Compra (Neto)</small><br><b style="font-size:14px;">$${money.format(t.ordenes_neto || 0)}</b></div>
+                <div class="kpi"><small>Entregado a Resguardo</small><br><b style="font-size:14px;">$${money.format(t.resguardo_entregado || 0)}</b></div>
+                <div class="kpi"><small>Consumo Real + Flotilla</small><br><b style="font-size:14px;color:#059669;">$${money.format(t.costo_total_acumulado || 0)}</b></div>
+                <div class="kpi"><small>Herramientas en Obra</small><br><b style="font-size:14px;">${t.herramientas_activas || 0} HER</b></div>
+            </div>
+            <h3>Órdenes de Compra Adjudicadas</h3>
+            <table><thead><tr><th>Folio OC</th><th>Proveedor</th><th>Fecha</th><th>Estado</th><th style="text-align:right;">Importe Neto</th></tr></thead><tbody>${trsOc || "<tr><td colspan='5'>Sin órdenes registradas.</td></tr>"}</tbody></table>
+            <h3>Entregas, Consumos y Retornos de Almacén</h3>
+            <table><thead><tr><th>Folio</th><th>Fecha</th><th>Movimiento</th><th style="text-align:right;">Partidas</th><th style="text-align:right;">Valor</th></tr></thead><tbody>${trsAlm || "<tr><td colspan='5'>Sin movimientos de almacén.</td></tr>"}</tbody></table>
+            <h3>Herramientas Bajo Custodia en la Obra</h3>
+            <table><thead><tr><th>Código HER</th><th>Artículo</th><th>Estado</th><th>Responsable</th></tr></thead><tbody>${trsHer || "<tr><td colspan='4'>Sin herramientas asignadas actualmente.</td></tr>"}</tbody></table>
+            <script>window.onload = () => window.print();<\/script>
+            </body></html>`);
+        w.document.close();
+    }
+
+    async function renderizarExpedienteObraEnProject(frm) {
+        if (frm.is_new()) return;
+        try {
+            const { message: exp } = await frappe.call({
+                method: "lebaref_compras.analitica_operativa.expediente_obra",
+                type: "GET",
+                args: { obra: frm.doc.name },
+            });
+            if (!exp) return;
+            frm.__lebExpObra = exp;
+            const esc = frappe.utils.escape_html;
+            const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const t = exp.totales || {};
+
+            const html = `
+                <div class="leb-exp-obra-card" style="border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;background:#f8fafc;margin-bottom:10px;">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap" style="gap:8px;">
+                        <b style="color:#031e34;font-size:13px;">📊 Expediente Financiero y Operativo de la Obra (CAT-05)</b>
+                        <button type="button" class="btn btn-xs btn-default leb-print-exp-obra">🖨️ Imprimir Expediente Carta</button>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:8px;">
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Compras OC (Neto)</div>
+                            <div style="font-size:15px;font-weight:800;color:#031e34;">$${money.format(t.ordenes_neto || 0)}</div>
+                            <small class="text-muted">${t.ordenes_count || 0} OC(s) · ${t.solicitudes_count || 0} Solicitud(es)</small>
+                        </div>
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Entregado a Resguardo</div>
+                            <div style="font-size:15px;font-weight:800;color:#0d5b94;">$${money.format(t.resguardo_entregado || 0)}</div>
+                        </div>
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Consumo Real + Flotilla</div>
+                            <div style="font-size:15px;font-weight:800;color:#059669;">$${money.format(t.costo_total_acumulado || 0)}</div>
+                        </div>
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Herramientas en Obra</div>
+                            <div style="font-size:15px;font-weight:800;color:#b45309;">${t.herramientas_activas || 0} equipo(s)</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            frm.dashboard.wrapper.find(".leb-exp-obra-card").remove();
+            const $el = $(html).prependTo(frm.dashboard.wrapper);
+            $el.find(".leb-print-exp-obra").on("click", () => imprimirExpedienteObraCarta(exp));
+            void esc;
+        } catch (e) {
+            // Mantener vista estándar si falla lectura parcial
+        }
+    }
+
+    function abrirDialogoCierreReaperturaOc(frm, accion) {
+        const esCerrar = accion === "cerrar";
+        const d = new frappe.ui.Dialog({
+            title: esCerrar
+                ? `🔒 Finiquitar / Cerrar Remanente de OC · ${frm.doc.name}`
+                : `🔓 Reabrir Orden de Compra Cerrada · ${frm.doc.name}`,
+            fields: [
+                {
+                    fieldname: "_nota",
+                    fieldtype: "HTML",
+                    options: `<div class="alert ${esCerrar ? "alert-warning" : "alert-info"} py-2 px-3 mb-2" style="font-size:12px;">
+                        ${esCerrar
+                            ? "Esta acción da por concluido el remanente pendiente de recibir <b>sin inventar entradas falsas de almacén</b> y deja constancia auditada en la bitácora de la orden (COM-08)."
+                            : "La orden volverá a su estado activo conforme a sus recepciones y facturas reales (COM-08)."}
+                    </div>`,
+                },
+                {
+                    fieldname: "motivo",
+                    label: esCerrar ? "Motivo del cierre parcial / finiquito" : "Motivo de la reapertura",
+                    fieldtype: "Small Text",
+                    reqd: 1,
+                },
+            ],
+            primary_action_label: esCerrar ? "Confirmar Finiquito de Remanente" : "Confirmar Reapertura",
+            async primary_action(vals) {
+                await frappe.call({
+                    method: "lebaref_compras.analitica_operativa.gestionar_cierre_orden",
+                    type: "POST",
+                    args: {
+                        orden: frm.doc.name,
+                        accion,
+                        motivo: vals.motivo,
+                    },
+                    freeze: true,
+                });
+                d.hide();
+                frappe.show_alert({
+                    message: esCerrar ? "Remanente de OC cerrado con motivo auditable" : "Orden de Compra reabierta",
+                    indicator: "green",
+                });
+                frm.reload_doc();
+            },
+        });
+        d.show();
+    }
+
+    async function renderizarIndicadoresVehiculoEnFlotilla(frm) {
+        if (frm.is_new()) return;
+        try {
+            const { message: k } = await frappe.call({
+                method: "lebaref_compras.analitica_operativa.indicadores_vehiculo",
+                type: "GET",
+                args: { vehiculo: frm.doc.name },
+            });
+            if (!k) return;
+            const esc = frappe.utils.escape_html;
+            const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const kmlTxt = k.datos_suficientes_rendimiento ? `${k.km_por_litro} km/L` : "Datos insuficientes";
+            const cpkTxt = k.costo_por_km !== null ? `$${money.format(k.costo_por_km)} / km` : "Sin recorrido";
+            const catsTxt = (k.gasto_por_categoria || [])
+                .map((c) => `<span class="badge badge-light mr-1" style="border:1px solid #cbd5e1;">${esc(c.categoria)}: <b>$${money.format(c.monto)}</b></span>`)
+                .join("") || `<span class="text-muted small">Sin gastos registrados aún</span>`;
+
+            const html = `
+                <div class="leb-flotilla-kpi-card" style="border:1px solid #cbd5e1;border-radius:10px;padding:10px 14px;background:#f8fafc;margin-bottom:10px;">
+                    <div style="display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:8px;margin-bottom:8px;">
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Rendimiento Real (FLO-02)</div>
+                            <div style="font-size:15px;font-weight:800;color:${k.datos_suficientes_rendimiento ? "#059669" : "#64748b"};">${esc(kmlTxt)}</div>
+                            <small class="text-muted" style="font-size:10.5px;">${esc(k.nota_rendimiento || "")}</small>
+                        </div>
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Costo por Kilómetro</div>
+                            <div style="font-size:15px;font-weight:800;color:#031e34;">${esc(cpkTxt)}</div>
+                            <small class="text-muted" style="font-size:10.5px;">Total: $${money.format(k.total_gasto || 0)} (${k.recorrido_total} km)</small>
+                        </div>
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Próximo Servicio</div>
+                            <div style="font-size:15px;font-weight:800;color:${k.km_restantes_servicio <= 1000 ? "#b45309" : "#0d5b94"};">${k.km_restantes_servicio} km rest.</div>
+                            <small class="text-muted" style="font-size:10.5px;">Meta: ${k.proximo_servicio} km ${k.fecha_estimada_servicio ? "· Est: " + esc(k.fecha_estimada_servicio) : ""}</small>
+                        </div>
+                        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:7px 10px;">
+                            <div class="small text-muted">Vigencia de Seguro</div>
+                            <div style="font-size:15px;font-weight:800;color:${k.dias_seguro !== null && k.dias_seguro <= 30 ? "#dc2626" : "#059669"};">${esc(k.seguro_vence || "—")}</div>
+                            <small class="text-muted" style="font-size:10.5px;">${k.dias_seguro !== null ? `${k.dias_seguro} días restantes` : ""}</small>
+                        </div>
+                    </div>
+                    <div style="font-size:11.5px;"><b>Desglose por categoría:</b> ${catsTxt}</div>
+                </div>
+            `;
+            frm.dashboard.wrapper.find(".leb-flotilla-kpi-card").remove();
+            $(html).prependTo(frm.dashboard.wrapper);
+        } catch (e) {
+            // Ignorar si no aplica
+        }
+    }
+
     window.lebaref = {
         abrirOperacion,
         verDetalleEquipo,
@@ -1460,6 +2205,10 @@
         abrirImpresorCodigosCarta,
         abrirEscaneoPistola,
         abrirDialogoNuevoCliente,
+        abrirTableroPendientes,
+        abrirAlertasStockMinimo,
+        abrirAnaliticaEjecutiva,
+        abrirCargaRapidaSolicitudCsv,
         SHEETS_URL,
     };
 
@@ -1538,6 +2287,7 @@
     frappe.ui.form.on("Project", {
         refresh(frm) {
             if (frm.is_new()) return;
+            renderizarExpedienteObraEnProject(frm);
             if (frm.doc.customer) {
                 frm.dashboard.set_headline_alert(
                     `🏢 Obra vinculada al cliente: <b>${frappe.utils.escape_html(frm.doc.customer)}</b>`,
@@ -1547,6 +2297,9 @@
             if (frappe.model.can_write("Project")) {
                 frm.add_custom_button("🏢 Asignar / Cambiar Cliente", () => abrirDialogoClienteObra(frm));
             }
+            frm.add_custom_button("🖨️ Imprimir Expediente Carta", () => {
+                if (frm.__lebExpObra) imprimirExpedienteObraCarta(frm.__lebExpObra);
+            });
         },
     });
 
@@ -1603,6 +2356,20 @@
                         ),
                         "Lebaref"
                     );
+                    if (Number(frm.doc.per_received || 0) < 100 && frm.doc.status !== "Completed") {
+                        frm.add_custom_button("🔒 Finiquitar / Cerrar Remanente (COM-08)", () =>
+                            abrirDialogoCierreReaperturaOc(frm, "cerrar"),
+                            "Lebaref"
+                        );
+                    }
+                }
+            }
+            if (frm.doc.docstatus === 1 && frm.doc.status === "Closed") {
+                frm.dashboard.set_headline_alert("🔒 Orden de Compra cerrada / remanente finiquitado (COM-08).", "orange");
+                if (frappe.model.can_write("Purchase Order") && frappe.model.can_submit("Purchase Order")) {
+                    frm.add_custom_button("🔓 Reabrir Orden Cerrada (COM-08)", () =>
+                        abrirDialogoCierreReaperturaOc(frm, "reabrir")
+                    ).addClass("btn-primary");
                 }
             }
             if (frm.doc.docstatus === 1) {
@@ -1823,6 +2590,7 @@
         refresh(frm) {
             if (frm.is_new()) return;
             frm.disable_save();
+            renderizarIndicadoresVehiculoEnFlotilla(frm);
             frm.add_custom_button("Registrar gasto / combustible", () =>
                 abrirOperacion("gasto_vehiculo", frm.doc.name, `Gasto o combustible · ${frm.doc.name}`, () => frm.reload_doc())
             ).addClass("btn-primary");
@@ -2624,6 +3392,12 @@
                     if (listview.__lebBtnsReady) return;
                     listview.__lebBtnsReady = true;
                     listview.page.add_inner_button(label, () => abrirOperacion(accion, "", label, () => listview.refresh()));
+                    if (dt === "Material Request") {
+                        listview.page.add_inner_button("📥 Carga Rápida CSV / Excel", () =>
+                            abrirCargaRapidaSolicitudCsv(() => listview.refresh())
+                        );
+                        listview.page.add_inner_button("⚠️ Reabastecer Mínimos", () => abrirAlertasStockMinimo());
+                    }
                     if (dt === "Stock Entry") {
                         listview.page.add_inner_button("📋 Sobrante Histórico c/Acta (ALM-07)", () =>
                             abrirOperacion("sobrante", "", "Registrar Sobrante Histórico con Acta (ALM-07)", () => listview.refresh())
@@ -2720,6 +3494,7 @@
                         est.$wrapper.toggleClass("leb-split-active", !est.oculto);
                         if (est.$page) est.$page.toggleClass("leb-split-active-page", !est.oculto);
                     });
+                    listview.page.add_inner_button("⚠️ Stock Mínimo", () => abrirAlertasStockMinimo());
                     listview.page.add_inner_button("🏷️ Hojas de Códigos Carta", () => abrirImpresorCodigosCarta("articulos"));
                     listview.page.add_inner_button("🔫 Escanear S30W (F2)", () => abrirEscaneoPistola());
                     listview.page.add_inner_button("🗺️ Mapa Zonas A–F", () => abrirMapaUbicaciones());
@@ -2744,15 +3519,32 @@
                 },
             });
         }
+
+        const prevBin = frappe.listview_settings["Bin"] || {};
+        if (!prevBin.__lebWrapped) {
+            const prevBinOnload = prevBin.onload;
+            frappe.listview_settings["Bin"] = Object.assign({}, prevBin, {
+                __lebWrapped: true,
+                onload(listview) {
+                    if (typeof prevBinOnload === "function") prevBinOnload(listview);
+                    if (listview.__lebBtnsReady) return;
+                    listview.__lebBtnsReady = true;
+                    listview.page.add_inner_button("⚠️ Alertas de Stock Mínimo / Reabastecer", () => abrirAlertasStockMinimo());
+                    listview.page.add_inner_button("🗺️ Mapa Zonas A–F", () => abrirMapaUbicaciones());
+                },
+            });
+        }
     }
 
     window.__lebarefAplicarListviewSettings = aplicarListviewSettings;
     aplicarListviewSettings();
+    setTimeout(pintarFranjaPendientesWorkspace, 450);
 
     if (window.frappe && frappe.router && typeof frappe.router.on === "function") {
         frappe.router.on("change", () => {
             aplicarListviewSettings();
             setTimeout(() => {
+                pintarFranjaPendientesWorkspace();
                 const route = frappe.get_route ? frappe.get_route() : [];
                 if (route[0] === "List" && route[1] === "Item" && window.cur_list && window.cur_list.doctype === "Item") {
                     inicializarSplitCatalogoItem(window.cur_list);

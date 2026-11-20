@@ -100,17 +100,22 @@ def _construir_contenido_workspace():
         "text-decoration:none;border:1px solid #cbd5e1;margin-left:6px;margin-top:4px;"
     )
     banner_html = (
-        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'
-        'padding:10px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:4px;">'
+        '<div style="padding:10px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:4px;">'
+        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
         '<img src="/files/lebaref_logo_horizontal.svg" alt="Lebaref" style="height:54px;width:auto;display:block;">'
         '<div style="text-align:right;font-size:12px;color:#475569;">'
         '<b style="color:#031e34;font-size:13px;">Plataforma Operativa de Compras, Almacén y Activos</b><br>'
         '<span>Ingeniería · Construcción · HVAC · Electricidad · Remodelación</span><br>'
+        f'<a href="#leb-pendientes" style="{pill_base}background:#0f172a;color:#ffffff;border-color:#0f172a;">📋 Pendientes y Agenda</a>'
+        f'<a href="#leb-minimos" style="{pill_base}background:#b45309;color:#ffffff;border-color:#b45309;">⚠️ Stock Mínimo</a>'
+        f'<a href="#leb-analitica" style="{pill_base}background:#059669;color:#ffffff;border-color:#059669;">📈 Analítica / PPV</a>'
         f'<a href="#leb-escanear-s30w" style="{pill_base}background:#031e34;color:#ffffff;border-color:#031e34;">🔫 Escanear S30W (F2)</a>'
         f'<a href="#leb-codigos-carta" style="{pill_base}background:#0d5b94;color:#ffffff;border-color:#0d5b94;">🏷️ Hojas de Códigos Carta</a>'
         f'<a href="#leb-mapa-af" style="{pill_base}background:#ffffff;color:#031e34;">🗺️ Mapa Zonas A–F</a>'
         f'<a href="#leb-historico" style="{pill_base}background:#ffffff;color:#031e34;">📜 Archivo Histórico</a>'
         '</div></div>'
+        '<div id="leb-ws-live-strip" style="margin-top:8px;"></div>'
+        '</div>'
     )
     bloques = [
         {"id": "leb-brand-banner", "type": "paragraph", "data": {"text": banner_html, "col": 12}},

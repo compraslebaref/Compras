@@ -72,13 +72,21 @@
     }
 
     async function abrirDialogoCotizacionDirecta(frm, alGuardar = null) {
-        const { message: info } = await frappe.call({
-            method: "lebaref_compras.ux_lebaref.esquema_cotizacion_directa",
-            type: "GET",
-            args: { solicitud: frm.doc.name },
-            freeze: true,
-            freeze_message: "Cargando partidas de la solicitud…",
-        });
+        const [{ message: info }, { message: refsHist }] = await Promise.all([
+            frappe.call({
+                method: "lebaref_compras.ux_lebaref.esquema_cotizacion_directa",
+                type: "GET",
+                args: { solicitud: frm.doc.name },
+                freeze: true,
+                freeze_message: "Cargando partidas y referencias históricas…",
+            }),
+            frappe.call({
+                method: "lebaref_compras.analitica_operativa.referencias_historicas_solicitud",
+                type: "GET",
+                args: { solicitud: frm.doc.name },
+            }).catch(() => ({ message: {} })),
+        ]);
+        const mapaRefs = refsHist || {};
 
         const preciosEstado = (info.partidas || []).map((p) => ({
             mr_item: p.mr_item,
@@ -87,6 +95,7 @@
             descripcion: p.descripcion,
             qty: p.qty,
             uom: p.uom,
+            ref: mapaRefs[p.mr_item] || null,
             rate: "",
             lead_time_days: "1",
         }));
@@ -188,7 +197,7 @@
         const tbl = $('<table class="table table-bordered table-sm" style="font-size:12px;">').appendTo(
             $('<div class="table-responsive">').appendTo(host)
         );
-        $('<thead style="background:#031e34;color:#fff;"><tr><th style="width:36px;">#</th><th style="width:140px;">Código / Clave</th><th>Descripción del Artículo / Concepto</th><th class="text-right" style="width:95px;">Cantidad</th><th style="width:145px;">Precio Unit. s/IVA ($)</th><th style="width:105px;">Entrega (días)</th></tr></thead>').appendTo(tbl);
+        $('<thead style="background:#031e34;color:#fff;"><tr><th style="width:34px;">#</th><th style="width:130px;">Código / Clave</th><th>Descripción del Artículo / Concepto</th><th class="text-right" style="width:90px;">Cantidad</th><th class="text-right" style="width:128px;">Ref. Histórica</th><th style="width:140px;">Precio Unit. s/IVA ($)</th><th style="width:96px;">Entrega (días)</th></tr></thead>').appendTo(tbl);
         const tbody = $("<tbody>").appendTo(tbl);
 
         for (const p of preciosEstado) {
@@ -197,6 +206,13 @@
             $("<td>").html(`<b>${frappe.utils.escape_html(p.clave)}</b>`).appendTo(tr);
             $("<td>").text(p.descripcion).appendTo(tr);
             $("<td class='text-right'>").html(`<b>${numFmt.format(p.qty)} ${frappe.utils.escape_html(p.uom)}</b>`).appendTo(tr);
+
+            const tdRef = $("<td class='text-right small'>").appendTo(tr);
+            if (p.ref && p.ref.ref_precio > 0) {
+                tdRef.html(`<b>$${moneyFmt.format(p.ref.ref_precio)}</b><br><span class="text-muted">${frappe.utils.escape_html(p.ref.ref_proveedor || p.ref.ref_fuente || "")}</span>`);
+            } else {
+                tdRef.html(`<span class="text-muted">Sin ref.</span>`);
+            }
 
             const tdRate = $("<td>").appendTo(tr);
             $('<input type="number" step="0.01" min="0" class="form-control form-control-sm" placeholder="0.00 (Sin cotizar)">')
@@ -372,11 +388,19 @@
             return;
         }
 
-        const { message: comparison } = await frappe.call({
-            method: api + ".consultar",
-            type: "GET",
-            args: { solicitud: frm.doc.name },
-        });
+        const [{ message: comparison }, { message: refsHistComp }] = await Promise.all([
+            frappe.call({
+                method: api + ".consultar",
+                type: "GET",
+                args: { solicitud: frm.doc.name },
+            }),
+            frappe.call({
+                method: "lebaref_compras.analitica_operativa.referencias_historicas_solicitud",
+                type: "GET",
+                args: { solicitud: frm.doc.name },
+            }).catch(() => ({ message: {} })),
+        ]);
+        const mapaRefsComp = refsHistComp || {};
 
         // Recolectar proveedores únicos y el resumen comercial de su cotización vigente (COM-04 / COM-07)
         const suppliers = [];
@@ -447,7 +471,7 @@
             const table = $('<table class="table table-bordered table-sm" style="font-size:12px;">').appendTo(tblWrap);
             const thead = $('<thead style="background:#031e34;color:#fff;">').appendTo(table);
             const hRow = $("<tr>").appendTo(thead);
-            hRow.append("<th>Artículo / Concepto</th><th class='text-right'>Cant.</th>");
+            hRow.append("<th>Artículo / Concepto</th><th class='text-right'>Cant.</th><th class='text-right'>Ref. Histórica</th>");
 
             for (const sup of suppliers) {
                 const th = $("<th>").appendTo(hRow);
@@ -484,6 +508,16 @@
                     .text(`${numFmt.format(line.cantidad)} ${line.unidad || ""}`)
                     .appendTo(tr);
 
+                const refRow = mapaRefsComp[line.id] || null;
+                const tdRefComp = $("<td class='text-right small' style='background:#f8fafc;white-space:nowrap;'>").appendTo(tr);
+                if (refRow && refRow.ref_precio > 0) {
+                    tdRefComp.html(
+                        `<b>$${moneyFmt.format(refRow.ref_precio)}</b><br><span class="text-muted" style="font-size:10.5px;">${frappe.utils.escape_html(refRow.ref_proveedor || refRow.ref_fuente || "")}</span>`
+                    );
+                } else {
+                    tdRefComp.html(`<span class="text-muted">—</span>`);
+                }
+
                 let minPrice = Infinity;
                 for (const opt of line.opciones || []) {
                     if (opt.precio > 0 && opt.precio < minPrice) minPrice = opt.precio;
@@ -517,6 +551,14 @@
                     if (isBest) {
                         $("<span class='badge badge-success ml-1'>").text("★ Mejor").appendTo(priceLine);
                     }
+                    if (refRow && refRow.ref_precio > 0) {
+                        const pctVar = ((opt.precio - refRow.ref_precio) / refRow.ref_precio) * 100;
+                        const colorVar = pctVar <= -0.5 ? "#059669" : (pctVar >= 0.5 ? "#b45309" : "#64748b");
+                        const txtVar = pctVar <= -0.5
+                            ? `▼ ${pctVar.toFixed(1)}% vs hist.`
+                            : (pctVar >= 0.5 ? `▲ +${pctVar.toFixed(1)}% vs hist.` : `= Igual a hist.`);
+                        $(`<span class="ml-1" style="font-size:10.5px;font-weight:700;color:${colorVar};">`).text(txtVar).appendTo(priceLine);
+                    }
                     $("<div class='small text-muted'>")
                         .text(`Subtotal partida: $${moneyFmt.format(subtotal)} · ${opt.entrega ? opt.entrega + " d" : "S/plazo"}`)
                         .appendTo(box);
@@ -538,12 +580,14 @@
                     }
 
                     if (!line.ordenado) {
+                        const ahorroPpv = refRow && refRow.ref_precio > 0 ? (refRow.ref_precio - opt.precio) * line.cantidad : 0;
                         radios.push({
                             input,
                             line: line.id,
                             option: opt.id,
                             proveedor: sup,
                             subtotal,
+                            ahorroPpv,
                             moneda: opt.moneda,
                             comercial: com,
                         });
@@ -579,8 +623,10 @@
             }
             const totals = {};
             const conds = {};
+            let ppvNeto = 0;
             for (const c of chosen) {
                 totals[c.proveedor] = (totals[c.proveedor] || 0) + c.subtotal;
+                ppvNeto += Number(c.ahorroPpv || 0);
                 if (!conds[c.proveedor] && c.comercial) {
                     const tags = [c.comercial.taxes_and_charges, c.comercial.shipping_rule, c.comercial.payment_terms_template].filter(Boolean);
                     conds[c.proveedor] = tags.length ? ` (${tags.join(", ")})` : "";
@@ -589,9 +635,13 @@
             const parts = Object.entries(totals).map(
                 ([prov, sum]) => `${prov}: Neto $${moneyFmt.format(sum)}${conds[prov] || ""}`
             );
+            const ppvHtml = Math.abs(ppvNeto) >= 0.01
+                ? `<br><span style="font-weight:700;color:${ppvNeto >= 0 ? "#059669" : "#b45309"};">${ppvNeto >= 0 ? `✅ Ahorro frente a referencia histórica (PPV): $${moneyFmt.format(ppvNeto)} MXN` : `⚠️ Variación sobre referencia histórica (PPV): +$${moneyFmt.format(Math.abs(ppvNeto))} MXN`}</span>`
+                : "";
             summaryBox.html(
                 `<b>Adjudicación seleccionada (${chosen.length} renglón/es — ERPNext aplicará automáticamente IVA, flete y vencimientos en cada OC):</b><br>` +
-                parts.map((p) => frappe.utils.escape_html(p)).join(" &nbsp;|&nbsp; ")
+                parts.map((p) => frappe.utils.escape_html(p)).join(" &nbsp;|&nbsp; ") +
+                ppvHtml
             );
             if (comparison.puede_generar && dialog.get_primary_btn()) {
                 dialog.get_primary_btn().prop("disabled", false);
