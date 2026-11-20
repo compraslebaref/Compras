@@ -90,6 +90,15 @@
   },
   {
    "doctype": "Sidebar Item",
+   "icon": "repeat",
+   "is_default_module": 1,
+   "label": "Sustituciones autorizadas",
+   "link_to": "Lebaref Sustitucion",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
    "icon": "arrow-left-right",
    "is_default_module": 1,
    "label": "Entregas y sobrantes",

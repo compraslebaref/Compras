@@ -32,7 +32,7 @@
 
 ### 2.2 Operaciones de Compras, Almacén y Catálogos (`lebaref_compras.operaciones`)
 - **`GET /api/method/lebaref_compras.operaciones.esquema?accion=<accion>&folio=<folio>`**
-  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `devolver`, `cfdi`.
+  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `autorizar_sustitucion`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `devolver`, `cfdi`.
   - Delega automáticamente a `lebaref_compras.equipos.esquema` cuando `accion` pertenece a herramientas/flotilla/kits (`herramienta`, `prestamo`, `retorno_herramienta`, `estado_herramienta`, `vehiculo`, `gasto_vehiculo`, `revision_vehiculo`, `estado_vehiculo`, `kit`, `composicion_kit`, `prestamo_kit`, `garantia_herramienta`, `mantenimiento_herramienta`, `anular_mantenimiento`).
   - Respuesta `message`:
     ```json
@@ -418,3 +418,33 @@ El grupo y la unidad deben existir. Un servicio puede incluirse en solicitud, pe
 La recepción conserva `custom_lebaref_recibido_por`, la remisión nativa `supplier_delivery_note`, y el motivo y destinos en `remarks`. Conserva obra, orden, unidades y partida del documento de origen. El material recibido en obra incrementa ese almacén. ERPNext puede completar el almacén de referencia del servicio con sus valores predeterminados. El servicio conserva `is_stock_item=0` y carece de movimiento de inventario. HTTP `417` para servicio con almacén enviado, destino inválido, cambio de almacén sin obra o motivo, o cantidades inválidas. Los permisos nativos, la recepción parcial y los reintentos de §2.2 se mantienen.
 
 El nuevo campo de persona requiere migración. Para uso operativo hay que desplegar el backend integrado y conectar la captura en Desk. La selección de almacén representa el lugar de resguardo y conserva inventario hasta un movimiento nativo posterior de consumo.
+
+## 11. Sustitución autorizada al recibir (`ALM-04`)
+
+`accion=autorizar_sustitucion` usa el folio de una **Purchase Order** confirmada y abierta. La sesión requiere crear y confirmar **Lebaref Sustitucion**, además de escritura y autorización (`submit`) de esa orden. Se aprovisionan permisos de creación y confirmación para `Purchase Manager`, y de lectura para `Purchase User` y `Stock User`. El evento de validación también exige esos permisos de orden cuando se captura por REST nativo o Desk.
+
+```json
+{"renglon":"po-item-a","sustituto":"TOR-EQUIV-01","cantidad":2,"motivo":"Marca equivalente aprobada para entrega inmediata"}
+```
+
+```json
+{"message":{"folio":"autorizacion-id","tipo":"Lebaref Sustitucion"}}
+```
+
+La autorización confirmada conserva `orden`, `renglon`, `original`, `sustituto`, `cantidad`, `unidad`, `factor`, `precio`, `motivo`, propietario e historial. Los datos del original, unidad, factor y precio se obtienen del servidor. El sustituto debe ser otro artículo activo, inventariable y de compra, con la misma unidad base y una conversión de compra idéntica. La cantidad autorizada debe caber en el saldo pendiente después de descontar las otras autorizaciones vigentes aún pendientes de recibir. Se conservan UUID y huella para reintentos.
+
+`esquema?accion=recibir&folio=<orden>` añade la columna opcional `sustitucion` con las autorizaciones confirmadas de esa orden. En el POST normal de `recibir`, cada renglón puede indicar una autorización. Omitirla conserva la recepción del artículo original. Se puede recibir parcialmente dentro de la cantidad autorizada.
+
+```json
+{"rows":[{"id":"po-item-a","qty":1,"sustitucion":"autorizacion-id"}]}
+```
+
+```json
+{"message":{"folio":"MAT-PRE-2026-00012","tipo":"Purchase Receipt"}}
+```
+
+En **Purchase Receipt Item**, `item_code` identifica el sustituto recibido, `custom_lebaref_articulo_original` conserva el artículo solicitado y `custom_lebaref_sustitucion` identifica la autorización. La recepción mantiene las referencias nativas `purchase_order` y `purchase_order_item`. ERPNext calcula el saldo sobre el renglón original y el inventario sobre el sustituto físico. El precio se conserva en la recepción y en la autorización. Esta versión exige el mismo precio y conversión de la orden; los cambios comerciales requieren ajustar la documentación de compra por el proceso correspondiente.
+
+La extensión declarativa `extend_doctype_class` de **Purchase Receipt** y **Purchase Invoice** admite la diferencia de código exclusivamente al comprobar una autorización confirmada cuyo par original/sustituto, orden, renglón, cantidad, unidad, factor y precio coinciden. Las demás comparaciones y validaciones nativas se mantienen. La factura debe generarse desde la recepción confirmada y usar `update_stock=0`. Los campos de procedencia se copian a **Purchase Invoice Item**. Las devoluciones refieren el renglón de recepción original y restituyen el cupo recibido conforme al movimiento nativo. Una autorización con recepciones vigentes conserva su vínculo y rechaza la anulación.
+
+HTTP `403` para un auxiliar que intenta autorizar. HTTP `417` para saldo o cantidad autorizada excedidos, unidades incompatibles, código, precio o referencias que difieran de la autorización, o una autorización cancelada. Hay que reconstruir el backend y migrar para instalar el DocType y los campos. Antigravity debe conectar el diálogo de autorización y el selector de recepción en Desk y desplegar la imagen integrada.

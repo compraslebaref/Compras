@@ -332,12 +332,12 @@
   {
     "id": "ALM-04",
     "capacidad": "Sustitución de marca/artículo al recibir",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Cambiar producto de partida y motivo.",
-    "integracion": "Recepción conserva el artículo de la OC; sin sustitución en Windows.",
-    "evidencia": "CambiarProductoEnPartidaOrdenCompra y esquema recibir.",
-    "criterio_cierre": "Recibir sustituto aprobado conservando original, motivo y costo.",
+    "integracion": "Autorización confirmada por responsable, renglón y cantidad. Recepción y factura conservan original/sustituto, motivo, precio y vínculos nativos. Misma unidad base, conversión y precio de orden.",
+    "evidencia": "verificar_sustituciones: permisos, recepción parcial, reintento, exceso rechazado, recepción alterada rechazada, factura y devolución nativas y saldo original. Imagen lebaref/erpnext-codex:alm04.",
+    "criterio_cierre": "Desplegar backend y workers con la misma versión, conectar Desk y validar operación. Cambios comerciales requieren revisión de documentación de compra.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 8528

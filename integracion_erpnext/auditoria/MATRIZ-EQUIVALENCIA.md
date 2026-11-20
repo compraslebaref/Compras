@@ -230,13 +230,13 @@ Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cam
 
 ## ALM-04 · Sustitución de marca/artículo al recibir
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Cambiar producto de partida y motivo.
-- Integración: Recepción conserva el artículo de la OC; sin sustitución en Windows.
-- Evidencia: CambiarProductoEnPartidaOrdenCompra y esquema recibir.
-- Criterio para cerrar: Recibir sustituto aprobado conservando original, motivo y costo.
-- Fuentes: [original L8528](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:8528) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: Autorización confirmada por renglón y cantidad, con permisos de escritura y autorización de la orden. Conserva original, sustituto, motivo, precio y referencias nativas. Recepción y factura aplican una excepción de identidad acotada a la autorización comprobada.
+- Evidencia: `verificar_sustituciones` valida auxiliar rechazado, aprobación del responsable, recepción parcial e idempotente, límite autorizado, rechazo de recepción alterada, factura nativa, devolución nativa, conservación del original y saldo de orden. `Validar.ps1 -ImagenBackend lebaref/erpnext-codex:alm04`.
+- Criterio para cerrar: Desplegar el backend y los workers de la misma versión, conectar la autorización y recepción en Desk y validar el recorrido operativo. Esta versión conserva precio, unidad base y conversión de la orden; cambios comerciales requieren revisar la documentación de compra.
+- Fuentes: `sustituciones.py`, `verificar_sustituciones.py` y §11 de CONTRATO-API.md.
 
 ## ALM-05 · Entrega versus consumo/costo de obra
 

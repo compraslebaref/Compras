@@ -118,6 +118,22 @@
 
         const rowStates = (schema.rows || []).map((r) => Object.assign({}, r));
 
+        const mapaSustituciones = {};
+        if (accion === "recibir" && folio) {
+            try {
+                const listaSust = await frappe.db.get_list("Lebaref Sustitucion", {
+                    filters: { orden: folio, docstatus: 1 },
+                    fields: ["name", "renglon", "original", "sustituto", "cantidad", "unidad", "motivo"],
+                    limit: 100,
+                });
+                for (const s of listaSust || []) {
+                    mapaSustituciones[s.name] = s;
+                }
+            } catch (e) {
+                // Conservar choices del esquema si no hubiera lectura extendida
+            }
+        }
+
         function crearFilaVacia() {
             const obj = {};
             for (const col of schema.columns || []) {
@@ -157,6 +173,29 @@
                         } else {
                             td.css({ background: "#f8fafc", verticalAlign: "middle" }).text(curVal);
                         }
+                    } else if (accion === "recibir" && col.name === "sustitucion") {
+                        const todasSust = Array.isArray(col.choices) ? col.choices : [];
+                        const opcionesSust = todasSust.filter((ch) => {
+                            const info = mapaSustituciones[ch];
+                            return !info || info.renglon === rowObj.id;
+                        });
+                        if (!opcionesSust.length) {
+                            rowObj.sustitucion = "";
+                            td.css({ background: "#f8fafc", color: "#94a3b8", verticalAlign: "middle" }).text("— Original —");
+                        } else {
+                            const sel = $('<select class="form-control form-control-sm">').appendTo(td);
+                            $("<option>").val("").text(`— Recibir original (${rowObj.item_code}) —`).appendTo(sel);
+                            for (const ch of opcionesSust) {
+                                const s = mapaSustituciones[ch];
+                                const lbl = s
+                                    ? `🔄 ${s.sustituto} (máx ${s.cantidad} ${s.unidad || ""}) · ${ch}`
+                                    : ch;
+                                $("<option>").val(ch).text(lbl).prop("selected", ch === curVal).appendTo(sel);
+                            }
+                            sel.on("change", function () {
+                                rowObj.sustitucion = $(this).val();
+                            });
+                        }
                     } else if (Array.isArray(col.choices) && col.choices.length) {
                         const sel = $('<select class="form-control form-control-sm">').appendTo(td);
                         if (!col.choices.includes("")) {
@@ -168,6 +207,9 @@
                         sel.on("change", function () {
                             rowObj[col.name] = $(this).val();
                         });
+                    } else if (Array.isArray(col.choices) && col.choices.length === 0) {
+                        rowObj[col.name] = "";
+                        td.css({ background: "#f8fafc", color: "#94a3b8", verticalAlign: "middle" }).text("—");
                     } else {
                         const inp = $('<input type="text" class="form-control form-control-sm">').val(curVal).appendTo(td);
                         inp.on("input", function () {
@@ -197,6 +239,18 @@
         }
 
         renderRowsTable();
+
+        if (accion === "autorizar_sustitucion" && dialog.fields_dict.renglon && dialog.fields_dict.cantidad) {
+            const sugerirPendiente = () => {
+                const rid = dialog.get_value("renglon");
+                const rFound = (schema.rows || []).find((x) => x.id === rid);
+                if (rFound && rFound.pending !== undefined) {
+                    dialog.set_value("cantidad", String(rFound.pending));
+                }
+            };
+            dialog.fields_dict.renglon.$input.on("change", sugerirPendiente);
+            sugerirPendiente();
+        }
 
         dialog.set_primary_action("Guardar y Confirmar", async () => {
             const payload = {};
@@ -296,9 +350,10 @@
         const topBar = $(`
             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap" style="gap:8px;">
                 <div class="small text-muted">Haz clic en cualquier <b>Zona (A–F)</b> del plano para filtrar sus herramientas y existencias.</div>
-                <div class="d-flex align-items-center" style="gap:6px;">
-                    <input type="text" class="form-control form-control-sm leb-map-search" placeholder="Buscar código HER, artículo o responsable…" style="width:250px;">
+                <div class="d-flex align-items-center flex-wrap" style="gap:6px;">
+                    <input type="text" class="form-control form-control-sm leb-map-search" placeholder="Buscar código HER, artículo o responsable…" style="width:240px;">
                     <button type="button" class="btn btn-xs btn-default leb-map-all">Mostrar Todas (${herramientas.length} HER · ${existencias.length} Stock)</button>
+                    <button type="button" class="btn btn-xs btn-primary leb-map-print">🏷️ Imprimir Códigos de Almacén</button>
                 </div>
             </div>
         `).appendTo(host);
@@ -388,6 +443,10 @@
             textoFiltro = "";
             topBar.find(".leb-map-search").val("");
             renderPlanoYTablas();
+        });
+        topBar.find(".leb-map-print").on("click", () => {
+            d.hide();
+            abrirImpresorCodigosCarta("articulos", textoFiltro);
         });
 
         renderPlanoYTablas();
@@ -707,16 +766,267 @@
         cargarRenglonesOrden(poChoices[0]);
     }
 
+    async function abrirImpresorCodigosCarta(origenInicial = "articulos", busquedaInicial = "", anaquelInicial = "") {
+        const { message: opts } = await frappe.call({
+            method: "lebaref_compras.impresion_carta.opciones_hojas_codigos",
+            type: "GET",
+            freeze: true,
+            freeze_message: "Preparando opciones de impresión Tamaño Carta…",
+        });
+
+        const grupos = (opts && opts.grupos) || [];
+        const anaqueles = (opts && opts.anaqueles) || [];
+
+        const ORIGEN_POR_ETIQUETA = {
+            "Artículos del Catálogo (SKUs)": "articulos",
+            "Herramientas Individuales (HER)": "herramientas",
+            "Maletines / Kits de Cuadrilla (KIT)": "kits",
+            "Flotilla Vehicular (VEH)": "vehiculos",
+        };
+        const ETIQUETA_POR_ORIGEN = {
+            articulos: "Artículos del Catálogo (SKUs)",
+            herramientas: "Herramientas Individuales (HER)",
+            kits: "Maletines / Kits de Cuadrilla (KIT)",
+            vehiculos: "Flotilla Vehicular (VEH)",
+        };
+
+        const FORMATO_POR_ETIQUETA = {
+            "Catálogo Visual con Foto (12 por hoja Carta · 3×4)": "catalogo_12",
+            "Planilla 30 Etiquetas (3×10 · Avery 5160 / Recortable)": "etiquetas_30",
+            "Tarjetas Grandes de Anaquel / Gabinete (6 por hoja Carta · 2×3)": "tarjetas_6",
+        };
+
+        const d = new frappe.ui.Dialog({
+            title: "🏷️ Imprimir Hojas de Códigos de Barras Tamaño Carta (Datamax S30W)",
+            size: "large",
+            fields: [
+                {
+                    fieldname: "_info",
+                    fieldtype: "HTML",
+                    options: `<div class="alert alert-info py-2 px-3 mb-2" style="font-size:12px;">
+                        Diseñado para <b>impresora láser o inyección Tamaño Carta</b> (sin rollo térmico) y lectura inmediata con pistola <b>Datamax S30W</b>:<br>
+                        • <b>Catálogo 12/hoja:</b> tarjetas con foto real y código Code 128B para carpeta de mostrador.<br>
+                        • <b>Planilla 30 etiquetas (3×10):</b> compatible con papel adherible <i>Avery 5160 (66.6 × 25.4 mm)</i> o Carta recortable.<br>
+                        • <b>Tarjetas grandes 6/hoja:</b> ideales para frentes de estantes A–F, tapas de maletines KIT y unidades VEH.
+                    </div>`,
+                },
+                {
+                    fieldname: "origen_lbl",
+                    label: "Qué códigos deseas imprimir",
+                    fieldtype: "Select",
+                    options: Object.keys(ORIGEN_POR_ETIQUETA).join("\n"),
+                    default: ETIQUETA_POR_ORIGEN[origenInicial] || "Artículos del Catálogo (SKUs)",
+                    reqd: 1,
+                },
+                {
+                    fieldname: "formato_lbl",
+                    label: "Distribución en Hoja Tamaño Carta",
+                    fieldtype: "Select",
+                    options: Object.keys(FORMATO_POR_ETIQUETA).join("\n"),
+                    default: busquedaInicial ? "Planilla 30 Etiquetas (3×10 · Avery 5160 / Recortable)" : "Catálogo Visual con Foto (12 por hoja Carta · 3×4)",
+                    reqd: 1,
+                },
+                { fieldtype: "Column Break" },
+                {
+                    fieldname: "grupo",
+                    label: "Categoría / Familia (opcional, solo SKUs)",
+                    fieldtype: "Select",
+                    options: ["", ...grupos].join("\n"),
+                    default: "",
+                },
+                {
+                    fieldname: "anaquel",
+                    label: "Ubicación / Anaquel (opcional)",
+                    fieldtype: "Select",
+                    options: ["", ...anaqueles].join("\n"),
+                    default: anaquelInicial || "",
+                },
+                {
+                    fieldname: "busqueda",
+                    label: "Filtro específico (código, serie, placas o descripción)",
+                    fieldtype: "Data",
+                    default: busquedaInicial || "",
+                },
+                {
+                    fieldname: "solo_con_stock",
+                    label: "Solo artículos con existencia física (> 0) en almacén",
+                    fieldtype: "Check",
+                    default: busquedaInicial || origenInicial !== "articulos" ? 0 : 1,
+                },
+                {
+                    fieldname: "copias",
+                    label: "Copias por cada código",
+                    fieldtype: "Int",
+                    default: 1,
+                },
+            ],
+            primary_action_label: "🖨️ Generar Hoja Carta Lista para Imprimir",
+            async primary_action(vals) {
+                const origen = ORIGEN_POR_ETIQUETA[vals.origen_lbl] || "articulos";
+                const formato = FORMATO_POR_ETIQUETA[vals.formato_lbl] || "catalogo_12";
+                const win = window.open("", "_blank");
+                if (win) {
+                    win.document.write("<!doctype html><html><body style='font-family:Segoe UI,Arial,sans-serif;padding:24px;'>Generando códigos vectoriales Code 128B para impresión Tamaño Carta…</body></html>");
+                }
+                const btn = d.get_primary_btn().prop("disabled", true);
+                try {
+                    const { message: htmlDoc } = await frappe.call({
+                        method: "lebaref_compras.impresion_carta.generar_html_codigos_carta",
+                        type: "GET",
+                        args: {
+                            origen,
+                            formato,
+                            grupo: origen === "articulos" ? (vals.grupo || "") : "",
+                            anaquel: vals.anaquel || "",
+                            solo_con_stock: origen === "articulos" && vals.solo_con_stock ? 1 : 0,
+                            busqueda: vals.busqueda || "",
+                            copias: Math.max(1, Math.min(30, Number(vals.copias || 1))),
+                        },
+                        freeze: true,
+                        freeze_message: "Armando hojas Tamaño Carta con códigos Code 128B…",
+                    });
+                    if (win) {
+                        win.document.open();
+                        win.document.write(htmlDoc);
+                        win.document.close();
+                        d.hide();
+                    } else {
+                        frappe.msgprint("Tu navegador bloqueó la pestaña emergente. Permite ventanas emergentes para 127.0.0.1 y vuelve a intentar.");
+                    }
+                } catch (err) {
+                    if (win) win.close();
+                } finally {
+                    btn.prop("disabled", false);
+                }
+            },
+        });
+
+        const actualizarVisibilidadSku = () => {
+            const esSku = (ORIGEN_POR_ETIQUETA[d.get_value("origen_lbl")] || "articulos") === "articulos";
+            d.set_df_property("grupo", "hidden", esSku ? 0 : 1);
+            d.set_df_property("solo_con_stock", "hidden", esSku ? 0 : 1);
+        };
+        d.fields_dict.origen_lbl.$input.on("change", actualizarVisibilidadSku);
+        d.show();
+        actualizarVisibilidadSku();
+    }
+
+    let dialogoEscaneoActivo = null;
+
+    function abrirEscaneoPistola() {
+        if (dialogoEscaneoActivo && dialogoEscaneoActivo.display) {
+            const inp = dialogoEscaneoActivo.get_field("codigo").$input;
+            if (inp) inp.val("").trigger("focus");
+            return;
+        }
+        const d = new frappe.ui.Dialog({
+            title: "🔫 Escanear Código con Pistola Datamax S30W (Atajo: F2)",
+            fields: [
+                {
+                    fieldname: "_ayuda",
+                    fieldtype: "HTML",
+                    options: `<div class="small text-muted mb-2">
+                        Dispara el lector <b>Datamax S30W</b> sobre cualquier código impreso en hoja Carta (Solicitud, Orden, Recepción, Salida, Herramienta <b>HER</b>, Maletín <b>KIT</b>, Vehículo <b>VEH</b>, SKU o código de barras de fábrica).
+                    </div>`,
+                },
+                {
+                    fieldname: "codigo",
+                    label: "Código escaneado o escrito",
+                    fieldtype: "Data",
+                    reqd: 1,
+                },
+            ],
+            primary_action_label: "Abrir en ERPNext",
+            async primary_action(vals) {
+                const codigo = String(vals.codigo || "").trim();
+                if (!codigo) return;
+                const btn = d.get_primary_btn().prop("disabled", true);
+                try {
+                    const { message: res } = await frappe.call({
+                        method: "lebaref_compras.impresion_carta.resolver_escaneo",
+                        type: "GET",
+                        args: { codigo },
+                    });
+                    if (res && res.encontrado) {
+                        d.hide();
+                        frappe.show_alert({
+                            message: `🔫 Código reconocido: ${res.name} (${res.doctype})`,
+                            indicator: "green",
+                        });
+                        frappe.set_route("Form", res.doctype, res.name);
+                    } else {
+                        frappe.show_alert({
+                            message: `No se encontró ningún documento o artículo con el código "${codigo}".`,
+                            indicator: "orange",
+                        });
+                        const inp = d.get_field("codigo").$input;
+                        if (inp) inp.val("").trigger("focus");
+                    }
+                } finally {
+                    btn.prop("disabled", false);
+                }
+            },
+        });
+        dialogoEscaneoActivo = d;
+        d.show();
+        setTimeout(() => {
+            const inp = d.get_field("codigo").$input;
+            if (inp) {
+                inp.attr("placeholder", "Apunta y dispara con la pistola S30W…");
+                inp.trigger("focus");
+                inp.off("keydown.lebs30w").on("keydown.lebs30w", (ev) => {
+                    if (ev.key === "Enter") {
+                        ev.preventDefault();
+                        d.get_primary_btn().trigger("click");
+                    }
+                });
+            }
+        }, 120);
+    }
+
+    // Atajo global F2 para disparar pistola lectora S30W desde cualquier pantalla de ERPNext
+    $(document).on("keydown.lebarefScanner", (ev) => {
+        if (ev.key === "F2") {
+            ev.preventDefault();
+            abrirEscaneoPistola();
+        }
+    });
+
+    // Enlaces rápidos del banner superior en el Workspace Lebaref
+    $(document).on("click", 'a[href="#leb-escanear-s30w"], a[href="#leb-codigos-carta"], a[href="#leb-mapa-af"], a[href="#leb-historico"]', function (ev) {
+        ev.preventDefault();
+        const href = $(this).attr("href");
+        if (href === "#leb-escanear-s30w") abrirEscaneoPistola();
+        else if (href === "#leb-codigos-carta") abrirImpresorCodigosCarta("articulos");
+        else if (href === "#leb-mapa-af") abrirMapaUbicaciones();
+        else if (href === "#leb-historico") abrirArchivoHistorico("precios");
+    });
+
     window.lebaref = {
         abrirOperacion,
         verDetalleEquipo,
         abrirMapaUbicaciones,
         abrirDirectorioProveedores,
         abrirArchivoHistorico,
+        abrirImpresorCodigosCarta,
+        abrirEscaneoPistola,
         SHEETS_URL,
     };
 
     // --- Botones guiados en Formularios de ERPNext Desk ---
+
+    frappe.ui.form.on("Item", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            frm.add_custom_button("🏷️ Imprimir Etiquetas de este SKU", () =>
+                abrirImpresorCodigosCarta("articulos", frm.doc.item_code || frm.doc.name)
+            );
+            frm.add_custom_button("💰 Histórico de Precios", () =>
+                abrirArchivoHistorico("precios", frm.doc.item_code || frm.doc.name), "Lebaref"
+            );
+            frm.add_custom_button("🗺️ Mapa Zonas A–F", () => abrirMapaUbicaciones(), "Lebaref");
+        },
+    });
 
     frappe.ui.form.on("Request for Quotation", {
         refresh(frm) {
@@ -730,22 +1040,53 @@
     });
 
     frappe.ui.form.on("Purchase Order", {
-        refresh(frm) {
+        async refresh(frm) {
             if (frm.doc.docstatus === 0 && frappe.model.can_submit("Purchase Order")) {
                 frm.add_custom_button("Autorizar Orden (Lebaref)", () =>
                     abrirOperacion("autorizar", frm.doc.name, `Autorizar Orden de Compra ${frm.doc.name}`, () => frm.reload_doc())
                 ).addClass("btn-primary");
             }
-            if (frm.doc.docstatus === 1 && frm.doc.status !== "Closed") {
+            if (frm.doc.docstatus === 1 && frm.doc.status !== "Closed" && frm.doc.status !== "On Hold") {
                 frm.add_custom_button("Recibir mercancía en almacén", () =>
                     abrirOperacion("recibir", frm.doc.name, `Recibir mercancía de ${frm.doc.name}`)
                 ).addClass("btn-primary");
+                if (frappe.model.can_write("Purchase Order") && frappe.model.can_submit("Purchase Order")) {
+                    frm.add_custom_button("Autorizar sustitución al recibir (ALM-04)", () =>
+                        abrirOperacion(
+                            "autorizar_sustitucion",
+                            frm.doc.name,
+                            `Autorizar sustitución de artículo · ${frm.doc.name}`,
+                            () => frm.reload_doc()
+                        ),
+                        "Lebaref"
+                    );
+                }
+            }
+            if (frm.doc.docstatus === 1) {
+                try {
+                    const susts = await frappe.db.get_list("Lebaref Sustitucion", {
+                        filters: { orden: frm.doc.name, docstatus: 1 },
+                        fields: ["name", "original", "sustituto", "cantidad", "unidad", "motivo"],
+                        limit: 20,
+                    });
+                    if (susts && susts.length) {
+                        const detalle = susts
+                            .map((s) => `${frappe.utils.escape_html(s.original)} → <b>${frappe.utils.escape_html(s.sustituto)}</b> (${s.cantidad} ${frappe.utils.escape_html(s.unidad || "")} · Motivo: ${frappe.utils.escape_html(s.motivo || "")})`)
+                            .join(" | ");
+                        frm.dashboard.set_headline_alert(
+                            `🔄 Sustitución(es) autorizada(s) para recibir (ALM-04): ${detalle}`,
+                            "blue"
+                        );
+                    }
+                } catch (e) {
+                    // Sin lectura de Lebaref Sustitucion
+                }
             }
         },
     });
 
     frappe.ui.form.on("Purchase Receipt", {
-        refresh(frm) {
+        async refresh(frm) {
             if (frm.doc.docstatus === 1 && frm.doc.custom_lebaref_por_regularizar) {
                 frm.dashboard.set_headline_alert(
                     "⚠️ Entrada anticipada sin Orden de Compra — Pendiente de regularizar (ALM-02).",
@@ -759,6 +1100,43 @@
                 frm.add_custom_button("Archivar CFDI 4.0 (XML)", () =>
                     abrirOperacion("cfdi", frm.doc.name, `Archivar XML CFDI contra ${frm.doc.name}`)
                 ).addClass("btn-primary");
+            }
+            const filasSust = (frm.doc.items || []).filter((r) => r.custom_lebaref_articulo_original || r.custom_lebaref_sustitucion);
+            if (frm.doc.docstatus === 1 && filasSust.length && !frm.doc.custom_lebaref_por_regularizar) {
+                const motivosPorId = {};
+                try {
+                    const ids = [...new Set(filasSust.map((r) => r.custom_lebaref_sustitucion).filter(Boolean))];
+                    if (ids.length) {
+                        const docsSust = await frappe.db.get_list("Lebaref Sustitucion", {
+                            filters: { name: ["in", ids] },
+                            fields: ["name", "motivo"],
+                            limit: 50,
+                        });
+                        for (const ds of docsSust || []) motivosPorId[ds.name] = ds.motivo;
+                    }
+                } catch (e) {
+                    // Ignorar si no aplica
+                }
+                const txtSust = filasSust
+                    .map((r) => {
+                        const mot = motivosPorId[r.custom_lebaref_sustitucion];
+                        return `<b>${frappe.utils.escape_html(r.custom_lebaref_articulo_original || "")}</b> → <b>${frappe.utils.escape_html(r.item_code)}</b> (${r.qty} ${frappe.utils.escape_html(r.uom || "")}${mot ? " · Motivo: " + frappe.utils.escape_html(mot) : ""})`;
+                    })
+                    .join(" | ");
+                frm.dashboard.set_headline_alert(`🔄 Recepción con sustitución autorizada (ALM-04): ${txtSust}`, "blue");
+            }
+        },
+    });
+
+    frappe.ui.form.on("Lebaref Sustitucion", {
+        refresh(frm) {
+            if (!frm.is_new() && frm.doc.docstatus === 1) {
+                frm.disable_save();
+                if (frm.doc.orden) {
+                    frm.add_custom_button("Abrir Orden de Compra", () =>
+                        frappe.set_route("Form", "Purchase Order", frm.doc.orden)
+                    );
+                }
             }
         },
     });
@@ -778,6 +1156,9 @@
             if (frm.is_new()) return;
             frm.disable_save();
             frm.add_custom_button("Ver historial y TCO", () => verDetalleEquipo("Lebaref Herramienta", frm.doc.name));
+            frm.add_custom_button("🏷️ Imprimir Etiqueta / Ficha Carta", () =>
+                abrirImpresorCodigosCarta("herramientas", frm.doc.codigo || frm.doc.name)
+            );
             frm.add_custom_button("Compra y garantía", () =>
                 abrirOperacion("garantia_herramienta", frm.doc.name, `Compra y garantía · ${frm.doc.name}`, () => frm.reload_doc()), "Acciones Lebaref");
             frm.add_custom_button("Registrar mantenimiento", () =>
@@ -807,6 +1188,9 @@
             frm.add_custom_button("Prestar kit (selectivo)", () =>
                 abrirOperacion("prestamo_kit", frm.doc.name, `Prestar herramientas del kit ${frm.doc.name}`)
             ).addClass("btn-primary");
+            frm.add_custom_button("🏷️ Imprimir Etiqueta de Kit", () =>
+                abrirImpresorCodigosCarta("kits", frm.doc.codigo || frm.doc.name)
+            );
             frm.add_custom_button("Ver contenido y estado", () => verDetalleEquipo("Lebaref Kit", frm.doc.name));
             frm.add_custom_button("Cambiar composición del kit", () =>
                 abrirOperacion("composicion_kit", frm.doc.name, `Composición de ${frm.doc.name}`, () => frm.reload_doc()), "Acciones Lebaref");
@@ -835,13 +1219,16 @@
             ).addClass("btn-primary");
             frm.add_custom_button("Check-list semanal", () =>
                 abrirOperacion("revision_vehiculo", frm.doc.name, `Check-list vehicular · ${frm.doc.name}`, () => frm.reload_doc()));
+            frm.add_custom_button("🏷️ Imprimir Etiqueta Vehicular", () =>
+                abrirImpresorCodigosCarta("vehiculos", frm.doc.codigo || frm.doc.name)
+            );
             frm.add_custom_button("Ver bitácora y rendimiento", () => verDetalleEquipo("Lebaref Vehiculo", frm.doc.name));
             frm.add_custom_button("Estado / vigencia de seguro", () =>
                 abrirOperacion("estado_vehiculo", frm.doc.name, `Estado y seguro · ${frm.doc.name}`, () => frm.reload_doc()), "Acciones Lebaref");
         },
     });
 
-    // --- Botones rápidos en Listas (ListView) para altas protegidas y capturas guiadas ---
+    // --- Botones rápidos en Listas (ListView) para altas protegidas, escaneo S30W e impresión Carta ---
     const listActions = [
         ["Material Request", "Captura Rápida Lebaref (con Conceptos Libres)", "solicitud"],
         ["Purchase Receipt", "Entrada Anticipada sin OC (ALM-02)", "entrada_sin_oc"],
@@ -853,6 +1240,12 @@
         ["Lebaref Vehiculo", "Nuevo Vehículo (VEH)", "vehiculo"],
     ];
 
+    const ORIGEN_IMPRESION_LISTA = {
+        "Lebaref Herramienta": "herramientas",
+        "Lebaref Kit": "kits",
+        "Lebaref Vehiculo": "vehiculos",
+    };
+
     for (const [dt, label, accion] of listActions) {
         const prev = frappe.listview_settings[dt] || {};
         const prevOnload = prev.onload;
@@ -863,6 +1256,13 @@
                 if (dt === "Supplier") {
                     listview.page.add_inner_button("📊 ¿A quién cotizar? (Directorio / Sheets)", () => abrirDirectorioProveedores());
                     listview.page.add_inner_button("📜 Histórico de Precios y CFDIs", () => abrirArchivoHistorico("precios"));
+                } else {
+                    listview.page.add_inner_button("🔫 Escanear S30W (F2)", () => abrirEscaneoPistola());
+                }
+                if (ORIGEN_IMPRESION_LISTA[dt]) {
+                    listview.page.add_inner_button("🏷️ Hojas de Códigos / Etiquetas Carta", () =>
+                        abrirImpresorCodigosCarta(ORIGEN_IMPRESION_LISTA[dt])
+                    );
                 }
                 if (dt === "Lebaref Herramienta") {
                     listview.page.add_inner_button("🗺️ Mapa de Ubicaciones (A–F)", () => abrirMapaUbicaciones());
@@ -877,18 +1277,23 @@
         frappe.listview_settings[dtHist] = Object.assign({}, prevH, {
             onload(listview) {
                 if (typeof prevHOnload === "function") prevHOnload(listview);
+                if (dtHist === "Purchase Order") {
+                    listview.page.add_inner_button("🔫 Escanear S30W (F2)", () => abrirEscaneoPistola());
+                }
                 listview.page.add_inner_button("📜 Archivo Histórico SQLite (CFDIs / Precios / OCs)", () => abrirArchivoHistorico(tabDef));
             },
         });
     }
 
-    // También agregar el Mapa de Ubicaciones e Histórico en la lista de Item (Artículos)
+    // Lista de Item (Artículos): Alta rápida, Hojas de Códigos Carta, Escaneo S30W, Mapa A–F e Histórico
     const prevItem = frappe.listview_settings["Item"] || {};
     const prevItemOnload = prevItem.onload;
     frappe.listview_settings["Item"] = Object.assign({}, prevItem, {
         onload(listview) {
             if (typeof prevItemOnload === "function") prevItemOnload(listview);
             listview.page.add_inner_button("Alta Rápida SKU (con Conversión)", () => abrirOperacion("articulo", "", "Alta Rápida de Artículo", () => listview.refresh()));
+            listview.page.add_inner_button("🏷️ Hojas de Códigos / Etiquetas Carta", () => abrirImpresorCodigosCarta("articulos"));
+            listview.page.add_inner_button("🔫 Escanear S30W (F2)", () => abrirEscaneoPistola());
             listview.page.add_inner_button("🗺️ Mapa de Ubicaciones (A–F)", () => abrirMapaUbicaciones());
             listview.page.add_inner_button("💰 Banco Histórico de Precios", () => abrirArchivoHistorico("precios"));
         },

@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import comercial, proveedores, recepciones, solicitudes, surtido, unidades
+from lebaref_compras import comercial, proveedores, recepciones, solicitudes, sustituciones, surtido, unidades
 from lebaref_compras.unidades import numero
 
 TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
@@ -15,13 +15,13 @@ TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
            "surtir": "Stock Entry", "peticion": "Request for Quotation",
            "oferta": "Supplier Quotation", "autorizar": "Purchase Order",
            "recibir": "Purchase Receipt", "entrada_sin_oc": "Purchase Receipt",
-           "regularizar_entrada": "Purchase Receipt", "entregar": "Stock Entry", "devolver": "Stock Entry",
+           "autorizar_sustitucion": "Lebaref Sustitucion", "regularizar_entrada": "Purchase Receipt", "entregar": "Stock Entry", "devolver": "Stock Entry",
            "cfdi": "Lebaref CFDI", "articulo": "Item", "proveedor": "Supplier", "obra": "Project", "almacen": "Warehouse"}
 MASTERS = {"articulo", "proveedor", "obra", "almacen"}
 ENMIENDAS = {"convertir_concepto", "canalizar_stock"}
 SOURCES = {action: "Material Request" for action in (*ENMIENDAS, "anexo", "surtir", "peticion")}
 SOURCES.update({"oferta": "Request for Quotation",
-           "autorizar": "Purchase Order", "recibir": "Purchase Order",
+           "autorizar": "Purchase Order", "autorizar_sustitucion": "Purchase Order", "recibir": "Purchase Order",
            "devolver": "Stock Entry", "cfdi": "Purchase Receipt", "regularizar_entrada": "Purchase Receipt"})
 
 
@@ -198,12 +198,22 @@ def esquema(accion, folio=""):
         columns = [columna(k, label, False) for k, label in (("item_code", "Artículo"), ("qty", "Cantidad"), ("rate", "Precio"), ("project", "Obra"), ("custom_lebaref_partida", "Partida"))]
         rows = [r.as_dict() for r in doc.items]
         note = f"{doc.name} | {doc.supplier} | Total {doc.grand_total} {doc.currency}. AUTORIZAR confirma la orden."
+    elif accion == "autorizar_sustitucion":
+        doc.check_permission("write")
+        doc.check_permission("submit")
+        fields = [campo("renglon", "Renglón de orden", choices=[r.name for r in doc.items]),
+                  campo("sustituto", "Artículo sustituto", choices=catalogo("Item", {"disabled": 0, "is_stock_item": 1, "is_purchase_item": 1})),
+                  campo("cantidad", "Cantidad a autorizar"), campo("motivo", "Motivo", kind="multiline")]
+        columns = [columna(key, label, False) for key, label in (("id", "Referencia"), ("item_code", "Original"), ("pending", "Pendiente"), ("uom", "Unidad"), ("rate", "Precio"))]
+        rows = [dict(id=r.name, item_code=r.item_code, pending=r.qty-r.received_qty, uom=r.uom, rate=r.rate) for r in doc.items]
+        note = "Confirma una autorización por cantidad. El sustituto debe conservar unidad, factor y precio de la orden."
     elif accion == "recibir":
         fields = [campo("recibido_por", "Persona que recibe"), campo("supplier_delivery_note", "Remisión del proveedor"),
                   campo("motivo_destino", "Motivo de cambio de almacén", kind="multiline")]
         columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False), columna("pending", "Pendiente", False), columna("qty", "Recibir ahora")]
         columns.extend(columna(key, label, False) for key, label in unidades.CAMPOS)
         columns.append(columna("concepto_libre", "Concepto libre", False))
+        columns.append(columna("sustitucion", "Autorización de sustitución", choices=catalogo("Lebaref Sustitucion", {"orden": doc.name, "docstatus": 1})))
         columns.extend([columna("warehouse", "Almacén destino", choices=catalogo("Warehouse", {"company": doc.company, "is_group": 0, "disabled": 0})),
                         columna("project", "Obra", False), columna("is_stock_item", "Controla inventario", False)])
         rows = [dict(id=r.name, item_code=r.item_code, pending=max(0, r.qty-r.received_qty), qty=0,
@@ -386,7 +396,11 @@ def ejecutar(accion, datos, operacion, folio=""):
         if {r.purchase_order_item for r in kept} != {k for k, v in values.items() if v}:
             frappe.throw("Hay renglones sin saldo pendiente.")
         doc.set("items", kept)
+        sustituciones.aplicar(doc, data)
         recepciones.configurar_destinos(doc, data)
+    elif accion == "autorizar_sustitucion":
+        doc = frappe.get_doc(dict(doctype="Lebaref Sustitucion", orden=source.name,
+            renglon=data.get("renglon"), sustituto=data.get("sustituto"), cantidad=data.get("cantidad"), motivo=data.get("motivo")))
     elif accion == "entrada_sin_oc":
         doc = recepciones.crear(data)
     elif accion == "regularizar_entrada":

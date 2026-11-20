@@ -23,11 +23,16 @@ after_migrate = [
     "lebaref_compras.desk_ui.configurar_todo_desk",
 ]
 
+app_include_js = [
+    "/files/lebaref_desk.js",
+]
+
 doctype_js = {
     "Material Request": ["public/js/lebaref_desk.js", "public/js/material_request.js"],
     "Request for Quotation": "public/js/lebaref_desk.js",
     "Purchase Order": "public/js/lebaref_desk.js",
     "Purchase Receipt": "public/js/lebaref_desk.js",
+    "Lebaref Sustitucion": "public/js/lebaref_desk.js",
     "Stock Entry": "public/js/lebaref_desk.js",
     "Supplier": "public/js/lebaref_desk.js",
     "Item": "public/js/lebaref_desk.js",
@@ -79,3 +84,13 @@ for name in ("Lebaref Herramienta", "Lebaref Prestamo", "Lebaref Retorno", "Leba
     doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}
 for name in ("Lebaref Kit", "Lebaref Composicion Kit", "Lebaref Garantia Herramienta", "Lebaref Mantenimiento Herramienta", "Lebaref Anulacion Mantenimiento"):
     doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}
+
+
+extend_doctype_class = {
+    "Purchase Receipt": ["lebaref_compras.sustituciones.CompraConSustituciones"],
+    "Purchase Invoice": ["lebaref_compras.sustituciones.CompraConSustituciones"],
+}
+doc_events["Lebaref Sustitucion"] = {
+    "validate": "lebaref_compras.sustituciones.validar_autorizacion",
+    "before_cancel": "lebaref_compras.sustituciones.anular_autorizacion",
+}

@@ -95,13 +95,21 @@ def _clasificar_zona_bin(warehouse, item_code, anaquel="", grupo=""):
 
 
 def _construir_contenido_workspace():
+    pill_base = (
+        "display:inline-block;padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:700;"
+        "text-decoration:none;border:1px solid #cbd5e1;margin-left:6px;margin-top:4px;"
+    )
     banner_html = (
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'
         'padding:10px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:4px;">'
         '<img src="/files/lebaref_logo_horizontal.svg" alt="Lebaref" style="height:54px;width:auto;display:block;">'
         '<div style="text-align:right;font-size:12px;color:#475569;">'
         '<b style="color:#031e34;font-size:13px;">Plataforma Operativa de Compras, Almacén y Activos</b><br>'
-        'Ingeniería · Construcción · HVAC · Electricidad · Remodelación'
+        '<span>Ingeniería · Construcción · HVAC · Electricidad · Remodelación</span><br>'
+        f'<a href="#leb-escanear-s30w" style="{pill_base}background:#031e34;color:#ffffff;border-color:#031e34;">🔫 Escanear S30W (F2)</a>'
+        f'<a href="#leb-codigos-carta" style="{pill_base}background:#0d5b94;color:#ffffff;border-color:#0d5b94;">🏷️ Hojas de Códigos Carta</a>'
+        f'<a href="#leb-mapa-af" style="{pill_base}background:#ffffff;color:#031e34;">🗺️ Mapa Zonas A–F</a>'
+        f'<a href="#leb-historico" style="{pill_base}background:#ffffff;color:#031e34;">📜 Archivo Histórico</a>'
         '</div></div>'
     )
     bloques = [
@@ -430,11 +438,19 @@ def configurar_workspace_lebaref():
 
 def _asegurar_enlace_assets():
     public_dir = frappe.get_app_path("lebaref_compras", "public")
-    assets_dir = os.path.join(frappe.get_site_path(".."), "assets")
+    js_src = os.path.join(public_dir, "js", "lebaref_desk.js")
+    files_dir = frappe.get_site_path("public", "files")
+    os.makedirs(files_dir, exist_ok=True)
+    if os.path.isfile(js_src):
+        shutil.copyfile(js_src, os.path.join(files_dir, "lebaref_desk.js"))
+    bench_sites = os.path.abspath(frappe.get_site_path(".."))
+    assets_dir = os.path.join(bench_sites, "assets")
     destino = os.path.join(assets_dir, "lebaref_compras")
-    if os.path.isdir(public_dir) and os.path.isdir(assets_dir) and not os.path.exists(destino):
+    if os.path.isdir(public_dir) and os.path.isdir(assets_dir):
         try:
-            os.symlink(public_dir, destino)
+            if os.path.islink(destino):
+                os.unlink(destino)
+            shutil.copytree(public_dir, destino, dirs_exist_ok=True)
         except OSError:
             pass
 
