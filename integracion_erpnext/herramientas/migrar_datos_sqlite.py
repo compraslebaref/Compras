@@ -788,7 +788,7 @@ def main():
                         "recibe": "Almacén General",
                         "notas": f"Retorno histórico migrado de {folio_pre}",
                         "rows": [
-                            {"herramienta": item.herramienta, "devolver": "Sí", "estado": "Bueno", "observaciones": "Devuelto completo en registro original"}
+                            {"id": item.name, "herramienta": item.herramienta, "estado": "Bueno", "observaciones": "Devuelto completo en registro original"}
                             for item in pre_doc.items
                         ],
                     },
