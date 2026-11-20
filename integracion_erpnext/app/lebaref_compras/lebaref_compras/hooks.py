@@ -40,6 +40,9 @@ doctype_js = {
 
 doctype_list_js = {
     "Material Request": "public/js/lebaref_desk.js",
+    "Purchase Order": "public/js/lebaref_desk.js",
+    "Purchase Receipt": "public/js/lebaref_desk.js",
+    "Lebaref CFDI": "public/js/lebaref_desk.js",
     "Stock Entry": "public/js/lebaref_desk.js",
     "Supplier": "public/js/lebaref_desk.js",
     "Item": "public/js/lebaref_desk.js",

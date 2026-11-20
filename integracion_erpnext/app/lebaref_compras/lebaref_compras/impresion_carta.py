@@ -290,7 +290,19 @@ FORMATO_RECEPCION = _CSS_CARTA + """
       <td><b>Proveedor:</b> {{ doc.supplier_name or doc.supplier }}</td>
       <td><b>Remisión Proveedor:</b> {{ doc.supplier_delivery_note or "—" }}</td>
     </tr>
+    <tr>
+      <td colspan="2"><b>Recibió físicamente:</b> {{ doc.custom_lebaref_recibido_por or "Almacén" }}</td>
+      <td><b>Modalidad:</b> {{ "⚠️ Entrada anticipada sin OC (Por regularizar)" if doc.custom_lebaref_por_regularizar else "Con Orden de Compra" }}</td>
+    </tr>
   </table>
+  {% if doc.custom_lebaref_por_regularizar %}
+  <div class="leb-notas" style="background:#fffbeb;border-color:#f59e0b;color:#92400e;">
+    <b>⚠️ ENTRADA ANTICIPADA PENDIENTE DE REGULARIZAR:</b> Esta mercancía ingresó físicamente antes de emitirse o autorizarse su Orden de Compra. Debe vincularse posteriormente mediante <i>Regularizar entrada (ALM-02)</i>.
+  </div>
+  {% endif %}
+  {% if doc.remarks %}
+  <div class="leb-notas"><b>Observaciones / Destino de recepción:</b> {{ doc.remarks }}</div>
+  {% endif %}
   <table class="leb-tbl">
     <thead>
       <tr>

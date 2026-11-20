@@ -133,9 +133,38 @@ def _construir_contenido_workspace():
 
 
 def configurar_plantillas_comerciales():
-    """Configura por empresa las plantillas de IVA 16%, Compra Exenta 0%, Reglas de Flete y Condiciones de Pago (COM-04 / COM-07)."""
+    """Configura por empresa las plantillas de IVA 16%, Compra Exenta 0%, Reglas de Flete, Condiciones de Pago y perfil Coordinador (COM-04 / COM-07 / ALM-02)."""
     from frappe.permissions import add_permission
     from frappe.core.doctype.custom_docperm.custom_docperm import update_custom_docperm
+
+    # Permitir recepciones anticipadas sin OC en Buying Settings (ALM-02)
+    if frappe.db.exists("DocType", "Buying Settings"):
+        frappe.db.set_single_value("Buying Settings", "po_required", "No")
+
+    # Perfil Coordinador Operativo (Compras + Almacén) para permitir regularización ALM-02 y operación integral sin alterar usuarios de prueba
+    perfil_coord = "Lebaref Coordinador Operativo"
+    roles_coord = ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager")
+    if not frappe.db.exists("Role Profile", perfil_coord):
+        frappe.get_doc({
+            "doctype": "Role Profile",
+            "role_profile": perfil_coord,
+            "roles": [{"role": r} for r in roles_coord if frappe.db.exists("Role", r)],
+        }).insert(ignore_permissions=True)
+
+    # Asegurar cuenta operativa real de Oscar en español con perfil Coordinador Operativo
+    correo_oscar = "oscar.gomez@lebaref.com"
+    if not frappe.db.exists("User", correo_oscar):
+        u_doc = frappe.get_doc({
+            "doctype": "User",
+            "email": correo_oscar,
+            "first_name": "Oscar",
+            "last_name": "Gómez",
+            "language": "es",
+            "enabled": 1,
+            "send_welcome_email": 0,
+            "role_profile_name": perfil_coord,
+        })
+        u_doc.insert(ignore_permissions=True)
 
     # Asegurar permiso de lectura/selección en maestros comerciales para Compras
     for dt in ("Purchase Taxes and Charges Template", "Shipping Rule", "Payment Terms Template"):
