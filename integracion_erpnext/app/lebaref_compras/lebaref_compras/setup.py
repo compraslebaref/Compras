@@ -88,10 +88,37 @@ def configure_purchase_fields():
         ])
     from lebaref_compras.sustituciones import configurar as configurar_sustituciones
     configurar_sustituciones()
+    fields["Stock Reconciliation"] = [
+        {"fieldname": "custom_lebaref_operacion", "label": "Operación", "fieldtype": "Data", "unique": 1, "no_copy": 1, "read_only": 1},
+        {"fieldname": "custom_lebaref_huella", "label": "Huella", "fieldtype": "Data", "no_copy": 1, "read_only": 1},
+        {"fieldname": "custom_lebaref_tipo_ajuste", "label": "Tipo de ajuste", "fieldtype": "Select", "options": "\nConteo\nMerma", "read_only": 1},
+        {"fieldname": "custom_lebaref_motivo_ajuste", "label": "Motivo", "fieldtype": "Small Text", "read_only": 1},
+        {"fieldname": "custom_lebaref_referencia_ajuste", "label": "Acta de conteo", "fieldtype": "Data", "read_only": 1},
+        {"fieldname": "custom_lebaref_clave_ajuste", "label": "Clave de conteo", "fieldtype": "Data", "unique": 1, "no_copy": 1, "read_only": 1},
+    ]
+    fields["Stock Reconciliation Item"] = [
+        {"fieldname": "custom_lebaref_observado", "label": "Existencia observada", "fieldtype": "Float", "read_only": 1},
+        {"fieldname": "custom_lebaref_valor_observado", "label": "Valor observado", "fieldtype": "Float", "read_only": 1},
+    ]
+    for doctype in ("Purchase Invoice", "Payment Entry"):
+        fields.setdefault(doctype, []).extend([
+            {"fieldname":"custom_lebaref_operacion","label":"Operación","fieldtype":"Data","unique":1,"read_only":1,"no_copy":1},
+            {"fieldname":"custom_lebaref_huella","label":"Huella","fieldtype":"Data","read_only":1,"no_copy":1},
+        ])
+    fields["Purchase Invoice"].extend([
+        {"fieldname":"custom_lebaref_tipo_comprobante","label":"Tipo de comprobante","fieldtype":"Select","options":"\nCFDI\nNota/ticket","read_only":1},
+        {"fieldname":"custom_lebaref_cfdi","label":"CFDI conciliado","fieldtype":"Link","options":"Lebaref CFDI","read_only":1},
+        {"fieldname":"custom_lebaref_recepcion_comprobante","label":"Recepción del comprobante","fieldtype":"Link","options":"Purchase Receipt","read_only":1},
+        {"fieldname":"custom_lebaref_motivo_nota","label":"Motivo de nota sin CFDI","fieldtype":"Small Text","read_only":1},
+        {"fieldname":"custom_lebaref_clave_comprobante","label":"Clave de comprobante","fieldtype":"Data","unique":1,"read_only":1,"no_copy":1},
+    ])
+    fields["Payment Entry"].append({"fieldname":"custom_lebaref_factura","label":"Factura de origen Lebaref","fieldtype":"Link","options":"Purchase Invoice","read_only":1})
     create_custom_fields(fields)
     from lebaref_compras.solicitudes import configurar as configurar_solicitudes
     configurar_solicitudes()
     configure_cfdi()
+    from lebaref_compras.comprobantes import configurar as configurar_comprobantes
+    configurar_comprobantes()
     from lebaref_compras.equipos_setup import configurar
     configurar()
 

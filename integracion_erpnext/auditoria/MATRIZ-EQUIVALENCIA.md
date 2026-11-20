@@ -270,13 +270,13 @@ Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cam
 
 ## ALM-08 · Conteo físico, ajustes y merma
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Ajuste al stock físico con motivo y bitácora.
-- Integración: No hay acción Windows; Stock Reconciliation existe pero no está habilitado a estos perfiles.
-- Evidencia: Código y consulta de permisos.
-- Criterio para cerrar: Ajuste positivo/negativo aprobado, razón y valoración auditables.
-- Fuentes: [original L8869](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:8869) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/cliente_windows/MainForm.cs)
+- Integración: Borrador de Stock Reconciliation con acta, motivo y observación inicial; confirmación nativa con rechazo de conteos desactualizados. Merma reduce cantidad y conserva valoración.
+- Evidencia: Conteo de 10 a 12, merma a 9, reversión a 12, entrada adicional y rechazo del conteo desactualizado; permisos y revaluación en merma rechazada. Validar.ps1 con imagen lebaref/erpnext-codex:cierre.
+- Criterio para cerrar: Conectar captura/autorización en Desk y probar conteos físicos reales, cuentas y permisos operativos.
+- Fuentes: ajustes.py y verificar_ajustes.py, §14..16 de CONTRATO-API.md y REPRODUCIR.md.
 
 ## ALM-09 · Stock mínimo y reabastecimiento
 
@@ -310,33 +310,33 @@ Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cam
 
 ## XML-02 · Conceptos XML y conciliación
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Mapea conceptos a productos, crea proveedor/producto y sincroniza orden.
-- Integración: Solo encabezado y archivo contra recepción; no valida conceptos/importes contra OC.
-- Evidencia: GuardarFacturaXml frente a registrar_cfdi.
-- Criterio para cerrar: Vincular conceptos/cantidades/importes y detectar diferencias sin contabilizar dos veces.
-- Fuentes: [original L6111](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:6111) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: Conciliación inmutable por CFDI/recepción completa, con conceptos, cantidades convertidas a inventario, importes netos, moneda, huella y total. Admite flete en cargo nativo Actual.
+- Evidencia: Diferencias detectadas y rechazadas; conciliación exacta, factores equivalentes y flete; archivo privado; reintento sin duplicación. Validar.ps1 con imagen lebaref/erpnext-codex:cierre.
+- Criterio para cerrar: Conectar selección de conceptos/cargos en Desk y validar CFDI reales de una recepción completa.
+- Fuentes: comprobantes.py y verificar_comprobantes.py, §14..16 de CONTRATO-API.md y REPRODUCIR.md.
 
 ## XML-03 · Compra con nota/ticket y sin factura
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Compra directa, comprobante interno y entrada opcional.
-- Integración: Solo CFDI tipo I contra recepción confirmada.
-- Evidencia: RegistrarCompraDirectaSinFactura y TARGETS.
-- Criterio para cerrar: Registrar nota interna diferenciada de CFDI, con gasto/compra/entrada según corresponda.
-- Fuentes: [original L7097](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:7097) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: Nota o ticket identificado en Purchase Invoice nativa, creada en borrador desde la recepción; referencia única, motivo e historial; autorización financiera.
+- Evidencia: Nota con referencia y motivo, reintento, confirmación y nota de crédito nativa. Stock conserva las existencias previas. Validar.ps1 con imagen lebaref/erpnext-codex:cierre.
+- Criterio para cerrar: Conectar nota, soporte e impresión en Desk y validar el circuito contable real.
+- Fuentes: finanzas.py y verificar_comprobantes.py, §14..16 de CONTRATO-API.md y REPRODUCIR.md.
 
 ## XML-04 · Factura/pago contable y conexión con activos
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Registro operativo de factura/pago; no se acredita contabilidad ERP completa en el original.
-- Integración: Purchase Invoice/Payment Entry/Asset existen, pero no están integrados en Windows.
-- Evidencia: DocTypes instalados y permisos; no ensayo contable.
-- Criterio para cerrar: Definir alcance contable y conciliar recepción-factura-pago si se adopta; no presumir que archivar XML lo cumple.
-- Fuentes: [original L5979](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:5979) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/cliente_windows/MainForm.cs)
+- Integración: Flujo nativo Purchase Receipt a Purchase Invoice y Payment Entry; pagos parciales y totales, saldo actual y reversión. Activos fijos configurados conservan el proceso nativo.
+- Evidencia: Factura conciliada sin doble stock, rechazo al auxiliar, pago parcial y total, pago pendiente desactualizado rechazado, cancelación de pago y nota de crédito. Validar.ps1 con imagen lebaref/erpnext-codex:cierre.
+- Criterio para cerrar: Desplegar backend/workers, conectar revisión financiera y validar cuentas, perfiles y recorrido real. Conciliación por recepción completa; las fichas HER se gestionan en su módulo.
+- Fuentes: finanzas.py y verificar_comprobantes.py, §14..16 de CONTRATO-API.md y REPRODUCIR.md.
 
 ## HER-01 · Fichas y vínculo con recepción
 

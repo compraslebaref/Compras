@@ -723,12 +723,140 @@ FORMATO_TARJETON_VEH = _CSS_CARTA + """
 </div>
 """
 
+FORMATO_CONTEO_MERMA = _CSS_CARTA + """
+<div class="leb-carta">
+  {% set es_merma = (doc.custom_lebaref_tipo_ajuste == 'Merma') %}
+  <div class="leb-hdr">
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Control Físico de Almacén e Inventario (ALM-08)</div>
+        <div class="leb-doc-title">{{ "Acta de Merma de Inventario" if es_merma else "Acta de Conteo y Ajuste Físico" }}</div>
+        <div style="font-size:11px;color:#475569;">Folio: <b>{{ doc.name }}</b> · Acta: <b>{{ doc.custom_lebaref_referencia_ajuste or "—" }}</b></div>
+      </div>
+    </div>
+    <div>{{ svg_code128(doc.name) }}</div>
+  </div>
+  <table class="leb-meta">
+    <tr>
+      <td><b>Tratamiento:</b> {{ doc.custom_lebaref_tipo_ajuste or "Conciliación" }}</td>
+      <td><b>Acta Físico:</b> {{ doc.custom_lebaref_referencia_ajuste or "—" }}</td>
+      <td><b>Fecha:</b> {{ frappe.utils.formatdate(doc.posting_date) }}</td>
+      <td><b>Estado:</b> {{ "Autorizado" if doc.docstatus == 1 else ("Cancelado" if doc.docstatus == 2 else "Borrador por autorizar") }}</td>
+    </tr>
+  </table>
+  {% if doc.custom_lebaref_motivo_ajuste %}
+  <div class="leb-notas"><b>Motivo / Justificación del Acta:</b> {{ doc.custom_lebaref_motivo_ajuste }}</div>
+  {% endif %}
+  <table class="leb-items" style="margin-top:8px;">
+    <thead>
+      <tr>
+        <th style="width:32px;">#</th>
+        <th>Artículo</th>
+        <th>Almacén</th>
+        <th class="num">Existencia Observada</th>
+        <th class="num">Conteo Físico</th>
+        <th class="num">Diferencia</th>
+        <th class="num">Valor Unitario</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in doc.items %}
+      {% set obs = r.custom_lebaref_observado if r.custom_lebaref_observado is not none else (r.current_qty or 0) %}
+      {% set dif = (r.qty or 0) - obs %}
+      <tr>
+        <td>{{ r.idx }}</td>
+        <td><b>{{ r.item_code }}</b>{% if r.item_name and r.item_name != r.item_code %}<br><small>{{ r.item_name }}</small>{% endif %}</td>
+        <td>{{ r.warehouse }}</td>
+        <td class="num">{{ frappe.utils.flt(obs, 3) }}</td>
+        <td class="num"><b>{{ frappe.utils.flt(r.qty, 3) }}</b></td>
+        <td class="num" style="font-weight:700;">{{ "+" if dif > 0 else "" }}{{ frappe.utils.flt(dif, 3) }}</td>
+        <td class="num">{{ frappe.utils.fmt_money(r.valuation_rate or 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <table class="leb-firmas">
+    <tr>
+      <td><div class="leb-linea-firma">Realizó Conteo (Almacén)</div></td>
+      <td><div class="leb-linea-firma">Verificó Físicamente</div></td>
+      <td><div class="leb-linea-firma">Autorizó Ajuste / Merma (Responsable)</div></td>
+    </tr>
+  </table>
+</div>
+"""
+
+FORMATO_FACTURA_NOTA = _CSS_CARTA + """
+<div class="leb-carta">
+  {% set es_nota = (doc.custom_lebaref_tipo_comprobante == 'Nota/ticket') %}
+  <div class="leb-hdr">
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Registro Contable y Cuentas por Pagar (XML-03 / XML-04)</div>
+        <div class="leb-doc-title">{{ "Comprobante Interno de Compra con Nota / Ticket" if es_nota else "Factura de Compra Conciliada (CFDI 4.0)" }}</div>
+        <div style="font-size:11px;color:#475569;">Folio ERP: <b>{{ doc.name }}</b> · Comprobante: <b>{{ doc.bill_no or "—" }}</b></div>
+      </div>
+    </div>
+    <div>{{ svg_code128(doc.name) }}</div>
+  </div>
+  <table class="leb-meta">
+    <tr>
+      <td><b>Proveedor:</b> {{ doc.supplier_name or doc.supplier }}</td>
+      <td><b>Tipo:</b> {{ doc.custom_lebaref_tipo_comprobante or "Factura Estándar" }}</td>
+      <td><b>Recepción Origen:</b> {{ doc.custom_lebaref_recepcion_comprobante or "—" }}</td>
+    </tr>
+    <tr>
+      <td><b>Fecha Comprobante:</b> {{ frappe.utils.formatdate(doc.bill_date or doc.posting_date) }}</td>
+      <td><b>Total Facturado:</b> {{ frappe.utils.fmt_money(doc.grand_total, currency=doc.currency) }}</td>
+      <td><b>Saldo por Pagar:</b> {{ frappe.utils.fmt_money(doc.outstanding_amount, currency=doc.currency) }}</td>
+    </tr>
+  </table>
+  {% if es_nota and doc.custom_lebaref_motivo_nota %}
+  <div class="leb-notas"><b>Motivo de Compra sin CFDI (Nota / Ticket):</b> {{ doc.custom_lebaref_motivo_nota }}</div>
+  {% elif doc.custom_lebaref_cfdi %}
+  <div class="leb-notas"><b>UUID Fiscal CFDI 4.0 Conciliado:</b> {{ doc.custom_lebaref_cfdi }}</div>
+  {% endif %}
+  <table class="leb-items" style="margin-top:8px;">
+    <thead>
+      <tr>
+        <th style="width:32px;">#</th>
+        <th>Artículo / Concepto</th>
+        <th class="num">Cantidad</th>
+        <th class="num">Precio Neto</th>
+        <th class="num">Importe Neto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in doc.items %}
+      <tr>
+        <td>{{ r.idx }}</td>
+        <td><b>{{ r.item_code }}</b> — {{ r.item_name or r.description }}</td>
+        <td class="num">{{ frappe.utils.flt(r.qty, 3) }} {{ r.uom or "" }}</td>
+        <td class="num">{{ frappe.utils.fmt_money(r.rate, currency=doc.currency) }}</td>
+        <td class="num"><b>{{ frappe.utils.fmt_money(r.net_amount, currency=doc.currency) }}</b></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <table class="leb-firmas">
+    <tr>
+      <td><div class="leb-linea-firma">Registró Compras / Contabilidad</div></td>
+      <td><div class="leb-linea-firma">Autorizó Comprobante</div></td>
+      <td><div class="leb-linea-firma">Programación / Tesorería</div></td>
+    </tr>
+  </table>
+</div>
+"""
+
 PRINT_FORMATS = (
     ("Lebaref Carta - Solicitud", "Material Request", FORMATO_SOLICITUD),
     ("Lebaref Carta - Orden de Compra", "Purchase Order", FORMATO_ORDEN_COMPRA),
     ("Lebaref Carta - Recepción Almacén", "Purchase Receipt", FORMATO_RECEPCION),
     ("Lebaref Carta - Salida o Sobrante", "Stock Entry", FORMATO_SALIDA_SOBRANTE),
     ("Lebaref Carta - Responsiva EPP y Equipo", "Stock Entry", FORMATO_RESPONSIVA_EPP),
+    ("Lebaref Carta - Conteo y Merma", "Stock Reconciliation", FORMATO_CONTEO_MERMA),
+    ("Lebaref Carta - Factura o Nota de Compra", "Purchase Invoice", FORMATO_FACTURA_NOTA),
     ("Lebaref Carta - Vale Préstamo Herramienta", "Lebaref Prestamo", FORMATO_PRESTAMO_HER),
     ("Lebaref Carta - Check-list Vehicular", "Lebaref Revision Vehiculo", FORMATO_CHECKLIST_VEH),
     ("Lebaref Carta - Ficha y Etiqueta Herramienta", "Lebaref Herramienta", FORMATO_FICHA_HER),
@@ -1058,7 +1186,11 @@ def resolver_escaneo(codigo: str):
         ("Purchase Order", limpio),
         ("Material Request", limpio),
         ("Purchase Receipt", limpio),
+        ("Purchase Invoice", limpio),
+        ("Payment Entry", limpio),
         ("Stock Entry", limpio),
+        ("Stock Reconciliation", limpio),
+        ("Lebaref CFDI", limpio.upper()),
         ("Request for Quotation", limpio),
         ("Supplier Quotation", limpio),
         ("Lebaref Prestamo", limpio),

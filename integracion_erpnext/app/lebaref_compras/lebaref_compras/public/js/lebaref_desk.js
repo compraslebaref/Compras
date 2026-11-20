@@ -208,6 +208,9 @@
                     } else if (accion === "sobrante" && col.name === "valor_unitario" && dialog.get_value("tipo") !== "Entrada no contabilizada") {
                         rowObj.valor_unitario = "";
                         td.css({ background: "#f8fafc", color: "#94a3b8", verticalAlign: "middle" }).text("No aplica (Traslado)");
+                    } else if (accion === "ajuste" && col.name === "valuation_rate" && dialog.get_value("tipo") === "Merma") {
+                        rowObj.valuation_rate = "";
+                        td.css({ background: "#f8fafc", color: "#94a3b8", verticalAlign: "middle" }).text("Conserva valor observado");
                     } else if (Array.isArray(col.choices) && col.choices.length) {
                         const sel = $('<select class="form-control form-control-sm">').appendTo(td);
                         if (!col.choices.includes("")) {
@@ -281,6 +284,10 @@
             };
             dialog.fields_dict.tipo.$input.on("change", syncTipoSobrante);
             setTimeout(syncTipoSobrante, 30);
+        }
+
+        if (accion === "ajuste" && dialog.fields_dict.tipo) {
+            dialog.fields_dict.tipo.$input.on("change", () => renderRowsTable());
         }
 
         dialog.set_primary_action("Guardar y Confirmar", async () => {
@@ -2303,23 +2310,367 @@
         },
     });
 
+    async function abrirDialogoConciliarCfdi(frm) {
+        const { message: evalIni } = await frappe.call({
+            method: "lebaref_compras.comprobantes.consultar",
+            type: "GET",
+            args: { cfdi: frm.doc.name },
+            freeze: true,
+            freeze_message: "Leyendo conceptos del XML y renglones de la recepción…",
+        });
+
+        const esc = frappe.utils.escape_html;
+        const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const conceptos = (evalIni && evalIni.conceptos) || [];
+        const renglones = (evalIni && evalIni.renglones) || [];
+        const cargos = (evalIni && evalIni.cargos) || [];
+        const tokenOp = nuevoUuid();
+
+        const opcionesDestino = [{ val: "", lbl: "— Seleccionar renglón o cargo fijo —" }];
+        for (const r of renglones) {
+            opcionesDestino.push({
+                val: `R:${r.id}`,
+                lbl: `📦 ${r.item_code} · ${r.qty} ${r.uom || ""} (Neto $${money.format(r.net_amount || 0)})`,
+            });
+        }
+        for (const cg of cargos) {
+            opcionesDestino.push({
+                val: `C:${cg.id}`,
+                lbl: `🚚 Cargo fijo: ${cg.descripcion} ($${money.format(cg.importe || 0)})`,
+            });
+        }
+
+        // Autopropuesta inteligente por coincidencia de código o importe neto
+        const estadoMap = conceptos.map((c, idx) => {
+            let propVal = "";
+            const porCodigo = renglones.find((r) => c.codigo && (r.item_code === c.codigo));
+            const porImporte = renglones.find((r) => Math.abs(Number(r.net_amount || 0) - Number(c.importe_neto || 0)) < 0.02);
+            const porCargo = cargos.find((cg) => Math.abs(Number(cg.importe || 0) - Number(c.importe_neto || 0)) < 0.02);
+            if (porCodigo) propVal = `R:${porCodigo.id}`;
+            else if (porCargo && String(c.descripcion || "").toLowerCase().includes("flete")) propVal = `C:${porCargo.id}`;
+            else if (porImporte) propVal = `R:${porImporte.id}`;
+            else if (renglones[idx]) propVal = `R:${renglones[idx].id}`;
+            return {
+                concepto: c.id,
+                descripcion: c.descripcion,
+                codigo: c.codigo,
+                cantidad: c.cantidad,
+                unidad: c.unidad,
+                importe_neto: c.importe_neto,
+                destino: propVal,
+                factor_xml: "1",
+            };
+        });
+
+        const armarSeleccionPayload = () => ({
+            rows: estadoMap
+                .filter((m) => m.destino)
+                .map((m) => {
+                    if (m.destino.startsWith("C:")) {
+                        return { concepto: String(m.concepto), cargo: m.destino.slice(2) };
+                    }
+                    return {
+                        concepto: String(m.concepto),
+                        renglon: m.destino.slice(2),
+                        factor_xml: Number(m.factor_xml || 1),
+                    };
+                }),
+        });
+
+        const d = new frappe.ui.Dialog({
+            title: `🔍 Conciliación Estructural CFDI 4.0 contra Recepción · ${frm.doc.name}`,
+            size: "extra-large",
+            fields: [{ fieldname: "_html", fieldtype: "HTML" }],
+            primary_action_label: "✅ Guardar Conciliación Inmutable (XML-02)",
+            async primary_action() {
+                if (estadoMap.some((m) => !m.destino)) {
+                    frappe.msgprint("Relaciona todos los conceptos del XML con un renglón o cargo fijo de la recepción.");
+                    return;
+                }
+                const { message: res } = await frappe.call({
+                    method: "lebaref_compras.operaciones.ejecutar",
+                    type: "POST",
+                    args: {
+                        accion: "conciliar_cfdi",
+                        folio: frm.doc.name,
+                        operacion: tokenOp,
+                        datos: JSON.stringify(armarSeleccionPayload()),
+                    },
+                    freeze: true,
+                    freeze_message: "Guardando conciliación inmutable del CFDI…",
+                });
+                d.hide();
+                frappe.show_alert({ message: `CFDI conciliado correctamente (${res.folio})`, indicator: "green" });
+                frm.reload_doc();
+            },
+        });
+
+        const wrap = d.fields_dict._html.$wrapper;
+        const diffTot = Number(evalIni.diferencia_total || 0);
+        wrap.html(`
+            <div class="p-2 mb-2 d-flex justify-content-between align-items-center flex-wrap" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;gap:8px;">
+                <div>
+                    <b>Recepción:</b> ${esc(evalIni.recepcion)} &nbsp;|&nbsp;
+                    <b>Moneda:</b> ${esc(evalIni.moneda)} &nbsp;|&nbsp;
+                    <b>Total XML:</b> $${money.format(Number(evalIni.total_xml || 0))} &nbsp;|&nbsp;
+                    <b>Total Recepción:</b> $${money.format(Number(evalIni.total_recepcion || 0))} &nbsp;|&nbsp;
+                    <b style="color:${Math.abs(diffTot) < 0.01 ? "#059669" : "#dc2626"};">Dif. Total: $${money.format(diffTot)}</b>
+                </div>
+                <button type="button" class="btn btn-xs btn-default leb-cfdi-check">🔍 Verificar Cuadre Exacto</button>
+            </div>
+            <div class="leb-cfdi-status mb-2"></div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" style="font-size:12px;">
+                    <thead style="background:#031e34;color:#fff;">
+                        <tr>
+                            <th style="width:34px;">#</th>
+                            <th>Concepto XML</th>
+                            <th class="text-right" style="width:105px;">Cant. XML</th>
+                            <th class="text-right" style="width:115px;">Neto XML</th>
+                            <th style="width:290px;">Renglón o Cargo en Recepción</th>
+                            <th style="width:105px;">Factor Inv.</th>
+                        </tr>
+                    </thead>
+                    <tbody class="leb-cfdi-tbody"></tbody>
+                </table>
+            </div>
+        `);
+
+        const tbody = wrap.find(".leb-cfdi-tbody");
+        for (const m of estadoMap) {
+            const tr = $("<tr>").appendTo(tbody);
+            $("<td>").text(m.concepto).appendTo(tr);
+            $("<td>").html(`<b>${esc(m.codigo || "S/Clave")}</b> · ${esc(m.descripcion)}`).appendTo(tr);
+            $("<td class='text-right'>").text(`${m.cantidad} ${m.unidad || ""}`).appendTo(tr);
+            $("<td class='text-right'>").html(`<b>$${money.format(Number(m.importe_neto || 0))}</b>`).appendTo(tr);
+
+            const tdSel = $("<td>").appendTo(tr);
+            const sel = $('<select class="form-control form-control-sm">').appendTo(tdSel);
+            for (const op of opcionesDestino) {
+                $("<option>").val(op.val).text(op.lbl).prop("selected", op.val === m.destino).appendTo(sel);
+            }
+
+            const tdFac = $("<td>").appendTo(tr);
+            const inpFac = $('<input type="number" step="0.0001" min="0.0001" class="form-control form-control-sm">')
+                .val(m.factor_xml)
+                .prop("disabled", m.destino.startsWith("C:"))
+                .appendTo(tdFac);
+
+            sel.on("change", function () {
+                m.destino = $(this).val();
+                const esCargo = m.destino.startsWith("C:");
+                inpFac.prop("disabled", esCargo);
+                if (esCargo) inpFac.val("1");
+            });
+            inpFac.on("input", function () {
+                m.factor_xml = $(this).val();
+            });
+        }
+
+        const verificar = async () => {
+            if (estadoMap.some((m) => !m.destino)) {
+                wrap.find(".leb-cfdi-status").html(`<div class="alert alert-warning py-2 px-3 mb-0" style="font-size:12px;">Selecciona un renglón o cargo para todos los conceptos XML antes de verificar.</div>`);
+                return;
+            }
+            const { message: resCheck } = await frappe.call({
+                method: "lebaref_compras.comprobantes.consultar",
+                type: "GET",
+                args: {
+                    cfdi: frm.doc.name,
+                    seleccion: JSON.stringify(armarSeleccionPayload()),
+                },
+            });
+            if (resCheck && resCheck.coincide) {
+                wrap.find(".leb-cfdi-status").html(`<div class="alert alert-success py-2 px-3 mb-0" style="font-size:12px;">✅ <b>Cuadre exacto verificado:</b> Moneda, cantidades convertidas, importes netos, cargos fijos y total coinciden al 100%. Puedes guardar la conciliación.</div>`);
+            } else {
+                const diffs = ((resCheck && resCheck.diferencias) || [])
+                    .filter((x) => Number(x.diferencia_cantidad || 0) !== 0 || Number(x.diferencia_importe || 0) !== 0)
+                    .map((x) => `${esc(x.renglon || x.cargo)}: dif. cant = <b>${esc(x.diferencia_cantidad)}</b>, dif. importe = <b>$${esc(x.diferencia_importe)}</b>`)
+                    .join(" | ");
+                wrap.find(".leb-cfdi-status").html(`<div class="alert alert-danger py-2 px-3 mb-0" style="font-size:12px;">⚠️ <b>Diferencias detectadas:</b> ${diffs || "Verifica moneda y total del comprobante."}</div>`);
+            }
+        };
+
+        wrap.find(".leb-cfdi-check").on("click", verificar);
+        d.show();
+        setTimeout(verificar, 100);
+    }
+
     frappe.ui.form.on("Lebaref CFDI", {
-        refresh(frm) {
+        async refresh(frm) {
             if (frm.is_new()) return;
             frm.disable_save();
             if (frm.doc.recepcion) {
-                frm.dashboard.set_headline_alert(
-                    `🧾 CFDI 4.0 vinculado a Recepción de Almacén <b>${frappe.utils.escape_html(frm.doc.recepcion)}</b>`,
-                    "green"
-                );
                 frm.add_custom_button("Abrir Recepción", () =>
                     frappe.set_route("Form", "Purchase Receipt", frm.doc.recepcion)
                 );
+                let conciliacionId = null;
+                let facturaActiva = null;
+                try {
+                    const concs = await frappe.db.get_list("Lebaref Conciliacion CFDI", {
+                        filters: { cfdi: frm.doc.name },
+                        fields: ["name"],
+                        limit: 1,
+                    });
+                    if (concs && concs.length) conciliacionId = concs[0].name;
+                } catch (e) {
+                    // Sin lectura de conciliación
+                }
+                try {
+                    const pinvs = await frappe.db.get_list("Purchase Invoice", {
+                        filters: { custom_lebaref_cfdi: frm.doc.name, docstatus: ["!=", 2] },
+                        fields: ["name", "docstatus", "status"],
+                        limit: 1,
+                    });
+                    if (pinvs && pinvs.length) facturaActiva = pinvs[0];
+                } catch (e) {
+                    // Sin lectura de facturas
+                }
+
+                if (facturaActiva) {
+                    frm.dashboard.set_headline_alert(
+                        `✅ CFDI 4.0 conciliado y vinculado a Factura de Compra <b>${frappe.utils.escape_html(facturaActiva.name)}</b> (${frappe.utils.escape_html(facturaActiva.status || "")}).`,
+                        "green"
+                    );
+                    frm.add_custom_button("🧾 Abrir Factura de Compra", () =>
+                        frappe.set_route("Form", "Purchase Invoice", facturaActiva.name)
+                    ).addClass("btn-primary");
+                } else if (conciliacionId) {
+                    frm.dashboard.set_headline_alert(
+                        `✅ Conceptos XML conciliados contra Recepción <b>${frappe.utils.escape_html(frm.doc.recepcion)}</b> (Conciliación: ${frappe.utils.escape_html(conciliacionId)}). Listo para generar Factura de Compra.`,
+                        "green"
+                    );
+                    if (frappe.model.can_create("Purchase Invoice")) {
+                        frm.add_custom_button("🧾 Generar Factura de Compra desde CFDI (XML-04)", () =>
+                            abrirOperacion(
+                                "facturar_cfdi",
+                                frm.doc.name,
+                                `Generar Factura de Compra · ${frm.doc.name}`,
+                                (res) => frappe.set_route("Form", "Purchase Invoice", res.folio)
+                            )
+                        ).addClass("btn-primary");
+                    }
+                } else {
+                    frm.dashboard.set_headline_alert(
+                        `🧾 CFDI 4.0 archivado contra Recepción <b>${frappe.utils.escape_html(frm.doc.recepcion)}</b> — Pendiente de conciliar conceptos XML (XML-02).`,
+                        "orange"
+                    );
+                    frm.add_custom_button("🔍 Conciliar Conceptos XML contra Recepción (XML-02)", () =>
+                        abrirDialogoConciliarCfdi(frm)
+                    ).addClass("btn-primary");
+                }
             } else if (frm.doc.custom_oc_origen) {
                 frm.dashboard.set_headline_alert(
                     `📜 Factura CFDI 4.0 Histórica Migrada · Serie/Folio: <b>${frappe.utils.escape_html(frm.doc.custom_serie_folio || "—")}</b> · Orden Origen: <b>${frappe.utils.escape_html(frm.doc.custom_oc_origen)}</b>`,
                     "blue"
                 );
+            }
+        },
+    });
+
+    frappe.ui.form.on("Lebaref Conciliacion CFDI", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            frm.disable_save();
+            if (frm.doc.cfdi) {
+                frm.add_custom_button("Abrir CFDI 4.0", () => frappe.set_route("Form", "Lebaref CFDI", frm.doc.cfdi));
+            }
+            if (frm.doc.recepcion) {
+                frm.add_custom_button("Abrir Recepción", () => frappe.set_route("Form", "Purchase Receipt", frm.doc.recepcion));
+            }
+        },
+    });
+
+    frappe.ui.form.on("Stock Reconciliation", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            if (frm.doc.custom_lebaref_tipo_ajuste) {
+                const infoActa = `Tratamiento: <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_tipo_ajuste)}</b> · Acta: <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_referencia_ajuste || "—")}</b> · Motivo: ${frappe.utils.escape_html(frm.doc.custom_lebaref_motivo_ajuste || "—")}`;
+                if (frm.doc.docstatus === 0) {
+                    frm.dashboard.set_headline_alert(
+                        `📋 Ajuste / Merma en borrador pendiente de autorización (ALM-08) — ${infoActa}`,
+                        "orange"
+                    );
+                    if (frappe.model.can_submit("Stock Reconciliation")) {
+                        frm.add_custom_button("✅ Autorizar Conteo / Merma (ALM-08)", () =>
+                            abrirOperacion(
+                                "autorizar_ajuste",
+                                frm.doc.name,
+                                `Autorizar ${frm.doc.custom_lebaref_tipo_ajuste} · ${frm.doc.name}`,
+                                () => frm.reload_doc()
+                            )
+                        ).addClass("btn-primary");
+                    }
+                } else if (frm.doc.docstatus === 1) {
+                    frm.dashboard.set_headline_alert(`✅ Ajuste / Merma autorizado (ALM-08) — ${infoActa}`, "green");
+                }
+            }
+        },
+    });
+
+    frappe.ui.form.on("Purchase Invoice", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            const tipoComp = frm.doc.custom_lebaref_tipo_comprobante || "";
+            if (tipoComp) {
+                const detalleComp = tipoComp === "CFDI"
+                    ? `UUID CFDI: <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_cfdi || frm.doc.bill_no || "—")}</b>`
+                    : `Nota / Ticket: <b>${frappe.utils.escape_html(frm.doc.bill_no || "—")}</b> · Motivo: ${frappe.utils.escape_html(frm.doc.custom_lebaref_motivo_nota || "—")}`;
+                frm.dashboard.set_headline_alert(
+                    `🧾 Comprobante de Compra Lebaref (${frappe.utils.escape_html(tipoComp)}) — ${detalleComp}`,
+                    frm.doc.docstatus === 1 ? "green" : "orange"
+                );
+            }
+            if (frm.doc.custom_lebaref_recepcion_comprobante) {
+                frm.add_custom_button("Abrir Recepción", () =>
+                    frappe.set_route("Form", "Purchase Receipt", frm.doc.custom_lebaref_recepcion_comprobante),
+                    "Lebaref"
+                );
+            }
+            if (frm.doc.docstatus === 0 && frappe.model.can_submit("Purchase Invoice")) {
+                frm.add_custom_button("✅ Autorizar Factura / Nota de Compra (XML-04)", () =>
+                    abrirOperacion(
+                        "autorizar_factura",
+                        frm.doc.name,
+                        `Autorizar Comprobante de Compra · ${frm.doc.name}`,
+                        () => frm.reload_doc()
+                    )
+                ).addClass("btn-primary");
+            }
+            if (frm.doc.docstatus === 1 && !frm.doc.is_return && Number(frm.doc.outstanding_amount || 0) > 0 && frappe.model.can_create("Payment Entry")) {
+                frm.add_custom_button("💳 Registrar Pago a Proveedor (XML-04)", () =>
+                    abrirOperacion(
+                        "pagar_factura",
+                        frm.doc.name,
+                        `Registrar Pago de Factura · ${frm.doc.name}`,
+                        (res) => frappe.set_route("Form", "Payment Entry", res.folio)
+                    )
+                ).addClass("btn-primary");
+            }
+        },
+    });
+
+    frappe.ui.form.on("Payment Entry", {
+        refresh(frm) {
+            if (frm.is_new()) return;
+            if (frm.doc.custom_lebaref_factura) {
+                frm.dashboard.set_headline_alert(
+                    `💳 Pago vinculado a Factura de Compra <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_factura)}</b> · Ref: <b>${frappe.utils.escape_html(frm.doc.reference_no || "—")}</b>`,
+                    frm.doc.docstatus === 1 ? "green" : "orange"
+                );
+                frm.add_custom_button("Abrir Factura de Compra", () =>
+                    frappe.set_route("Form", "Purchase Invoice", frm.doc.custom_lebaref_factura)
+                );
+            }
+            if (frm.doc.docstatus === 0 && frm.doc.custom_lebaref_factura && frappe.model.can_submit("Payment Entry")) {
+                frm.add_custom_button("✅ Autorizar y Aplicar Pago (XML-04)", () =>
+                    abrirOperacion(
+                        "autorizar_pago",
+                        frm.doc.name,
+                        `Autorizar Pago · ${frm.doc.name}`,
+                        () => frm.reload_doc()
+                    )
+                ).addClass("btn-primary");
             }
         },
     });
@@ -2406,10 +2757,19 @@
                     abrirDialogoRegularizarEntrada(frm)
                 ).addClass("btn-primary");
             }
-            if (frm.doc.docstatus === 1 && !frm.doc.custom_lebaref_por_regularizar) {
+            if (frm.doc.docstatus === 1 && !frm.doc.custom_lebaref_por_regularizar && !frm.doc.is_return) {
                 frm.add_custom_button("Archivar CFDI 4.0 (XML)", () =>
-                    abrirOperacion("cfdi", frm.doc.name, `Archivar XML CFDI contra ${frm.doc.name}`)
+                    abrirOperacion("cfdi", frm.doc.name, `Archivar XML CFDI contra ${frm.doc.name}`, (res) =>
+                        frappe.set_route("Form", "Lebaref CFDI", res.folio)
+                    )
                 ).addClass("btn-primary");
+                if (frappe.model.can_create("Purchase Invoice")) {
+                    frm.add_custom_button("📝 Compra con Nota / Ticket sin CFDI (XML-03)", () =>
+                        abrirOperacion("nota_compra", frm.doc.name, `Documentar Compra con Nota o Ticket · ${frm.doc.name}`, (res) =>
+                            frappe.set_route("Form", "Purchase Invoice", res.folio)
+                        )
+                    );
+                }
             }
             const filasSust = (frm.doc.items || []).filter((r) => r.custom_lebaref_articulo_original || r.custom_lebaref_sustitucion);
             if (frm.doc.docstatus === 1 && filasSust.length && !frm.doc.custom_lebaref_por_regularizar) {
@@ -3365,6 +3725,7 @@
         ["Material Request", "Captura Rápida Lebaref (con Conceptos Libres)", "solicitud"],
         ["Purchase Receipt", "Entrada Anticipada sin OC (ALM-02)", "entrada_sin_oc"],
         ["Stock Entry", "Entregar Material a Obra", "entregar"],
+        ["Stock Reconciliation", "📋 Nuevo Conteo Físico o Merma (ALM-08)", "ajuste"],
         ["Supplier", "Alta Rápida con Contacto", "proveedor"],
         ["Lebaref Herramienta", "Nueva Herramienta (HER)", "herramienta"],
         ["Lebaref Kit", "Nuevo Maletín / Kit (KIT)", "kit"],

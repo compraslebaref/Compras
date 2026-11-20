@@ -35,7 +35,11 @@ doctype_js = {
     "Purchase Receipt": "public/js/lebaref_desk.js",
     "Lebaref Sustitucion": "public/js/lebaref_desk.js",
     "Lebaref CFDI": "public/js/lebaref_desk.js",
+    "Lebaref Conciliacion CFDI": "public/js/lebaref_desk.js",
+    "Purchase Invoice": "public/js/lebaref_desk.js",
+    "Payment Entry": "public/js/lebaref_desk.js",
     "Stock Entry": "public/js/lebaref_desk.js",
+    "Stock Reconciliation": "public/js/lebaref_desk.js",
     "Supplier": "public/js/lebaref_desk.js",
     "Customer": "public/js/lebaref_desk.js",
     "Project": "public/js/lebaref_desk.js",
@@ -55,7 +59,11 @@ doctype_list_js = {
     "Purchase Order": "public/js/lebaref_desk.js",
     "Purchase Receipt": "public/js/lebaref_desk.js",
     "Lebaref CFDI": "public/js/lebaref_desk.js",
+    "Lebaref Conciliacion CFDI": "public/js/lebaref_desk.js",
+    "Purchase Invoice": "public/js/lebaref_desk.js",
+    "Payment Entry": "public/js/lebaref_desk.js",
     "Stock Entry": "public/js/lebaref_desk.js",
+    "Stock Reconciliation": "public/js/lebaref_desk.js",
     "Supplier": "public/js/lebaref_desk.js",
     "Customer": "public/js/lebaref_desk.js",
     "Project": "public/js/lebaref_desk.js",
@@ -123,3 +131,16 @@ doc_events["Stock Entry"] = {
     "before_submit": "lebaref_compras.sobrantes.autorizar",
     "on_cancel": "lebaref_compras.sobrantes.liberar_referencia",
 }
+
+
+doc_events["Stock Reconciliation"] = {
+    "validate": "lebaref_compras.ajustes.validar",
+    "before_submit": "lebaref_compras.ajustes.autorizar",
+    "before_cancel": "lebaref_compras.ajustes.cancelar",
+    "on_cancel": "lebaref_compras.ajustes.liberar",
+}
+
+
+doc_events["Lebaref Conciliacion CFDI"] = {"validate":"lebaref_compras.comprobantes.validar_registro"}
+doc_events["Purchase Invoice"] = {"before_validate":"lebaref_compras.finanzas.preparar_factura", "validate":"lebaref_compras.finanzas.validar_factura", "on_cancel":"lebaref_compras.finanzas.liberar_factura"}
+doc_events["Payment Entry"] = {"before_submit":"lebaref_compras.finanzas.validar_pago"}

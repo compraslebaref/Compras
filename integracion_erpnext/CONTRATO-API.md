@@ -32,7 +32,7 @@
 
 ### 2.2 Operaciones de Compras, Almacén y Catálogos (`lebaref_compras.operaciones`)
 - **`GET /api/method/lebaref_compras.operaciones.esquema?accion=<accion>&folio=<folio>`**
-  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `autorizar_sustitucion`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `consumir`, `sobrante`, `autorizar_sobrante`, `devolver`, `cfdi`.
+  - Acciones compras/almacén/maestros: `ajuste`, `autorizar_ajuste`, `conciliar_cfdi`, `facturar_cfdi`, `nota_compra`, `autorizar_factura`, `pagar_factura`, `autorizar_pago`, `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `autorizar_sustitucion`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `consumir`, `sobrante`, `autorizar_sobrante`, `devolver`, `cfdi`.
   - Delega automáticamente a `lebaref_compras.equipos.esquema` cuando `accion` pertenece a herramientas/flotilla/kits (`herramienta`, `prestamo`, `retorno_herramienta`, `estado_herramienta`, `vehiculo`, `gasto_vehiculo`, `revision_vehiculo`, `estado_vehiculo`, `kit`, `composicion_kit`, `prestamo_kit`, `garantia_herramienta`, `mantenimiento_herramienta`, `anular_mantenimiento`).
   - Respuesta `message`:
     ```json
@@ -516,3 +516,77 @@ El documento conserva `custom_lebaref_tipo_sobrante`, `custom_lebaref_referencia
 Un sobrante histórico usa este flujo cuando carece de entrega original vinculada. La devolución de una entrega conocida conserva `devolver`. Si el material ya está incluido en el almacén de destino, se conserva su evidencia en el expediente existente. Los sobrantes históricos no se seleccionan como entrega original en consumir o devolver.
 
 HTTP `403` por falta de autoridad para confirmar o anular. HTTP `417` por datos de procedencia incompletos, unidad incompatible, almacenes inválidos o falta de verificación de stock nuevo. Un acta duplicada conserva el error nativo de clave única. Se conservan los errores nativos de existencias, series, lotes y contabilidad. Requiere reconstrucción y migración para instalar los campos y su índice único. Antigravity debe conectar la captura, revisión y autorización e identificar el tipo de sobrante en la impresión.
+
+## 14. Conteo, ajuste y merma (`ALM-08`)
+
+`accion=ajuste` crea un **Stock Reconciliation** en borrador y requiere permiso nativo de creación. `tipo` admite `Conteo` y `Merma`. `qty` es la cantidad física final en la unidad de inventario, incluido cero. Se capturan acta y motivo. La valoración se toma del Bin actual, o de `valuation_rate` si se proporciona. Un conteo positivo con existencia previa cero requiere valoración positiva explícita.
+
+```json
+{"company":"Lebaref","tipo":"Conteo","referencia":"ACTA-CON-001","motivo":"Conteo físico de anaquel A","rows":[{"item_code":"TOR-01","warehouse":"Central - L","qty":12}]}
+```
+
+```json
+{"message":{"folio":"MAT-RECO-2026-00001","tipo":"Stock Reconciliation"}}
+```
+
+Para merma se captura la cantidad final menor que la observada y se conserva la valoración observada. Las revisiones de valoración se registran mediante Conteo. Por ejemplo, con diez piezas observadas y tres dañadas, se envía `tipo=Merma` y `qty=7`. El documento conserva tipo, motivo, acta, UUID y huella en `custom_lebaref_*`. Cada renglón guarda `custom_lebaref_observado` y `custom_lebaref_valor_observado`.
+
+`accion=autorizar_ajuste` usa el folio de borrador y `datos={"confirmar":"AUTORIZAR"}`. Requiere permiso nativo de envío de Stock Reconciliation. Antes de confirmar se bloquean los Bin y se compara su cantidad y valoración actuales con la observación inicial. Un cambio exige nueva captura. La confirmación guiada fija fecha/hora actuales y deja que ERPNext contabilice la diferencia con sus cuentas configuradas. La referencia tiene clave única por empresa/acta. La cancelación conserva las reglas nativas y libera la clave para corregir el documento.
+
+Los eventos validate/before_submit/before_cancel/on_cancel aplican también a la ruta nativa. HTTP `403` por permisos insuficientes. HTTP `417` por tipo o motivo inválido, merma que no reduce stock, datos de almacén/artículo inválidos, o conteo desactualizado. Referencias duplicadas conservan el error nativo de clave única. Los requisitos de series, lotes y valoración siguen el flujo de Stock Reconciliation.
+
+## 15. Conciliación y factura de comprobantes (`XML-02 / XML-03 / XML-04`)
+
+El alcance contable adoptado es **Purchase Receipt → Purchase Invoice → Payment Entry** nativos, con permisos financieros existentes. Cada conciliación de esta API cubre un CFDI y una recepción completa. La selección identifica conceptos XML por su posición estable y renglones por su ID de ERPNext. Se revisan moneda, RFC, huella del archivo privado, cantidades, importes netos por renglón y total. Las diferencias monetarias usan la precisión de la recepción. La validación estructural y conciliación quedan registradas en **Lebaref Conciliacion CFDI**, con propietario, fecha, selección y resultado inmutables. La comprobación de vigencia SAT y firma fiscal requiere su proceso fiscal correspondiente.
+
+`GET /api/method/lebaref_compras.comprobantes.consultar?cfdi=<UUID>` devuelve `conceptos`, `renglones`, `cargos` fijos nativos, `moneda`, `fecha_xml`, `total_xml`, `total_recepcion` y `diferencia_total`. Para previsualizar una selección se añade `seleccion` como JSON con este formato. `factor_xml` convierte cantidad XML a unidad de inventario de la recepción. Cada concepto selecciona un `renglon` o un `cargo`, exclusivamente. Cargo identifica una fila de impuestos/cargos nativos con `charge_type=Actual`, útil cuando el flete aparece como concepto XML.
+
+```json
+{"rows":[{"concepto":"1","renglon":"pr-item-a","factor_xml":10},{"concepto":"2","cargo":"pr-tax-flete"}]}
+```
+
+La respuesta añade `seleccion`, `diferencias` por cantidad/importe y `coincide`. Con `coincide=false` se revisa el expediente antes de continuar. Todos los conceptos deben estar relacionados y todos los renglones de recepción deben cuadrar. Varios conceptos pueden acumularse en un renglón. Los factores equivalentes, como 1 y 1.00, se normalizan.
+
+`accion=conciliar_cfdi` usa como `folio` el UUID del CFDI archivado y como `datos` esa selección. Requiere crear Lebaref Conciliacion CFDI. Se rechazan diferencias y la conciliación repetida equivalente devuelve el folio existente.
+
+```json
+{"message":{"folio":"conciliacion-id","tipo":"Lebaref Conciliacion CFDI"}}
+```
+
+`accion=facturar_cfdi` usa como `folio` el UUID conciliado. `datos` admite `fecha` opcional para la fecha del comprobante y se propone la fecha del XML cuando está disponible. La API usa el mapeador nativo de recepción a factura y exige que la recepción carezca de otra factura activa. Devuelve una **Purchase Invoice en borrador**. La factura conserva `custom_lebaref_tipo_comprobante=CFDI`, `custom_lebaref_cfdi`, `custom_lebaref_recepcion_comprobante`, `bill_no` y su clave de comprobante. La creación requiere permiso nativo de Purchase Invoice.
+
+```json
+{"fecha":"2026-11-20"}
+```
+
+```json
+{"message":{"folio":"ACC-PINV-2026-00001","tipo":"Purchase Invoice"}}
+```
+
+Para una compra con nota o ticket, `accion=nota_compra` usa el folio de la recepción confirmada y estos datos. Crea igualmente una Purchase Invoice en borrador, con tipo `Nota/ticket`, referencia y motivo, y conserva la recepción. La referencia se normaliza y su clave es única por empresa/proveedor/tipo/referencia. Los archivos de soporte pueden adjuntarse al expediente mediante File nativo.
+
+```json
+{"referencia":"TICKET-001","motivo":"Compra documentada con nota de mostrador","fecha":"2026-11-20"}
+```
+
+`accion=autorizar_factura` usa el folio de factura y `datos={"confirmar":"AUTORIZAR"}`. Exige permiso nativo de envío de Purchase Invoice. Los validadores financieros comparan cantidades e importes con la recepción y comprueban la conciliación vigente del CFDI. La factura mantiene `update_stock=0` y evita otra recepción de inventario. Los activos fijos configurados en Item conservan el proceso nativo de ERPNext y las referencias de recepción. La creación automática de fichas personalizadas HER no forma parte de este flujo contable.
+
+La anulación nativa de factura libera su clave de comprobante para corrección y conserva el UUID/referencia e historial. Las notas de crédito nativas conservan `return_against` y su propio tratamiento fiscal; los marcadores de comprobante de ingreso se limpian al generarlas. El test comprueba una nota de crédito nativa desde una factura documentada con nota.
+
+## 16. Pago y saldo de factura (`XML-04`)
+
+`accion=pagar_factura` usa una Purchase Invoice confirmada con saldo. Crea un **Payment Entry en borrador** mediante `get_payment_entry` nativo. `importe` está en la moneda de la cuenta por pagar del proveedor, coherente con `outstanding_amount`; `cuenta` es una cuenta activa Bank o Cash de la misma empresa, visible para la sesión. ERPNext aplica sus conversiones y configuración contable. `referencia` y `fecha` identifican el comprobante del pago.
+
+```json
+{"importe":120,"cuenta":"Bancos - L","referencia":"TRANSFERENCIA-001","fecha":"2026-11-20"}
+```
+
+```json
+{"message":{"folio":"ACC-PAY-2026-00001","tipo":"Payment Entry"}}
+```
+
+La captura exige crear Payment Entry. `accion=autorizar_pago`, con el folio del pago y `datos={"confirmar":"PAGAR"}`, requiere permiso nativo de envío. Antes de confirmar se bloquea la factura y se verifica su saldo actual, proveedor, empresa y asignación única. Un pago preparado antes de otro que reduzca el saldo se rechaza si excede el remanente. `custom_lebaref_factura` conserva el vínculo. El saldo y la cancelación se resuelven por las entradas contables y de proveedor nativas. `GET /api/resource/Purchase%20Invoice/<folio>` expone `outstanding_amount` y `status` actualizados.
+
+Reintentos de creación con el mismo UUID conservan el borrador y las autorizaciones repetidas conservan el documento confirmado. HTTP `403` por permisos contables insuficientes. HTTP `417` por diferencia de conciliación, comprobante/recepción incoherentes, factura ya vinculada, cuenta inválida, referencia ausente o exceso del saldo actual. Los requisitos contables adicionales conservan sus errores nativos.
+
+Estos módulos requieren reconstrucción, migración y despliegue coherente de backend/workers. Se agregan permisos de lectura del archivo CFDI para Accounts User y Accounts Manager. La conexión de diálogos, selección de conceptos/cargos, revisión contable e impresión corresponde a Antigravity. Los perfiles contables y cuentas reales deben validarse en el recorrido operativo.

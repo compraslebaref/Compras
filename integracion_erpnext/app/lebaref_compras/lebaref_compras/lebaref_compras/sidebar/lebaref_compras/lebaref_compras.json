@@ -55,6 +55,24 @@
    "type": "Link"
   },
   {
+   "doctype": "Sidebar Item",
+   "icon": "file-text",
+   "is_default_module": 1,
+   "label": "Facturas y Notas de Compra",
+   "link_to": "Purchase Invoice",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "credit-card",
+   "is_default_module": 1,
+   "label": "Pagos a Proveedores",
+   "link_to": "Payment Entry",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
    "collapsible": 1,
    "doctype": "Sidebar Item",
    "label": "Almacén, Obras y Catálogos",
@@ -84,6 +102,15 @@
    "is_default_module": 1,
    "label": "Entregas y sobrantes",
    "link_to": "Stock Entry",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "clipboard-check",
+   "is_default_module": 1,
+   "label": "Conteos y mermas",
+   "link_to": "Stock Reconciliation",
    "link_type": "DocType",
    "type": "Link"
   },

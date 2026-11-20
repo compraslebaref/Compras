@@ -12,6 +12,8 @@ WORKSPACE_SHORTCUTS = [
     {"label": "Cotizaciones de proveedores", "type": "DocType", "link_to": "Supplier Quotation", "doc_view": "List", "color": "Orange"},
     {"label": "Órdenes de compra", "type": "DocType", "link_to": "Purchase Order", "doc_view": "List", "color": "Green"},
     {"label": "CFDI 4.0 archivados", "type": "DocType", "link_to": "Lebaref CFDI", "doc_view": "List", "color": "Grey"},
+    {"label": "Facturas y notas de compra", "type": "DocType", "link_to": "Purchase Invoice", "doc_view": "List", "color": "Blue"},
+    {"label": "Pagos a proveedores", "type": "DocType", "link_to": "Payment Entry", "doc_view": "List", "color": "Green"},
     # 2. Almacén, Obras, Clientes y Catálogos Maestros
     {"label": "Recepciones de compra", "type": "DocType", "link_to": "Purchase Receipt", "doc_view": "List", "color": "Green"},
     {"label": "Artículos (Catálogo)", "type": "DocType", "link_to": "Item", "doc_view": "List", "color": "Grey"},
@@ -21,6 +23,7 @@ WORKSPACE_SHORTCUTS = [
     {"label": "Departamentos", "type": "DocType", "link_to": "Department", "doc_view": "List", "color": "Cyan"},
     {"label": "Existencias por almacén", "type": "DocType", "link_to": "Bin", "doc_view": "List", "color": "Cyan"},
     {"label": "Entregas y sobrantes", "type": "DocType", "link_to": "Stock Entry", "doc_view": "List", "color": "Blue"},
+    {"label": "Conteos y mermas", "type": "DocType", "link_to": "Stock Reconciliation", "doc_view": "List", "color": "Orange"},
     # 3. Custodia de Herramientas, Kits y Flotilla
     {"label": "Herramientas (HER)", "type": "DocType", "link_to": "Lebaref Herramienta", "doc_view": "List", "color": "Orange"},
     {"label": "Préstamos (PRE)", "type": "DocType", "link_to": "Lebaref Prestamo", "doc_view": "List", "color": "Yellow"},
@@ -126,8 +129,8 @@ def _construir_contenido_workspace():
         },
     ]
     grupos = [
-        ("compras", ["Solicitudes de material", "Cotizaciones de proveedores", "Órdenes de compra", "CFDI 4.0 archivados"]),
-        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Proveedores", "Clientes", "Obras / Proyectos", "Departamentos", "Existencias por almacén", "Entregas y sobrantes"]),
+        ("compras", ["Solicitudes de material", "Cotizaciones de proveedores", "Órdenes de compra", "CFDI 4.0 archivados", "Facturas y notas de compra", "Pagos a proveedores"]),
+        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Proveedores", "Clientes", "Obras / Proyectos", "Departamentos", "Existencias por almacén", "Entregas y sobrantes", "Conteos y mermas"]),
         ("equipos", ["Herramientas (HER)", "Préstamos (PRE)", "Maletines / Kits (KIT)", "Mantenimientos (HER)", "Flotilla vehicular (VEH)", "Gastos y combustible", "Check-list vehicular"]),
     ]
     titulos = {
@@ -155,9 +158,9 @@ def configurar_plantillas_comerciales():
     if frappe.db.exists("DocType", "Buying Settings"):
         frappe.db.set_single_value("Buying Settings", "po_required", "No")
 
-    # Perfil Coordinador Operativo (Compras + Almacén + Consulta Contable) para regularización ALM-02, sobrantes ALM-07 y costos ALM-05
+    # Perfil Coordinador Operativo (Compras + Almacén + Contabilidad/Pagos) para ALM-02..08 y XML-02..04
     perfil_coord = "Lebaref Coordinador Operativo"
-    roles_coord = ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager", "Accounts User")
+    roles_coord = ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager", "Accounts User", "Accounts Manager")
     if not frappe.db.exists("Role Profile", perfil_coord):
         frappe.get_doc({
             "doctype": "Role Profile",
@@ -316,6 +319,32 @@ def configurar_plantillas_comerciales():
                         "shipping_rule_type": "Buying",
                         "calculate_based_on": "Fixed",
                         "shipping_amount": monto,
+                    }).insert(ignore_permissions=True)
+
+        # Cuentas operativas de Bancos y Caja para registro de pagos de facturas (XML-04)
+        for tipo_cta, nombre_cta in (("Bank", "Banco Operativo MXN"), ("Cash", "Caja Chica Operativa")):
+            existe_cta = frappe.db.get_value(
+                "Account",
+                {"company": emp.name, "account_type": tipo_cta, "is_group": 0, "disabled": 0},
+                "name",
+            )
+            if not existe_cta:
+                padre_cta = frappe.db.get_value(
+                    "Account",
+                    {"company": emp.name, "account_type": tipo_cta, "is_group": 1},
+                    "name",
+                ) or frappe.db.get_value(
+                    "Account",
+                    {"company": emp.name, "root_type": "Asset", "is_group": 1, "parent_account": ["is", "set"]},
+                    "name",
+                )
+                if padre_cta:
+                    frappe.get_doc({
+                        "doctype": "Account",
+                        "account_name": nombre_cta,
+                        "company": emp.name,
+                        "parent_account": padre_cta,
+                        "account_type": tipo_cta,
                     }).insert(ignore_permissions=True)
 
 

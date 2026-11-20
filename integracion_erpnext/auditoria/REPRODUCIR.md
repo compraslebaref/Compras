@@ -72,3 +72,19 @@ Se reutilizan los campos de procedencia de Stock Entry y Stock Entry Detail exis
 Usar la etiqueta `lebaref/erpnext-codex:alm07` en construcción y Validar.ps1. La suite integral incluye verificar_sobrantes. Crea diez unidades registradas en obra, captura un borrador de sobrante de tres, comprueba que el borrador conserva las existencias y que Almacén carece de autorización para confirmarlo, incluso por submit nativo. Administrator confirma el traslado, dejando siete en obra y tres en destino. Rechaza el acta duplicada con otra operación y conserva el total diez. Rechaza una entrada adicional sin confirmación de existencias previas. Confirma dos unidades verificadas como no contabilizadas, anula el movimiento y corrige el acta comprobando reversión y conservación del original. Comprueba el rechazo de cancelación por Almacén. Todos los registros ficticios se revierten.
 
 La migración añade cinco campos de Stock Entry, incluido el índice único de empresa/acta. Los hooks de sobrantes se componen con los controles existentes de consumos. El borrador usa permiso nativo de creación de Stock Entry; confirmación y cancelación requieren también submit de Stock Reconciliation. Se libera la clave única al anular y se conserva el acta legible. La clasificación del stock histórico requiere revisión física y conciliación con lo migrado por el responsable. Desplegar backend y workers de la misma versión antes de probar la conexión e impresión en Desk.
+
+## Cierre backend — ALM-08 y XML-02..04
+
+Construir y validar la imagen final desde el worktree de Codex.
+
+```powershell
+$pruebas = (Resolve-Path .\integracion_erpnext\pruebas).Path
+wsl.exe -d Ubuntu --cd $pruebas --exec docker build -f Dockerfile -t lebaref/erpnext-codex:cierre ..
+powershell -ExecutionPolicy Bypass -File .\integracion_erpnext\pruebas\Validar.ps1 -ImagenBackend lebaref/erpnext-codex:cierre
+```
+
+`verificar_integracion` ejecuta también `verificar_ajustes` y `verificar_comprobantes`. El primero comprueba aumento por conteo, merma con valoración conservada, permisos, reversión y rechazo de captura desactualizada. El segundo concilia un CFDI con dos conceptos, incluido flete registrado como cargo fijo, detecta diferencias, conserva idempotencia con factores equivalentes, factura sin otro ingreso de stock y verifica factura con nota/ticket. Prueba autorización contable, pago parcial, otro pago que queda desactualizado, cancelación, pago total, exceso rechazado y nota de crédito nativa. Las transacciones de datos ficticios se revierten al finalizar.
+
+Se migran los campos de Stock Reconciliation/Item, Purchase Invoice y Payment Entry y el DocType inmutable Lebaref Conciliacion CFDI. Las cuentas, asientos, activos fijos configurados y saldos del proveedor conservan los mecanismos nativos. Los permisos financieros se mantienen y se habilita lectura de CFDI para Accounts User/Manager. Desplegar backend y workers coherentes, migrar y renovar caché antes de conectar las operaciones en Desk. Los contratos exactos están en §14..16.
+
+El cierre cubre la cola transaccional indicada, con conciliación de un CFDI y una recepción completa. La puesta en marcha requiere verificar perfiles y cuentas reales, capturas e impresión de Desk y aceptación por usuarios. El alcance fiscal de la conciliación es estructural y de correspondencia con ERPNext. La verificación de vigencia/firma SAT pertenece a su procedimiento fiscal. Las fichas personalizadas HER se mantienen en el módulo de herramientas.
