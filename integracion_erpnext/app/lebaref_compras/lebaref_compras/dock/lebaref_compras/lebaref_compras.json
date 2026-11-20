@@ -1,0 +1,19 @@
+{
+ "app": "lebaref_compras",
+ "doctype": "Dock",
+ "items": [
+  {
+   "added": 0,
+   "doctype": "Dock Item",
+   "hidden": 0,
+   "icon": "box-soft",
+   "link_to": "Lebaref Compras",
+   "link_type": "Sidebar",
+   "title": "Lebaref"
+  }
+ ],
+ "mount_on": "erpnext",
+ "name": "lebaref_compras",
+ "standard": 1,
+ "user": ""
+}

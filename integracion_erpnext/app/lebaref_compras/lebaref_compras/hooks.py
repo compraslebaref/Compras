@@ -2,9 +2,59 @@ app_name = "lebaref_compras"
 app_title = "Lebaref Compras"
 app_publisher = "Lebaref"
 app_description = "Procesos de compras y almacén de Lebaref para ERPNext"
+app_logo_url = "/files/lebaref_isotipo.svg"
 required_apps = ["erpnext"]
-after_install = "lebaref_compras.setup.configure_purchase_fields"
-after_migrate = "lebaref_compras.setup.configure_purchase_fields"
+
+add_to_apps_screen = [
+    {
+        "name": "lebaref_compras",
+        "logo": "/files/lebaref_isotipo.svg",
+        "title": "Lebaref",
+        "route": "/app/lebaref",
+    }
+]
+
+after_install = [
+    "lebaref_compras.setup.configure_purchase_fields",
+    "lebaref_compras.desk_ui.configurar_todo_desk",
+]
+after_migrate = [
+    "lebaref_compras.setup.configure_purchase_fields",
+    "lebaref_compras.desk_ui.configurar_todo_desk",
+]
+
+doctype_js = {
+    "Material Request": ["public/js/lebaref_desk.js", "public/js/material_request.js"],
+    "Request for Quotation": "public/js/lebaref_desk.js",
+    "Purchase Order": "public/js/lebaref_desk.js",
+    "Purchase Receipt": "public/js/lebaref_desk.js",
+    "Stock Entry": "public/js/lebaref_desk.js",
+    "Supplier": "public/js/lebaref_desk.js",
+    "Item": "public/js/lebaref_desk.js",
+    "Lebaref Herramienta": "public/js/lebaref_desk.js",
+    "Lebaref Mantenimiento Herramienta": "public/js/lebaref_desk.js",
+    "Lebaref Kit": "public/js/lebaref_desk.js",
+    "Lebaref Prestamo": "public/js/lebaref_desk.js",
+    "Lebaref Vehiculo": "public/js/lebaref_desk.js",
+}
+
+doctype_list_js = {
+    "Material Request": "public/js/lebaref_desk.js",
+    "Stock Entry": "public/js/lebaref_desk.js",
+    "Supplier": "public/js/lebaref_desk.js",
+    "Item": "public/js/lebaref_desk.js",
+    "Lebaref Herramienta": "public/js/lebaref_desk.js",
+    "Lebaref Kit": "public/js/lebaref_desk.js",
+    "Lebaref Prestamo": "public/js/lebaref_desk.js",
+    "Lebaref Vehiculo": "public/js/lebaref_desk.js",
+}
+
+jinja = {
+    "methods": [
+        "lebaref_compras.impresion_carta.svg_code128",
+        "lebaref_compras.impresion_carta.svg_logo_lebaref",
+    ]
+}
 
 doc_events = {
     doctype: {"before_validate": "lebaref_compras.trazabilidad.copiar_obra_y_partida"}
@@ -21,7 +71,6 @@ doc_events["Purchase Order"]["before_validate"] = [
     "lebaref_compras.comercial.desde_cotizacion",
 ]
 
-doctype_js = {"Material Request": "public/js/material_request.js"}
 doc_events["Lebaref CFDI"] = {"validate": "lebaref_compras.operaciones.validar_archivo"}
 for name in ("Lebaref Herramienta", "Lebaref Prestamo", "Lebaref Retorno", "Lebaref Estado Herramienta", "Lebaref Vehiculo", "Lebaref Gasto Vehiculo", "Lebaref Revision Vehiculo", "Lebaref Estado Vehiculo"):
     doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}

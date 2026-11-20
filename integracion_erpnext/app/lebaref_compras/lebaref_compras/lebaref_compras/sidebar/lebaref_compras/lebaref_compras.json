@@ -1,0 +1,210 @@
+{
+ "app": "lebaref_compras",
+ "doctype": "Sidebar",
+ "header_icon": "box-duotone",
+ "items": [
+  {
+   "doctype": "Sidebar Item",
+   "icon": "house",
+   "is_default_module": 1,
+   "label": "Inicio Lebaref",
+   "link_to": "Lebaref",
+   "link_type": "Workspace",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Sidebar Item",
+   "label": "Abastecimiento y Compras",
+   "type": "Section Break"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "clipboard-list",
+   "is_default_module": 1,
+   "label": "Solicitudes de material",
+   "link_to": "Material Request",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "file-text",
+   "is_default_module": 1,
+   "label": "Peticiones de cotización",
+   "link_to": "Request for Quotation",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "file-check",
+   "is_default_module": 1,
+   "label": "Cotizaciones de proveedores",
+   "link_to": "Supplier Quotation",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "shopping-cart",
+   "is_default_module": 1,
+   "label": "Órdenes de compra",
+   "link_to": "Purchase Order",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "file-code",
+   "is_default_module": 1,
+   "label": "CFDI 4.0 archivados",
+   "link_to": "Lebaref CFDI",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "external-link",
+   "is_default_module": 0,
+   "label": "¿A quién cotizar? (Sheets)",
+   "link_type": "URL",
+   "open_in_new_tab": 1,
+   "type": "Link",
+   "url": "https://docs.google.com/spreadsheets/d/1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I/edit?gid=0#gid=0"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Sidebar Item",
+   "label": "Almacén y Catálogos",
+   "type": "Section Break"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "package-check",
+   "is_default_module": 1,
+   "label": "Recepciones de compra",
+   "link_to": "Purchase Receipt",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "arrow-left-right",
+   "is_default_module": 1,
+   "label": "Entregas y sobrantes",
+   "link_to": "Stock Entry",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "package",
+   "is_default_module": 1,
+   "label": "Artículos (Catálogo)",
+   "link_to": "Item",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "truck",
+   "is_default_module": 1,
+   "label": "Proveedores",
+   "link_to": "Supplier",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "folder",
+   "is_default_module": 1,
+   "label": "Obras / Proyectos",
+   "link_to": "Project",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "layers",
+   "is_default_module": 1,
+   "label": "Existencias por almacén",
+   "link_to": "Bin",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "collapsible": 1,
+   "doctype": "Sidebar Item",
+   "label": "Herramientas, Kits y Flotilla",
+   "type": "Section Break"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "wrench",
+   "is_default_module": 1,
+   "label": "Herramientas (HER)",
+   "link_to": "Lebaref Herramienta",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "clipboard",
+   "is_default_module": 1,
+   "label": "Préstamos (PRE)",
+   "link_to": "Lebaref Prestamo",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "briefcase",
+   "is_default_module": 1,
+   "label": "Maletines / Kits (KIT)",
+   "link_to": "Lebaref Kit",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "settings",
+   "is_default_module": 1,
+   "label": "Mantenimientos (HER)",
+   "link_to": "Lebaref Mantenimiento Herramienta",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "car",
+   "is_default_module": 1,
+   "label": "Flotilla vehicular (VEH)",
+   "link_to": "Lebaref Vehiculo",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "credit-card",
+   "is_default_module": 1,
+   "label": "Gastos y combustible",
+   "link_to": "Lebaref Gasto Vehiculo",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "check-square",
+   "is_default_module": 1,
+   "label": "Check-list vehicular",
+   "link_to": "Lebaref Revision Vehiculo",
+   "link_type": "DocType",
+   "type": "Link"
+  }
+ ],
+ "module": "Lebaref Compras",
+ "name": "Lebaref Compras",
+ "standard": 1,
+ "title": "Lebaref Compras"
+}
