@@ -104,6 +104,8 @@ def main():
         "solicitudes_abiertas_migradas": 0,
         "cotizaciones_abiertas_migradas": 0,
         "ordenes_abiertas_migradas": 0,
+        "prestamos_historicos_migrados": 0,
+        "archivo_historico_exportado": {},
         "advertencias": [],
     }
 
@@ -743,6 +745,137 @@ def main():
             stats["advertencias"].append(f"OC {folio_oc}: {ex}")
 
     frappe.db.commit()
+
+    # 10. Préstamos históricos cerrados (PRE-2026-0002 y PRE-2026-0003) con su retorno completo
+    for pr in conn.execute("SELECT * FROM PrestamosHerramienta ORDER BY Id"):
+        folio_pre = (pr["Folio"] or f"PRE-{pr['Id']}").strip()
+        op_pre = det_uuid(f"MIG-PRE:{folio_pre}")
+        if frappe.db.exists("Lebaref Prestamo", {"custom_lebaref_operacion": op_pre}):
+            stats["prestamos_historicos_migrados"] += 1
+            continue
+        herramientas_pre = [
+            her_code_by_id.get(pp["HerramientaActivoId"], "")
+            for pp in conn.execute("SELECT HerramientaActivoId FROM PrestamoPartidas WHERE PrestamoHerramientaId = ? ORDER BY Id", (pr["Id"],))
+        ]
+        herramientas_pre = [h for h in herramientas_pre if h and frappe.db.exists("Lebaref Herramienta", h)]
+        if not herramientas_pre:
+            continue
+        sp_p = f"mig_pre_{pr['Id']}"
+        frappe.db.savepoint(sp_p)
+        try:
+            obra_pre = proj_by_id.get(pr["ProyectoId"]) or next(iter(proj_by_id.values()), "")
+            enc_pre = encargado_by_id.get(pr["EncargadoId"]) or "Responsable de Obra"
+            rec_pre = (pr["PersonaRecibe"] or enc_pre).strip()
+            res_pre = operaciones.ejecutar(
+                "prestamo",
+                {
+                    "company": company_name,
+                    "obra": obra_pre,
+                    "responsable": enc_pre,
+                    "recibe": rec_pre,
+                    "departamento": "HVAC",
+                    "compromiso": add_days(today(), 1),
+                    "notas": f"Vale histórico migrado desde SQLite: {folio_pre} ({(pr['FechaSalida'] or '')[:16]})",
+                    "rows": [{"herramienta": h} for h in herramientas_pre],
+                },
+                op_pre,
+            )
+            pre_doc = frappe.get_doc("Lebaref Prestamo", res_pre["folio"])
+            if "Devuelto" in (pr["Estatus"] or ""):
+                operaciones.ejecutar(
+                    "retorno_herramienta",
+                    {
+                        "recibe": "Almacén General",
+                        "notas": f"Retorno histórico migrado de {folio_pre}",
+                        "rows": [
+                            {"herramienta": item.herramienta, "devolver": "Sí", "estado": "Bueno", "observaciones": "Devuelto completo en registro original"}
+                            for item in pre_doc.items
+                        ],
+                    },
+                    det_uuid(f"MIG-RET:{folio_pre}"),
+                    pre_doc.name,
+                )
+            stats["prestamos_historicos_migrados"] += 1
+        except Exception as ex:
+            frappe.db.rollback(save_point=sp_p)
+            stats["advertencias"].append(f"Préstamo {folio_pre}: {ex}")
+
+    frappe.db.commit()
+
+    # 11. Exportar archivo histórico de solo lectura (1,019 precios, 220 CFDIs 4.0 y 229 OCs cerradas) sin alterar contabilidad ni stock
+    sup_label_by_id = {
+        r["Id"]: (r["NombreComercial"] or r["RazonSocial"] or "").strip()
+        for r in conn.execute("SELECT Id, NombreComercial, RazonSocial FROM Proveedores")
+    }
+    precios_hist = [
+        {
+            "fecha": (r["FechaCotizacion"] or "")[:10],
+            "codigo": prod_code_by_id.get(r["ProductoId"], "") if r["ProductoId"] else "",
+            "concepto": (r["DescripcionConcepto"] or "").strip(),
+            "familia": (r["Familia"] or "").strip(),
+            "proveedor": sup_label_by_id.get(r["ProveedorId"], ""),
+            "precio": flt(r["PrecioSinIva"] or 0),
+            "dias": int(r["DiasEntrega"] or 0),
+            "ganador": bool(r["FueGanador"]),
+            "origen": (r["OrigenFolio"] or "").strip(),
+        }
+        for r in conn.execute("SELECT * FROM BancoPreciosHistorico ORDER BY Id DESC")
+    ]
+
+    resumen_cfdi_map = defaultdict(list)
+    for fc in conn.execute("SELECT FacturaXmlId, Descripcion FROM FacturaConceptos ORDER BY Id"):
+        if len(resumen_cfdi_map[fc["FacturaXmlId"]]) < 3 and fc["Descripcion"]:
+            resumen_cfdi_map[fc["FacturaXmlId"]].append(fc["Descripcion"].strip()[:45])
+
+    cfdis_hist = [
+        {
+            "uuid": (r["Uuid"] or "").strip().upper(),
+            "serie_folio": (r["SerieFolio"] or "").strip(),
+            "fecha": (r["FechaTimbrado"] or "").strip(),
+            "rfc": (r["EmisorRfc"] or "").strip().upper(),
+            "emisor": (r["EmisorNombre"] or "").strip(),
+            "moneda": (r["Moneda"] or "MXN").strip(),
+            "subtotal": flt(r["Subtotal"] or 0),
+            "iva": flt(r["Iva"] or 0),
+            "total": flt(r["Total"] or 0),
+            "oc_folio": (r["OrdenCompraFolio"] or "").strip(),
+            "resumen": " · ".join(resumen_cfdi_map.get(r["Id"], [])),
+        }
+        for r in conn.execute("SELECT * FROM FacturasXml ORDER BY FechaTimbrado DESC, Id DESC")
+    ]
+
+    obra_label_by_id = {
+        r["Id"]: (r["Nombre"] or "").strip()
+        for r in conn.execute("SELECT Id, Nombre FROM Proyectos")
+    }
+    ordenes_hist = [
+        {
+            "folio": (r["Folio"] or "").strip(),
+            "fecha": (r["Fecha"] or "").strip(),
+            "proveedor": sup_label_by_id.get(r["ProveedorId"], ""),
+            "obra": obra_label_by_id.get(r["ProyectoId"], ""),
+            "depto": (r["DepartamentoNombre"] or "").strip(),
+            "encargado": (r["EncargadoNombre"] or "").strip(),
+            "subtotal": flt(r["Subtotal"] or 0),
+            "iva": flt(r["Iva"] or 0),
+            "total": flt(r["TotalConIva"] or 0),
+            "condicion": (r["CondicionPago"] or "").strip(),
+        }
+        for r in conn.execute("SELECT * FROM OrdenesCompra WHERE Estatus = 'Recibida Completa' ORDER BY Id DESC")
+    ]
+
+    priv_dir = frappe.get_site_path("private", "files")
+    os.makedirs(priv_dir, exist_ok=True)
+    hist_path = os.path.join(priv_dir, "historico_sqlite_lebaref.json")
+    with open(hist_path, "w", encoding="utf-8") as f_hist:
+        json.dump({"precios": precios_hist, "cfdis": cfdis_hist, "ordenes": ordenes_hist}, f_hist, ensure_ascii=False)
+
+    stats["archivo_historico_exportado"] = {
+        "precios": len(precios_hist),
+        "cfdis": len(cfdis_hist),
+        "ordenes_cerradas": len(ordenes_hist),
+    }
+
     frappe.clear_cache()
     print("MIGRACION_RESUMEN_JSON:" + json.dumps(stats, ensure_ascii=False))
 

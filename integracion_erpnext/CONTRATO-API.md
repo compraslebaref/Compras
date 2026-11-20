@@ -32,7 +32,7 @@
 
 ### 2.2 Operaciones de Compras, Almacén y Catálogos (`lebaref_compras.operaciones`)
 - **`GET /api/method/lebaref_compras.operaciones.esquema?accion=<accion>&folio=<folio>`**
-  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `recibir`, `entregar`, `devolver`, `cfdi`.
+  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `devolver`, `cfdi`.
   - Delega automáticamente a `lebaref_compras.equipos.esquema` cuando `accion` pertenece a herramientas/flotilla/kits (`herramienta`, `prestamo`, `retorno_herramienta`, `estado_herramienta`, `vehiculo`, `gasto_vehiculo`, `revision_vehiculo`, `estado_vehiculo`, `kit`, `composicion_kit`, `prestamo_kit`, `garantia_herramienta`, `mantenimiento_herramienta`, `anular_mantenimiento`).
   - Respuesta `message`:
     ```json
@@ -358,3 +358,63 @@ Envía las cantidades parciales o totales en la unidad del renglón. ERPNext val
 ```
 
 La instalación de los campos de procedencia requiere `bench --site <sitio> migrate`. El surtido corresponde al movimiento físico. La reserva previa de existencias y la selección del solicitante desde un directorio quedan pendientes.
+
+## 9. Entrada anticipada y regularización (`ALM-02`)
+
+Ambas acciones usan `operaciones.esquema` y `operaciones.ejecutar` de §2.2. Requieren migración de campos y reconstrucción del backend. La entrada anticipada confirma un **Purchase Receipt** nativo. La configuración `Buying Settings.po_required` debe permitir recepción sin orden. Se conserva su validación nativa.
+
+Para `accion=entrada_sin_oc`, usa `folio` vacío, UUID nuevo y estos `datos`. El precio por unidad de compra y el motivo son obligatorios. Los artículos deben ser activos, inventariables y de compra. El almacén debe ser activo, de detalle y de la empresa. Se aplican las unidades de compra del catálogo o la `uom` enviada con conversión válida. Las series, lotes e inspecciones conservan los requisitos nativos de ERPNext.
+
+```json
+{"company":"Lebaref","supplier":"Proveedor A","remarks":"Entrega anticipada pendiente de autorización","rows":[{"item_code":"TOR-01","qty":2,"rate":100,"warehouse":"Central - L","project":"PROJ-0001"}]}
+```
+
+```json
+{"message":{"folio":"MAT-PRE-2026-00010","tipo":"Purchase Receipt"}}
+```
+
+El documento conserva `custom_lebaref_por_regularizar=1`. El esquema permite agregar renglones y seleccionar unidades, almacén, obra y partida. La sesión necesita permisos nativos de creación y envío de recepción y lectura de los maestros aplicables.
+
+Para `accion=regularizar_entrada`, usa como `folio` esa recepción confirmada y envía una orden autorizada con el mismo proveedor, empresa y moneda. Cada `id` es un **Purchase Receipt Item** y cada `purchase_order_item` es un renglón de la orden seleccionada. Consulta sus IDs con `GET /api/resource/Purchase%20Order/<folio>` en `data.items[].name`. Relaciona todos los renglones de la recepción. Varios pueden referirse al mismo renglón de orden si su suma cabe en el saldo. Artículo, unidad, factor, obra y precio deben coincidir. La recepción debe regularizarse antes de crear facturas o devoluciones vinculadas.
+
+```json
+{"purchase_order":"PUR-ORD-2026-00010","motivo":"Orden autorizada después de la entrega","rows":[{"id":"pr-item-a","purchase_order_item":"po-item-a"}]}
+```
+
+```json
+{"message":{"folio":"MAT-PRE-2026-00010","tipo":"Purchase Receipt"}}
+```
+
+La operación conserva folio, fecha, importes y valoración originales. Actualiza únicamente los vínculos a orden y solicitud y recalcula saldos con los agregadores nativos de ERPNext. Registra comentarios con usuario, fecha y motivo, y cambia `custom_lebaref_por_regularizar` a cero. Los libros de inventario y contabilidad conservan sus entradas originales. La sesión necesita escritura de recepción y de orden, y lectura de ambos documentos. La orden se bloquea durante la transacción para serializar recepciones concurrentes.
+
+Un reintento idéntico devuelve el mismo folio con `repetida: true`. La regularización guarda su UUID y huella en campos propios, conservando la idempotencia del alta inicial. Una nueva operación sobre una entrada ya regularizada se rechaza. HTTP `417` para recepción ajena al flujo, orden cerrada o suspendida, referencias ajenas o repetidas, diferencias en datos o exceso de saldo. HTTP `403` para permisos insuficientes. Los fallos de regularización revierten todos sus cambios.
+
+Antigravity debe conectar las acciones nuevas en Desk y desplegar la imagen integrada antes de su uso operativo.
+
+## 10. Recepción directa a obra y servicios (`ALM-03`)
+
+`accion=articulo` admite `tipo_articulo` con los valores `Material` y `Servicio`. Omitirlo conserva el alta inventariable habitual. Servicio crea un Item con `is_stock_item=0` y las unidades indicadas. El esquema de alta y consulta devuelve `tipo_articulo`. Los permisos de alta de catálogo se conservan. Un valor distinto devuelve HTTP `417`.
+
+```json
+{"item_code":"SRV-INST-01","item_name":"Servicio de instalación","item_group":"Services","stock_uom":"Nos","tipo_articulo":"Servicio"}
+```
+
+```json
+{"message":{"folio":"SRV-INST-01","tipo":"Item"}}
+```
+
+El grupo y la unidad deben existir. Un servicio puede incluirse en solicitud, petición, oferta y orden mediante su SKU. Al recibirlo, ERPNext actualiza la cantidad recibida y mantiene el vínculo a la orden sin crear existencias.
+
+`esquema?accion=recibir&folio=<orden>` incorpora campos opcionales `recibido_por`, `supplier_delivery_note` y `motivo_destino`. Las filas incorporan `warehouse` editable, `project` e `is_stock_item` informativos. Los servicios muestran almacén vacío. Para material, omitir `warehouse` conserva el destino de la orden. Un almacén distinto requiere una obra en el renglón de la orden y un motivo de cambio. La obra debe pertenecer a la empresa. El destino debe ser activo, de detalle, de la misma empresa y legible para la sesión. La selección del almacén de la obra es explícita en cada renglón.
+
+```json
+{"recibido_por":"Ana Pérez","supplier_delivery_note":"REM-123","motivo_destino":"Entrega del proveedor directamente en obra","rows":[{"id":"po-material-a","qty":2,"warehouse":"Obra Norte - L"},{"id":"po-servicio-b","qty":1}]}
+```
+
+```json
+{"message":{"folio":"MAT-PRE-2026-00011","tipo":"Purchase Receipt"}}
+```
+
+La recepción conserva `custom_lebaref_recibido_por`, la remisión nativa `supplier_delivery_note`, y el motivo y destinos en `remarks`. Conserva obra, orden, unidades y partida del documento de origen. El material recibido en obra incrementa ese almacén. ERPNext puede completar el almacén de referencia del servicio con sus valores predeterminados. El servicio conserva `is_stock_item=0` y carece de movimiento de inventario. HTTP `417` para servicio con almacén enviado, destino inválido, cambio de almacén sin obra o motivo, o cantidades inválidas. Los permisos nativos, la recepción parcial y los reintentos de §2.2 se mantienen.
+
+El nuevo campo de persona requiere migración. Para uso operativo hay que desplegar el backend integrado y conectar la captura en Desk. La selección de almacén representa el lugar de resguardo y conserva inventario hasta un movimiento nativo posterior de consumo.

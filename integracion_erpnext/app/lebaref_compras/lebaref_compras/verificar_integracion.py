@@ -6,6 +6,7 @@ from lebaref_compras.operaciones import esquema, ejecutar
 from lebaref_compras.comparativa import consultar, generar_ordenes
 from lebaref_compras.verificar_comercial import verificar_comercial
 from lebaref_compras.verificar_solicitudes import verificar_solicitudes
+from lebaref_compras.verificar_recepciones import verificar_recepciones, verificar_destinos
 
 
 def _verificar_ofertas_parciales(data, item_code, supplier, second_supplier):
@@ -327,6 +328,10 @@ def verificar():
         results.append("COM-04 / COM-07: IVA 16 %, exento, flete y traslados nativos de condición y fecha de pago")
         verificar_solicitudes(seed, supplier.name, warehouse.name)
         results.append("SOL-03 / SOL-05 / CAT-04: anexos, SKU existente o nuevo, salida parcial y transferencia vinculada")
+        verificar_recepciones(seed, supplier.name)
+        results.append("ALM-02: entrada anticipada, regularización auditada sin nuevos movimientos, permisos, reintentos y recepción del saldo")
+        verificar_destinos(seed, supplier.name, warehouse.name)
+        results.append("ALM-03: material directo a obra, servicio sin existencias, persona/remisión, destinos inválidos y recepción compatible del saldo")
         return {"correcto": True, "pruebas": results, "datos": "Revertidos al finalizar"}
     finally:
         frappe.db.rollback()

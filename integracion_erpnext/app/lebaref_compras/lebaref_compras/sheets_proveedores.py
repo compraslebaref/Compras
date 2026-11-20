@@ -1,5 +1,7 @@
-"""Directorio '¿A quién cotizar?' y puente de sincronización con Google Sheets (CAT-03)."""
+"""Directorio '¿A quién cotizar?', puente Google Sheets y consulta de Archivo Histórico SQLite (CAT-03 / OPS-HIST)."""
 from collections import Counter
+import json
+import os
 import frappe
 
 SHEETS_ID = "1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I"
@@ -82,3 +84,17 @@ def directorio():
         "proveedores": registros,
         "tsv": "\n".join(tsv_lineas),
     }
+
+
+@frappe.whitelist(methods=["GET"])
+def archivo_historico():
+    """Consulta de solo lectura del archivo histórico migrado desde SQLite (Banco de Precios, 220 CFDIs y 229 OCs cerradas)."""
+    if not (frappe.has_permission("Purchase Order", "read") or frappe.has_permission("Supplier Quotation", "read")):
+        frappe.throw("No tienes permiso para consultar el archivo histórico de compras.", frappe.PermissionError)
+
+    ruta = frappe.get_site_path("private", "files", "historico_sqlite_lebaref.json")
+    if not os.path.exists(ruta):
+        return {"precios": [], "cfdis": [], "ordenes": []}
+
+    with open(ruta, encoding="utf-8") as f:
+        return json.load(f)
