@@ -102,3 +102,39 @@ def regularizar(receipt, data, token, signature):
         frappe.db.rollback(save_point="regularizar_recepcion")
         raise
     return dict(folio=receipt.name, tipo=receipt.doctype)
+
+
+def configurar_destinos(doc, data):
+    rows = {r["id"]: r for r in data["rows"]}
+    changed = []
+    for item in doc.items:
+        row = rows[item.purchase_order_item]
+        stock = frappe.get_cached_value("Item", item.item_code, "is_stock_item")
+        if not stock:
+            if row.get("warehouse"):
+                frappe.throw("Deja vacío el almacén para recibir un servicio.")
+            item.warehouse = None
+            continue
+        destination = row.get("warehouse") or item.warehouse
+        if destination == item.warehouse:
+            continue
+        if not item.project:
+            frappe.throw("La orden debe indicar la obra antes de cambiar el almacén de recepción.")
+        warehouse = frappe.get_doc("Warehouse", destination)
+        warehouse.check_permission("read")
+        if warehouse.company != doc.company or warehouse.disabled or warehouse.is_group:
+            frappe.throw("Selecciona un almacén activo de detalle de la misma empresa.")
+        project = frappe.get_doc("Project", item.project)
+        project.check_permission("read")
+        if project.company != doc.company:
+            frappe.throw("La obra debe pertenecer a la empresa de la recepción.")
+        changed.append(f"{item.item_code}: {item.warehouse or ''} → {warehouse.name}")
+        item.warehouse = warehouse.name
+    if changed:
+        motivo = str(data.get("motivo_destino") or "").strip()
+        if not motivo:
+            frappe.throw("Indica el motivo para recibir en un almacén distinto al de la orden.")
+        doc.remarks = "\n".join([doc.remarks or "", "Recepción directa. " + motivo, *changed]).strip()
+    doc.custom_lebaref_recibido_por = data.get("recibido_por") or ""
+    if data.get("supplier_delivery_note"):
+        doc.supplier_delivery_note = data["supplier_delivery_note"]

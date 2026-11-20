@@ -74,3 +74,60 @@ def verificar_recepciones(seed, supplier):
     ejecutar("recibir", {"rows": [dict(id=order.items[0].name, qty=1)]}, str(uuid.uuid4()), order.name)
     assert frappe.db.get_value("Bin", {"item_code": item.name, "warehouse": base.warehouse}, "actual_qty") == 2
     assert frappe.db.get_value("Purchase Order", order.name, "per_received") == 100
+
+
+def verificar_destinos(seed, supplier, obra_warehouse):
+    frappe.set_user("autoriza@lebaref.test")
+    base = seed.items[0]
+    group = frappe.db.get_value("Item", base.item_code, "item_group")
+    common = dict(item_group=group, stock_uom=base.stock_uom)
+    material = ejecutar("articulo", dict(common, item_code="TEST-OBR-" + uuid.uuid4().hex[:8],
+        item_name="Material directo a obra"), str(uuid.uuid4()))["folio"]
+    service = ejecutar("articulo", dict(common, item_code="TEST-SRV-" + uuid.uuid4().hex[:8],
+        item_name="Servicio de instalación", tipo_articulo="Servicio"), str(uuid.uuid4()))["folio"]
+    assert frappe.db.get_value("Item", service, "is_stock_item") == 0
+    assert frappe.db.get_value("Item", material, "is_stock_item") == 1
+    assert {f["name"]: f["value"] for f in esquema("articulo", service)["fields"]}["tipo_articulo"] == "Servicio"
+    frappe.set_user("Administrator")
+    order = frappe.get_doc(dict(doctype="Purchase Order", company=seed.company, supplier=supplier,
+        transaction_date=today(), schedule_date=today(), items=[
+            dict(item_code=material, qty=3, rate=100, warehouse=base.warehouse, project=base.project),
+            dict(item_code=service, qty=1, rate=150, project=base.project)])).insert()
+    order.submit()
+    material_row, service_row = order.items
+    data = dict(recibido_por="Ana de prueba", supplier_delivery_note="REM-ALM03",
+        motivo_destino="Entrega del proveedor directamente en obra", rows=[
+            dict(id=material_row.name, qty=2, warehouse=obra_warehouse), dict(id=service_row.name, qty=1)])
+    frappe.set_user("almacen@lebaref.test")
+    schema = esquema("recibir", order.name)
+    assert next(r for r in schema["rows"] if r["id"] == service_row.name)["warehouse"] == ""
+    for invalid in (dict(data, motivo_destino=""),
+                    dict(data, rows=[dict(id=service_row.name, qty=1, warehouse=obra_warehouse)]),
+                    dict(data, rows=[dict(id=material_row.name, qty=2, warehouse="All Warehouses - " + frappe.get_cached_value("Company", seed.company, "abbr"))])):
+        try:
+            ejecutar("recibir", invalid, str(uuid.uuid4()), order.name)
+        except frappe.ValidationError:
+            pass
+        else:
+            raise AssertionError("Se aceptó un destino de recepción inválido")
+    token = str(uuid.uuid4())
+    receipt = ejecutar("recibir", data, token, order.name)["folio"]
+    assert ejecutar("recibir", data, token, order.name)["repetida"]
+    doc = frappe.get_doc("Purchase Receipt", receipt)
+    assert doc.custom_lebaref_recibido_por == "Ana de prueba" and doc.supplier_delivery_note == "REM-ALM03"
+    assert data["motivo_destino"] in doc.remarks
+    stock_row = next(r for r in doc.items if r.item_code == material)
+    service_received = next(r for r in doc.items if r.item_code == service)
+    assert stock_row.warehouse == obra_warehouse and stock_row.project == base.project
+    assert service_received.purchase_order_item == service_row.name
+    assert frappe.db.get_value("Bin", {"item_code": material, "warehouse": obra_warehouse}, "actual_qty") == 2
+    assert not frappe.db.get_value("Bin", {"item_code": material, "warehouse": base.warehouse}, "actual_qty")
+    assert not frappe.db.exists("Stock Ledger Entry", {"voucher_no": receipt, "item_code": service})
+    assert not frappe.db.exists("Bin", {"item_code": service})
+    order.reload()
+    assert order.items[0].received_qty == 2 and order.items[1].received_qty == 1
+    # Existing callers can omit every new field and receive the remainder in the original warehouse.
+    ejecutar("recibir", {"rows": [dict(id=material_row.name, qty=1)]}, str(uuid.uuid4()), order.name)
+    assert frappe.db.get_value("Bin", {"item_code": material, "warehouse": base.warehouse}, "actual_qty") == 1
+    assert frappe.db.get_value("Bin", {"item_code": material, "warehouse": obra_warehouse}, "actual_qty") == 2
+    assert frappe.db.get_value("Purchase Order", order.name, "per_received") == 100

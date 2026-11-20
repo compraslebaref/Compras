@@ -64,6 +64,7 @@ def configure_purchase_fields():
             "fieldtype": "Date", "insert_after": anchor,
         })
     fields["Purchase Receipt"].extend([
+        {"fieldname": "custom_lebaref_recibido_por", "label": "Persona que recibe", "fieldtype": "Data", "read_only": 1},
         {"fieldname": "custom_lebaref_por_regularizar", "label": "Entrada pendiente de orden", "fieldtype": "Check", "read_only": 1, "no_copy": 1},
         {"fieldname": "custom_lebaref_regularizacion_operacion", "label": "Operación de regularización", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
         {"fieldname": "custom_lebaref_regularizacion_huella", "label": "Huella de regularización", "fieldtype": "Data", "read_only": 1, "no_copy": 1},

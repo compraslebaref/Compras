@@ -88,9 +88,10 @@ def esquema(accion, folio=""):
             campo("stock_uom", "Unidad de inventario", values.get("stock_uom", ""), uoms),
             campo("uom", "Unidad de compra", values.get("uom", ""), uoms),
             campo("conversion_factor", "Factor a inventario", values.get("conversion_factor", "")),
+            campo("tipo_articulo", "Tipo de artículo", ("Material" if doc.is_stock_item else "Servicio") if doc else "Material", ["Material", "Servicio"]),
         ]
         note = "Consulta unidades del artículo." if doc else (
-            "Crea un artículo con control de inventario. El factor indica cuántas unidades de inventario contiene una unidad de compra."
+            "Selecciona Material para controlar existencias o Servicio para compras sin inventario. El factor convierte la unidad de compra a la unidad base."
         )
     elif accion == "proveedor":
         values = proveedores.valores(doc) if doc else {}
@@ -198,13 +199,19 @@ def esquema(accion, folio=""):
         rows = [r.as_dict() for r in doc.items]
         note = f"{doc.name} | {doc.supplier} | Total {doc.grand_total} {doc.currency}. AUTORIZAR confirma la orden."
     elif accion == "recibir":
+        fields = [campo("recibido_por", "Persona que recibe"), campo("supplier_delivery_note", "Remisión del proveedor"),
+                  campo("motivo_destino", "Motivo de cambio de almacén", kind="multiline")]
         columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False), columna("pending", "Pendiente", False), columna("qty", "Recibir ahora")]
         columns.extend(columna(key, label, False) for key, label in unidades.CAMPOS)
         columns.append(columna("concepto_libre", "Concepto libre", False))
+        columns.extend([columna("warehouse", "Almacén destino", choices=catalogo("Warehouse", {"company": doc.company, "is_group": 0, "disabled": 0})),
+                        columna("project", "Obra", False), columna("is_stock_item", "Controla inventario", False)])
         rows = [dict(id=r.name, item_code=r.item_code, pending=max(0, r.qty-r.received_qty), qty=0,
+                     project=r.project, is_stock_item=frappe.get_cached_value("Item", r.item_code, "is_stock_item"),
+                     warehouse=r.warehouse if frappe.get_cached_value("Item", r.item_code, "is_stock_item") else "",
                      concepto_libre=solicitudes.concepto_visible(r), **unidades.valores(r))
                 for r in doc.items if r.qty > r.received_qty]
-        note = "Escribe solo lo recibido físicamente. Cero omite el renglón. Se conserva el almacén de la orden."
+        note = "Cero omite el renglón. Puedes recibir material directamente en el almacén de la obra indicando el motivo. Los servicios se registran sin existencias."
     elif accion == "entregar":
         fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("from_warehouse", "Almacén origen", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("to_warehouse", "Almacén de obra", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("project", "Obra", choices=catalogo("Project")), campo("remarks", "Recibe / referencia")]
         columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"is_stock_item": 1, "disabled": 0})), columna("qty", "Cantidad (unidad de inventario)"), columna("custom_lebaref_partida", "Partida")]
@@ -379,6 +386,7 @@ def ejecutar(accion, datos, operacion, folio=""):
         if {r.purchase_order_item for r in kept} != {k for k, v in values.items() if v}:
             frappe.throw("Hay renglones sin saldo pendiente.")
         doc.set("items", kept)
+        recepciones.configurar_destinos(doc, data)
     elif accion == "entrada_sin_oc":
         doc = recepciones.crear(data)
     elif accion == "regularizar_entrada":

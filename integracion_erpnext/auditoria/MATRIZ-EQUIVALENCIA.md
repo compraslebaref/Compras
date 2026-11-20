@@ -220,13 +220,13 @@ Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cam
 
 ## ALM-03 · Recepción directa a obra y servicios
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Persona, remisión y opción de servicio no inventariable.
-- Integración: Puede recibir al almacén ya configurado de la OC, pero no reproduce esa captura/flujo; altas son inventariables.
-- Evidencia: Código de ambas rutas.
-- Criterio para cerrar: Compra directa a obra sin inflar almacén central; servicio sin existencia ficticia.
-- Fuentes: [original L8552](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:8552) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: `recibir` permite elegir almacén de la obra por renglón conservando la obra de la orden. Captura persona, remisión y motivo del cambio. `articulo` permite alta de Servicio (`is_stock_item=0`). Los datos omitidos mantienen el flujo habitual.
+- Evidencia: `verificar_destinos` recibe dos unidades directamente en obra y un servicio, verifica el inventario por almacén, ausencia de Bin y Stock Ledger Entry para el servicio, reintento, destinos inválidos y recepción del saldo en el almacén original. `Validar.ps1 -ImagenBackend lebaref/erpnext-codex:alm03`.
+- Criterio para cerrar: Integrar y desplegar el backend, conectar la captura en Desk y validar el recorrido del auxiliar. El almacén de obra se selecciona explícitamente.
+- Fuentes: `recepciones.configurar_destinos`, `solicitudes.nuevo_articulo`, `verificar_recepciones.verificar_destinos` y §10 de CONTRATO-API.md.
 
 ## ALM-04 · Sustitución de marca/artículo al recibir
 

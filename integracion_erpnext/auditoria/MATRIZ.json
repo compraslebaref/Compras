@@ -317,12 +317,12 @@
   {
     "id": "ALM-03",
     "capacidad": "Recepción directa a obra y servicios",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Persona, remisión y opción de servicio no inventariable.",
-    "integracion": "Puede recibir al almacén ya configurado de la OC, pero no reproduce esa captura/flujo; altas son inventariables.",
-    "evidencia": "Código de ambas rutas.",
-    "criterio_cierre": "Compra directa a obra sin inflar almacén central; servicio sin existencia ficticia.",
+    "integracion": "Recepción directa al almacén de obra por renglón, persona/remisión y motivo. Alta de Servicio no inventariable. Conserva los valores habituales cuando se omiten los campos nuevos.",
+    "evidencia": "verificar_destinos: existencias por almacén, servicio sin Bin ni Stock Ledger Entry, reintento, destinos inválidos y saldo. Validar.ps1 con imagen lebaref/erpnext-codex:alm03.",
+    "criterio_cierre": "Integrar y desplegar backend, conectar captura en Desk y validar recorrido del auxiliar. Selección explícita del almacén de obra.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 8552

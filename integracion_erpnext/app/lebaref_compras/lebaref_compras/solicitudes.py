@@ -121,7 +121,10 @@ def nuevo_articulo(data):
     if not isinstance(data, dict):
         frappe.throw("Captura los datos del artículo.")
     allowed = ("item_code", "item_name", "item_group", "stock_uom")
-    item = frappe.get_doc(dict(doctype="Item", is_stock_item=1, **{key: data.get(key) for key in allowed}))
+    tipo = data.get("tipo_articulo", "Material")
+    if tipo not in ("Material", "Servicio"):
+        frappe.throw("Selecciona Material o Servicio como tipo de artículo.")
+    item = frappe.get_doc(dict(doctype="Item", is_stock_item=int(tipo == "Material"), **{key: data.get(key) for key in allowed}))
     if item.item_code == ARTICULO_LIBRE:
         frappe.throw("El código está reservado para conceptos libres.")
     unidades.configurar_articulo(item, data)

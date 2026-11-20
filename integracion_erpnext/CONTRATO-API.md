@@ -390,3 +390,31 @@ La operación conserva folio, fecha, importes y valoración originales. Actualiz
 Un reintento idéntico devuelve el mismo folio con `repetida: true`. La regularización guarda su UUID y huella en campos propios, conservando la idempotencia del alta inicial. Una nueva operación sobre una entrada ya regularizada se rechaza. HTTP `417` para recepción ajena al flujo, orden cerrada o suspendida, referencias ajenas o repetidas, diferencias en datos o exceso de saldo. HTTP `403` para permisos insuficientes. Los fallos de regularización revierten todos sus cambios.
 
 Antigravity debe conectar las acciones nuevas en Desk y desplegar la imagen integrada antes de su uso operativo.
+
+## 10. Recepción directa a obra y servicios (`ALM-03`)
+
+`accion=articulo` admite `tipo_articulo` con los valores `Material` y `Servicio`. Omitirlo conserva el alta inventariable habitual. Servicio crea un Item con `is_stock_item=0` y las unidades indicadas. El esquema de alta y consulta devuelve `tipo_articulo`. Los permisos de alta de catálogo se conservan. Un valor distinto devuelve HTTP `417`.
+
+```json
+{"item_code":"SRV-INST-01","item_name":"Servicio de instalación","item_group":"Services","stock_uom":"Nos","tipo_articulo":"Servicio"}
+```
+
+```json
+{"message":{"folio":"SRV-INST-01","tipo":"Item"}}
+```
+
+El grupo y la unidad deben existir. Un servicio puede incluirse en solicitud, petición, oferta y orden mediante su SKU. Al recibirlo, ERPNext actualiza la cantidad recibida y mantiene el vínculo a la orden sin crear existencias.
+
+`esquema?accion=recibir&folio=<orden>` incorpora campos opcionales `recibido_por`, `supplier_delivery_note` y `motivo_destino`. Las filas incorporan `warehouse` editable, `project` e `is_stock_item` informativos. Los servicios muestran almacén vacío. Para material, omitir `warehouse` conserva el destino de la orden. Un almacén distinto requiere una obra en el renglón de la orden y un motivo de cambio. La obra debe pertenecer a la empresa. El destino debe ser activo, de detalle, de la misma empresa y legible para la sesión. La selección del almacén de la obra es explícita en cada renglón.
+
+```json
+{"recibido_por":"Ana Pérez","supplier_delivery_note":"REM-123","motivo_destino":"Entrega del proveedor directamente en obra","rows":[{"id":"po-material-a","qty":2,"warehouse":"Obra Norte - L"},{"id":"po-servicio-b","qty":1}]}
+```
+
+```json
+{"message":{"folio":"MAT-PRE-2026-00011","tipo":"Purchase Receipt"}}
+```
+
+La recepción conserva `custom_lebaref_recibido_por`, la remisión nativa `supplier_delivery_note`, y el motivo y destinos en `remarks`. Conserva obra, orden, unidades y partida del documento de origen. El material recibido en obra incrementa ese almacén. ERPNext puede completar el almacén de referencia del servicio con sus valores predeterminados. El servicio conserva `is_stock_item=0` y carece de movimiento de inventario. HTTP `417` para servicio con almacén enviado, destino inválido, cambio de almacén sin obra o motivo, o cantidades inválidas. Los permisos nativos, la recepción parcial y los reintentos de §2.2 se mantienen.
+
+El nuevo campo de persona requiere migración. Para uso operativo hay que desplegar el backend integrado y conectar la captura en Desk. La selección de almacén representa el lugar de resguardo y conserva inventario hasta un movimiento nativo posterior de consumo.
