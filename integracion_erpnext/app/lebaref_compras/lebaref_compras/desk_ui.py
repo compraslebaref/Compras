@@ -7,18 +7,18 @@ import frappe
 SHEETS_URL = "https://docs.google.com/spreadsheets/d/1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I/edit?gid=0#gid=0"
 
 WORKSPACE_SHORTCUTS = [
-    # 1. Abastecimiento y Compras
+    # 1. Abastecimiento y Compras (flujo directo Solicitud -> Cotización/Comparativa -> OC -> CFDI)
     {"label": "Solicitudes de material", "type": "DocType", "link_to": "Material Request", "doc_view": "List", "color": "Blue"},
-    {"label": "Peticiones de cotización", "type": "DocType", "link_to": "Request for Quotation", "doc_view": "List", "color": "Cyan"},
     {"label": "Cotizaciones de proveedores", "type": "DocType", "link_to": "Supplier Quotation", "doc_view": "List", "color": "Orange"},
     {"label": "Órdenes de compra", "type": "DocType", "link_to": "Purchase Order", "doc_view": "List", "color": "Green"},
     {"label": "CFDI 4.0 archivados", "type": "DocType", "link_to": "Lebaref CFDI", "doc_view": "List", "color": "Grey"},
-    {"label": "¿A quién cotizar? (Sheets)", "type": "URL", "url": SHEETS_URL, "color": "Green"},
-    # 2. Almacén, Obras y Catálogos Maestros (Stock Entry al final para no dejar hueco en roles sin Stock User)
+    # 2. Almacén, Obras, Clientes y Catálogos Maestros
     {"label": "Recepciones de compra", "type": "DocType", "link_to": "Purchase Receipt", "doc_view": "List", "color": "Green"},
     {"label": "Artículos (Catálogo)", "type": "DocType", "link_to": "Item", "doc_view": "List", "color": "Grey"},
     {"label": "Proveedores", "type": "DocType", "link_to": "Supplier", "doc_view": "List", "color": "Grey"},
+    {"label": "Clientes", "type": "DocType", "link_to": "Customer", "doc_view": "List", "color": "Blue"},
     {"label": "Obras / Proyectos", "type": "DocType", "link_to": "Project", "doc_view": "List", "color": "Grey"},
+    {"label": "Departamentos", "type": "DocType", "link_to": "Department", "doc_view": "List", "color": "Cyan"},
     {"label": "Existencias por almacén", "type": "DocType", "link_to": "Bin", "doc_view": "List", "color": "Cyan"},
     {"label": "Entregas y sobrantes", "type": "DocType", "link_to": "Stock Entry", "doc_view": "List", "color": "Blue"},
     # 3. Custodia de Herramientas, Kits y Flotilla
@@ -95,13 +95,21 @@ def _clasificar_zona_bin(warehouse, item_code, anaquel="", grupo=""):
 
 
 def _construir_contenido_workspace():
+    pill_base = (
+        "display:inline-block;padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:700;"
+        "text-decoration:none;border:1px solid #cbd5e1;margin-left:6px;margin-top:4px;"
+    )
     banner_html = (
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'
         'padding:10px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:4px;">'
         '<img src="/files/lebaref_logo_horizontal.svg" alt="Lebaref" style="height:54px;width:auto;display:block;">'
         '<div style="text-align:right;font-size:12px;color:#475569;">'
         '<b style="color:#031e34;font-size:13px;">Plataforma Operativa de Compras, Almacén y Activos</b><br>'
-        'Ingeniería · Construcción · HVAC · Electricidad · Remodelación'
+        '<span>Ingeniería · Construcción · HVAC · Electricidad · Remodelación</span><br>'
+        f'<a href="#leb-escanear-s30w" style="{pill_base}background:#031e34;color:#ffffff;border-color:#031e34;">🔫 Escanear S30W (F2)</a>'
+        f'<a href="#leb-codigos-carta" style="{pill_base}background:#0d5b94;color:#ffffff;border-color:#0d5b94;">🏷️ Hojas de Códigos Carta</a>'
+        f'<a href="#leb-mapa-af" style="{pill_base}background:#ffffff;color:#031e34;">🗺️ Mapa Zonas A–F</a>'
+        f'<a href="#leb-historico" style="{pill_base}background:#ffffff;color:#031e34;">📜 Archivo Histórico</a>'
         '</div></div>'
     )
     bloques = [
@@ -113,12 +121,12 @@ def _construir_contenido_workspace():
         },
     ]
     grupos = [
-        ("compras", ["Solicitudes de material", "Peticiones de cotización", "Cotizaciones de proveedores", "Órdenes de compra", "CFDI 4.0 archivados", "¿A quién cotizar? (Sheets)"]),
-        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Proveedores", "Obras / Proyectos", "Existencias por almacén", "Entregas y sobrantes"]),
+        ("compras", ["Solicitudes de material", "Cotizaciones de proveedores", "Órdenes de compra", "CFDI 4.0 archivados"]),
+        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Proveedores", "Clientes", "Obras / Proyectos", "Departamentos", "Existencias por almacén", "Entregas y sobrantes"]),
         ("equipos", ["Herramientas (HER)", "Préstamos (PRE)", "Maletines / Kits (KIT)", "Mantenimientos (HER)", "Flotilla vehicular (VEH)", "Gastos y combustible", "Check-list vehicular"]),
     ]
     titulos = {
-        "almacen": "<span class=\"h4\"><b>2. Almacén, Obras y Catálogos Maestros</b></span>",
+        "almacen": "<span class=\"h4\"><b>2. Almacén, Obras, Clientes y Catálogos Maestros</b></span>",
         "equipos": "<span class=\"h4\"><b>3. Custodia de Herramientas, Kits y Flotilla</b></span>",
     }
     idx = 0
@@ -126,9 +134,10 @@ def _construir_contenido_workspace():
         if clave in titulos:
             bloques.append({"id": f"spc-{clave}", "type": "spacer", "data": {"col": 12}})
             bloques.append({"id": f"hdr-{clave}", "type": "header", "data": {"text": titulos[clave], "col": 12}})
+        ancho = 3 if clave == "compras" else 3
         for etq in etiquetas:
             idx += 1
-            bloques.append({"id": f"leb-sc-{idx}", "type": "shortcut", "data": {"shortcut_name": etq, "col": 4}})
+            bloques.append({"id": f"leb-sc-{idx}", "type": "shortcut", "data": {"shortcut_name": etq, "col": ancho}})
     return json.dumps(bloques, ensure_ascii=False)
 
 
@@ -141,15 +150,23 @@ def configurar_plantillas_comerciales():
     if frappe.db.exists("DocType", "Buying Settings"):
         frappe.db.set_single_value("Buying Settings", "po_required", "No")
 
-    # Perfil Coordinador Operativo (Compras + Almacén) para permitir regularización ALM-02 y operación integral sin alterar usuarios de prueba
+    # Perfil Coordinador Operativo (Compras + Almacén + Consulta Contable) para regularización ALM-02, sobrantes ALM-07 y costos ALM-05
     perfil_coord = "Lebaref Coordinador Operativo"
-    roles_coord = ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager")
+    roles_coord = ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager", "Accounts User")
     if not frappe.db.exists("Role Profile", perfil_coord):
         frappe.get_doc({
             "doctype": "Role Profile",
             "role_profile": perfil_coord,
             "roles": [{"role": r} for r in roles_coord if frappe.db.exists("Role", r)],
         }).insert(ignore_permissions=True)
+    else:
+        rp_doc = frappe.get_doc("Role Profile", perfil_coord)
+        existentes_rp = {r.role for r in rp_doc.roles}
+        faltantes_rp = [r for r in roles_coord if r not in existentes_rp and frappe.db.exists("Role", r)]
+        if faltantes_rp:
+            for r in faltantes_rp:
+                rp_doc.append("roles", {"role": r})
+            rp_doc.save(ignore_permissions=True)
 
     # Asegurar cuenta operativa real de Oscar en español con perfil Coordinador Operativo
     correo_oscar = "oscar.gomez@lebaref.com"
@@ -165,6 +182,12 @@ def configurar_plantillas_comerciales():
             "role_profile_name": perfil_coord,
         })
         u_doc.insert(ignore_permissions=True)
+    else:
+        u_doc = frappe.get_doc("User", correo_oscar)
+        if u_doc.role_profile_name != perfil_coord or len(u_doc.roles) < len(roles_coord):
+            u_doc.role_profile_name = perfil_coord
+            u_doc.populate_role_profile_roles()
+            u_doc.save(ignore_permissions=True)
 
     # Asegurar permiso de lectura/selección en maestros comerciales para Compras
     for dt in ("Purchase Taxes and Charges Template", "Shipping Rule", "Payment Terms Template"):
@@ -430,20 +453,30 @@ def configurar_workspace_lebaref():
 
 def _asegurar_enlace_assets():
     public_dir = frappe.get_app_path("lebaref_compras", "public")
-    assets_dir = os.path.join(frappe.get_site_path(".."), "assets")
+    js_src = os.path.join(public_dir, "js", "lebaref_desk.js")
+    files_dir = frappe.get_site_path("public", "files")
+    os.makedirs(files_dir, exist_ok=True)
+    if os.path.isfile(js_src):
+        shutil.copyfile(js_src, os.path.join(files_dir, "lebaref_desk.js"))
+    bench_sites = os.path.abspath(frappe.get_site_path(".."))
+    assets_dir = os.path.join(bench_sites, "assets")
     destino = os.path.join(assets_dir, "lebaref_compras")
-    if os.path.isdir(public_dir) and os.path.isdir(assets_dir) and not os.path.exists(destino):
+    if os.path.isdir(public_dir) and os.path.isdir(assets_dir):
         try:
-            os.symlink(public_dir, destino)
+            if os.path.islink(destino):
+                os.unlink(destino)
+            shutil.copytree(public_dir, destino, dirs_exist_ok=True)
         except OSError:
             pass
 
 
 def configurar_todo_desk():
     from lebaref_compras.impresion_carta import configurar_formatos_impresion
+    from lebaref_compras.ux_lebaref import configurar_ux_lebaref
     _asegurar_enlace_assets()
     configurar_identidad_visual()
     configurar_plantillas_comerciales()
+    configurar_ux_lebaref()
     configurar_workspace_lebaref()
     configurar_sidebar_y_dock_lebaref()
     configurar_formatos_impresion()
