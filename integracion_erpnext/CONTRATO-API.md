@@ -32,7 +32,7 @@
 
 ### 2.2 Operaciones de Compras, Almacén y Catálogos (`lebaref_compras.operaciones`)
 - **`GET /api/method/lebaref_compras.operaciones.esquema?accion=<accion>&folio=<folio>`**
-  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `recibir`, `entregar`, `devolver`, `cfdi`.
+  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `devolver`, `cfdi`.
   - Delega automáticamente a `lebaref_compras.equipos.esquema` cuando `accion` pertenece a herramientas/flotilla/kits (`herramienta`, `prestamo`, `retorno_herramienta`, `estado_herramienta`, `vehiculo`, `gasto_vehiculo`, `revision_vehiculo`, `estado_vehiculo`, `kit`, `composicion_kit`, `prestamo_kit`, `garantia_herramienta`, `mantenimiento_herramienta`, `anular_mantenimiento`).
   - Respuesta `message`:
     ```json
@@ -358,3 +358,35 @@ Envía las cantidades parciales o totales en la unidad del renglón. ERPNext val
 ```
 
 La instalación de los campos de procedencia requiere `bench --site <sitio> migrate`. El surtido corresponde al movimiento físico. La reserva previa de existencias y la selección del solicitante desde un directorio quedan pendientes.
+
+## 9. Entrada anticipada y regularización (`ALM-02`)
+
+Ambas acciones usan `operaciones.esquema` y `operaciones.ejecutar` de §2.2. Requieren migración de campos y reconstrucción del backend. La entrada anticipada confirma un **Purchase Receipt** nativo. La configuración `Buying Settings.po_required` debe permitir recepción sin orden. Se conserva su validación nativa.
+
+Para `accion=entrada_sin_oc`, usa `folio` vacío, UUID nuevo y estos `datos`. El precio por unidad de compra y el motivo son obligatorios. Los artículos deben ser activos, inventariables y de compra. El almacén debe ser activo, de detalle y de la empresa. Se aplican las unidades de compra del catálogo o la `uom` enviada con conversión válida. Las series, lotes e inspecciones conservan los requisitos nativos de ERPNext.
+
+```json
+{"company":"Lebaref","supplier":"Proveedor A","remarks":"Entrega anticipada pendiente de autorización","rows":[{"item_code":"TOR-01","qty":2,"rate":100,"warehouse":"Central - L","project":"PROJ-0001"}]}
+```
+
+```json
+{"message":{"folio":"MAT-PRE-2026-00010","tipo":"Purchase Receipt"}}
+```
+
+El documento conserva `custom_lebaref_por_regularizar=1`. El esquema permite agregar renglones y seleccionar unidades, almacén, obra y partida. La sesión necesita permisos nativos de creación y envío de recepción y lectura de los maestros aplicables.
+
+Para `accion=regularizar_entrada`, usa como `folio` esa recepción confirmada y envía una orden autorizada con el mismo proveedor, empresa y moneda. Cada `id` es un **Purchase Receipt Item** y cada `purchase_order_item` es un renglón de la orden seleccionada. Consulta sus IDs con `GET /api/resource/Purchase%20Order/<folio>` en `data.items[].name`. Relaciona todos los renglones de la recepción. Varios pueden referirse al mismo renglón de orden si su suma cabe en el saldo. Artículo, unidad, factor, obra y precio deben coincidir. La recepción debe regularizarse antes de crear facturas o devoluciones vinculadas.
+
+```json
+{"purchase_order":"PUR-ORD-2026-00010","motivo":"Orden autorizada después de la entrega","rows":[{"id":"pr-item-a","purchase_order_item":"po-item-a"}]}
+```
+
+```json
+{"message":{"folio":"MAT-PRE-2026-00010","tipo":"Purchase Receipt"}}
+```
+
+La operación conserva folio, fecha, importes y valoración originales. Actualiza únicamente los vínculos a orden y solicitud y recalcula saldos con los agregadores nativos de ERPNext. Registra comentarios con usuario, fecha y motivo, y cambia `custom_lebaref_por_regularizar` a cero. Los libros de inventario y contabilidad conservan sus entradas originales. La sesión necesita escritura de recepción y de orden, y lectura de ambos documentos. La orden se bloquea durante la transacción para serializar recepciones concurrentes.
+
+Un reintento idéntico devuelve el mismo folio con `repetida: true`. La regularización guarda su UUID y huella en campos propios, conservando la idempotencia del alta inicial. Una nueva operación sobre una entrada ya regularizada se rechaza. HTTP `417` para recepción ajena al flujo, orden cerrada o suspendida, referencias ajenas o repetidas, diferencias en datos o exceso de saldo. HTTP `403` para permisos insuficientes. Los fallos de regularización revierten todos sus cambios.
+
+Antigravity debe conectar las acciones nuevas en Desk y desplegar la imagen integrada antes de su uso operativo.

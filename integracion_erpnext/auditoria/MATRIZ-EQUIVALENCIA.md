@@ -210,13 +210,13 @@ Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cam
 
 ## ALM-02 · Entrada sin OC y regularización
 
-**No integrado · P1**
+**Parcial · P1**
 
 - Original: Entrada por regularizar vinculable después a OC/XML.
-- Integración: recibir requiere Purchase Order confirmada.
-- Evidencia: RegistrarEntradaDirectaSinOc y SOURCES.
-- Criterio para cerrar: Recibir antes de la OC y regularizar sin duplicar inventario ni compra.
-- Fuentes: [original L3088](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:3088) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: API `entrada_sin_oc` confirma una recepción nativa. `regularizar_entrada` vincula la misma recepción a una orden autorizada conservando inventario, valoración y comentarios auditables. Se regulariza antes de facturas o devoluciones vinculadas.
+- Evidencia: Validar.ps1 con imagen lebaref/erpnext-codex:alm02, migración y tres suites correctas. Caso con consumo previo, reintentos, referencias inválidas, permisos y recepción del saldo. Libros de inventario y contabilidad de la recepción conservan su número de registros.
+- Criterio para cerrar: Conectar los diálogos de Desk, desplegar el backend y habilitar un perfil operativo con escritura de recepción y orden. El perfil actual Responsable de Compras carece de escritura de recepción. Validar la captura por auxiliares.
+- Fuentes: `recepciones.py`, `verificar_recepciones.py` y §9 de CONTRATO-API.md.
 
 ## ALM-03 · Recepción directa a obra y servicios
 

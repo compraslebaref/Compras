@@ -40,3 +40,9 @@ UTF-8 y con saltos de línea normalizados a LF; coincidieron con el código loca
 La matriz en Markdown y JSON contiene las mismas 55 capacidades. P1/P2 indican
 prioridad para cerrar equivalencia, no vulnerabilidades de seguridad. Las funciones
 no integradas no se consideran aprobadas por el hecho de pasar las tres suites.
+
+## ALM-02 — recepción anticipada
+
+Construir y validar desde el worktree de Codex con las mismas instrucciones anteriores, usando la etiqueta `lebaref/erpnext-codex:alm02` en ambos comandos. `verificar_integracion.verificar` incluye `verificar_recepciones`: recibe dos unidades, consume una, vincula la recepción a una orden de tres y recibe la unidad pendiente. Compara existencias y conteos de entradas contables y de inventario antes y después de vincular. Verifica reintentos y referencias inválidas. Toda la prueba se revierte.
+
+La regularización requiere escritura sobre recepción y orden. La prueba positiva usa Administrator y comprueba el rechazo al usuario de Almacén. El perfil actual Responsable de Compras carece de escritura sobre recepción. La habilitación del perfil operativo y la conexión en Desk siguen pendientes. Los campos se migraron usando contenedores temporales. La imagen de backend de Desk requiere integración y despliegue para servir las acciones nuevas.

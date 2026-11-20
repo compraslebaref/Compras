@@ -302,12 +302,12 @@
   {
     "id": "ALM-02",
     "capacidad": "Entrada sin OC y regularización",
-    "estado": "No integrado",
+    "estado": "Parcial",
     "prioridad": "P1",
     "original": "Entrada por regularizar vinculable después a OC/XML.",
-    "integracion": "recibir requiere Purchase Order confirmada.",
-    "evidencia": "RegistrarEntradaDirectaSinOc y SOURCES.",
-    "criterio_cierre": "Recibir antes de la OC y regularizar sin duplicar inventario ni compra.",
+    "integracion": "API entrada_sin_oc y regularizar_entrada con referencias nativas de recepción y orden; conserva inventario y valoración. Antes de facturación o devoluciones vinculadas.",
+    "evidencia": "Validar.ps1 -ImagenBackend lebaref/erpnext-codex:alm02: migración y tres suites superadas, incluido consumo previo, reintentos, permisos y saldo.",
+    "criterio_cierre": "Conectar Desk, desplegar backend y habilitar perfil operativo con escritura de recepción y orden. Validar captura por auxiliares.",
     "fuente_original": {
       "archivo": "C:\\Users\\oscar\\.gemini\\antigravity\\scratch\\SistemaComprasAlmacen\\Data\\DatabaseService.cs",
       "linea": 3088

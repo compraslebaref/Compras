@@ -7,21 +7,22 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import comercial, proveedores, solicitudes, surtido, unidades
+from lebaref_compras import comercial, proveedores, recepciones, solicitudes, surtido, unidades
 from lebaref_compras.unidades import numero
 
 TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
            "convertir_concepto": "Material Request", "canalizar_stock": "Material Request",
            "surtir": "Stock Entry", "peticion": "Request for Quotation",
            "oferta": "Supplier Quotation", "autorizar": "Purchase Order",
-           "recibir": "Purchase Receipt", "entregar": "Stock Entry", "devolver": "Stock Entry",
+           "recibir": "Purchase Receipt", "entrada_sin_oc": "Purchase Receipt",
+           "regularizar_entrada": "Purchase Receipt", "entregar": "Stock Entry", "devolver": "Stock Entry",
            "cfdi": "Lebaref CFDI", "articulo": "Item", "proveedor": "Supplier", "obra": "Project", "almacen": "Warehouse"}
 MASTERS = {"articulo", "proveedor", "obra", "almacen"}
 ENMIENDAS = {"convertir_concepto", "canalizar_stock"}
 SOURCES = {action: "Material Request" for action in (*ENMIENDAS, "anexo", "surtir", "peticion")}
 SOURCES.update({"oferta": "Request for Quotation",
            "autorizar": "Purchase Order", "recibir": "Purchase Order",
-           "devolver": "Stock Entry", "cfdi": "Purchase Receipt"})
+           "devolver": "Stock Entry", "cfdi": "Purchase Receipt", "regularizar_entrada": "Purchase Receipt"})
 
 
 def permiso(accion):
@@ -29,7 +30,9 @@ def permiso(accion):
         frappe.throw("Operación desconocida.")
     dt = TARGETS[accion]
     rights = ("create", "submit")
-    if accion == "autorizar":
+    if accion == "regularizar_entrada":
+        rights = ("write",)
+    elif accion == "autorizar":
         rights = ("submit",)
     elif accion in MASTERS or accion in ("cfdi", "anexo"):
         rights = ("create",)
@@ -213,11 +216,28 @@ def esquema(accion, folio=""):
         returned = devoluciones(doc)
         rows = [dict(id=r.name, item_code=r.item_code, pending=r.qty-returned.get(r.name, 0), qty=0) for r in doc.items]
         note = "Retorno de sobrante al almacén original. El sistema verifica existencias y devoluciones anteriores."
+    elif accion == "entrada_sin_oc":
+        fields = [campo("company", "Empresa", choices=catalogo("Company")),
+                  campo("supplier", "Proveedor", choices=catalogo("Supplier")),
+                  campo("remarks", "Motivo de entrada anticipada", kind="multiline")]
+        columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"disabled": 0, "is_stock_item": 1, "is_purchase_item": 1})),
+                   columna("qty", "Cantidad"), columna("rate", "Precio unitario"),
+                   columna("warehouse", "Almacén", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})),
+                   columna("uom", "Unidad de compra", choices=catalogo("UOM", {"enabled": 1})),
+                   columna("project", "Obra", choices=catalogo("Project")), columna("custom_lebaref_partida", "Partida")]
+        note = "Confirma una recepción anticipada. ERPNext debe permitir recepciones sin orden en Buying Settings."
+    elif accion == "regularizar_entrada":
+        fields = [campo("purchase_order", "Orden de compra", choices=catalogo("Purchase Order", {"docstatus": 1, "supplier": doc.supplier, "company": doc.company})),
+                  campo("motivo", "Motivo de regularización", kind="multiline")]
+        columns = [columna("id", "Referencia recepción", False), columna("item_code", "Artículo", False),
+                   columna("qty", "Cantidad", False), columna("purchase_order_item", "Referencia renglón de orden")]
+        rows = [dict(id=r.name, item_code=r.item_code, qty=r.qty, purchase_order_item="") for r in doc.items]
+        note = "Vincula todos los renglones a una orden autorizada. Consulta sus referencias en el documento de orden."
     elif accion == "cfdi":
         fields = [campo("xml", "Archivo XML CFDI", kind="file")]
         note = "Archiva el XML contra esta recepción, valida UUID y RFC, y evita duplicados. No crea póliza/factura contable ni verifica el estado SAT."
     return dict(fields=fields, columns=columns, rows=rows,
-                add_rows=accion in ("entregar", "anexo") or (accion == "solicitud" and not folio), note=note)
+                add_rows=accion in ("entregar", "anexo", "entrada_sin_oc") or (accion == "solicitud" and not folio), note=note)
 
 
 def elegidos(data, available):
@@ -262,10 +282,12 @@ def ejecutar(accion, datos, operacion, folio=""):
     frappe.get_doc("User", frappe.session.user, for_update=True)
     source = origen(accion, folio, lock=True)
     if accion not in ("autorizar", "cfdi"):
-        prior = frappe.db.get_value(TARGETS[accion], {"custom_lebaref_operacion": token}, ["name", "custom_lebaref_huella"], as_dict=True, for_update=True)
+        operation_field = "custom_lebaref_regularizacion_operacion" if accion == "regularizar_entrada" else "custom_lebaref_operacion"
+        hash_field = "custom_lebaref_regularizacion_huella" if accion == "regularizar_entrada" else "custom_lebaref_huella"
+        prior = frappe.db.get_value(TARGETS[accion], {operation_field: token}, ["name", hash_field], as_dict=True, for_update=True)
         if prior:
             frappe.get_doc(TARGETS[accion], prior.name).check_permission("read")
-            if prior.custom_lebaref_huella != signature:
+            if prior.get(hash_field) != signature:
                 frappe.throw("Este intento ya fue guardado con otros datos. Cierra y abre una nueva operación.")
             return dict(folio=prior.name, tipo=TARGETS[accion], repetida=True)
     if accion == "articulo":
@@ -357,6 +379,10 @@ def ejecutar(accion, datos, operacion, folio=""):
         if {r.purchase_order_item for r in kept} != {k for k, v in values.items() if v}:
             frappe.throw("Hay renglones sin saldo pendiente.")
         doc.set("items", kept)
+    elif accion == "entrada_sin_oc":
+        doc = recepciones.crear(data)
+    elif accion == "regularizar_entrada":
+        return recepciones.regularizar(source, data, token, signature)
     elif accion == "entregar":
         if not data.get("project") or data.get("from_warehouse") == data.get("to_warehouse"):
             frappe.throw("Selecciona una obra y dos almacenes distintos.")
