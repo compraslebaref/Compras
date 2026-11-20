@@ -1,4 +1,5 @@
 """Directorio '¿A quién cotizar?' y puente de sincronización con Google Sheets (CAT-03)."""
+from collections import Counter
 import frappe
 
 SHEETS_ID = "1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I"
@@ -31,25 +32,17 @@ def directorio():
             ):
                 contactos_map[c.name] = c
 
-    conteo_oc = {}
+    conteo_oc = Counter()
     if frappe.has_permission("Purchase Order", "read"):
-        for po in frappe.get_all(
-            "Purchase Order",
-            filters={"docstatus": 1},
-            fields=["supplier", "count(name) as total"],
-            group_by="supplier",
-        ):
-            conteo_oc[po.supplier] = int(po.total or 0)
+        conteo_oc = Counter(
+            frappe.get_list("Purchase Order", filters={"docstatus": 1}, pluck="supplier", limit_page_length=0)
+        )
 
-    conteo_cot = {}
+    conteo_cot = Counter()
     if frappe.has_permission("Supplier Quotation", "read"):
-        for sq in frappe.get_all(
-            "Supplier Quotation",
-            filters={"docstatus": 1},
-            fields=["supplier", "count(name) as total"],
-            group_by="supplier",
-        ):
-            conteo_cot[sq.supplier] = int(sq.total or 0)
+        conteo_cot = Counter(
+            frappe.get_list("Supplier Quotation", filters={"docstatus": 1}, pluck="supplier", limit_page_length=0)
+        )
 
     registros = []
     tsv_lineas = ["Especialidad / Grupo\tProveedor\tRFC\tContacto\tTeléfono\tCorreo\tCotizaciones\tÓrdenes"]
