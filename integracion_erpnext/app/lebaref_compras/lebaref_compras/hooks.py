@@ -89,3 +89,9 @@ doc_events["Lebaref Sustitucion"] = {
     "validate": "lebaref_compras.sustituciones.validar_autorizacion",
     "before_cancel": "lebaref_compras.sustituciones.anular_autorizacion",
 }
+
+
+doc_events["Stock Entry"] = {
+    "validate": "lebaref_compras.consumos.validar_movimiento",
+    "before_cancel": "lebaref_compras.consumos.antes_de_cancelar",
+}

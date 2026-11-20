@@ -32,7 +32,7 @@
 
 ### 2.2 Operaciones de Compras, Almacén y Catálogos (`lebaref_compras.operaciones`)
 - **`GET /api/method/lebaref_compras.operaciones.esquema?accion=<accion>&folio=<folio>`**
-  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `autorizar_sustitucion`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `devolver`, `cfdi`.
+  - Acciones compras/almacén/maestros: `articulo`, `proveedor`, `obra`, `almacen`, `solicitud`, `anexo`, `convertir_concepto`, `canalizar_stock`, `surtir`, `peticion`, `oferta`, `autorizar`, `autorizar_sustitucion`, `recibir`, `entrada_sin_oc`, `regularizar_entrada`, `entregar`, `consumir`, `devolver`, `cfdi`.
   - Delega automáticamente a `lebaref_compras.equipos.esquema` cuando `accion` pertenece a herramientas/flotilla/kits (`herramienta`, `prestamo`, `retorno_herramienta`, `estado_herramienta`, `vehiculo`, `gasto_vehiculo`, `revision_vehiculo`, `estado_vehiculo`, `kit`, `composicion_kit`, `prestamo_kit`, `garantia_herramienta`, `mantenimiento_herramienta`, `anular_mantenimiento`).
   - Respuesta `message`:
     ```json
@@ -448,3 +448,33 @@ En **Purchase Receipt Item**, `item_code` identifica el sustituto recibido, `cus
 La extensión declarativa `extend_doctype_class` de **Purchase Receipt** y **Purchase Invoice** admite la diferencia de código exclusivamente al comprobar una autorización confirmada cuyo par original/sustituto, orden, renglón, cantidad, unidad, factor y precio coinciden. Las demás comparaciones y validaciones nativas se mantienen. La factura debe generarse desde la recepción confirmada y usar `update_stock=0`. Los campos de procedencia se copian a **Purchase Invoice Item**. Las devoluciones refieren el renglón de recepción original y restituyen el cupo recibido conforme al movimiento nativo. Una autorización con recepciones vigentes conserva su vínculo y rechaza la anulación.
 
 HTTP `403` para un auxiliar que intenta autorizar. HTTP `417` para saldo o cantidad autorizada excedidos, unidades incompatibles, código, precio o referencias que difieran de la autorización, o una autorización cancelada. Hay que reconstruir el backend y migrar para instalar el DocType y los campos. Antigravity debe conectar el diálogo de autorización y el selector de recepción en Desk y desplegar la imagen integrada.
+
+## 12. Consumo vinculado y saldo bajo resguardo (`ALM-05`)
+
+`entregar` mantiene la transferencia nativa de Central a Obra. El nuevo `accion=consumir` usa como `folio` el **Stock Entry** de entrega original confirmada (`Material Transfer` con `custom_lebaref_origen` vacío). Requiere permisos nativos de creación y envío de Stock Entry y lectura del original. Cada renglón seleccionado debe identificar su obra en la entrega. `remarks` es obligatorio y describe el motivo o actividad.
+
+`esquema?accion=consumir&folio=<entrega>` devuelve `remarks` y renglones con `id`, `item_code`, `pending`, `qty` y `uom`. La cantidad se captura en la unidad del renglón original. Se permiten cantidades parciales y se conserva el factor de conversión.
+
+```json
+{"remarks":"Instalación de soportes en obra","rows":[{"id":"entrega-item-a","qty":0.5}]}
+```
+
+```json
+{"message":{"folio":"MAT-STE-2026-00020","tipo":"Stock Entry"}}
+```
+
+La escritura confirma un **Stock Entry** nativo `Material Issue`, desde el almacén donde quedó el material, conservando empresa, obra, partida y unidad. `custom_lebaref_origen` identifica la entrega y cada `Stock Entry Detail.custom_lebaref_renglon` identifica el renglón original. ERPNext valida existencias, calcula la valoración y contabiliza el gasto con la dimensión de obra y sus cuentas configuradas. La transferencia a obra conserva el inventario hasta ese consumo. El importe consumido se obtiene del movimiento nativo en la moneda de la empresa.
+
+Consumos y devoluciones comparten el saldo de cada renglón. Se agregan cantidades de inventario y se convierten a la unidad del original. Por ejemplo, dos cajas de diez piezas permiten consumir media caja y devolver una, dejando media caja bajo resguardo. Otro inventario físico en el mismo almacén conserva su procedencia y no amplía el saldo de esta entrega. Una anulación nativa de consumo o devolución restituye su saldo. La entrega original rechaza su anulación mientras tenga movimientos vinculados confirmados.
+
+`devolver` conserva el contrato anterior y ahora limita su cantidad al saldo después de consumos y devoluciones. Los eventos `Stock Entry.validate` y `before_cancel` comprueban también la ruta nativa de Desk/REST para referencias, artículo, almacén, obra, partida y saldo. La entrega de origen se bloquea y se usan lecturas actuales bloqueantes del saldo para serializar movimientos vinculados. Los reintentos de `ejecutar` conservan el UUID de §2.2.
+
+`GET /api/method/lebaref_compras.consumos.consultar?entrega=<folio>` devuelve cantidades por renglón y exige lectura de la entrega. Ejemplo de respuesta para una sesión con permiso nativo de lectura de GL Entry.
+
+```json
+{"message":{"entrega":"MAT-STE-2026-00019","puede_ver_costos":true,"moneda":"MXN","rows":[{"id":"entrega-item-a","item_code":"TOR-01","uom":"Box","entregado":2.0,"consumido":0.5,"devuelto":1.0,"saldo":0.5,"warehouse":"Obra Norte - L","project":"PROJ-0001","costo_consumido":50.0}]}}
+```
+
+Para una sesión sin ese permiso, `puede_ver_costos` es `false` y las filas omiten `costo_consumido`. La consulta resume los movimientos vinculados a esa entrega. Los movimientos generales de inventario conservan los flujos nativos existentes. El consumo directo desde una solicitud de Material Issue sigue disponible mediante `surtir` (§8).
+
+HTTP `403` por permisos insuficientes y HTTP `417` por referencia inválida, origen no confirmado o ajeno al flujo, obra o motivo ausentes, destino incoherente, o exceso del saldo compartido. El consumo conserva los controles nativos de existencias y contabilidad. Mermas y ajustes físicos se completarán en ALM-08. Antigravity debe desplegar backend y workers de la misma versión, conectar consumir y consultar en Desk y validar la impresión del consumo como Material Issue.

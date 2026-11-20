@@ -240,13 +240,13 @@ Total: 55 capacidades. Parcial: 21; Verificado acotado: 8; No integrado: 20; Cam
 
 ## ALM-05 · Entrega versus consumo/costo de obra
 
-**Cambio de comportamiento · P1**
+**Parcial · P1**
 
 - Original: Salida descuenta stock y calcula costo neto consumido con devoluciones.
-- Integración: Material Transfer conserva inventario en almacén de obra; no consume.
-- Evidencia: Código de salidas y Stock Entry; prueba transferencia aprobada.
-- Criterio para cerrar: Acordar y probar entrega, consumo, sobrante y merma como eventos distintos.
-- Fuentes: [original L4989](C:/Users/oscar/.gemini/antigravity/scratch/SistemaComprasAlmacen/Data/DatabaseService.cs:4989) · [integración](C:/Users/oscar/Documents/Codex/2026-11-16/https-github-com-frappe-erpnext-git/work/lebaref-integracion/integracion_erpnext/app/lebaref_compras/lebaref_compras/operaciones.py)
+- Integración: La entrega mantiene Material Transfer y el consumo vinculado confirma Material Issue con obra, partida, motivo y valoración nativa. Consumo y devolución comparten el saldo bajo resguardo en unidades del original. La consulta muestra cantidades y costo a sesiones con lectura de GL Entry.
+- Evidencia: `verificar_consumos` prueba dos cajas con factor 10, consumo de media caja con gasto por obra de 50, devolución de una caja, reintento, límites compartidos aun con stock de otra procedencia, consumo nativo alterado rechazado y anulación que restituye saldo y revierte costo. `Validar.ps1 -ImagenBackend lebaref/erpnext-codex:alm05`.
+- Criterio para cerrar: Desplegar y conectar consumir y consultar en Desk, identificar el consumo en impresión y validar el recorrido operativo. Merma y ajustes físicos se completan en ALM-08.
+- Fuentes: `consumos.py`, `verificar_consumos.py` y §12 de CONTRATO-API.md.
 
 ## ALM-06 · Devolución ligada a entrega
 

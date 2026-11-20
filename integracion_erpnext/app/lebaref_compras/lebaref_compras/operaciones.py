@@ -7,12 +7,12 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import comercial, proveedores, recepciones, solicitudes, sustituciones, surtido, unidades
+from lebaref_compras import comercial, consumos, proveedores, recepciones, solicitudes, sustituciones, surtido, unidades
 from lebaref_compras.unidades import numero
 
 TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
            "convertir_concepto": "Material Request", "canalizar_stock": "Material Request",
-           "surtir": "Stock Entry", "peticion": "Request for Quotation",
+           "consumir": "Stock Entry", "surtir": "Stock Entry", "peticion": "Request for Quotation",
            "oferta": "Supplier Quotation", "autorizar": "Purchase Order",
            "recibir": "Purchase Receipt", "entrada_sin_oc": "Purchase Receipt",
            "autorizar_sustitucion": "Lebaref Sustitucion", "regularizar_entrada": "Purchase Receipt", "entregar": "Stock Entry", "devolver": "Stock Entry",
@@ -22,7 +22,7 @@ ENMIENDAS = {"convertir_concepto", "canalizar_stock"}
 SOURCES = {action: "Material Request" for action in (*ENMIENDAS, "anexo", "surtir", "peticion")}
 SOURCES.update({"oferta": "Request for Quotation",
            "autorizar": "Purchase Order", "autorizar_sustitucion": "Purchase Order", "recibir": "Purchase Order",
-           "devolver": "Stock Entry", "cfdi": "Purchase Receipt", "regularizar_entrada": "Purchase Receipt"})
+           "devolver": "Stock Entry", "consumir": "Stock Entry", "cfdi": "Purchase Receipt", "regularizar_entrada": "Purchase Receipt"})
 
 
 def permiso(accion):
@@ -226,6 +226,14 @@ def esquema(accion, folio=""):
         fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("from_warehouse", "Almacén origen", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("to_warehouse", "Almacén de obra", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("project", "Obra", choices=catalogo("Project")), campo("remarks", "Recibe / referencia")]
         columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"is_stock_item": 1, "disabled": 0})), columna("qty", "Cantidad (unidad de inventario)"), columna("custom_lebaref_partida", "Partida")]
         note = "Transferencia de inventario: la existencia pasa del almacén central al almacén de obra; no representa consumo."
+    elif accion == "consumir":
+        consumos.validar_entrega(doc)
+        fields = [campo("remarks", "Motivo o actividad del consumo", kind="multiline")]
+        columns = [columna("id", "Referencia", False), columna("item_code", "Artículo", False),
+                   columna("pending", "Bajo resguardo", False), columna("qty", "Consumir ahora"), columna("uom", "Unidad", False)]
+        balances = consumos.saldos(doc)
+        rows = [dict(id=r.name, item_code=r.item_code, pending=balances[r.name]["saldo"], qty=0, uom=r.uom) for r in doc.items]
+        note = "Confirma el consumo desde el almacén de obra, con costo y vínculo a esta entrega."
     elif accion == "devolver":
         if doc.stock_entry_type != "Material Transfer" or doc.custom_lebaref_origen:
             frappe.throw("Selecciona una entrega original de tipo Transferencia de materiales.")
@@ -272,12 +280,9 @@ def elegidos(data, available):
     return result
 
 
-def devoluciones(doc):
-    # Internal aggregate only, after checking access to the original transfer.
-    result = {}
-    for r in frappe.get_all("Stock Entry Detail", filters={"custom_lebaref_renglon": ["in", [i.name for i in doc.items]], "docstatus": 1}, fields=["custom_lebaref_renglon", "qty"]):
-        result[r.custom_lebaref_renglon] = result.get(r.custom_lebaref_renglon, 0) + r.qty
-    return result
+def devoluciones(doc, lock=False):
+    # Quantities already consumed or returned are unavailable for another return.
+    return {key: values["consumido"] + values["devuelto"] for key, values in consumos.saldos(doc, lock=lock).items()}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -409,11 +414,13 @@ def ejecutar(accion, datos, operacion, folio=""):
         if not data.get("project") or data.get("from_warehouse") == data.get("to_warehouse"):
             frappe.throw("Selecciona una obra y dos almacenes distintos.")
         doc = frappe.get_doc(dict(doctype="Stock Entry", stock_entry_type="Material Transfer", company=data.get("company"), project=data.get("project"), remarks=data.get("remarks"), items=[dict(item_code=r.get("item_code"), qty=numero(r.get("qty")), s_warehouse=data.get("from_warehouse"), t_warehouse=data.get("to_warehouse"), custom_lebaref_partida=r.get("custom_lebaref_partida")) for r in data.get("rows", [])]))
+    elif accion == "consumir":
+        doc = consumos.crear(source, data, elegidos(data, {r.name for r in source.items}))
     elif accion == "devolver":
         if source.stock_entry_type != "Material Transfer" or source.custom_lebaref_origen:
             frappe.throw("Selecciona una entrega original.")
         values = elegidos(data, {r.name for r in source.items})
-        returned = devoluciones(source)
+        returned = devoluciones(source, lock=True)
         items = []
         for r in source.items:
             qty = values.get(r.name, 0)

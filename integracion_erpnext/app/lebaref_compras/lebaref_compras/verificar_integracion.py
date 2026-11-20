@@ -5,6 +5,7 @@ from frappe.utils import add_days, today
 from lebaref_compras.operaciones import esquema, ejecutar
 from lebaref_compras.comparativa import consultar, generar_ordenes
 from lebaref_compras.verificar_comercial import verificar_comercial
+from lebaref_compras.verificar_consumos import verificar_consumos
 from lebaref_compras.verificar_sustituciones import verificar_sustituciones
 from lebaref_compras.verificar_solicitudes import verificar_solicitudes
 from lebaref_compras.verificar_recepciones import verificar_recepciones, verificar_destinos
@@ -339,6 +340,8 @@ def verificar():
         results.append("ALM-03: material directo a obra, servicio sin existencias, persona/remisión, destinos inválidos y recepción compatible del saldo")
         verificar_sustituciones(seed, supplier.name)
         results.append("ALM-04: autorización por responsable, límite de sustitución, inventario correcto, factura y devolución nativas y saldo original")
+        verificar_consumos(seed, warehouse.name)
+        results.append("ALM-05: resguardo, consumo y devolución con factor 10, gasto por obra, límites compartidos, reintento y anulación")
         return {"correcto": True, "pruebas": results, "datos": "Revertidos al finalizar"}
     finally:
         frappe.db.rollback()
