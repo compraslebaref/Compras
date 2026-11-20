@@ -43,11 +43,26 @@ def configure_purchase_fields():
             {"fieldname": "custom_lebaref_operacion", "label": "Operación Windows", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
             {"fieldname": "custom_lebaref_huella", "label": "Huella de operación", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
         ]
+    fields["Material Request Item"].append({
+        "fieldname": "custom_lebaref_renglon_origen", "label": "Referencia del renglón enmendado",
+        "fieldtype": "Data", "read_only": 1, "no_copy": 1, "insert_after": "custom_lebaref_concepto",
+    })
     fields["Material Request"].extend([
+        {"fieldname": "custom_lebaref_solicitud_origen", "label": "Solicitud de origen del anexo",
+         "fieldtype": "Link", "options": "Material Request", "read_only": 1, "insert_after": "amended_from"},
         {"fieldname": "custom_lebaref_departamento", "label": "Departamento", "fieldtype": "Link", "options": "Department"},
         {"fieldname": "custom_lebaref_solicitante", "label": "Solicitante", "fieldtype": "Data"},
         {"fieldname": "custom_lebaref_notas", "label": "Notas", "fieldtype": "Small Text"},
     ])
+    fields["Supplier Quotation"].append({
+        "fieldname": "custom_lebaref_condicion_pago", "label": "Condición de pago",
+        "fieldtype": "Link", "options": "Payment Terms Template", "insert_after": "valid_till",
+    })
+    for doctype, anchor in (("Supplier Quotation", "custom_lebaref_condicion_pago"), ("Purchase Order", "payment_terms_template")):
+        fields.setdefault(doctype, []).append({
+            "fieldname": "custom_lebaref_fecha_programada_pago", "label": "Fecha programada de pago",
+            "fieldtype": "Date", "insert_after": anchor,
+        })
     fields["Stock Entry"].append({"fieldname": "custom_lebaref_origen", "label": "Entrega de origen", "fieldtype": "Link", "options": "Stock Entry", "read_only": 1, "no_copy": 1})
     fields["Stock Entry Detail"] = [
         {"fieldname": "custom_lebaref_partida", "label": "Partida de obra", "fieldtype": "Data"},

@@ -4,6 +4,7 @@ import frappe
 from erpnext.buying.doctype.supplier_quotation.supplier_quotation import make_purchase_order
 from frappe.utils import flt, getdate, today
 
+from lebaref_compras import comercial
 from lebaref_compras.solicitudes import concepto_visible
 
 
@@ -77,6 +78,7 @@ def consultar(solicitud):
                 "precio": flt(item.rate) * flt(origin.conversion_factor) / flt(item.conversion_factor),
                 "moneda": quote.currency,
                 "entrega": item.lead_time_days,
+                "comercial": comercial.resumen(quote),
             }
         )
     return {
@@ -137,6 +139,7 @@ def generar_ordenes(solicitud, seleccion):
                 frappe.throw("La cantidad disponible en una cotización cambió. Actualiza la comparativa.")
             if not item.schedule_date:
                 item.schedule_date = max(getdate(origin.schedule_date), getdate(today()))
+        comercial.condiciones_en_orden(order, quotes[selected[0]][0], desde_comparativa=True)
         order.insert()
         orders.append({"folio": order.name, "proveedor": order.supplier_name or order.supplier})
     return orders

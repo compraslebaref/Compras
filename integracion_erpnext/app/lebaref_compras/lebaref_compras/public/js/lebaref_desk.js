@@ -15,6 +15,15 @@
         return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     }
 
+    // Campos opcionales que admiten dejarse en blanco cuando el usuario no elige ninguno
+    const SELECT_OPCIONALES = new Set([
+        "departamento",
+        "taxes_and_charges",
+        "shipping_rule",
+        "payment_terms_template",
+        "almacen_destino",
+    ]);
+
     async function abrirOperacion(accion, folio = "", tituloPersonalizado = "", alTerminar = null) {
         const { message: schema } = await frappe.call({
             method: "lebaref_compras.operaciones.esquema",
@@ -48,19 +57,22 @@
                         </div>`,
                 });
             } else if (Array.isArray(f.choices) && f.choices.length) {
+                const permiteVacio = SELECT_OPCIONALES.has(f.name) || f.choices.includes("");
+                const listaOpciones = permiteVacio && !f.choices.includes("") ? ["", ...f.choices] : f.choices;
                 dialogFields.push({
                     fieldname: f.name,
                     label: f.label,
                     fieldtype: "Select",
-                    options: f.choices.join("\n"),
-                    default: f.value || f.choices[0] || "",
+                    options: listaOpciones.join("\n"),
+                    default: f.value !== undefined && f.value !== null && f.value !== "" ? f.value : (permiteVacio ? "" : (f.choices[0] || "")),
                 });
             } else if (f.kind === "date") {
+                const esFechaOpcional = f.name === "fecha_programada_pago";
                 dialogFields.push({
                     fieldname: f.name,
                     label: f.label,
                     fieldtype: "Date",
-                    default: f.value || frappe.datetime.get_today(),
+                    default: f.value || (esFechaOpcional ? "" : frappe.datetime.get_today()),
                 });
             } else if (f.kind === "multiline") {
                 dialogFields.push({
@@ -74,7 +86,7 @@
                     fieldname: f.name,
                     label: f.label,
                     fieldtype: "Data",
-                    default: f.value || "",
+                    default: f.value !== undefined && f.value !== null ? String(f.value) : "",
                 });
             }
         }
@@ -90,7 +102,6 @@
             fields: dialogFields,
         });
 
-        // Enlazar lectura de archivo XML local cuando aplique (CFDI 4.0)
         dialog.$wrapper.find(".leb-xml-input").on("change", function () {
             const fname = $(this).data("fname");
             const file = this.files && this.files[0];
@@ -105,13 +116,12 @@
             reader.readAsText(file, "UTF-8");
         });
 
-        // Construir tabla interactiva conservando metadatos originales de cada renglón (uom, stock_uom, conversion_factor, id)
         const rowStates = (schema.rows || []).map((r) => Object.assign({}, r));
 
         function crearFilaVacia() {
             const obj = {};
             for (const col of schema.columns || []) {
-                obj[col.name] = Array.isArray(col.choices) && col.choices.length ? (col.choices[0] || "") : "";
+                obj[col.name] = "";
             }
             return obj;
         }
@@ -189,7 +199,12 @@
                 if (f.kind === "file") {
                     payload[f.name] = fileContents[f.name] || "";
                 } else {
-                    payload[f.name] = dialog.get_value(f.name);
+                    const val = dialog.get_value(f.name);
+                    if (val !== undefined && val !== null && val !== "") {
+                        payload[f.name] = val;
+                    } else if (!SELECT_OPCIONALES.has(f.name) && f.name !== "fecha_programada_pago") {
+                        payload[f.name] = "";
+                    }
                 }
             }
             if (hasTable) {
@@ -257,40 +272,194 @@
             method: "lebaref_compras.desk_ui.mapa_ubicaciones",
             type: "GET",
         });
-        const herRows = (data.herramientas || []).map((h) =>
-            `<tr><td><b>${frappe.utils.escape_html(h.ubicacion || "—")}</b></td><td>${frappe.utils.escape_html(h.codigo)}</td><td>${frappe.utils.escape_html(h.marca_modelo || h.articulo)}</td><td>${frappe.utils.escape_html(h.estado)}</td><td>${frappe.utils.escape_html(h.responsable || "En almacén")}</td></tr>`
-        ).join("");
-        const binRows = (data.existencias || []).map((b) =>
-            `<tr><td><b>${frappe.utils.escape_html(b.warehouse)}</b></td><td>${frappe.utils.escape_html(b.item_code)}</td><td class="text-right"><b>${b.actual_qty} ${frappe.utils.escape_html(b.stock_uom || "")}</b></td></tr>`
-        ).join("");
+
+        const zonas = data.zonas || [];
+        const herramientas = data.herramientas || [];
+        const existencias = data.existencias || [];
+        const kits = data.kits || [];
 
         const d = new frappe.ui.Dialog({
-            title: "Mapa de Ubicaciones, Anaqueles y Custodia Lebaref",
+            title: "🗺️ Mapa Visual de Almacén, Anaqueles A–F y Custodia Lebaref",
             size: "extra-large",
-            fields: [{
-                fieldname: "mapa",
-                fieldtype: "HTML",
-                options: `
-                    <h6><b>Herramientas por Ubicación / Gabinete (${(data.herramientas || []).length})</b></h6>
-                    <div class="table-responsive mb-3" style="max-height:240px;overflow:auto;">
-                        <table class="table table-sm table-bordered" style="font-size:12px;">
-                            <thead><tr><th>Ubicación</th><th>Código HER</th><th>Descripción</th><th>Estado</th><th>Resguardo</th></tr></thead>
-                            <tbody>${herRows || "<tr><td colspan='5'>Sin herramientas registradas.</td></tr>"}</tbody>
-                        </table>
-                    </div>
-                    <h6><b>Existencias de Inventario por Almacén (${(data.existencias || []).length})</b></h6>
-                    <div class="table-responsive" style="max-height:220px;overflow:auto;">
-                        <table class="table table-sm table-bordered" style="font-size:12px;">
-                            <thead><tr><th>Almacén</th><th>Artículo</th><th class="text-right">Existencia</th></tr></thead>
-                            <tbody>${binRows || "<tr><td colspan='3'>Sin existencias con saldo distinto de cero.</td></tr>"}</tbody>
-                        </table>
-                    </div>`,
-            }],
+            fields: [{ fieldname: "mapa", fieldtype: "HTML" }],
         });
+
+        const host = d.fields_dict.mapa.$wrapper;
+        let zonaActiva = "TODAS";
+        let textoFiltro = "";
+
+        const topBar = $(`
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap" style="gap:8px;">
+                <div class="small text-muted">Haz clic en cualquier <b>Zona (A–F)</b> del plano para filtrar sus herramientas y existencias.</div>
+                <div class="d-flex align-items-center" style="gap:6px;">
+                    <input type="text" class="form-control form-control-sm leb-map-search" placeholder="Buscar código HER, artículo o responsable…" style="width:250px;">
+                    <button type="button" class="btn btn-xs btn-default leb-map-all">Mostrar Todas (${herramientas.length} HER · ${existencias.length} Stock)</button>
+                </div>
+            </div>
+        `).appendTo(host);
+
+        const gridWrap = $('<div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:10px;margin-bottom:14px;">').appendTo(host);
+        const detailWrap = $("<div>").appendTo(host);
+
+        function renderPlanoYTablas() {
+            gridWrap.empty();
+            for (const z of zonas) {
+                const selected = zonaActiva === z.clave;
+                const card = $(`
+                    <div style="cursor:pointer;border:2px solid ${selected ? z.color : "#cbd5e1"};background:${selected ? "#eff6ff" : "#ffffff"};border-radius:8px;padding:10px 12px;transition:all .12s;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span style="display:inline-block;background:${z.color};color:#fff;font-weight:800;font-size:12px;padding:2px 8px;border-radius:5px;">ZONA ${frappe.utils.escape_html(z.clave)}</span>
+                            <span style="font-size:11px;font-weight:700;color:#334155;">${z.herramientas} HER · ${z.articulos_stock} Stock${z.kits ? ` · ${z.kits} KIT` : ""}</span>
+                        </div>
+                        <div style="font-weight:700;font-size:12.5px;color:#0f172a;margin-top:6px;">${frappe.utils.escape_html(z.titulo)}</div>
+                        <div style="font-size:11px;color:#64748b;margin-top:2px;">${frappe.utils.escape_html(z.subtitulo)}</div>
+                    </div>
+                `).appendTo(gridWrap);
+                card.on("click", () => {
+                    zonaActiva = zonaActiva === z.clave ? "TODAS" : z.clave;
+                    renderPlanoYTablas();
+                });
+            }
+
+            const q = textoFiltro.trim().toLowerCase();
+            const herFiltradas = herramientas.filter((h) => {
+                if (zonaActiva !== "TODAS" && h.zona !== zonaActiva) return false;
+                if (!q) return true;
+                return [h.codigo, h.articulo, h.marca_modelo, h.ubicacion, h.responsable, h.obra, h.estado]
+                    .some((v) => String(v || "").toLowerCase().includes(q));
+            });
+
+            const binFiltrados = existencias.filter((b) => {
+                if (zonaActiva !== "TODAS" && b.zona !== zonaActiva) return false;
+                if (!q) return true;
+                return [b.warehouse, b.item_code].some((v) => String(v || "").toLowerCase().includes(q));
+            });
+
+            const herRows = herFiltradas.map((h) => {
+                const badgeColor = h.estado === "Disponible" ? "success" : (h.estado === "Prestada" ? "warning" : "secondary");
+                return `<tr>
+                    <td><b>Zona ${frappe.utils.escape_html(h.zona)}</b> · ${frappe.utils.escape_html(h.ubicacion || "Sin estante")}</td>
+                    <td><a href="/app/lebaref-herramienta/${encodeURIComponent(h.name)}"><b>${frappe.utils.escape_html(h.codigo)}</b></a></td>
+                    <td>${frappe.utils.escape_html(h.marca_modelo || h.articulo)}</td>
+                    <td><span class="badge badge-${badgeColor}">${frappe.utils.escape_html(h.estado)}</span></td>
+                    <td>${frappe.utils.escape_html(h.responsable || (h.obra ? "Obra " + h.obra : "En almacén"))}</td>
+                </tr>`;
+            }).join("");
+
+            const binRows = binFiltrados.map((b) =>
+                `<tr>
+                    <td><b>Zona ${frappe.utils.escape_html(b.zona)}</b> · ${frappe.utils.escape_html(b.warehouse)}</td>
+                    <td><a href="/app/item/${encodeURIComponent(b.item_code)}"><b>${frappe.utils.escape_html(b.item_code)}</b></a></td>
+                    <td class="text-right"><b>${b.actual_qty} ${frappe.utils.escape_html(b.stock_uom || "")}</b></td>
+                </tr>`
+            ).join("");
+
+            detailWrap.html(`
+                <div class="mb-1" style="font-weight:700;font-size:12.5px;color:#031e34;">
+                    Filtro activo: <span class="badge badge-primary">${zonaActiva === "TODAS" ? "Todas las Zonas (A–F)" : "Zona " + zonaActiva}</span>
+                    &nbsp;·&nbsp; Herramientas mostradas: <b>${herFiltradas.length}</b> &nbsp;·&nbsp; Renglones de stock: <b>${binFiltrados.length}</b>
+                </div>
+                <div class="table-responsive mb-3" style="max-height:220px;overflow:auto;">
+                    <table class="table table-sm table-bordered" style="font-size:12px;">
+                        <thead style="background:#f8fafc;"><tr><th>Zona / Anaquel</th><th>Código HER</th><th>Descripción / Modelo</th><th>Estado</th><th>Resguardo / Obra</th></tr></thead>
+                        <tbody>${herRows || "<tr><td colspan='5' class='text-muted'>Sin herramientas en este filtro.</td></tr>"}</tbody>
+                    </table>
+                </div>
+                <div class="table-responsive" style="max-height:180px;overflow:auto;">
+                    <table class="table table-sm table-bordered" style="font-size:12px;">
+                        <thead style="background:#f8fafc;"><tr><th>Zona / Almacén</th><th>Artículo (SKU)</th><th class="text-right">Existencia Actual</th></tr></thead>
+                        <tbody>${binRows || "<tr><td colspan='3' class='text-muted'>Sin existencias con saldo distinto de cero en este filtro.</td></tr>"}</tbody>
+                    </table>
+                </div>
+            `);
+        }
+
+        topBar.find(".leb-map-search").on("input", function () {
+            textoFiltro = $(this).val() || "";
+            renderPlanoYTablas();
+        });
+        topBar.find(".leb-map-all").on("click", () => {
+            zonaActiva = "TODAS";
+            textoFiltro = "";
+            topBar.find(".leb-map-search").val("");
+            renderPlanoYTablas();
+        });
+
+        renderPlanoYTablas();
         d.show();
     }
 
-    window.lebaref = { abrirOperacion, verDetalleEquipo, abrirMapaUbicaciones, SHEETS_URL };
+    async function abrirDirectorioProveedores() {
+        const { message: dir } = await frappe.call({
+            method: "lebaref_compras.sheets_proveedores.directorio",
+            type: "GET",
+            freeze: true,
+            freeze_message: "Consultando directorio de proveedores…",
+        });
+
+        const d = new frappe.ui.Dialog({
+            title: `📊 ¿A quién cotizar? · Directorio Lebaref (${dir.total} proveedores)`,
+            size: "extra-large",
+            fields: [{ fieldname: "dir_html", fieldtype: "HTML" }],
+        });
+
+        const host = d.fields_dict.dir_html.$wrapper;
+        const bar = $(`
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap" style="gap:8px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
+                <input type="text" class="form-control form-control-sm leb-dir-q" placeholder="Filtrar por especialidad, proveedor, RFC o contacto…" style="width:290px;">
+                <div class="d-flex" style="gap:6px;">
+                    <button type="button" class="btn btn-xs btn-default leb-dir-copy">📋 Copiar Tabla para Sheets</button>
+                    <button type="button" class="btn btn-xs btn-primary leb-dir-open">🌐 Abrir Google Sheets Oficial</button>
+                </div>
+            </div>
+        `).appendTo(host);
+
+        const tblHost = $('<div class="table-responsive" style="max-height:420px;overflow:auto;">').appendTo(host);
+
+        function renderDir(filtro = "") {
+            const q = filtro.trim().toLowerCase();
+            const lista = (dir.proveedores || []).filter((p) => {
+                if (!q) return true;
+                return [p.especialidad, p.proveedor, p.rfc, p.contacto, p.telefono, p.correo]
+                    .some((v) => String(v || "").toLowerCase().includes(q));
+            });
+            const rows = lista.map((p) => `
+                <tr>
+                    <td><span class="badge badge-light">${frappe.utils.escape_html(p.especialidad)}</span></td>
+                    <td><a href="/app/supplier/${encodeURIComponent(p.id)}"><b>${frappe.utils.escape_html(p.proveedor)}</b></a></td>
+                    <td>${frappe.utils.escape_html(p.rfc || "—")}</td>
+                    <td>${frappe.utils.escape_html(p.contacto || "—")}</td>
+                    <td>${frappe.utils.escape_html(p.telefono || "—")}</td>
+                    <td>${frappe.utils.escape_html(p.correo || "—")}</td>
+                    <td class="text-right">${p.cotizaciones} / <b>${p.ordenes}</b></td>
+                </tr>
+            `).join("");
+            tblHost.html(`
+                <table class="table table-bordered table-sm" style="font-size:12px;">
+                    <thead style="background:#031e34;color:#fff;">
+                        <tr><th>Especialidad / Grupo</th><th>Proveedor</th><th>RFC</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th class="text-right">Cot. / OCs</th></tr>
+                    </thead>
+                    <tbody>${rows || "<tr><td colspan='7' class='text-muted'>Sin coincidencias.</td></tr>"}</tbody>
+                </table>
+            `);
+        }
+
+        bar.find(".leb-dir-q").on("input", function () {
+            renderDir($(this).val() || "");
+        });
+        bar.find(".leb-dir-copy").on("click", async () => {
+            if (navigator.clipboard && dir.tsv) {
+                await navigator.clipboard.writeText(dir.tsv);
+                frappe.show_alert({ message: "Directorio copiado al portapapeles (listo para pegar en Google Sheets)", indicator: "green" });
+            }
+        });
+        bar.find(".leb-dir-open").on("click", () => window.open(dir.sheets_url || SHEETS_URL, "_blank", "noopener"));
+
+        renderDir();
+        d.show();
+    }
+
+    window.lebaref = { abrirOperacion, verDetalleEquipo, abrirMapaUbicaciones, abrirDirectorioProveedores, SHEETS_URL };
 
     // --- Botones guiados en Formularios de ERPNext Desk ---
 
@@ -298,10 +467,10 @@
         refresh(frm) {
             if (frm.doc.docstatus === 1) {
                 frm.add_custom_button("Registrar oferta de proveedor", () =>
-                    abrirOperacion("oferta", frm.doc.name, `Registrar oferta para ${frm.doc.name}`)
+                    abrirOperacion("oferta", frm.doc.name, `Registrar oferta comercial para ${frm.doc.name}`)
                 ).addClass("btn-primary");
             }
-            frm.add_custom_button("¿A quién cotizar? (Sheets)", () => window.open(SHEETS_URL, "_blank", "noopener"), "Lebaref");
+            frm.add_custom_button("¿A quién cotizar? (Directorio / Sheets)", () => abrirDirectorioProveedores(), "Lebaref");
         },
     });
 
@@ -351,7 +520,7 @@
                 abrirOperacion("mantenimiento_herramienta", frm.doc.name, `Mantenimiento · ${frm.doc.name}`, () => frm.reload_doc()), "Acciones Lebaref");
             frm.add_custom_button("Cambiar estado / ubicación", () =>
                 abrirOperacion("estado_herramienta", frm.doc.name, `Estado de herramienta · ${frm.doc.name}`, () => frm.reload_doc()), "Acciones Lebaref");
-            frm.add_custom_button("Mapa de ubicaciones", () => abrirMapaUbicaciones(), "Acciones Lebaref");
+            frm.add_custom_button("🗺️ Mapa de ubicaciones (A–F)", () => abrirMapaUbicaciones(), "Acciones Lebaref");
         },
     });
 
@@ -427,12 +596,23 @@
                 if (typeof prevOnload === "function") prevOnload(listview);
                 listview.page.add_inner_button(label, () => abrirOperacion(accion, "", label, () => listview.refresh()));
                 if (dt === "Supplier") {
-                    listview.page.add_inner_button("🌐 ¿A quién cotizar? (Sheets)", () => window.open(SHEETS_URL, "_blank", "noopener"));
+                    listview.page.add_inner_button("📊 ¿A quién cotizar? (Directorio / Sheets)", () => abrirDirectorioProveedores());
                 }
-                if (dt === "Lebaref Herramienta" || dt === "Item") {
-                    listview.page.add_inner_button("🗺️ Mapa de Ubicaciones", () => abrirMapaUbicaciones());
+                if (dt === "Lebaref Herramienta") {
+                    listview.page.add_inner_button("🗺️ Mapa de Ubicaciones (A–F)", () => abrirMapaUbicaciones());
                 }
             },
         });
     }
+
+    // También agregar el Mapa de Ubicaciones en la lista de Item (Artículos)
+    const prevItem = frappe.listview_settings["Item"] || {};
+    const prevItemOnload = prevItem.onload;
+    frappe.listview_settings["Item"] = Object.assign({}, prevItem, {
+        onload(listview) {
+            if (typeof prevItemOnload === "function") prevItemOnload(listview);
+            listview.page.add_inner_button("Alta Rápida SKU (con Conversión)", () => abrirOperacion("articulo", "", "Alta Rápida de Artículo", () => listview.refresh()));
+            listview.page.add_inner_button("🗺️ Mapa de Ubicaciones (A–F)", () => abrirMapaUbicaciones());
+        },
+    });
 })();

@@ -66,6 +66,11 @@ doc_events = {
     )
 }
 
+doc_events["Purchase Order"]["before_validate"] = [
+    "lebaref_compras.trazabilidad.copiar_obra_y_partida",
+    "lebaref_compras.comercial.desde_cotizacion",
+]
+
 doc_events["Lebaref CFDI"] = {"validate": "lebaref_compras.operaciones.validar_archivo"}
 for name in ("Lebaref Herramienta", "Lebaref Prestamo", "Lebaref Retorno", "Lebaref Estado Herramienta", "Lebaref Vehiculo", "Lebaref Gasto Vehiculo", "Lebaref Revision Vehiculo", "Lebaref Estado Vehiculo"):
     doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}

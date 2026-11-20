@@ -125,6 +125,14 @@ FORMATO_SOLICITUD = _CSS_CARTA + """
       <td><b>Solicitante:</b> {{ doc.custom_lebaref_solicitante or doc.owner }}</td>
       <td><b>Título / Ref:</b> {{ doc.title or "—" }}</td>
     </tr>
+    {% if doc.custom_lebaref_solicitud_origen or doc.amended_from %}
+    <tr>
+      <td colspan="3">
+        {% if doc.custom_lebaref_solicitud_origen %}<b>Anexo vinculado a solicitud origen:</b> {{ doc.custom_lebaref_solicitud_origen }} &nbsp;{% endif %}
+        {% if doc.amended_from %}<b>Enmienda de:</b> {{ doc.amended_from }}{% endif %}
+      </td>
+    </tr>
+    {% endif %}
   </table>
   {% if doc.custom_lebaref_notas %}
   <div class="leb-notas"><b>Notas / Justificación:</b> {{ doc.custom_lebaref_notas }}</div>
@@ -186,6 +194,11 @@ FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
       <td colspan="2"><b>Proveedor:</b> {{ doc.supplier_name or doc.supplier }} {% if doc.tax_id %}(RFC: {{ doc.tax_id }}){% endif %}</td>
       <td><b>Moneda:</b> {{ doc.currency }}</td>
     </tr>
+    <tr>
+      <td><b>Condición de pago:</b> {{ doc.payment_terms_template or "Contado / Según acuerdo" }}</td>
+      <td><b>Fecha prog. pago:</b> {{ frappe.utils.formatdate(doc.custom_lebaref_fecha_programada_pago) if doc.custom_lebaref_fecha_programada_pago else "—" }}</td>
+      <td><b>Regla de flete:</b> {{ doc.shipping_rule or "Incluido / No aplica" }}</td>
+    </tr>
   </table>
   <table class="leb-tbl">
     <thead>
@@ -217,9 +230,37 @@ FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
   </table>
   <table class="leb-totales">
     <tr><td><b>Subtotal Neto</b></td><td class="leb-num">{{ frappe.utils.fmt_money(doc.net_total, currency=doc.currency) }}</td></tr>
-    <tr><td><b>Impuestos / Cargos</b></td><td class="leb-num">{{ frappe.utils.fmt_money(doc.total_taxes_and_charges or 0, currency=doc.currency) }}</td></tr>
+    {% if doc.taxes %}
+      {% for tx in doc.taxes %}
+      <tr><td><b>{{ tx.description or "Impuesto / Cargo" }}</b></td><td class="leb-num">{{ frappe.utils.fmt_money(tx.tax_amount or 0, currency=doc.currency) }}</td></tr>
+      {% endfor %}
+    {% else %}
+      <tr><td><b>Impuestos / Cargos</b></td><td class="leb-num">{{ frappe.utils.fmt_money(doc.total_taxes_and_charges or 0, currency=doc.currency) }}</td></tr>
+    {% endif %}
     <tr class="gran-total"><td>Total Orden ({{ doc.currency }})</td><td class="leb-num">{{ frappe.utils.fmt_money(doc.grand_total, currency=doc.currency) }}</td></tr>
   </table>
+  {% if doc.payment_schedule %}
+  <table class="leb-tbl" style="margin-bottom:14px;">
+    <thead>
+      <tr>
+        <th>Tramo / Condición de Pago</th>
+        <th style="width:120px;">Fecha Vencimiento</th>
+        <th class="leb-num" style="width:90px;">Porción (%)</th>
+        <th class="leb-num" style="width:120px;">Importe Programado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ps in doc.payment_schedule %}
+      <tr>
+        <td>{{ ps.payment_term or ps.description or "Pago programado" }}</td>
+        <td>{{ frappe.utils.formatdate(ps.due_date) if ps.due_date else "—" }}</td>
+        <td class="leb-num">{{ "{:,.1f}%".format(ps.invoice_portion or 0) }}</td>
+        <td class="leb-num"><b>{{ frappe.utils.fmt_money(ps.payment_amount or 0, currency=doc.currency) }}</b></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
   <table class="leb-firmas">
     <tr>
       <td><div class="leb-linea-firma">Elaboró Compras</div></td>
@@ -449,11 +490,72 @@ FORMATO_CHECKLIST_VEH = _CSS_CARTA + """
 </div>
 """
 
+FORMATO_RESPONSIVA_EPP = _CSS_CARTA + """
+<div class="leb-carta">
+  <div class="leb-hdr">
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Seguridad Industrial y Almacén (NOM-017-STPS)</div>
+        <div class="leb-doc-title">Carta Responsiva de Entrega de EPP y Equipo</div>
+        <div style="font-size:11px;color:#475569;">Fecha de entrega: {{ frappe.utils.formatdate(doc.posting_date) }} · Folio: <b>{{ doc.name }}</b></div>
+      </div>
+    </div>
+    <div>{{ svg_code128(doc.name) }}</div>
+  </div>
+  <table class="leb-meta">
+    <tr>
+      <td><b>Folio Salida:</b> {{ doc.name }}</td>
+      <td><b>Obra / Centro de Trabajo:</b> {{ doc.project or "Operación General" }}</td>
+      <td><b>Tipo Movimiento:</b> {{ _(doc.stock_entry_type) }}</td>
+    </tr>
+    <tr>
+      <td colspan="3"><b>Colaborador Receptor / Observaciones:</b> {{ doc.remarks or "—" }}</td>
+    </tr>
+  </table>
+  <table class="leb-tbl">
+    <thead>
+      <tr>
+        <th style="width:32px;">#</th>
+        <th style="width:110px;">Código</th>
+        <th>Equipo de Protección Personal (EPP) / Dotación Entregada</th>
+        <th style="width:130px;">Almacén Origen</th>
+        <th class="leb-num" style="width:85px;">Cantidad</th>
+        <th style="width:95px;">Estado Entrega</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in doc.items %}
+      <tr>
+        <td>{{ row.idx }}</td>
+        <td><b>{{ row.item_code }}</b></td>
+        <td>{{ row.item_name }}{% if row.custom_lebaref_partida %}<br><small>Área / Partida: {{ row.custom_lebaref_partida }}</small>{% endif %}</td>
+        <td>{{ row.s_warehouse or "—" }}</td>
+        <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
+        <td>Nuevo / Óptimo</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="leb-notas" style="font-size:10.5px;line-height:1.45;">
+    <b>Declaratoria y Compromiso del Colaborador:</b> Hago constar que recibí en óptimas condiciones el Equipo de Protección Personal (EPP) y/o dotación arriba detallada, así como las indicaciones para su uso, revisión, limpieza y resguardo conforme a la normatividad de seguridad industrial vigente (NOM-017-STPS) y al reglamento interno de <b>LEBAREF</b>. Me comprometo a portarlo obligatoriamente durante mis actividades operativas y a reportar de inmediato cualquier deterioro, desgaste o extravío para su reposición oportuna.
+  </div>
+  <table class="leb-firmas">
+    <tr>
+      <td><div class="leb-linea-firma">Entregó Almacén / Seguridad Industrial</div></td>
+      <td><div class="leb-linea-firma">Nombre y Firma del Colaborador que Recibe</div></td>
+      <td><div class="leb-linea-firma">Supervisor / Residente de Obra</div></td>
+    </tr>
+  </table>
+</div>
+"""
+
 PRINT_FORMATS = (
     ("Lebaref Carta - Solicitud", "Material Request", FORMATO_SOLICITUD),
     ("Lebaref Carta - Orden de Compra", "Purchase Order", FORMATO_ORDEN_COMPRA),
     ("Lebaref Carta - Recepción Almacén", "Purchase Receipt", FORMATO_RECEPCION),
     ("Lebaref Carta - Salida o Sobrante", "Stock Entry", FORMATO_SALIDA_SOBRANTE),
+    ("Lebaref Carta - Responsiva EPP y Equipo", "Stock Entry", FORMATO_RESPONSIVA_EPP),
     ("Lebaref Carta - Vale Préstamo Herramienta", "Lebaref Prestamo", FORMATO_PRESTAMO_HER),
     ("Lebaref Carta - Check-list Vehicular", "Lebaref Revision Vehiculo", FORMATO_CHECKLIST_VEH),
 )
