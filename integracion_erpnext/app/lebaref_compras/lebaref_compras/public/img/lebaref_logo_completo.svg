@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="160 14 748 552" width="748" height="552">
+  <defs>
+    <linearGradient id="leb-twr-mid-l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#486074" stop-opacity="0.82"/>
+      <stop offset="100%" stop-color="#10293E" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="leb-twr-mid-r" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#B6BCC4"/>
+      <stop offset="48%" stop-color="#7D8793"/>
+      <stop offset="100%" stop-color="#46515D"/>
+    </linearGradient>
+    <linearGradient id="leb-bldg-r" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#808A96"/>
+      <stop offset="55%" stop-color="#5B6673"/>
+      <stop offset="100%" stop-color="#3F4B57"/>
+    </linearGradient>
+    <linearGradient id="leb-ground" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0A273D" stop-opacity="0"/>
+      <stop offset="14%" stop-color="#0A273D" stop-opacity="0.88"/>
+      <stop offset="86%" stop-color="#293B4B" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#647483" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="leb-cond-1" x1="376" y1="334" x2="438" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D5B94" stop-opacity="0.15"/>
+      <stop offset="26%" stop-color="#0D5B94" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#166CA6"/>
+    </linearGradient>
+    <linearGradient id="leb-cond-2" x1="360" y1="350" x2="452" y2="205" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D5B94" stop-opacity="0.12"/>
+      <stop offset="24%" stop-color="#0D5B94" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#166CA6"/>
+    </linearGradient>
+    <linearGradient id="leb-cond-3" x1="346" y1="366" x2="466" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D5B94" stop-opacity="0.12"/>
+      <stop offset="22%" stop-color="#0D5B94" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#166CA6"/>
+    </linearGradient>
+  </defs>
+  <g id="leb-isotipo">
+    <path d="M 376.0,337.6 H 407.0 A 30.1,30.1 0 0 0 437.1,307.5 V 187.9 L 430.9,194.1 V 307.5 A 23.9,23.9 0 0 1 407.0,331.4 H 376.0 Z" fill="url(#leb-cond-1)"/>
+    <path d="M 360.0,353.6 H 407.0 A 44.1,44.1 0 0 0 451.1,309.5 V 171.9 L 444.9,178.1 V 309.5 A 37.9,37.9 0 0 1 407.0,347.4 H 360.0 Z" fill="url(#leb-cond-2)"/>
+    <path d="M 346.0,369.6 H 407.0 A 58.1,58.1 0 0 0 465.1,311.5 V 155.9 L 458.9,162.1 V 311.5 A 51.9,51.9 0 0 1 407.0,363.4 H 346.0 Z" fill="url(#leb-cond-3)"/>
+    <polygon points="480,70 526,24 526,370 480,370" fill="#031E34"/>
+    <polygon points="502,112 526,88 526,370 502,370" fill="url(#leb-twr-mid-l)"/>
+    <polygon points="532,90 574,132 574,370 532,370" fill="url(#leb-twr-mid-r)"/>
+    <polygon points="574,266 602,252 602,370 574,370" fill="#06233A"/>
+    <polygon points="602,252 702,334 702,370 602,370" fill="url(#leb-bldg-r)"/>
+    <rect x="442" y="369.5" width="296" height="5" rx="2" fill="url(#leb-ground)"/>
+  </g>
+  <g id="leb-wordmark">
+    <g fill="#031E34" fill-rule="evenodd">
+      <path d="M 194,410 H 204.2 V 452.2 H 254 V 462 H 194 Z"/>
+      <path d="M 290,410 H 352 V 419.6 H 300.2 V 431.2 H 345 V 440.6 H 300.2 V 452.4 H 352 V 462 H 290 Z"/>
+      <path d="M 396,410 H 447 C 457.5,410 462.5,415 462.5,422.5 C 462.5,428.2 459.2,432.4 453.5,434.5 C 460.5,436.3 464.5,441.0 464.5,448.2 C 464.5,456.8 458.8,462 447.5,462 H 396 Z M 406.2,419.2 V 430.8 H 445.0 C 450.0,430.8 452.3,428.5 452.3,425.0 C 452.3,421.5 450.0,419.2 445.0,419.2 Z M 406.2,439.6 V 452.6 H 446.2 C 451.6,452.6 454.2,450.1 454.2,446.1 C 454.2,442.1 451.6,439.6 446.2,439.6 Z"/>
+      <path d="M 528.2,410 H 539.8 L 572,462 H 560.4 L 534,419.8 L 507.6,462 H 496 Z"/>
+      <path d="M 616,410 H 665 C 675.8,410 681,415.8 681,425.8 C 681,434.8 676.0,440.4 666.8,441.4 L 681.5,462 H 669.5 L 655.6,441.8 H 626.2 V 462 H 616 Z M 626.2,419.4 V 432.6 H 663.5 C 668.6,432.6 670.8,430.0 670.8,426.0 C 670.8,422.0 668.6,419.4 663.5,419.4 Z"/>
+      <path d="M 726,410 H 788 V 419.6 H 736.2 V 431.2 H 781 V 440.6 H 736.2 V 452.4 H 788 V 462 H 726 Z"/>
+      <path d="M 832,410 H 894 V 419.6 H 842.2 V 431.6 H 886 V 441.2 H 842.2 V 462 H 832 Z"/>
+    </g>
+    <polygon points="534,444.2 547.2,462 520.8,462" fill="#0D5B94"/>
+  </g>
+  <g id="leb-subtitles" font-family="'Montserrat', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" text-anchor="middle">
+    <line x1="174" y1="499" x2="212" y2="499" stroke="#334155" stroke-width="2.1"/>
+    <text x="534" y="503.5" font-size="13.4" font-weight="600" fill="#0F2537" textLength="608" lengthAdjust="spacing">INGENIERÍA &#160;|&#160; CONSTRUCCIÓN &#160;|&#160; HVAC &#160;|&#160; ELECTRICIDAD &#160;|&#160; REMODELACIÓN</text>
+    <line x1="856" y1="499" x2="894" y2="499" stroke="#334155" stroke-width="2.1"/>
+    <text x="534" y="551" font-size="14.6" font-weight="700" fill="#0D5B94" textLength="598" lengthAdjust="spacing">CONSTRUIMOS SOLUCIONES, GENERAMOS VALOR</text>
+  </g>
+</svg>

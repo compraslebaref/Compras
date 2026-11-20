@@ -2,7 +2,17 @@ app_name = "lebaref_compras"
 app_title = "Lebaref Compras"
 app_publisher = "Lebaref"
 app_description = "Procesos de compras y almacén de Lebaref para ERPNext"
+app_logo_url = "/files/lebaref_isotipo.svg"
 required_apps = ["erpnext"]
+
+add_to_apps_screen = [
+    {
+        "name": "lebaref_compras",
+        "logo": "/files/lebaref_isotipo.svg",
+        "title": "Lebaref",
+        "route": "/app/lebaref",
+    }
+]
 
 after_install = [
     "lebaref_compras.setup.configure_purchase_fields",
@@ -42,6 +52,7 @@ doctype_list_js = {
 jinja = {
     "methods": [
         "lebaref_compras.impresion_carta.svg_code128",
+        "lebaref_compras.impresion_carta.svg_logo_lebaref",
     ]
 }
 

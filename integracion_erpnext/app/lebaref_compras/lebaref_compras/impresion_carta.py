@@ -1,5 +1,7 @@
-"""Formatos de Impresión Tamaño Carta en español con Código de Barras Code 128B SVG nativo (DOC-01)."""
+"""Formatos de Impresión Tamaño Carta en español con Logo Vectorial Lebaref y Código de Barras Code 128B SVG nativo (DOC-01)."""
 import html
+import os
+import re
 import frappe
 
 # Patrones estándar ISO/IEC 15417 Code 128 (valores 0..106)
@@ -55,13 +57,32 @@ def svg_code128(texto, alto=42, ancho_modulo=1.55):
     )
 
 
+def svg_logo_lebaref(ancho=195):
+    """Devuelve el logotipo oficial de Lebaref en SVG vectorial puro para impresión nítida en documentos."""
+    ruta = frappe.get_app_path("lebaref_compras", "public", "img", "lebaref_logo_horizontal.svg")
+    if os.path.exists(ruta):
+        with open(ruta, encoding="utf-8") as f:
+            raw = f.read().strip()
+        alto = max(24, round(int(ancho) * 385 / 1210))
+        return re.sub(
+            r'<svg\b[^>]*>',
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1210 385" width="{int(ancho)}" height="{alto}" style="display:block;flex-shrink:0;">',
+            raw,
+            count=1,
+        )
+    return '<div class="leb-brand">LEBAREF</div>'
+
+
 _CSS_CARTA = """
 <style>
   @page { size: letter portrait; margin: 12mm 14mm; }
   .leb-carta { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; font-size: 11.5px; line-height: 1.38; }
-  .leb-hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
-  .leb-brand { font-size: 20px; font-weight: 800; letter-spacing: 0.6px; color: #0f172a; }
-  .leb-doc-title { font-size: 14px; font-weight: 700; color: #1d4ed8; margin-top: 2px; text-transform: uppercase; }
+  .leb-hdr { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #031e34; padding-bottom: 8px; margin-bottom: 12px; gap: 12px; }
+  .leb-hdr-brand { display: flex; align-items: center; gap: 12px; }
+  .leb-hdr-info { border-left: 1.5px solid #cbd5e1; padding-left: 12px; }
+  .leb-brand { font-size: 18px; font-weight: 800; letter-spacing: 0.6px; color: #031e34; }
+  .leb-sub-area { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; color: #475569; text-transform: uppercase; }
+  .leb-doc-title { font-size: 14px; font-weight: 800; color: #0d5b94; margin-top: 1px; text-transform: uppercase; }
   .leb-meta { width: 100%; border-collapse: collapse; margin-bottom: 12px; background: #f8fafc; border: 1px solid #cbd5e1; }
   .leb-meta td { padding: 5px 8px; border: 1px solid #e2e8f0; font-size: 11px; }
   .leb-meta b { color: #334155; }
@@ -83,10 +104,13 @@ _CSS_CARTA = """
 FORMATO_SOLICITUD = _CSS_CARTA + """
 <div class="leb-carta">
   <div class="leb-hdr">
-    <div>
-      <div class="leb-brand">LEBAREF</div>
-      <div class="leb-doc-title">Solicitud de Material / Requerimiento</div>
-      <div style="font-size:11px;color:#475569;">Empresa: {{ doc.company }} · Estado: <b>{{ _(doc.status) }}</b></div>
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Abastecimiento y Compras</div>
+        <div class="leb-doc-title">Solicitud de Material / Requerimiento</div>
+        <div style="font-size:11px;color:#475569;">Empresa: {{ doc.company }} · Estado: <b>{{ _(doc.status) }}</b></div>
+      </div>
     </div>
     <div>{{ svg_code128(doc.name) }}</div>
   </div>
@@ -142,10 +166,13 @@ FORMATO_SOLICITUD = _CSS_CARTA + """
 FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
 <div class="leb-carta">
   <div class="leb-hdr">
-    <div>
-      <div class="leb-brand">LEBAREF</div>
-      <div class="leb-doc-title">Orden de Compra</div>
-      <div style="font-size:11px;color:#475569;">Empresa: {{ doc.company }} · Estado: <b>{{ "BORRADOR (SIN AUTORIZAR)" if doc.docstatus == 0 else _(doc.status) }}</b></div>
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Departamento de Compras</div>
+        <div class="leb-doc-title">Orden de Compra</div>
+        <div style="font-size:11px;color:#475569;">Empresa: {{ doc.company }} · Estado: <b>{{ "BORRADOR (SIN AUTORIZAR)" if doc.docstatus == 0 else _(doc.status) }}</b></div>
+      </div>
     </div>
     <div>{{ svg_code128(doc.name) }}</div>
   </div>
@@ -206,10 +233,13 @@ FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
 FORMATO_RECEPCION = _CSS_CARTA + """
 <div class="leb-carta">
   <div class="leb-hdr">
-    <div>
-      <div class="leb-brand">LEBAREF · ALMACÉN</div>
-      <div class="leb-doc-title">Vale de Entrada / Recepción de Mercancía</div>
-      <div style="font-size:11px;color:#475569;">Empresa: {{ doc.company }} · Fecha: {{ frappe.utils.formatdate(doc.posting_date) }}</div>
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Almacén y Control de Entradas</div>
+        <div class="leb-doc-title">Vale de Entrada / Recepción de Mercancía</div>
+        <div style="font-size:11px;color:#475569;">Empresa: {{ doc.company }} · Fecha: {{ frappe.utils.formatdate(doc.posting_date) }}</div>
+      </div>
     </div>
     <div>{{ svg_code128(doc.name) }}</div>
   </div>
@@ -259,10 +289,13 @@ FORMATO_RECEPCION = _CSS_CARTA + """
 FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
 <div class="leb-carta">
   <div class="leb-hdr">
-    <div>
-      <div class="leb-brand">LEBAREF · CONTROL DE BODEGA</div>
-      <div class="leb-doc-title">{{ "Vale de Retorno de Sobrante a Almacén" if doc.custom_lebaref_origen else "Vale de Entrega / Salida de Material a Obra" }}</div>
-      <div style="font-size:11px;color:#475569;">Fecha: {{ frappe.utils.formatdate(doc.posting_date) }} · Tipo: {{ _(doc.stock_entry_type) }}</div>
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Control de Bodega y Obra</div>
+        <div class="leb-doc-title">{{ "Vale de Retorno de Sobrante a Almacén" if doc.custom_lebaref_origen else "Vale de Entrega / Salida de Material a Obra" }}</div>
+        <div style="font-size:11px;color:#475569;">Fecha: {{ frappe.utils.formatdate(doc.posting_date) }} · Tipo: {{ _(doc.stock_entry_type) }}</div>
+      </div>
     </div>
     <div>{{ svg_code128(doc.name) }}</div>
   </div>
@@ -313,10 +346,13 @@ FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
 FORMATO_PRESTAMO_HER = _CSS_CARTA + """
 <div class="leb-carta">
   <div class="leb-hdr">
-    <div>
-      <div class="leb-brand">LEBAREF · CUSTODIA DE HERRAMIENTAS</div>
-      <div class="leb-doc-title">Vale de Resguardo y Préstamo de Herramientas</div>
-      <div style="font-size:11px;color:#475569;">Estado actual: <b>{{ doc.estado }}</b></div>
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Custodia de Herramientas</div>
+        <div class="leb-doc-title">Vale de Resguardo y Préstamo de Herramientas</div>
+        <div style="font-size:11px;color:#475569;">Estado actual: <b>{{ doc.estado }}</b></div>
+      </div>
     </div>
     <div>{{ svg_code128(doc.name) }}</div>
   </div>
@@ -371,10 +407,13 @@ FORMATO_PRESTAMO_HER = _CSS_CARTA + """
 FORMATO_CHECKLIST_VEH = _CSS_CARTA + """
 <div class="leb-carta">
   <div class="leb-hdr">
-    <div>
-      <div class="leb-brand">LEBAREF · FLOTILLA VEHICULAR</div>
-      <div class="leb-doc-title">Check-list de Inspección Vehicular</div>
-      <div style="font-size:11px;color:#475569;">Unidad: <b>{{ doc.vehiculo }}</b> · Fecha: {{ frappe.utils.formatdate(doc.fecha) }}</div>
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Flotilla Vehicular</div>
+        <div class="leb-doc-title">Check-list de Inspección Vehicular</div>
+        <div style="font-size:11px;color:#475569;">Unidad: <b>{{ doc.vehiculo }}</b> · Fecha: {{ frappe.utils.formatdate(doc.fecha) }}</div>
+      </div>
     </div>
     <div>{{ svg_code128(doc.vehiculo) }}</div>
   </div>

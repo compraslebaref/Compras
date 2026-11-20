@@ -249,13 +249,23 @@
             <style>
                 @page { size: letter landscape; margin: 12mm; }
                 body { font-family: 'Segoe UI', Arial, sans-serif; color:#0f172a; font-size:11px; }
-                h2 { margin:0 0 4px 0; }
+                .hdr { display:flex; justify-content:space-between; align-items:center; border-bottom:2.5px solid #031e34; padding-bottom:8px; margin-bottom:10px; }
+                .hdr-left { display:flex; align-items:center; gap:14px; }
+                .hdr-title { border-left:1.5px solid #cbd5e1; padding-left:12px; }
+                h2 { margin:0 0 2px 0; font-size:15px; color:#0d5b94; text-transform:uppercase; }
                 table { width:100%; border-collapse:collapse; margin-top:10px; }
-                th { background:#0f172a; color:#fff; padding:6px; text-align:left; border:1px solid #0f172a; }
+                th { background:#031e34; color:#fff; padding:6px; text-align:left; border:1px solid #031e34; }
                 td { padding:6px; border:1px solid #cbd5e1; vertical-align:top; }
             </style></head><body>
-            <h2>LEBAREF · Cuadro Comparativo de Cotizaciones (${esc(folio)})</h2>
-            <div>Fecha de impresión: ${new Date().toLocaleString("es-MX")}</div>
+            <div class="hdr">
+                <div class="hdr-left">
+                    <img src="/files/lebaref_logo_horizontal.svg" alt="Lebaref" style="height:56px;width:auto;display:block;">
+                    <div class="hdr-title">
+                        <h2>Cuadro Comparativo de Cotizaciones (${esc(folio)})</h2>
+                        <div style="color:#475569;">Fecha de impresión: ${new Date().toLocaleString("es-MX")}</div>
+                    </div>
+                </div>
+            </div>
             <table><thead><tr><th>Artículo / Concepto</th><th>Cantidad</th>${headCols}</tr></thead><tbody>${bodyRows}</tbody></table>
             <script>window.onload = () => window.print();<\/script>
             </body></html>`);
