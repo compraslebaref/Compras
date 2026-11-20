@@ -541,6 +541,9 @@ def main():
 
     for sol in conn.execute("SELECT * FROM Solicitudes WHERE Estatus IN ('Pendiente', 'En Comparativa') ORDER BY Id"):
         folio_sol = (sol["Folio"] or f"SOL-{sol['Id']}").strip()
+        if frappe.db.exists("Material Request", {"custom_lebaref_operacion": det_uuid(f"MIG-SOL:{folio_sol}"), "docstatus": 1}):
+            stats["solicitudes_abiertas_migradas"] += 1
+            continue
         sp_s = f"mig_sol_{sol['Id']}"
         frappe.db.savepoint(sp_s)
         try:
