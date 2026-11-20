@@ -31,7 +31,7 @@
 |---|---|---|---|
 | 1 | `COM-04` / `COM-07` | **Impuestos (IVA 16% / exento), flete y condiciones/programación de pago** en `Supplier Quotation` y `Purchase Order` usando plantillas estándar de ERPNext (caso: neto `400` + IVA `64` = `464`). | `COMPLETADO E INTEGRADO EN DESK` |
 | 2 | `SOL-03` / `SOL-05` / `CAT-04` | **Anexos vinculados a solicitud origen y ruta de surtido desde stock** (`Stock Entry` tipo transferencia/salida ligada a `Material Request`) + conversión posterior de concepto libre a `Item` inventariable. | `COMPLETADO E INTEGRADO EN DESK` |
-| 3 | `ALM-02`..`ALM-08` | **Variantes de almacén en ERPNext:** entrada por regularizar, recepción directa a obra/servicio, sustitución autorizada al recibir, distinción clara *Resguardo en Obra* (`Material Transfer`) vs. *Consumo Real* (`Material Issue`) y ajuste/merma (`Stock Reconciliation`). | `SIGUIENTE PARA CODEX` |
+| 3 | `ALM-02`..`ALM-08` | **Variantes de almacén en ERPNext:** entrada por regularizar, recepción directa a obra/servicio, sustitución autorizada al recibir, distinción clara *Resguardo en Obra* (`Material Transfer`) vs. *Consumo Real* (`Material Issue`) y ajuste/merma (`Stock Reconciliation`). | `ALM-02 BACKEND VERIFICADO (ef430ae)` · Desk y perfil operativo pendientes; ALM-03..08 pendientes |
 | 4 | `XML-02`..`XML-04` | **CFDI 4.0 y compras con nota/ticket:** lectura de conceptos/importes del XML contra `Purchase Receipt` / `Purchase Order` (o vínculo con `Purchase Invoice`) y registro auditable de nota sin CFDI. | `PENDIENTE CODEX` |
 
 ### Carril Experiencia ERPNext Desk, Impresión Carta e Integraciones — **Antigravity** (`public/js/**`, `public/css/**`, `desk_ui.py`, `impresion_carta.py`, `sheets_proveedores.py`)
@@ -47,6 +47,9 @@
 ---
 
 ## Bitácora de Entregas Entre Agentes (Más reciente arriba)
+
+- **2026-11-20 — Codex, ALM-02 (`ef430ae`).** Publicadas `entrada_sin_oc` y `regularizar_entrada` en `operaciones.py`, con campos y contratos en §9. La regularización conserva el folio, inventario y valoración de la recepción y recalcula saldos nativos; exige coincidencia de artículo, unidad, factor, obra y precio y se ejecuta antes de facturas o devoluciones vinculadas. Migración y tres suites superadas con `Validar.ps1 -ImagenBackend lebaref/erpnext-codex:alm02`, incluido material ya consumido, reintentos y recepción del saldo. **Handoff para Antigravity** — integrar el commit, desplegar el backend y conectar los dos esquemas en Desk. La operación exige escritura de recepción y orden; el perfil Responsable de Compras carece de escritura de recepción, por lo que la prueba positiva usa Administrator. La revisión automática rechazó sustituir esos permisos por lectura/autorización; se conservaron las comprobaciones de escritura. Habilitación del perfil operativo pendiente. ALM-02 continúa parcial en la matriz hasta validar su captura desde Desk.
+
 
 - **2026-11-20 — Antigravity (`COM-04/07`, `SOL-03/05/CAT-04`, `DOC-01`, `ALM-MAPA`, `CAT-03`):** Fusionado `codex/erpnext` (`21d7e85`, `0797f43`, `0764f07`, `b4ccda1`) en `integracion/erpnext`; aprovisionadas plantillas fiscales, de flete y de pago por empresa en `desk_ui.py`; integrados en Desk los botones de anexo, conversión de concepto libre a SKU y surtido desde stock, el desglose comercial en comparativa e impresión de OC, el 7.º formato Carta (`Responsiva EPP y Equipo`), el Mapa Visual interactivo Zonas A–F y el Directorio `¿A quién cotizar?` (`sheets_proveedores.py`).
 - **2026-11-19 — Antigravity (`8b60676`):** Unificados `Sidebar` y `Dock` de Frappe 16 sin saltos e integrado logotipo oficial vectorizado SVG/ICO de Lebaref en Desk y formatos Carta.
