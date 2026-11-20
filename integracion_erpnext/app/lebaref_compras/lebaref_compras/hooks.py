@@ -76,3 +76,13 @@ for name in ("Lebaref Herramienta", "Lebaref Prestamo", "Lebaref Retorno", "Leba
     doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}
 for name in ("Lebaref Kit", "Lebaref Composicion Kit", "Lebaref Garantia Herramienta", "Lebaref Mantenimiento Herramienta", "Lebaref Anulacion Mantenimiento"):
     doc_events[name] = {"validate": "lebaref_compras.equipos.proteger", "on_trash": "lebaref_compras.equipos.proteger"}
+
+
+extend_doctype_class = {
+    "Purchase Receipt": ["lebaref_compras.sustituciones.CompraConSustituciones"],
+    "Purchase Invoice": ["lebaref_compras.sustituciones.CompraConSustituciones"],
+}
+doc_events["Lebaref Sustitucion"] = {
+    "validate": "lebaref_compras.sustituciones.validar_autorizacion",
+    "before_cancel": "lebaref_compras.sustituciones.anular_autorizacion",
+}

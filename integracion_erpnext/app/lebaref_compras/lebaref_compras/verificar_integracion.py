@@ -5,6 +5,7 @@ from frappe.utils import add_days, today
 from lebaref_compras.operaciones import esquema, ejecutar
 from lebaref_compras.comparativa import consultar, generar_ordenes
 from lebaref_compras.verificar_comercial import verificar_comercial
+from lebaref_compras.verificar_sustituciones import verificar_sustituciones
 from lebaref_compras.verificar_solicitudes import verificar_solicitudes
 from lebaref_compras.verificar_recepciones import verificar_recepciones, verificar_destinos
 
@@ -225,6 +226,10 @@ def verificar():
     if frappe.local.site != "lebaref-pruebas.local":
         raise RuntimeError("Solo se permite en el entorno de pruebas.")
     original_user = frappe.session.user
+    original_developer_mode = frappe.conf.developer_mode
+    # Test the hooks from this image when the shared Desk backend runs another version.
+    # This setting is process-local and is restored without writing site configuration.
+    frappe.conf.developer_mode = 1
     results = []
     try:
         frappe.set_user("Administrator")
@@ -332,7 +337,10 @@ def verificar():
         results.append("ALM-02: entrada anticipada, regularización auditada sin nuevos movimientos, permisos, reintentos y recepción del saldo")
         verificar_destinos(seed, supplier.name, warehouse.name)
         results.append("ALM-03: material directo a obra, servicio sin existencias, persona/remisión, destinos inválidos y recepción compatible del saldo")
+        verificar_sustituciones(seed, supplier.name)
+        results.append("ALM-04: autorización por responsable, límite de sustitución, inventario correcto, factura y devolución nativas y saldo original")
         return {"correcto": True, "pruebas": results, "datos": "Revertidos al finalizar"}
     finally:
         frappe.db.rollback()
         frappe.set_user(original_user)
+        frappe.conf.developer_mode = original_developer_mode

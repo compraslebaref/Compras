@@ -74,6 +74,13 @@ def configure_purchase_fields():
         {"fieldname": "custom_lebaref_partida", "label": "Partida de obra", "fieldtype": "Data"},
         {"fieldname": "custom_lebaref_renglon", "label": "Renglón de entrega", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
     ]
+    for doctype in ("Purchase Receipt Item", "Purchase Invoice Item"):
+        fields.setdefault(doctype, []).extend([
+            {"fieldname": "custom_lebaref_sustitucion", "label": "Autorización de sustitución", "fieldtype": "Link", "options": "Lebaref Sustitucion", "read_only": 1},
+            {"fieldname": "custom_lebaref_articulo_original", "label": "Artículo solicitado", "fieldtype": "Link", "options": "Item", "read_only": 1},
+        ])
+    from lebaref_compras.sustituciones import configurar as configurar_sustituciones
+    configurar_sustituciones()
     create_custom_fields(fields)
     from lebaref_compras.solicitudes import configurar as configurar_solicitudes
     configurar_solicitudes()
