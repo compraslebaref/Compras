@@ -97,3 +97,16 @@ doc_events["Stock Entry"] = {
     "before_submit": "lebaref_compras.sobrantes.autorizar",
     "on_cancel": "lebaref_compras.sobrantes.liberar_referencia",
 }
+
+
+doc_events["Stock Reconciliation"] = {
+    "validate": "lebaref_compras.ajustes.validar",
+    "before_submit": "lebaref_compras.ajustes.autorizar",
+    "before_cancel": "lebaref_compras.ajustes.cancelar",
+    "on_cancel": "lebaref_compras.ajustes.liberar",
+}
+
+
+doc_events["Lebaref Conciliacion CFDI"] = {"validate":"lebaref_compras.comprobantes.validar_registro"}
+doc_events["Purchase Invoice"] = {"before_validate":"lebaref_compras.finanzas.preparar_factura", "validate":"lebaref_compras.finanzas.validar_factura", "on_cancel":"lebaref_compras.finanzas.liberar_factura"}
+doc_events["Payment Entry"] = {"before_submit":"lebaref_compras.finanzas.validar_pago"}

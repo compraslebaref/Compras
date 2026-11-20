@@ -7,10 +7,11 @@ from xml.etree import ElementTree as ET
 
 import frappe
 from frappe.utils import today, add_days
-from lebaref_compras import comercial, consumos, proveedores, recepciones, solicitudes, sobrantes, sustituciones, surtido, unidades
+from lebaref_compras import ajustes, comercial, comprobantes, finanzas, consumos, proveedores, recepciones, solicitudes, sobrantes, sustituciones, surtido, unidades
 from lebaref_compras.unidades import numero
 
-TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
+TARGETS = {"conciliar_cfdi":"Lebaref Conciliacion CFDI", "facturar_cfdi":"Purchase Invoice", "nota_compra":"Purchase Invoice",
+           "autorizar_factura":"Purchase Invoice", "pagar_factura":"Payment Entry", "autorizar_pago":"Payment Entry", "ajuste": "Stock Reconciliation", "autorizar_ajuste": "Stock Reconciliation", "solicitud": "Material Request", "anexo": "Material Request",
            "convertir_concepto": "Material Request", "canalizar_stock": "Material Request",
            "sobrante": "Stock Entry", "autorizar_sobrante": "Stock Entry", "consumir": "Stock Entry", "surtir": "Stock Entry", "peticion": "Request for Quotation",
            "oferta": "Supplier Quotation", "autorizar": "Purchase Order",
@@ -20,7 +21,8 @@ TARGETS = {"solicitud": "Material Request", "anexo": "Material Request",
 MASTERS = {"articulo", "proveedor", "obra", "almacen"}
 ENMIENDAS = {"convertir_concepto", "canalizar_stock"}
 SOURCES = {action: "Material Request" for action in (*ENMIENDAS, "anexo", "surtir", "peticion")}
-SOURCES.update({"oferta": "Request for Quotation",
+SOURCES.update({"conciliar_cfdi":"Lebaref CFDI", "facturar_cfdi":"Lebaref CFDI", "nota_compra":"Purchase Receipt",
+           "autorizar_factura":"Purchase Invoice", "pagar_factura":"Purchase Invoice", "autorizar_pago":"Payment Entry", "autorizar_ajuste": "Stock Reconciliation", "oferta": "Request for Quotation",
            "autorizar": "Purchase Order", "autorizar_sustitucion": "Purchase Order", "recibir": "Purchase Order",
            "autorizar_sobrante": "Stock Entry", "devolver": "Stock Entry", "consumir": "Stock Entry", "cfdi": "Purchase Receipt", "regularizar_entrada": "Purchase Receipt"})
 
@@ -30,7 +32,16 @@ def permiso(accion):
         frappe.throw("Operación desconocida.")
     dt = TARGETS[accion]
     rights = ("create", "submit")
-    if accion == "sobrante":
+    if accion in ("conciliar_cfdi", "facturar_cfdi", "nota_compra", "pagar_factura"):
+        rights = ("create",)
+    elif accion in ("autorizar_factura", "autorizar_pago"):
+        rights = ("submit",)
+    elif accion == "ajuste":
+        rights = ("create",)
+    elif accion == "autorizar_ajuste":
+        ajustes.autorizar()
+        rights = ("submit",)
+    elif accion == "sobrante":
         rights = ("create",)
     elif accion == "autorizar_sobrante":
         sobrantes.comprobar_autorizacion()
@@ -51,7 +62,7 @@ def origen(accion, folio, lock=False):
         return None
     doc = frappe.get_doc(SOURCES[accion], folio, for_update=lock)
     doc.check_permission("read")
-    if accion not in ENMIENDAS | {"autorizar", "autorizar_sobrante"} and doc.docstatus != 1:
+    if accion not in ENMIENDAS | {"autorizar", "autorizar_sobrante", "autorizar_ajuste", "autorizar_factura", "autorizar_pago", "conciliar_cfdi", "facturar_cfdi"} and doc.docstatus != 1:
         frappe.throw("Selecciona un documento confirmado.")
     return doc
 
@@ -231,6 +242,39 @@ def esquema(accion, folio=""):
         fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("from_warehouse", "Almacén origen", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("to_warehouse", "Almacén de obra", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})), campo("project", "Obra", choices=catalogo("Project")), campo("remarks", "Recibe / referencia")]
         columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"is_stock_item": 1, "disabled": 0})), columna("qty", "Cantidad (unidad de inventario)"), columna("custom_lebaref_partida", "Partida")]
         note = "Transferencia de inventario: la existencia pasa del almacén central al almacén de obra; no representa consumo."
+    elif accion == "conciliar_cfdi":
+        preview = comprobantes.evaluar(doc)
+        fields = []
+        columns = [columna("concepto","Concepto XML",False), columna("descripcion","Descripción XML",False),
+                   columna("renglon","Renglón de recepción",choices=[r["id"] for r in preview["renglones"]]),
+                   columna("cargo","Cargo fijo de recepción",choices=[r["id"] for r in preview["cargos"]]), columna("factor_xml","Factor a inventario")]
+        rows = [dict(concepto=c["id"],descripcion=c["descripcion"],renglon="",factor_xml=1) for c in preview["conceptos"]]
+        note = "Relaciona todos los conceptos. Consulta el resultado antes de guardar la conciliación exacta."
+    elif accion in ("facturar_cfdi", "nota_compra"):
+        fields = [campo("fecha","Fecha del comprobante",(comprobantes.evaluar(doc)["fecha_xml"][:10] or today()) if accion=="facturar_cfdi" else today(),kind="date")]
+        if accion == "nota_compra":
+            fields.extend([campo("referencia","Referencia de nota o ticket"),campo("motivo","Motivo sin CFDI",kind="multiline")])
+        note = "Crea una factura de compra en borrador desde su recepción, para revisión contable."
+    elif accion == "pagar_factura":
+        fields = [campo("importe","Importe en moneda de cuenta por pagar",doc.outstanding_amount),
+                  campo("cuenta","Cuenta bancaria o caja",choices=catalogo("Account",{"company":doc.company,"is_group":0,"disabled":0,"account_type":["in",["Bank","Cash"]]})),
+                  campo("referencia","Referencia del pago"),campo("fecha","Fecha de referencia",today(),kind="date")]
+        note = "Crea un Payment Entry en borrador. La confirmación contable registra el pago."
+    elif accion in ("autorizar_factura", "autorizar_pago"):
+        word = "PAGAR" if accion == "autorizar_pago" else "AUTORIZAR"
+        fields = [campo("confirmar","Confirmación",choices=["",word])]
+        note = "Revisa los importes y referencias del documento contable antes de confirmar."
+    elif accion == "ajuste":
+        fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("tipo", "Tipo", "Conteo", ["Conteo", "Merma"]),
+                  campo("referencia", "Acta de conteo"), campo("motivo", "Motivo", kind="multiline")]
+        columns = [columna("item_code", "Artículo", choices=catalogo("Item", {"disabled": 0, "is_stock_item": 1})),
+                   columna("warehouse", "Almacén", choices=catalogo("Warehouse", {"is_group": 0, "disabled": 0})),
+                   columna("qty", "Cantidad física en unidad de inventario"), columna("valuation_rate", "Valor unitario, opcional si ya existe")]
+        note = "Crea un borrador de conciliación. La autorización revisa que las existencias sigan coincidiendo con la observación inicial."
+    elif accion == "autorizar_ajuste":
+        fields = [campo("confirmar", "Confirmación", choices=["", "AUTORIZAR"])]
+        columns = [columna(k, label, False) for k, label in (("item_code", "Artículo"), ("warehouse", "Almacén"), ("qty", "Conteo"), ("custom_lebaref_observado", "Observado"))]
+        rows = [r.as_dict() for r in doc.items]
     elif accion == "sobrante":
         fields = [campo("company", "Empresa", choices=catalogo("Company")), campo("project", "Obra de procedencia", choices=catalogo("Project")),
                   campo("referencia", "Acta o comprobante de origen"), campo("persona", "Persona que entrega"),
@@ -283,7 +327,7 @@ def esquema(accion, folio=""):
         fields = [campo("xml", "Archivo XML CFDI", kind="file")]
         note = "Archiva el XML contra esta recepción, valida UUID y RFC, y evita duplicados. No crea póliza/factura contable ni verifica el estado SAT."
     return dict(fields=fields, columns=columns, rows=rows,
-                add_rows=accion in ("entregar", "anexo", "entrada_sin_oc", "sobrante") or (accion == "solicitud" and not folio), note=note)
+                add_rows=accion in ("entregar", "anexo", "entrada_sin_oc", "sobrante", "ajuste") or (accion == "solicitud" and not folio), note=note)
 
 
 def elegidos(data, available):
@@ -324,7 +368,7 @@ def ejecutar(accion, datos, operacion, folio=""):
     # Lock is held until the request transaction commits/rolls back.
     frappe.get_doc("User", frappe.session.user, for_update=True)
     source = origen(accion, folio, lock=True)
-    if accion not in ("autorizar", "autorizar_sobrante", "cfdi"):
+    if accion not in ("autorizar", "autorizar_sobrante", "autorizar_ajuste", "autorizar_factura", "autorizar_pago", "cfdi"):
         operation_field = "custom_lebaref_regularizacion_operacion" if accion == "regularizar_entrada" else "custom_lebaref_operacion"
         hash_field = "custom_lebaref_regularizacion_huella" if accion == "regularizar_entrada" else "custom_lebaref_huella"
         prior = frappe.db.get_value(TARGETS[accion], {operation_field: token}, ["name", hash_field], as_dict=True, for_update=True)
@@ -435,6 +479,25 @@ def ejecutar(accion, datos, operacion, folio=""):
         if not data.get("project") or data.get("from_warehouse") == data.get("to_warehouse"):
             frappe.throw("Selecciona una obra y dos almacenes distintos.")
         doc = frappe.get_doc(dict(doctype="Stock Entry", stock_entry_type="Material Transfer", company=data.get("company"), project=data.get("project"), remarks=data.get("remarks"), items=[dict(item_code=r.get("item_code"), qty=numero(r.get("qty")), s_warehouse=data.get("from_warehouse"), t_warehouse=data.get("to_warehouse"), custom_lebaref_partida=r.get("custom_lebaref_partida")) for r in data.get("rows", [])]))
+    elif accion == "conciliar_cfdi":
+        return comprobantes.conciliar(source,data,token,signature)
+    elif accion == "facturar_cfdi":
+        receipt = frappe.get_doc("Purchase Receipt",source.recepcion,for_update=True)
+        doc = finanzas.factura(receipt,data,source)
+    elif accion == "nota_compra":
+        doc = finanzas.factura(source,data)
+    elif accion == "autorizar_factura":
+        return finanzas.confirmar(source,data,"AUTORIZAR")
+    elif accion == "pagar_factura":
+        doc = finanzas.pago(source,data)
+    elif accion == "autorizar_pago":
+        return finanzas.confirmar(source,data,"PAGAR")
+    elif accion == "ajuste":
+        doc = ajustes.crear(data)
+    elif accion == "autorizar_ajuste":
+        if data.get("confirmar") != "AUTORIZAR":
+            frappe.throw("Revisa el conteo y selecciona AUTORIZAR.")
+        return ajustes.confirmar(source)
     elif accion == "sobrante":
         doc = sobrantes.crear(data)
     elif accion == "autorizar_sobrante":
@@ -469,7 +532,7 @@ def ejecutar(accion, datos, operacion, folio=""):
     doc.insert()
     if accion == "proveedor":
         proveedores.completar(doc)
-    if accion not in MASTERS and accion not in ("anexo", "sobrante"):
+    if accion not in MASTERS and accion not in ("anexo", "sobrante", "ajuste", "facturar_cfdi", "nota_compra", "pagar_factura"):
         doc.submit()
     return dict(folio=doc.name, tipo=doc.doctype)
 
