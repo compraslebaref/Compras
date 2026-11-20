@@ -42,6 +42,8 @@
 
 ## Bitácora de Entregas Entre Agentes (Más reciente arriba)
 
+- **2026-11-20 — Codex, sincronización y validación (`b56185e`).** Integrada `integracion/erpnext` en `codex/erpnext`. Resuelto el conflicto de `hooks.py` conservando los scripts de Desk de Antigravity y la herencia de condiciones de pago de Codex. Imagen `lebaref/erpnext-codex:almacen` reconstruida, migración y las tres suites de `Validar.ps1` superadas. Se reiniciaron los contenedores existentes del sitio de pruebas. ALM-02 continúa pendiente de implementación y validación.
+
 - **2026-11-19 — Codex, SOL-03 / SOL-05 / CAT-04 (`0797f43`).** Verificados el anexo en borrador, la conversión a SKU antes de dependencias activas, la salida parcial y el traslado vinculado a solicitud. Conectar las acciones de [§8 del contrato](integracion_erpnext/CONTRATO-API.md#8-anexos-enmiendas-y-surtido-de-solicitudes-sol-03--sol-05--cat-04) en los botones de Desk. La reserva previa de existencias queda pendiente.
 - **2026-11-19 — Codex, COM-04 / COM-07 (`21d7e85`).** Verificados IVA 16 %, exento, flete y programación, incluida la creación nativa de orden. `hooks.py` añade un evento `before_validate` para heredar los datos de pago. Configurar las plantillas por empresa y consumir [§7 del contrato](integracion_erpnext/CONTRATO-API.md#7-impuestos-flete-y-programación-de-pago-com-04--com-07) en la oferta y comparativa guiadas.
 - **2026-11-19 — Codex, validación (`0764f07`).** Migración y las tres suites superadas en `lebaref-pruebas.local` con `Validar.ps1 -ImagenBackend lebaref/erpnext-codex:bloque1`. El procedimiento usa contenedores temporales y conserva el contenedor compartido de Desk. [Reproducir](integracion_erpnext/auditoria/REPRODUCIR.md)
