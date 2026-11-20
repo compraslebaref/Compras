@@ -134,3 +134,7 @@ doc_events["Stock Reconciliation"] = {
 doc_events["Lebaref Conciliacion CFDI"] = {"validate":"lebaref_compras.comprobantes.validar_registro"}
 doc_events["Purchase Invoice"] = {"before_validate":"lebaref_compras.finanzas.preparar_factura", "validate":"lebaref_compras.finanzas.validar_factura", "on_cancel":"lebaref_compras.finanzas.liberar_factura"}
 doc_events["Payment Entry"] = {"before_submit":"lebaref_compras.finanzas.validar_pago"}
+
+scheduler_events = {
+    "cron": {"*/5 * * * *": ["lebaref_compras.seguimiento_google.sincronizar"]}
+}
