@@ -64,7 +64,8 @@ Write-Host "=== 4. Ejecutando suites transaccionales en lebaref-pruebas.local ==
 $suites = @(
     'lebaref_compras.verificar_integracion.verificar',
     'lebaref_compras.verificar_equipos.verificar',
-    'lebaref_compras.verificar_kits.verificar'
+    'lebaref_compras.verificar_kits.verificar',
+    'lebaref_compras.verificar_seguimiento_google.verificar'
 )
 
 foreach ($suite in $suites) {

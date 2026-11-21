@@ -2,7 +2,7 @@
 name: lebaref-pruebas
 
 x-erpnext: &erpnext
-  image: lebaref/erpnext-pruebas:16.55.0
+  image: ${LEBAREF_ERP_IMAGE:-lebaref/erpnext-pruebas:16.55.0}
   volumes:
     - sites:/home/frappe/frappe-bench/sites
     - logs:/home/frappe/frappe-bench/logs
@@ -84,6 +84,13 @@ services:
   worker:
     <<: *erpnext
     command: [bench, worker, --queue, "short,default,long"]
+    depends_on:
+      preparar-sitio:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *erpnext
+    command: [bench, schedule]
     depends_on:
       preparar-sitio:
         condition: service_completed_successfully

@@ -1,0 +1,114 @@
+{
+  "doctype": "DocType",
+  "name": "Lebaref Sync Solicitud",
+  "module": "Lebaref Compras",
+  "autoname": "field:solicitud",
+  "naming_rule": "By fieldname",
+  "engine": "InnoDB",
+  "field_order": [
+    "solicitud",
+    "folio",
+    "gerencia",
+    "version",
+    "huella",
+    "snapshot",
+    "pendiente",
+    "intentos",
+    "siguiente_intento",
+    "ultimo_error",
+    "entregado",
+    "expediente"
+  ],
+  "fields": [
+    {
+      "fieldname": "solicitud",
+      "label": "Solicitud ERPNext",
+      "fieldtype": "Data",
+      "read_only": 1,
+      "unique": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "folio",
+      "label": "Folio del expediente",
+      "fieldtype": "Data",
+      "read_only": 1,
+      "unique": 1,
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "gerencia",
+      "label": "Gerencia",
+      "fieldtype": "Data",
+      "read_only": 1
+    },
+    {
+      "fieldname": "version",
+      "label": "Versión",
+      "fieldtype": "Int",
+      "read_only": 1
+    },
+    {
+      "fieldname": "huella",
+      "label": "Huella",
+      "fieldtype": "Data",
+      "read_only": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "snapshot",
+      "label": "Snapshot",
+      "fieldtype": "Long Text",
+      "read_only": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "pendiente",
+      "label": "Pendiente",
+      "fieldtype": "Check",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "intentos",
+      "label": "Intentos",
+      "fieldtype": "Int",
+      "read_only": 1
+    },
+    {
+      "fieldname": "siguiente_intento",
+      "label": "Siguiente intento",
+      "fieldtype": "Datetime",
+      "read_only": 1
+    },
+    {
+      "fieldname": "ultimo_error",
+      "label": "Último error",
+      "fieldtype": "Small Text",
+      "read_only": 1
+    },
+    {
+      "fieldname": "entregado",
+      "label": "Última entrega",
+      "fieldtype": "Datetime",
+      "read_only": 1
+    },
+    {
+      "fieldname": "expediente",
+      "label": "Expediente",
+      "fieldtype": "Data",
+      "read_only": 1,
+      "options": "URL"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1
+    }
+  ],
+  "track_changes": 0,
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}
