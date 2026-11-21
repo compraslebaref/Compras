@@ -1793,7 +1793,13 @@
                 });
                 d.hide();
                 frappe.show_alert({ message: `Solicitud creada: ${res.folio}`, indicator: "green" });
-                frappe.set_route("Form", "Material Request", res.folio);
+                const rt = frappe.get_route ? frappe.get_route() : [];
+                if (rt[0] === "List" && rt[1] === "Material Request" && window.cur_list && window.cur_list.doctype === "Material Request") {
+                    window.cur_list.refresh();
+                    seleccionarSolicitudEnSplit(window.cur_list, res.folio);
+                } else {
+                    frappe.set_route("List", "Material Request");
+                }
             },
         });
 
@@ -2064,8 +2070,11 @@
                 });
                 d.hide();
                 frappe.show_alert({ message: `Solicitud creada por carga rápida: ${res.folio}`, indicator: "green" });
-                if (typeof alTerminar === "function") alTerminar(res);
-                frappe.set_route("Form", "Material Request", res.folio);
+                if (typeof alTerminar === "function") {
+                    alTerminar(res);
+                } else {
+                    frappe.set_route("Form", "Material Request", res.folio);
+                }
             },
         });
 
@@ -3109,7 +3118,8 @@
                 flex: 1 1 0% !important;
                 min-width: 0 !important;
             }
-            .leb-item-split-panel {
+            .leb-item-split-panel,
+            .leb-sol-split-panel {
                 width: 396px;
                 flex: 0 0 396px;
                 background: var(--card-bg, #ffffff);
@@ -3123,14 +3133,20 @@
                 flex-direction: column;
                 overflow: hidden;
             }
-            .leb-item-split-panel.leb-hidden {
+            .leb-sol-split-panel {
+                width: 424px;
+                flex: 0 0 424px;
+            }
+            .leb-item-split-panel.leb-hidden,
+            .leb-sol-split-panel.leb-hidden {
                 display: none !important;
             }
             @media (max-width: 1024px) {
                 .leb-split-wrapper {
                     flex-direction: column !important;
                 }
-                .leb-item-split-panel {
+                .leb-item-split-panel,
+                .leb-sol-split-panel {
                     width: 100%;
                     flex: 1 1 auto;
                     position: static;
@@ -3379,8 +3395,12 @@
                 ev.preventDefault();
                 ev.stopPropagation();
                 if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
-                const lv = wrapper.__lebListview || (window.cur_list && window.cur_list.doctype === "Item" ? window.cur_list : null);
-                if (lv) seleccionarItemEnSplit(lv, code);
+                const lv = wrapper.__lebListview || window.cur_list || null;
+                if (lv && lv.doctype === "Item") {
+                    seleccionarItemEnSplit(lv, code);
+                } else if (lv && lv.doctype === "Material Request") {
+                    seleccionarSolicitudEnSplit(lv, code);
+                }
             },
             true
         );
@@ -3396,7 +3416,9 @@
                 const rowContainer = target.closest(".frappe-list .result .list-row-container");
                 if (!rowContainer) return;
                 const code = extraerCodigoDeFila(rowContainer);
-                if (code) frappe.set_route("Form", "Item", code);
+                const lv = wrapper.__lebListview || window.cur_list || null;
+                const dt = (lv && lv.doctype) || "Item";
+                if (code) frappe.set_route("Form", dt, code);
             },
             true
         );
@@ -3499,12 +3521,14 @@
     function extraerCodigoDeFila(rowContainer) {
         const chk = rowContainer.querySelector(".list-row-checkbox[data-name]");
         if (chk && chk.getAttribute("data-name")) return chk.getAttribute("data-name");
-        const lnk = rowContainer.querySelector("a[data-doctype='Item'][data-name], a[data-name]");
+        const lnk = rowContainer.querySelector("a[data-doctype][data-name], a[data-name]");
         if (lnk && lnk.getAttribute("data-name")) return lnk.getAttribute("data-name");
-        const hrefEl = rowContainer.querySelector("a[href*='/app/item/']");
-        if (hrefEl) {
-            const p = hrefEl.getAttribute("href").split("/app/item/")[1];
-            if (p) return decodeURIComponent(p.split("?")[0]);
+        for (const pref of ["/app/item/", "/app/material-request/"]) {
+            const hrefEl = rowContainer.querySelector(`a[href*='${pref}']`);
+            if (hrefEl) {
+                const p = hrefEl.getAttribute("href").split(pref)[1];
+                if (p) return decodeURIComponent(p.split("?")[0]);
+            }
         }
         return "";
     }
@@ -3845,9 +3869,496 @@
         $body.find(".leb-sp-open").on("click", () => frappe.set_route("Form", "Item", f.codigo_interno));
     }
 
+    // --- Vista Dividida Maestro–Detalle en Solicitudes (Lista a la izquierda + Ficha y Expediente a la derecha) ---
+    async function asegurarModuloSolicitud() {
+        if (window.lebarefSolicitud) return window.lebarefSolicitud;
+        try {
+            await $.getScript("/files/material_request.js");
+        } catch (e) {
+            await $.getScript("/assets/lebaref_compras/js/material_request.js");
+        }
+        return window.lebarefSolicitud || null;
+    }
+
+    function inicializarSplitSolicitudes(listview) {
+        inyectarEstilosSplitCatalogo();
+        asegurarListenersVentanaSplitCatalogo();
+        const $page = listview.$page;
+        if (!$page || !$page.length) return;
+
+        if (!listview.__lebSplitSol) {
+            const estado = {
+                folioActual: "",
+                tabActiva: "ficha",
+                oculto: false,
+                fichaCache: null,
+            };
+            listview.__lebSplitSol = estado;
+
+            $page.addClass("leb-split-active-page");
+            const $wrapper = $page.find(".layout-main-section-wrapper").first();
+            $wrapper.addClass("leb-split-wrapper leb-split-active");
+            if ($wrapper.get(0)) $wrapper.get(0).__lebListview = listview;
+
+            const $panel = $(`
+                <aside class="leb-sol-split-panel">
+                    <div class="leb-sp-hdr">
+                        <div style="font-weight:700;font-size:13.5px;">Solicitud</div>
+                        <div class="d-flex align-items-center" style="gap:6px;">
+                            <div class="leb-sp-tabs">
+                                <button type="button" class="leb-sp-tab active" data-tab="ficha">Ficha</button>
+                                <button type="button" class="leb-sp-tab" data-tab="expediente">Expediente</button>
+                            </div>
+                            <button type="button" class="btn btn-xs btn-primary leb-sol-new" title="Crear nueva solicitud de materiales">+ Nueva</button>
+                        </div>
+                    </div>
+                    <div class="leb-sp-body">
+                        <div class="text-muted small py-4 text-center">Selecciona una solicitud de la lista izquierda para ver su ficha, materiales y seguimiento.</div>
+                    </div>
+                </aside>
+            `).appendTo($wrapper);
+
+            estado.$panel = $panel;
+            estado.$wrapper = $wrapper;
+            estado.$page = $page;
+
+            $panel.find(".leb-sol-new").on("click", () => {
+                abrirOperacion("solicitud", "", "Nueva Solicitud de Materiales", (res) => {
+                    listview.refresh();
+                    if (res && res.folio) {
+                        estado.tabActiva = "ficha";
+                        seleccionarSolicitudEnSplit(listview, res.folio);
+                    }
+                });
+            });
+
+            $panel.find(".leb-sp-tab").on("click", function () {
+                estado.tabActiva = $(this).data("tab");
+                $panel.find(".leb-sp-tab").each(function () {
+                    $(this).toggleClass("active", $(this).data("tab") === estado.tabActiva);
+                });
+                pintarContenidoSplitSolicitud(listview);
+            });
+
+            $(document).off("keydown.lebSolSplit").on("keydown.lebSolSplit", (ev) => {
+                const route = frappe.get_route ? frappe.get_route() : [];
+                if (!route || route[0] !== "List" || route[1] !== "Material Request" || estado.oculto) return;
+                if ($(ev.target).is("input, textarea, select, [contenteditable]")) return;
+                if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
+                const lista = (listview.data || []).map((d) => d.name).filter(Boolean);
+                if (!lista.length) return;
+                ev.preventDefault();
+                const idx = lista.indexOf(estado.folioActual);
+                const nextIdx = ev.key === "ArrowDown"
+                    ? Math.min(lista.length - 1, idx + 1)
+                    : Math.max(0, (idx === -1 ? 0 : idx - 1));
+                seleccionarSolicitudEnSplit(listview, lista[nextIdx]);
+            });
+        }
+    }
+
+    function decorarSeleccionListaSolicitudes(listview) {
+        const estado = listview.__lebSplitSol;
+        if (!estado || !listview.$result) return;
+        listview.$result.find(".list-row-container").each(function () {
+            const folio = extraerCodigoDeFila(this);
+            if (!folio) return;
+            $(this).toggleClass("leb-row-selected", folio === estado.folioActual);
+        });
+    }
+
+    async function seleccionarSolicitudEnSplit(listview, folio) {
+        const estado = listview.__lebSplitSol;
+        if (!estado || !folio) return;
+        estado.folioActual = folio;
+        decorarSeleccionListaSolicitudes(listview);
+
+        const $body = estado.$panel.find(".leb-sp-body");
+        $body.html(`<div class="text-muted small py-4 text-center">Cargando ficha de <b>${frappe.utils.escape_html(folio)}</b>…</div>`);
+        try {
+            const { message: s } = await frappe.call({
+                method: "lebaref_compras.ux_lebaref.ficha_solicitud",
+                type: "GET",
+                args: { solicitud: folio },
+            });
+            if (estado.folioActual !== folio) return;
+            estado.fichaCache = s;
+            pintarContenidoSplitSolicitud(listview);
+        } catch (e) {
+            $body.html(`<div class="text-muted small py-3 text-center">No se pudo cargar la ficha de ${frappe.utils.escape_html(folio)}.</div>`);
+        }
+    }
+
+    function pintarContenidoSplitSolicitud(listview) {
+        const estado = listview.__lebSplitSol;
+        if (!estado || !estado.$panel) return;
+        const $body = estado.$panel.find(".leb-sp-body");
+        const s = estado.fichaCache;
+
+        estado.$panel.find(".leb-sp-tab").each(function () {
+            $(this).toggleClass("active", $(this).data("tab") === estado.tabActiva);
+        });
+
+        if (!s) {
+            $body.html(`
+                <div class="text-muted text-center py-5">
+                    <div style="font-size:30px;opacity:0.45;">📋</div>
+                    <div class="small mt-2">Selecciona una solicitud de la lista izquierda para ver su ficha y materiales.</div>
+                </div>
+            `);
+            return;
+        }
+
+        const esc = frappe.utils.escape_html;
+        const numFmt = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+        const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const exp = s.expediente || {};
+        const totalDocsExp = (exp.anexos || []).length + (exp.cotizaciones || []).length + (exp.ordenes || []).length + (exp.almacen || []).length;
+
+        // Actualizar contador sutil en pestaña Expediente
+        estado.$panel.find(".leb-sp-tab[data-tab='expediente']").text(
+            totalDocsExp ? `Expediente (${totalDocsExp})` : "Expediente"
+        );
+
+        const recargarActual = (nuevoFolio = "") => {
+            listview.refresh();
+            seleccionarSolicitudEnSplit(listview, nuevoFolio || s.folio);
+        };
+
+        if (estado.tabActiva === "expediente") {
+            const secCot = (exp.cotizaciones || []).map((c) => `
+                <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid var(--border-color,#f1f5f9);font-size:11.5px;">
+                    <div>
+                        <a href="/app/supplier-quotation/${encodeURIComponent(c.folio)}"><b>${esc(c.folio)}</b></a> · ${esc(c.proveedor)}
+                        <div class="text-muted" style="font-size:10.5px;">${esc(c.fecha)} · ${esc(c.estado)}</div>
+                    </div>
+                    <div class="text-right"><b>$${money.format(c.total || 0)}</b> <small>${esc(c.moneda)}</small></div>
+                </div>
+            `).join("");
+
+            const secOc = (exp.ordenes || []).map((o) => `
+                <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid var(--border-color,#f1f5f9);font-size:11.5px;">
+                    <div>
+                        <a href="/app/purchase-order/${encodeURIComponent(o.folio)}"><b>${esc(o.folio)}</b></a> · ${esc(o.proveedor)}
+                        <div class="text-muted" style="font-size:10.5px;">${esc(o.fecha)} · ${esc(o.estado)}${o.docstatus === 1 ? ` · Rec: ${o.pct_recibido}%` : ""}</div>
+                    </div>
+                    <div class="text-right"><b>$${money.format(o.total || 0)}</b> <small>${esc(o.moneda)}</small></div>
+                </div>
+            `).join("");
+
+            const secAlm = (exp.almacen || []).map((m) => {
+                const slug = m.doctype === "Purchase Receipt" ? "purchase-receipt" : "stock-entry";
+                return `
+                    <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid var(--border-color,#f1f5f9);font-size:11.5px;">
+                        <div>
+                            <a href="/app/${slug}/${encodeURIComponent(m.folio)}"><b>${esc(m.folio)}</b></a> · ${esc(m.tipo)}
+                            <div class="text-muted" style="font-size:10.5px;">${esc(m.fecha)} ${m.detalle ? "· " + esc(m.detalle) : ""}</div>
+                        </div>
+                        <span class="badge badge-light" style="border:1px solid #cbd5e1;">${esc(m.estado)}</span>
+                    </div>
+                `;
+            }).join("");
+
+            const secAnx = (exp.anexos || []).map((a) => `
+                <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid var(--border-color,#f1f5f9);font-size:11.5px;">
+                    <div>
+                        <a href="#" class="leb-sol-jump" data-folio="${esc(a.folio)}"><b>${esc(a.folio)}</b></a> · ${esc(a.nombre)}
+                        <div class="text-muted" style="font-size:10.5px;">${esc(a.fecha)}</div>
+                    </div>
+                    <span class="badge badge-info">${esc(a.estado)}</span>
+                </div>
+            `).join("");
+
+            $body.html(`
+                <div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div style="font-size:15px;font-weight:700;color:#0d5b94;">${esc(s.folio)}</div>
+                            <div class="small text-muted">${esc(s.nombre)}</div>
+                        </div>
+                        <span class="indicator-pill ${esc(s.estatus_color)}">${esc(s.estatus_etiqueta)}</span>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
+                        <div style="background:var(--subtle-fg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:6px;padding:6px;text-align:center;">
+                            <div style="font-size:10px;color:#64748b;font-weight:700;">COTIZ.</div>
+                            <div style="font-size:14px;font-weight:800;">${(exp.cotizaciones || []).length}</div>
+                        </div>
+                        <div style="background:var(--subtle-fg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:6px;padding:6px;text-align:center;">
+                            <div style="font-size:10px;color:#64748b;font-weight:700;">ÓRDENES</div>
+                            <div style="font-size:14px;font-weight:800;color:#059669;">${(exp.ordenes || []).length}</div>
+                        </div>
+                        <div style="background:var(--subtle-fg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:6px;padding:6px;text-align:center;">
+                            <div style="font-size:10px;color:#64748b;font-weight:700;">ALMACÉN</div>
+                            <div style="font-size:14px;font-weight:800;color:#0d5b94;">${(exp.almacen || []).length}</div>
+                        </div>
+                        <div style="background:var(--subtle-fg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:6px;padding:6px;text-align:center;">
+                            <div style="font-size:10px;color:#64748b;font-weight:700;">ANEXOS</div>
+                            <div style="font-size:14px;font-weight:800;">${(exp.anexos || []).length}</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div style="font-size:11px;font-weight:700;color:#031e34;text-transform:uppercase;margin-bottom:4px;">1. Cotizaciones de Proveedores</div>
+                        ${secCot || `<div class="text-muted small py-1">Sin cotizaciones registradas aún.</div>`}
+                    </div>
+
+                    <div class="mb-3">
+                        <div style="font-size:11px;font-weight:700;color:#031e34;text-transform:uppercase;margin-bottom:4px;">2. Órdenes de Compra Generadas</div>
+                        ${secOc || `<div class="text-muted small py-1">Sin órdenes de compra emitidas aún.</div>`}
+                    </div>
+
+                    <div class="mb-3">
+                        <div style="font-size:11px;font-weight:700;color:#031e34;text-transform:uppercase;margin-bottom:4px;">3. Recepciones y Surtido en Almacén</div>
+                        ${secAlm || `<div class="text-muted small py-1">Sin entradas o salidas registradas aún.</div>`}
+                    </div>
+
+                    ${(s.origen_anexo || secAnx) ? `
+                        <div class="mb-3">
+                            <div style="font-size:11px;font-weight:700;color:#031e34;text-transform:uppercase;margin-bottom:4px;">4. Solicitudes y Anexos Vinculados (SOL-03)</div>
+                            ${s.origen_anexo ? `<div class="small mb-1">Origen: <a href="#" class="leb-sol-jump" data-folio="${esc(s.origen_anexo)}"><b>${esc(s.origen_anexo)}</b></a></div>` : ""}
+                            ${secAnx}
+                        </div>
+                    ` : ""}
+
+                    <div class="d-flex mt-3" style="gap:6px;">
+                        ${s.docstatus === 1 && s.tipo_raw === "Purchase" ? `<button type="button" class="btn btn-primary btn-xs flex-fill leb-sol-exp-comp">⚖️ Cuadro Comparativo</button>` : ""}
+                        <button type="button" class="btn btn-default btn-xs flex-fill leb-sol-exp-print">🖨️ Imprimir Solicitud</button>
+                    </div>
+                </div>
+            `);
+
+            $body.find(".leb-sol-jump").on("click", function (ev) {
+                ev.preventDefault();
+                const destino = $(this).data("folio");
+                if (destino) {
+                    estado.tabActiva = "ficha";
+                    seleccionarSolicitudEnSplit(listview, destino);
+                }
+            });
+            $body.find(".leb-sol-exp-comp").on("click", async () => {
+                const mod = await asegurarModuloSolicitud();
+                if (mod && mod.abrirComparativa) mod.abrirComparativa(s.folio, () => recargarActual());
+            });
+            $body.find(".leb-sol-exp-print").on("click", () => {
+                frappe.set_route("print", "Material Request", s.folio);
+            });
+            return;
+        }
+
+        // Pestaña 1: FICHA DE LA SOLICITUD (diseño limpio estilo ERP original integrado en ERPNext)
+        const sig = s.siguiente_paso || {};
+        const paletaSig = {
+            blue: { bg: "#eff6ff", bd: "#bfdbfe", tit: "#1d4ed8", txt: "#1e3a8a" },
+            amber: { bg: "#fffbeb", bd: "#fde68a", tit: "#b45309", txt: "#78350f" },
+            green: { bg: "#ecfdf5", bd: "#a7f3d0", tit: "#047857", txt: "#065f46" },
+            gray: { bg: "#f8fafc", bd: "#cbd5e1", tit: "#475569", txt: "#334155" },
+        }[sig.tono || "blue"];
+
+        const botonesSecundarios = [];
+        if (s.docstatus === 1 && s.status_raw !== "Stopped" && s.tipo_raw === "Purchase") {
+            if (sig.accion !== "comparativa") {
+                botonesSecundarios.push(`<button type="button" class="btn btn-xs btn-default leb-sol-act-comp">⚖️ Comparativa</button>`);
+            }
+            if (sig.accion !== "cotizar") {
+                botonesSecundarios.push(`<button type="button" class="btn btn-xs btn-default leb-sol-act-cot">💰 + Cotizar</button>`);
+            }
+            if (s.tiene_conceptos_libres) {
+                botonesSecundarios.push(`<button type="button" class="btn btn-xs btn-default leb-sol-act-conv" title="Convertir renglón libre a SKU inventariable">🔄 A SKU</button>`);
+            } else {
+                botonesSecundarios.push(`<button type="button" class="btn btn-xs btn-default leb-sol-act-stock" title="Canalizar a surtido con existencias actuales">📦 De stock</button>`);
+            }
+        }
+
+        const filasDatos = [
+            ["Fecha", s.fecha_requerida && s.fecha_requerida !== s.fecha ? `${s.fecha} · Req: ${s.fecha_requerida}` : (s.fecha || "—")],
+            ["Solicitante", s.solicitante || "—"],
+            ["Departamento", s.departamento || "—"],
+            ["Destino", s.destino || "—"],
+            ["Origen", s.origen_texto || "—"],
+        ]
+            .map(([k, v]) => {
+                const valHtml = k === "Origen" && s.origen_anexo
+                    ? `Anexo de <a href="#" class="leb-sol-jump-orig" data-folio="${esc(s.origen_anexo)}"><b>${esc(s.origen_anexo)}</b></a>`
+                    : esc(v);
+                return `<div class="leb-sp-kv"><div class="leb-sp-kv-lbl">${esc(k)}</div><div class="leb-sp-kv-val">${valHtml}</div></div>`;
+            })
+            .join("");
+
+        const filasPartidas = (s.partidas || [])
+            .map((p) => {
+                const thumb = p.imagen
+                    ? `<img src="${esc(p.imagen)}" style="width:24px;height:24px;border-radius:4px;object-fit:contain;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;">`
+                    : `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;border:1px solid #e2e8f0;background:#f8fafc;font-size:11px;flex-shrink:0;">${p.es_libre ? "📝" : "📦"}</span>`;
+                const metaTags = [p.clave, p.partida, p.obra].filter(Boolean).join(" · ");
+                const stockInfo = p.es_libre
+                    ? `<span style="color:#b45309;">Concepto libre</span>`
+                    : `<span style="color:${p.stock_actual > 0 ? "#059669" : "#64748b"};">Stock: ${numFmt.format(p.stock_actual)} ${esc(p.uom_almacen)}</span>`;
+                const avanceOc = p.ordered_qty > 0
+                    ? `<div style="font-size:10px;color:#0d5b94;font-weight:600;">OC: ${numFmt.format(p.ordered_qty)}${p.received_qty > 0 ? ` · Rec: ${numFmt.format(p.received_qty)}` : ""}</div>`
+                    : "";
+                return `
+                    <tr>
+                        <td style="padding:6px 6px;">
+                            <div class="d-flex align-items-start" style="gap:7px;">
+                                ${thumb}
+                                <div style="min-width:0;">
+                                    <div style="font-weight:600;font-size:12px;line-height:1.25;color:var(--text-color,#0f172a);">${esc(p.descripcion)}</div>
+                                    <div class="text-muted" style="font-size:10.5px;">${esc(metaTags)} &nbsp;·&nbsp; ${stockInfo}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-right" style="padding:6px 6px;white-space:nowrap;vertical-align:middle;">
+                            <div style="font-weight:700;font-size:12px;">${numFmt.format(p.qty)} <span class="text-muted" style="font-weight:500;">${esc(p.uom)}</span></div>
+                            ${avanceOc}
+                        </td>
+                    </tr>
+                `;
+            })
+            .join("");
+
+        $body.html(`
+            <div>
+                <div class="d-flex justify-content-between align-items-start mb-1" style="gap:8px;">
+                    <div style="min-width:0;">
+                        <div style="font-size:16px;font-weight:800;color:#0d5b94;line-height:1.2;">${esc(s.folio)}</div>
+                        <div style="font-size:11px;color:var(--text-muted,#64748b);">${esc(s.tipo_etiqueta)}</div>
+                    </div>
+                    <span class="indicator-pill ${esc(s.estatus_color)}" style="flex-shrink:0;">${esc(s.estatus_etiqueta)}</span>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom:1px solid var(--border-color,#e2e8f0);gap:6px;">
+                    <div style="font-size:13px;font-weight:700;color:var(--text-color,#0f172a);word-break:break-word;">
+                        ${esc(s.nombre)}
+                    </div>
+                    ${s.puede_editar ? `<button type="button" class="btn btn-default btn-xs leb-sol-rename" title="Cambiar nombre descriptivo de la solicitud">✏️</button>` : ""}
+                </div>
+
+                <div style="padding:8px 11px;border-radius:8px;background:var(--subtle-fg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);margin-bottom:10px;">
+                    ${filasDatos}
+                </div>
+
+                <div style="padding:10px 12px;border-radius:8px;background:${paletaSig.bg};border:1px solid ${paletaSig.bd};margin-bottom:12px;">
+                    <div style="font-size:10.5px;font-weight:800;color:${paletaSig.tit};letter-spacing:0.02em;">${esc(sig.titulo || "ESTADO")}</div>
+                    <div style="font-size:11.8px;color:${paletaSig.txt};margin-top:3px;line-height:1.35;">${esc(sig.mensaje || "")}</div>
+                    ${(sig.boton || botonesSecundarios.length) ? `
+                        <div class="d-flex flex-wrap mt-2" style="gap:5px;">
+                            ${sig.boton ? `<button type="button" class="btn btn-xs btn-primary leb-sol-sig-btn">${esc(sig.boton)}</button>` : ""}
+                            ${botonesSecundarios.join("")}
+                        </div>
+                    ` : ""}
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div style="font-size:12.5px;font-weight:700;color:var(--text-color,#0f172a);">Materiales solicitados</div>
+                    <span class="text-muted" style="font-size:11px;font-weight:600;">${(s.partidas || []).length} partida(s)</span>
+                </div>
+                <div style="border:1px solid var(--border-color,#e2e8f0);border-radius:7px;overflow:hidden;margin-bottom:10px;max-height:255px;overflow-y:auto;">
+                    <table class="table table-sm mb-0" style="font-size:12px;">
+                        <thead style="background:var(--subtle-fg,#f8fafc);position:sticky;top:0;z-index:1;">
+                            <tr>
+                                <th style="padding:5px 6px;border-top:none;">Descripción / Código</th>
+                                <th class="text-right" style="padding:5px 6px;border-top:none;width:88px;">Cant.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filasPartidas || `<tr><td colspan="2" class="text-muted text-center py-3">Sin artículos capturados.</td></tr>`}
+                        </tbody>
+                    </table>
+                </div>
+
+                ${s.notas ? `
+                    <div style="padding:7px 10px;border-radius:6px;background:var(--subtle-fg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);font-size:11.5px;color:var(--text-muted,#475569);margin-bottom:10px;">
+                        <b>Notas:</b> ${esc(s.notas)}
+                    </div>
+                ` : ""}
+
+                <div class="mt-2">
+                    <button type="button" class="btn btn-primary btn-sm btn-block leb-sol-open">Abrir / Editar solicitud ↗</button>
+                    <div class="d-flex mt-2" style="gap:6px;">
+                        <button type="button" class="btn btn-default btn-xs flex-fill leb-sol-print">🖨️ Imprimir Carta</button>
+                        ${s.docstatus === 1 && s.status_raw !== "Stopped" ? `<button type="button" class="btn btn-default btn-xs flex-fill leb-sol-anexo">+ Anexo (SOL-03)</button>` : ""}
+                        <button type="button" class="btn btn-default btn-xs flex-fill leb-sol-ver-exp">📂 Expediente</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        $body.find(".leb-sol-open").on("click", () => frappe.set_route("Form", "Material Request", s.folio));
+        $body.find(".leb-sol-print").on("click", () => frappe.set_route("print", "Material Request", s.folio));
+        $body.find(".leb-sol-ver-exp").on("click", () => {
+            estado.tabActiva = "expediente";
+            pintarContenidoSplitSolicitud(listview);
+        });
+        $body.find(".leb-sol-jump-orig").on("click", function (ev) {
+            ev.preventDefault();
+            const orig = $(this).data("folio");
+            if (orig) seleccionarSolicitudEnSplit(listview, orig);
+        });
+        $body.find(".leb-sol-rename").on("click", async () => {
+            const mod = await asegurarModuloSolicitud();
+            if (mod && mod.abrirNombre) {
+                mod.abrirNombre(s.folio, s.nombre, () => recargarActual());
+            }
+        });
+        $body.find(".leb-sol-anexo").on("click", () => {
+            abrirOperacion("anexo", s.folio, `Crear anexo vinculado a ${s.folio}`, (res) => {
+                recargarActual((res && res.folio) || s.folio);
+            });
+        });
+
+        const ejecutarAccionGuiada = async (acc) => {
+            if (acc === "abrir_form") {
+                frappe.set_route("Form", "Material Request", s.folio);
+            } else if (acc === "confirmar_borrador") {
+                frappe.confirm(
+                    `¿Confirmar la solicitud <b>${esc(s.folio)}</b> (${esc(s.nombre)}) con ${(s.partidas || []).length} partida(s)?`,
+                    async () => {
+                        await frappe.call({
+                            method: "lebaref_compras.ux_lebaref.confirmar_solicitud_borrador",
+                            type: "POST",
+                            args: { solicitud: s.folio },
+                            freeze: true,
+                            freeze_message: "Confirmando solicitud…",
+                        });
+                        frappe.show_alert({ message: `Solicitud ${s.folio} confirmada`, indicator: "green" });
+                        recargarActual();
+                    }
+                );
+            } else if (acc === "cotizar") {
+                const mod = await asegurarModuloSolicitud();
+                if (mod && mod.abrirCotizacionDirecta) {
+                    mod.abrirCotizacionDirecta(s.folio, () => recargarActual());
+                }
+            } else if (acc === "comparativa") {
+                const mod = await asegurarModuloSolicitud();
+                if (mod && mod.abrirComparativa) {
+                    mod.abrirComparativa(s.folio, () => recargarActual());
+                }
+            } else if (acc === "surtir") {
+                abrirOperacion("surtir", s.folio, `Surtir desde almacén · ${s.folio}`, () => recargarActual());
+            } else if (acc === "ver_expediente") {
+                estado.tabActiva = "expediente";
+                pintarContenidoSplitSolicitud(listview);
+            }
+        };
+
+        $body.find(".leb-sol-sig-btn").on("click", () => ejecutarAccionGuiada(sig.accion));
+        $body.find(".leb-sol-act-comp").on("click", () => ejecutarAccionGuiada("comparativa"));
+        $body.find(".leb-sol-act-cot").on("click", () => ejecutarAccionGuiada("cotizar"));
+        $body.find(".leb-sol-act-stock").on("click", () => {
+            abrirOperacion("canalizar_stock", s.folio, `Canalizar a stock · ${s.folio}`, () => recargarActual());
+        });
+        $body.find(".leb-sol-act-conv").on("click", async () => {
+            const mod = await asegurarModuloSolicitud();
+            if (mod && mod.abrirConvertirConcepto) {
+                mod.abrirConvertirConcepto(s, (res) => recargarActual((res && res.folio) || s.folio));
+            }
+        });
+    }
+
     // --- Registro idempotente de ListView Settings (resistente a sobrescritura posterior de *_list.js de ERPNext) ---
     const listActions = [
-        ["Material Request", "Captura Rápida Lebaref (con Conceptos Libres)", "solicitud"],
         ["Purchase Receipt", "Entrada Anticipada sin OC (ALM-02)", "entrada_sin_oc"],
         ["Stock Entry", "Entregar Material a Obra", "entregar"],
         ["Stock Reconciliation", "📋 Nuevo Conteo Físico o Merma (ALM-08)", "ajuste"],
@@ -3957,6 +4468,76 @@
             });
         }
 
+        // Lista de Material Request (Solicitudes): Vista dividida Maestro–Detalle (Lista a la izquierda + Ficha y Expediente a la derecha)
+        const prevMR = frappe.listview_settings["Material Request"] || {};
+        if (!prevMR.__lebWrapped) {
+            const prevMROnload = prevMR.onload;
+            const prevMRRefresh = prevMR.refresh;
+            const camposExtraMR = [...new Set([
+                ...(prevMR.add_fields || []),
+                "title",
+                "status",
+                "docstatus",
+                "material_request_type",
+                "schedule_date",
+                "custom_lebaref_nombre_solicitud",
+                "custom_lebaref_solicitante",
+                "custom_lebaref_departamento",
+            ])];
+
+            frappe.listview_settings["Material Request"] = Object.assign({}, prevMR, {
+                __lebWrapped: true,
+                add_fields: camposExtraMR,
+                onload(listview) {
+                    if (typeof prevMROnload === "function") prevMROnload(listview);
+                    inicializarSplitSolicitudes(listview);
+                    if (listview.__lebBtnsReady) return;
+                    listview.__lebBtnsReady = true;
+                    listview.page.add_inner_button("◫ Mostrar / Ocultar Ficha", () => {
+                        const est = listview.__lebSplitSol;
+                        if (!est || !est.$panel) return;
+                        est.oculto = !est.oculto;
+                        est.$panel.toggleClass("leb-hidden", est.oculto);
+                        est.$wrapper.toggleClass("leb-split-active", !est.oculto);
+                        if (est.$page) est.$page.toggleClass("leb-split-active-page", !est.oculto);
+                    });
+                    listview.page.add_inner_button("Captura Rápida Lebaref (con Conceptos Libres)", () =>
+                        abrirOperacion("solicitud", "", "Captura Rápida Lebaref (con Conceptos Libres)", (res) => {
+                            listview.refresh();
+                            if (res && res.folio) seleccionarSolicitudEnSplit(listview, res.folio);
+                        })
+                    );
+                    listview.page.add_inner_button("📥 Carga Rápida CSV / Excel", () =>
+                        abrirCargaRapidaSolicitudCsv((res) => {
+                            listview.refresh();
+                            if (res && res.folio) seleccionarSolicitudEnSplit(listview, res.folio);
+                        })
+                    );
+                    listview.page.add_inner_button("⚠️ Reabastecer Mínimos", () => abrirAlertasStockMinimo());
+                    listview.page.add_inner_button("🔫 Escanear S30W (F2)", () => abrirEscaneoPistola());
+                },
+                refresh(listview) {
+                    if (typeof prevMRRefresh === "function") prevMRRefresh(listview);
+                    inicializarSplitSolicitudes(listview);
+                    decorarSeleccionListaSolicitudes(listview);
+                    const est = listview.__lebSplitSol;
+                    if (!est || est.oculto) return;
+                    const visibles = (listview.data || []).map((r) => r.name).filter(Boolean);
+                    if (!visibles.length) {
+                        est.folioActual = "";
+                        est.fichaCache = null;
+                        pintarContenidoSplitSolicitud(listview);
+                        return;
+                    }
+                    if (!est.folioActual || !visibles.includes(est.folioActual)) {
+                        seleccionarSolicitudEnSplit(listview, visibles[0]);
+                    } else {
+                        seleccionarSolicitudEnSplit(listview, est.folioActual);
+                    }
+                },
+            });
+        }
+
         // Lista de Item (Artículos): Vista dividida Maestro–Detalle (Lista a la izquierda + Ficha con foto a la derecha)
         const prevItem = frappe.listview_settings["Item"] || {};
         if (!prevItem.__lebWrapped) {
@@ -4039,6 +4620,14 @@
                     const visibles = (window.cur_list.data || []).map((r) => r.name).filter(Boolean);
                     if (est && !est.oculto && visibles.length && (!est.itemActual || !visibles.includes(est.itemActual))) {
                         seleccionarItemEnSplit(window.cur_list, visibles[0]);
+                    }
+                } else if (route[0] === "List" && route[1] === "Material Request" && window.cur_list && window.cur_list.doctype === "Material Request") {
+                    inicializarSplitSolicitudes(window.cur_list);
+                    decorarSeleccionListaSolicitudes(window.cur_list);
+                    const estSol = window.cur_list.__lebSplitSol;
+                    const visiblesSol = (window.cur_list.data || []).map((r) => r.name).filter(Boolean);
+                    if (estSol && !estSol.oculto && visiblesSol.length && (!estSol.folioActual || !visiblesSol.includes(estSol.folioActual))) {
+                        seleccionarSolicitudEnSplit(window.cur_list, visiblesSol[0]);
                     }
                 }
             }, 150);

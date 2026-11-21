@@ -528,11 +528,12 @@ def configurar_workspace_lebaref():
 
 def _asegurar_enlace_assets():
     public_dir = frappe.get_app_path("lebaref_compras", "public")
-    js_src = os.path.join(public_dir, "js", "lebaref_desk.js")
     files_dir = frappe.get_site_path("public", "files")
     os.makedirs(files_dir, exist_ok=True)
-    if os.path.isfile(js_src):
-        shutil.copyfile(js_src, os.path.join(files_dir, "lebaref_desk.js"))
+    for nombre_js in ("lebaref_desk.js", "material_request.js"):
+        js_src = os.path.join(public_dir, "js", nombre_js)
+        if os.path.isfile(js_src):
+            shutil.copyfile(js_src, os.path.join(files_dir, nombre_js))
     bench_sites = os.path.abspath(frappe.get_site_path(".."))
     assets_dir = os.path.join(bench_sites, "assets")
     destino = os.path.join(assets_dir, "lebaref_compras")

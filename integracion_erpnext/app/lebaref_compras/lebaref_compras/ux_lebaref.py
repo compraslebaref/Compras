@@ -369,12 +369,14 @@ def configurar_ux_lebaref():
     _ps("Project", None, "search_fields", "project_name,customer", "Data")
     _ps("Customer", None, "search_fields", "customer_name,tax_id", "Data")
     _ps("Supplier", None, "search_fields", "supplier_name,tax_id,custom_especialidad_cotizar", "Data")
+    _ps("Material Request", "custom_lebaref_departamento", "in_standard_filter", 1, "Check")
+    _ps("Material Request", "custom_lebaref_solicitante", "in_standard_filter", 1, "Check")
 
     # 2. Distribución limpia de columnas en Listas (evitando truncamiento y ocultando 'company' redundante)
     config_listas = {
         "Material Request": {
-            "mostrar": ["custom_lebaref_nombre_solicitud", "custom_lebaref_solicitante", "custom_lebaref_departamento", "schedule_date"],
-            "ocultar": ["title", "material_request_type", "company", "transaction_date", "per_ordered", "per_received"],
+            "mostrar": ["custom_lebaref_nombre_solicitud", "custom_lebaref_solicitante", "schedule_date"],
+            "ocultar": ["title", "material_request_type", "company", "transaction_date", "per_ordered", "per_received", "custom_lebaref_departamento"],
         },
         "Item": {
             "mostrar": ["custom_lebaref_codigo_barras", "item_name", "custom_lebaref_ubicacion"],
@@ -593,6 +595,374 @@ def guardar_nombre_solicitud(solicitud: str, nombre: str):
     doc.db_set("custom_lebaref_nombre_solicitud", limpio)
     doc.db_set("title", limpio)
     return {"ok": True, "nombre": limpio}
+
+
+@frappe.whitelist(methods=["POST"])
+def confirmar_solicitud_borrador(solicitud: str):
+    """Confirma una solicitud en borrador directamente desde la vista dividida de Solicitudes."""
+    doc = frappe.get_doc("Material Request", solicitud)
+    doc.check_permission("submit")
+    if doc.docstatus != 0:
+        frappe.throw("Esta solicitud ya está confirmada o cancelada.")
+    doc.submit()
+    return {"ok": True, "folio": doc.name}
+
+
+@frappe.whitelist(methods=["GET"])
+def ficha_solicitud(solicitud: str):
+    """Devuelve la Ficha y el Expediente trazable de una Solicitud para el panel lateral en Solicitudes (Lista + Ficha)."""
+    doc = frappe.get_doc("Material Request", solicitud)
+    doc.check_permission("read")
+
+    codigos = list({r.item_code for r in doc.items if r.item_code and r.item_code != "LEBAREF-CONCEPTO-LIBRE"})
+    img_map = {}
+    ubi_map = {}
+    stock_map = {}
+
+    if codigos:
+        campos_it = ["name", "image", "stock_uom"]
+        if frappe.db.has_column("Item", "custom_lebaref_ubicacion"):
+            campos_it.append("custom_lebaref_ubicacion")
+        for it in frappe.get_all("Item", filters={"name": ["in", codigos]}, fields=campos_it):
+            img_map[it.name] = it.get("image") or ""
+            ubi_map[it.name] = it.get("custom_lebaref_ubicacion") or ""
+
+        if frappe.has_permission("Bin", "read"):
+            for b in frappe.db.sql(
+                """
+                SELECT item_code, COALESCE(SUM(actual_qty), 0) AS qty
+                FROM `tabBin`
+                WHERE item_code IN %s
+                GROUP BY item_code
+                """,
+                (tuple(codigos),),
+                as_dict=True,
+            ):
+                stock_map[b.item_code] = flt(b.qty)
+
+    obras_set = []
+    almacenes_set = []
+    partidas = []
+    tiene_conceptos_libres = False
+
+    for r in doc.items:
+        es_libre = r.item_code == "LEBAREF-CONCEPTO-LIBRE" or bool(r.get("custom_lebaref_concepto"))
+        if es_libre:
+            tiene_conceptos_libres = True
+        clave, desc = _calcular_clave_y_descripcion(
+            r.item_code or "",
+            r.item_name or "",
+            r.description or "",
+            r.get("custom_lebaref_concepto") or "",
+        )
+        if r.project and r.project not in obras_set:
+            obras_set.append(r.project)
+        if r.warehouse and r.warehouse not in almacenes_set:
+            almacenes_set.append(r.warehouse)
+
+        partidas.append({
+            "name": r.name,
+            "idx": r.idx,
+            "item_code": r.item_code or "",
+            "es_libre": es_libre,
+            "clave": clave,
+            "descripcion": desc,
+            "custom_lebaref_concepto": r.get("custom_lebaref_concepto") or "",
+            "description": r.description or "",
+            "imagen": "" if es_libre else img_map.get(r.item_code, ""),
+            "ubicacion": "" if es_libre else ubi_map.get(r.item_code, ""),
+            "qty": flt(r.qty),
+            "uom": r.uom or r.stock_uom or "Nos",
+            "ordered_qty": flt(r.ordered_qty or 0),
+            "received_qty": flt(r.received_qty or 0),
+            "stock_actual": 0.0 if es_libre else stock_map.get(r.item_code, 0.0),
+            "uom_almacen": r.stock_uom or r.uom or "Nos",
+            "obra": r.project or "",
+            "partida": r.get("custom_lebaref_partida") or "",
+        })
+
+    # Trazabilidad / Expediente vinculado
+    anexos = []
+    if frappe.db.has_column("Material Request", "custom_lebaref_solicitud_origen"):
+        for ax in frappe.get_list(
+            "Material Request",
+            filters={"custom_lebaref_solicitud_origen": doc.name, "docstatus": ["<", 2]},
+            fields=["name", "custom_lebaref_nombre_solicitud", "title", "status", "transaction_date"],
+            order_by="creation asc",
+            limit_page_length=30,
+        ):
+            anexos.append({
+                "folio": ax.name,
+                "nombre": ax.custom_lebaref_nombre_solicitud or ax.title or ax.name,
+                "estado": ax.status or "",
+                "fecha": str(ax.transaction_date or ""),
+            })
+
+    cotizaciones = []
+    if frappe.has_permission("Supplier Quotation", "read"):
+        rows_sq = frappe.db.sql(
+            """
+            SELECT DISTINCT sq.name, sq.supplier, sq.supplier_name, sq.transaction_date,
+                            sq.grand_total, sq.net_total, sq.currency, sq.docstatus, sq.status
+            FROM `tabSupplier Quotation` sq
+            INNER JOIN `tabSupplier Quotation Item` sqi ON sqi.parent = sq.name
+            LEFT JOIN `tabRequest for Quotation Item` rfqi ON rfqi.name = sqi.request_for_quotation_item
+            WHERE sq.docstatus < 2
+              AND (sqi.material_request = %s OR rfqi.material_request = %s)
+            ORDER BY sq.creation DESC
+            """,
+            (doc.name, doc.name),
+            as_dict=True,
+        )
+        for sq in rows_sq:
+            cotizaciones.append({
+                "folio": sq.name,
+                "proveedor": sq.supplier_name or sq.supplier,
+                "fecha": str(sq.transaction_date or ""),
+                "neto": flt(sq.net_total),
+                "total": flt(sq.grand_total),
+                "moneda": sq.currency or "MXN",
+                "docstatus": int(sq.docstatus or 0),
+                "estado": "Borrador" if int(sq.docstatus or 0) == 0 else "Vigente",
+            })
+
+    ordenes = []
+    po_names = []
+    if frappe.has_permission("Purchase Order", "read"):
+        rows_po = frappe.db.sql(
+            """
+            SELECT DISTINCT po.name, po.supplier, po.supplier_name, po.transaction_date,
+                            po.grand_total, po.net_total, po.currency, po.docstatus, po.status, po.per_received
+            FROM `tabPurchase Order` po
+            INNER JOIN `tabPurchase Order Item` poi ON poi.parent = po.name
+            LEFT JOIN `tabSupplier Quotation Item` sqi ON sqi.name = poi.supplier_quotation_item
+            LEFT JOIN `tabRequest for Quotation Item` rfqi ON rfqi.name = sqi.request_for_quotation_item
+            WHERE po.docstatus < 2
+              AND (poi.material_request = %s OR rfqi.material_request = %s)
+            ORDER BY po.creation DESC
+            """,
+            (doc.name, doc.name),
+            as_dict=True,
+        )
+        for po in rows_po:
+            po_names.append(po.name)
+            ordenes.append({
+                "folio": po.name,
+                "proveedor": po.supplier_name or po.supplier,
+                "fecha": str(po.transaction_date or ""),
+                "neto": flt(po.net_total),
+                "total": flt(po.grand_total),
+                "moneda": po.currency or "MXN",
+                "docstatus": int(po.docstatus or 0),
+                "estado": "Por autorizar (Borrador)" if int(po.docstatus or 0) == 0 else (po.status or "Autorizada"),
+                "pct_recibido": round(flt(po.per_received or 0), 1),
+            })
+
+    movimientos_almacen = []
+    if frappe.has_permission("Purchase Receipt", "read"):
+        cond_po = "OR pri.purchase_order IN %s" if po_names else ""
+        params_pr = (doc.name, tuple(po_names)) if po_names else (doc.name,)
+        rows_pr = frappe.db.sql(
+            f"""
+            SELECT DISTINCT pr.name, pr.supplier_name, pr.supplier, pr.posting_date, pr.docstatus, pr.status, pr.grand_total
+            FROM `tabPurchase Receipt` pr
+            INNER JOIN `tabPurchase Receipt Item` pri ON pri.parent = pr.name
+            WHERE pr.docstatus < 2
+              AND (pri.material_request = %s {cond_po})
+            ORDER BY pr.posting_date DESC, pr.creation DESC
+            """,
+            params_pr,
+            as_dict=True,
+        )
+        for pr in rows_pr:
+            movimientos_almacen.append({
+                "doctype": "Purchase Receipt",
+                "tipo": "Recepción",
+                "folio": pr.name,
+                "detalle": pr.supplier_name or pr.supplier or "",
+                "fecha": str(pr.posting_date or ""),
+                "estado": "Borrador" if int(pr.docstatus or 0) == 0 else "Recibida",
+            })
+
+    if frappe.has_permission("Stock Entry", "read"):
+        rows_se = frappe.db.sql(
+            """
+            SELECT DISTINCT se.name, se.stock_entry_type, se.posting_date, se.docstatus, se.to_warehouse, se.project
+            FROM `tabStock Entry` se
+            INNER JOIN `tabStock Entry Detail` sed ON sed.parent = se.name
+            WHERE se.docstatus < 2
+              AND sed.material_request = %s
+            ORDER BY se.posting_date DESC, se.creation DESC
+            """,
+            (doc.name,),
+            as_dict=True,
+        )
+        for se in rows_se:
+            movimientos_almacen.append({
+                "doctype": "Stock Entry",
+                "tipo": se.stock_entry_type or "Movimiento",
+                "folio": se.name,
+                "detalle": se.project or se.to_warehouse or "",
+                "fecha": str(se.posting_date or ""),
+                "estado": "Borrador" if int(se.docstatus or 0) == 0 else "Confirmado",
+            })
+
+    # Clasificación de tipo, estatus en español y siguiente paso guiado (estilo ERP original)
+    mapa_tipos = {
+        "Purchase": "Solicitud de Compra",
+        "Material Issue": "Salida de Almacén",
+        "Material Transfer": "Surtido / Traslado de Stock",
+    }
+    tipo_etq = mapa_tipos.get(doc.material_request_type, doc.material_request_type or "Solicitud")
+
+    n_cot_activas = sum(1 for c in cotizaciones if c["docstatus"] == 1)
+    n_oc_borrador = sum(1 for o in ordenes if o["docstatus"] == 0)
+    n_oc_activas = sum(1 for o in ordenes if o["docstatus"] == 1)
+    pendientes_ordenar = sum(1 for p in partidas if (p["ordered_qty"] + 1e-6) < p["qty"])
+
+    if doc.docstatus == 2:
+        est_etq, est_color = "Cancelada", "red"
+        sig = {
+            "tono": "gray",
+            "titulo": "SOLICITUD CANCELADA",
+            "mensaje": "Este documento fue cancelado y no requiere seguimiento.",
+            "accion": "",
+            "boton": "",
+        }
+    elif doc.docstatus == 0:
+        est_etq, est_color = "En Captura (Borrador)", "orange"
+        sig = {
+            "tono": "amber",
+            "titulo": "➜ SIGUIENTE PASO",
+            "mensaje": "Revisa los materiales solicitados y confirma el borrador para pasar a cotización o surtido.",
+            "accion": "confirmar_borrador" if doc.has_permission("submit") else "abrir_form",
+            "boton": "✅ Confirmar Solicitud" if doc.has_permission("submit") else "Abrir Borrador ↗",
+        }
+    elif doc.status == "Stopped":
+        est_etq, est_color = "Cerrada / Detenida", "gray"
+        sig = {
+            "tono": "green",
+            "titulo": "✓ CONCLUIDA",
+            "mensaje": "Solicitud marcada como concluida sin remanente activo.",
+            "accion": "",
+            "boton": "",
+        }
+    elif doc.material_request_type in ("Material Issue", "Material Transfer"):
+        if flt(doc.per_ordered or 0) < 99.9:
+            est_etq, est_color = "Por Surtir en Almacén", "blue"
+            sig = {
+                "tono": "blue",
+                "titulo": "➜ SIGUIENTE PASO",
+                "mensaje": "Pendiente de entregar o trasladar el material físico desde Almacén.",
+                "accion": "surtir",
+                "boton": "📦 Surtir desde Almacén",
+            }
+        else:
+            est_etq, est_color = "Surtida", "green"
+            sig = {
+                "tono": "green",
+                "titulo": "✓ SURTIDO COMPLETADO",
+                "mensaje": "Todos los materiales de esta solicitud ya fueron entregados desde Almacén.",
+                "accion": "",
+                "boton": "",
+            }
+    else:
+        # Solicitud de Compra confirmada
+        if pendientes_ordenar > 0 and n_cot_activas == 0 and not ordenes:
+            est_etq, est_color = "Pendiente de Cotizar", "orange"
+            sig = {
+                "tono": "blue",
+                "titulo": "➜ SIGUIENTE PASO",
+                "mensaje": "Captura las cotizaciones de proveedores para comparar precios (o canaliza a stock si ya hay existencia).",
+                "accion": "cotizar",
+                "boton": "💰 Capturar Cotización",
+            }
+        elif pendientes_ordenar > 0 and n_cot_activas > 0:
+            est_etq, est_color = f"Con Cotizaciones ({n_cot_activas})", "blue"
+            sig = {
+                "tono": "blue",
+                "titulo": "➜ SIGUIENTE PASO",
+                "mensaje": f"Hay {n_cot_activas} oferta(s) lista(s). Abre el Cuadro Comparativo para adjudicar y generar la Orden de Compra.",
+                "accion": "comparativa",
+                "boton": f"⚖️ Abrir Comparativa ({n_cot_activas})",
+            }
+        elif n_oc_borrador > 0:
+            est_etq, est_color = f"OC por Autorizar ({n_oc_borrador})", "orange"
+            sig = {
+                "tono": "amber",
+                "titulo": "➜ SIGUIENTE PASO",
+                "mensaje": f"Se generaron {n_oc_borrador} Orden(es) de Compra en borrador pendientes de visto bueno del Coordinador / Dirección.",
+                "accion": "ver_expediente",
+                "boton": "📄 Ver Órdenes en Expediente",
+            }
+        elif flt(doc.per_received or 0) < 99.9 and n_oc_activas > 0:
+            est_etq, est_color = "En Tránsito / Por Recibir", "blue"
+            sig = {
+                "tono": "blue",
+                "titulo": "➜ EN SEGUIMIENTO DE ENTREGA",
+                "mensaje": f"{n_oc_activas} Orden(es) de Compra autorizada(s). Pendiente de recibir la mercancía en Almacén.",
+                "accion": "ver_expediente",
+                "boton": "🚚 Ver Órdenes y Recepciones",
+            }
+        else:
+            est_etq, est_color = "Atendida / Recibida", "green"
+            sig = {
+                "tono": "green",
+                "titulo": "✓ SOLICITUD COMPLETADA",
+                "mensaje": "Todas las partidas solicitadas fueron ordenadas y recibidas en Almacén.",
+                "accion": "",
+                "boton": "",
+            }
+
+    destino_partes = []
+    if obras_set:
+        destino_partes.append("Obra: " + ", ".join(obras_set[:3]))
+    if almacenes_set:
+        destino_partes.append(", ".join(almacenes_set[:2]))
+    destino_txt = " · ".join(destino_partes) if destino_partes else "Almacén General"
+
+    origen_anexo = (doc.get("custom_lebaref_solicitud_origen") or "").strip()
+    origen_txt = f"Anexo de {origen_anexo}" if origen_anexo else "Captura directa en ERP"
+
+    nombre_mostrar = (doc.get("custom_lebaref_nombre_solicitud") or "").strip()
+    if not nombre_mostrar:
+        t_raw = (doc.title or "").strip()
+        nombre_mostrar = t_raw if t_raw and t_raw not in ("Purchase", "Material Transfer", "Material Issue") else "Sin nombre asignado"
+
+    solicitante_txt = (doc.get("custom_lebaref_solicitante") or "").strip()
+    if not solicitante_txt:
+        solicitante_txt = frappe.utils.get_fullname(doc.owner) or doc.owner
+
+    return {
+        "folio": doc.name,
+        "nombre": nombre_mostrar,
+        "company": doc.company,
+        "tipo_raw": doc.material_request_type,
+        "tipo_etiqueta": tipo_etq,
+        "docstatus": int(doc.docstatus or 0),
+        "status_raw": doc.status or "",
+        "estatus_etiqueta": est_etq,
+        "estatus_color": est_color,
+        "fecha": str(doc.transaction_date or ""),
+        "fecha_requerida": str(doc.schedule_date or ""),
+        "solicitante": solicitante_txt,
+        "departamento": doc.get("custom_lebaref_departamento") or "—",
+        "destino": destino_txt,
+        "origen_anexo": origen_anexo,
+        "origen_texto": origen_txt,
+        "notas": (doc.get("custom_lebaref_notas") or doc.get("terms") or "").strip(),
+        "puede_editar": bool(doc.has_permission("write")),
+        "puede_confirmar": bool(doc.docstatus == 0 and doc.has_permission("submit")),
+        "tiene_conceptos_libres": tiene_conceptos_libres,
+        "siguiente_paso": sig,
+        "partidas": partidas,
+        "expediente": {
+            "anexos": anexos,
+            "cotizaciones": cotizaciones,
+            "ordenes": ordenes,
+            "almacen": movimientos_almacen,
+        },
+    }
 
 
 @frappe.whitelist(methods=["GET"])

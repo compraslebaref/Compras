@@ -1,4 +1,6 @@
 (() => {
+    if (window.__lebarefMaterialRequestJsLoaded) return;
+    window.__lebarefMaterialRequestJsLoaded = true;
     const api = "lebaref_compras.comparativa";
     const SHEETS_URL = "https://docs.google.com/spreadsheets/d/1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I/edit?gid=0#gid=0";
     const numFmt = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -42,10 +44,14 @@
         },
     });
 
-    function abrirDialogoNombreSolicitud(frm) {
-        const actual = frm.doc.custom_lebaref_nombre_solicitud || frm.doc.title || "";
+    function abrirDialogoNombreSolicitud(frmOrFolio, nombreInicial = "", alGuardar = null) {
+        const esFrm = frmOrFolio && typeof frmOrFolio === "object" && frmOrFolio.doc;
+        const folio = esFrm ? frmOrFolio.doc.name : String(frmOrFolio || "");
+        const actual = esFrm
+            ? (frmOrFolio.doc.custom_lebaref_nombre_solicitud || frmOrFolio.doc.title || "")
+            : (nombreInicial && nombreInicial !== "Sin nombre asignado" ? nombreInicial : "");
         const d = new frappe.ui.Dialog({
-            title: `✏️ Nombre / Referencia de la Solicitud · ${frm.doc.name}`,
+            title: `✏️ Nombre / Referencia de la Solicitud · ${folio}`,
             fields: [
                 {
                     fieldname: "nombre",
@@ -60,30 +66,34 @@
                 await frappe.call({
                     method: "lebaref_compras.ux_lebaref.guardar_nombre_solicitud",
                     type: "POST",
-                    args: { solicitud: frm.doc.name, nombre: vals.nombre },
+                    args: { solicitud: folio, nombre: vals.nombre },
                     freeze: true,
                 });
                 d.hide();
                 frappe.show_alert({ message: "Nombre de solicitud actualizado", indicator: "green" });
-                frm.reload_doc();
+                if (typeof alGuardar === "function") alGuardar(vals.nombre);
+                else if (esFrm) frmOrFolio.reload_doc();
             },
         });
         d.show();
     }
 
-    async function abrirDialogoCotizacionDirecta(frm, alGuardar = null) {
+    async function abrirDialogoCotizacionDirecta(frmOrFolio, alGuardar = null) {
+        const folio = frmOrFolio && typeof frmOrFolio === "object" && frmOrFolio.doc
+            ? frmOrFolio.doc.name
+            : String(frmOrFolio || "");
         const [{ message: info }, { message: refsHist }] = await Promise.all([
             frappe.call({
                 method: "lebaref_compras.ux_lebaref.esquema_cotizacion_directa",
                 type: "GET",
-                args: { solicitud: frm.doc.name },
+                args: { solicitud: folio },
                 freeze: true,
                 freeze_message: "Cargando partidas y referencias históricas…",
             }),
             frappe.call({
                 method: "lebaref_compras.analitica_operativa.referencias_historicas_solicitud",
                 type: "GET",
-                args: { solicitud: frm.doc.name },
+                args: { solicitud: folio },
             }).catch(() => ({ message: {} })),
         ]);
         const mapaRefs = refsHist || {};
@@ -101,7 +111,7 @@
         }));
 
         const d = new frappe.ui.Dialog({
-            title: `💰 Capturar Cotización Directa · ${frm.doc.name}`,
+            title: `💰 Capturar Cotización Directa · ${folio}`,
             size: "extra-large",
             fields: [
                 {
@@ -167,7 +177,7 @@
                         method: "lebaref_compras.ux_lebaref.registrar_cotizacion_directa",
                         type: "POST",
                         args: {
-                            solicitud: frm.doc.name,
+                            solicitud: folio,
                             datos: JSON.stringify({
                                 supplier: vals.supplier,
                                 valid_till: vals.valid_till,
@@ -243,9 +253,13 @@
         return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     }
 
-    function abrirDialogoConvertirConcepto(frm) {
-        const libres = (frm.doc.items || []).filter(
-            (r) => r.item_code === "LEBAREF-CONCEPTO-LIBRE" || Boolean(r.custom_lebaref_concepto)
+    function abrirDialogoConvertirConcepto(frmOrFicha, alConvertir = null) {
+        const esFrm = frmOrFicha && typeof frmOrFicha === "object" && frmOrFicha.doc;
+        const folio = esFrm ? frmOrFicha.doc.name : String((frmOrFicha && frmOrFicha.folio) || "");
+        const company = esFrm ? frmOrFicha.doc.company : String((frmOrFicha && frmOrFicha.company) || "");
+        const itemsRaw = esFrm ? (frmOrFicha.doc.items || []) : ((frmOrFicha && frmOrFicha.partidas) || []);
+        const libres = itemsRaw.filter(
+            (r) => r.es_libre || r.item_code === "LEBAREF-CONCEPTO-LIBRE" || Boolean(r.custom_lebaref_concepto)
         );
         if (!libres.length) {
             frappe.msgprint("Esta solicitud no tiene renglones de concepto libre pendientes de convertir.");
@@ -253,12 +267,12 @@
         }
         const opcionesRenglon = libres.map((r) => ({
             value: r.name,
-            label: `#${r.idx} · ${r.custom_lebaref_concepto || r.description || r.name} (${r.qty} ${r.uom || ""})`,
+            label: `#${r.idx} · ${r.custom_lebaref_concepto || r.descripcion || r.description || r.name} (${r.qty} ${r.uom || ""})`,
         }));
         const tokenOp = nuevoUuidLocal();
 
         const dlg = new frappe.ui.Dialog({
-            title: `Convertir concepto libre a SKU inventariable · ${frm.doc.name}`,
+            title: `Convertir concepto libre a SKU inventariable · ${folio}`,
             size: "large",
             fields: [
                 {
@@ -330,7 +344,7 @@
                     label: "Almacén destino del renglón",
                     fieldtype: "Link",
                     options: "Warehouse",
-                    get_query: () => ({ filters: { company: frm.doc.company, is_group: 0, disabled: 0 } }),
+                    get_query: () => ({ filters: { company, is_group: 0, disabled: 0 } }),
                 },
             ],
             primary_action_label: "Convertir y Confirmar Enmienda",
@@ -364,7 +378,7 @@
                         type: "POST",
                         args: {
                             accion: "convertir_concepto",
-                            folio: frm.doc.name,
+                            folio,
                             operacion: tokenOp,
                             datos: JSON.stringify(payload),
                         },
@@ -373,7 +387,8 @@
                     });
                     dlg.hide();
                     frappe.show_alert({ message: `Concepto convertido en ${res.folio}`, indicator: "green" });
-                    frappe.set_route("Form", "Material Request", res.folio);
+                    if (typeof alConvertir === "function") alConvertir(res);
+                    else frappe.set_route("Form", "Material Request", res.folio);
                 } finally {
                     btn.prop("disabled", false);
                 }
@@ -382,22 +397,24 @@
         dlg.show();
     }
 
-    async function showComparison(frm) {
-        if (frm.is_dirty()) {
+    async function showComparison(frmOrFolio, alGenerar = null) {
+        const esFrm = frmOrFolio && typeof frmOrFolio === "object" && frmOrFolio.doc;
+        if (esFrm && frmOrFolio.is_dirty()) {
             frappe.msgprint("Guarda la solicitud antes de abrir la comparativa.");
             return;
         }
+        const folio = esFrm ? frmOrFolio.doc.name : String(frmOrFolio || "");
 
         const [{ message: comparison }, { message: refsHistComp }] = await Promise.all([
             frappe.call({
                 method: api + ".consultar",
                 type: "GET",
-                args: { solicitud: frm.doc.name },
+                args: { solicitud: folio },
             }),
             frappe.call({
                 method: "lebaref_compras.analitica_operativa.referencias_historicas_solicitud",
                 type: "GET",
-                args: { solicitud: frm.doc.name },
+                args: { solicitud: folio },
             }).catch(() => ({ message: {} })),
         ]);
         const mapaRefsComp = refsHistComp || {};
@@ -419,7 +436,7 @@
         }
 
         const dialog = new frappe.ui.Dialog({
-            title: `Cuadro Comparativo Lebaref · ${frm.doc.name}`,
+            title: `Cuadro Comparativo Lebaref · ${folio}`,
             size: "extra-large",
             fields: [{ fieldname: "comparativa", fieldtype: "HTML" }],
         });
@@ -444,7 +461,7 @@
 
         toolbar.find(".leb-btn-add-quote").on("click", () => {
             dialog.hide();
-            abrirDialogoCotizacionDirecta(frm, () => showComparison(frm));
+            abrirDialogoCotizacionDirecta(folio, () => showComparison(frmOrFolio, alGenerar));
         });
 
         toolbar.find(".leb-btn-dir").on("click", () => {
@@ -461,7 +478,7 @@
         if (!suppliers.length) {
             const emptyBox = $(`
                 <div class="alert alert-warning mb-2">
-                    Aún no hay ofertas registradas para <b>${frappe.utils.escape_html(frm.doc.name)}</b>.<br>
+                    Aún no hay ofertas registradas para <b>${frappe.utils.escape_html(folio)}</b>.<br>
                     Haz clic en <b>➕ Capturar Cotización de Proveedor</b> aquí arriba para ingresar precios unitarios, IVA, flete y condiciones de pago directamente sobre esta solicitud.
                 </div>
             `).appendTo(wrapper);
@@ -659,7 +676,7 @@
             updateSummary();
         });
 
-        toolbar.find(".leb-btn-print").on("click", () => printComparisonCarta(frm.doc.name, comparison, suppliers, supplierMeta));
+        toolbar.find(".leb-btn-print").on("click", () => printComparisonCarta(folio, comparison, suppliers, supplierMeta));
 
         if (comparison.puede_generar && radios.length) {
             dialog.set_primary_action("Generar órdenes en borrador", async () => {
@@ -674,13 +691,14 @@
                 try {
                     const { message: orders } = await frappe.call({
                         method: api + ".generar_ordenes",
-                        args: { solicitud: frm.doc.name, seleccion: selection },
+                        args: { solicitud: folio, seleccion: selection },
                         freeze: true,
                         freeze_message: "Generando órdenes de compra con impuestos, flete y programación de pago…",
                     });
                     dialog.hide();
                     showOrders(orders);
-                    frm.reload_doc();
+                    if (typeof alGenerar === "function") alGenerar(orders);
+                    else if (esFrm) frmOrFolio.reload_doc();
                 } finally {
                     button.prop("disabled", false);
                 }
@@ -771,4 +789,11 @@
         result.fields_dict.ordenes.$wrapper.append(list);
         result.show();
     }
+
+    window.lebarefSolicitud = {
+        abrirNombre: abrirDialogoNombreSolicitud,
+        abrirCotizacionDirecta: abrirDialogoCotizacionDirecta,
+        abrirComparativa: showComparison,
+        abrirConvertirConcepto: abrirDialogoConvertirConcepto,
+    };
 })();
