@@ -372,6 +372,10 @@ def configurar_ux_lebaref():
     _ps("Material Request", "custom_lebaref_departamento", "in_standard_filter", 1, "Check")
     _ps("Material Request", "custom_lebaref_solicitante", "in_standard_filter", 1, "Check")
 
+    # Folio oficial de solicitudes: SOL-AAAA-#### (igual que el ERP original y la hoja/enlace de Google)
+    _ps("Material Request", "naming_series", "options", "SOL-.YYYY.-.####", "Text")
+    _ps("Material Request", "naming_series", "default", "SOL-.YYYY.-.####", "Text")
+
     # 2. Distribución limpia de columnas en Listas (evitando truncamiento y ocultando 'company' redundante)
     config_listas = {
         "Material Request": {
