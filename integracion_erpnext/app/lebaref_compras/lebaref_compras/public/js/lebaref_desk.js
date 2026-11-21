@@ -4170,6 +4170,15 @@
             }
         }
 
+        if (s.docstatus !== 2 && s.puede_editar) {
+            if (!s.en_espera_de && !s.concluida) {
+                botonesSecundarios.push(`<button type="button" class="btn btn-xs btn-default leb-sol-act-espera" title="Pausar: depende de alguien externo (no cuenta como pendiente nuestro)">⏸ En espera</button>`);
+            }
+            if (!s.concluida) {
+                botonesSecundarios.push(`<button type="button" class="btn btn-xs btn-default leb-sol-act-concluir" title="Declarar que ya no requiere más pasos">✓ Concluida</button>`);
+            }
+        }
+
         const filasDatos = [
             ["Fecha", s.fecha_requerida && s.fecha_requerida !== s.fecha ? `${s.fecha} · Req: ${s.fecha_requerida}` : (s.fecha || "—")],
             ["Solicitante", s.solicitante || "—"],
@@ -4307,8 +4316,23 @@
             });
         });
 
+        const cambiarEstadoManual = async (accion, detalle = "") => {
+            await frappe.call({
+                method: "lebaref_compras.ux_lebaref.cambiar_estado_manual",
+                type: "POST",
+                args: { solicitud: s.folio, accion, detalle },
+                freeze: true,
+                freeze_message: "Actualizando estatus…",
+            });
+            const msg = { espera: "Solicitud marcada En espera", concluir: "Solicitud marcada como Concluida", reanudar: "Solicitud reanudada" }[accion];
+            frappe.show_alert({ message: msg, indicator: "green" });
+            recargarActual();
+        };
+
         const ejecutarAccionGuiada = async (acc) => {
-            if (acc === "abrir_form") {
+            if (acc === "reanudar") {
+                cambiarEstadoManual("reanudar");
+            } else if (acc === "abrir_form") {
                 frappe.set_route("Form", "Material Request", s.folio);
             } else if (acc === "confirmar_borrador") {
                 frappe.confirm(
@@ -4345,6 +4369,26 @@
 
         $body.find(".leb-sol-sig-btn").on("click", () => ejecutarAccionGuiada(sig.accion));
         $body.find(".leb-sol-act-comp").on("click", () => ejecutarAccionGuiada("comparativa"));
+        $body.find(".leb-sol-act-espera").on("click", () => {
+            frappe.prompt(
+                [{
+                    fieldname: "de",
+                    label: "¿De quién o de qué esperas respuesta?",
+                    fieldtype: "Data",
+                    reqd: 1,
+                    description: "Ej. Gerente / Solicitante, Proveedor AME, Dirección, Cliente",
+                }],
+                (vals) => cambiarEstadoManual("espera", vals.de),
+                `⏸ Poner en espera · ${s.folio}`,
+                "Poner en espera"
+            );
+        });
+        $body.find(".leb-sol-act-concluir").on("click", () => {
+            frappe.confirm(
+                `¿Marcar <b>${esc(s.folio)}</b> como <b>concluida</b>? Dejará de contar como pendiente (puedes reabrirla después).`,
+                () => cambiarEstadoManual("concluir")
+            );
+        });
         $body.find(".leb-sol-act-cot").on("click", () => ejecutarAccionGuiada("cotizar"));
         $body.find(".leb-sol-act-stock").on("click", () => {
             abrirOperacion("canalizar_stock", s.folio, `Canalizar a stock · ${s.folio}`, () => recargarActual());
@@ -4483,11 +4527,18 @@
                 "custom_lebaref_nombre_solicitud",
                 "custom_lebaref_solicitante",
                 "custom_lebaref_departamento",
+                "custom_lebaref_concluida",
+                "custom_lebaref_en_espera_de",
             ])];
 
             frappe.listview_settings["Material Request"] = Object.assign({}, prevMR, {
                 __lebWrapped: true,
                 add_fields: camposExtraMR,
+                get_indicator(doc) {
+                    if (doc.docstatus !== 2 && Number(doc.custom_lebaref_concluida || 0) === 1) return ["Concluida", "green", "custom_lebaref_concluida,=,1"];
+                    if (doc.docstatus !== 2 && doc.custom_lebaref_en_espera_de) return ["En espera", "orange", "custom_lebaref_en_espera_de,is,set"];
+                    return typeof prevMR.get_indicator === "function" ? prevMR.get_indicator(doc) : undefined;
+                },
                 onload(listview) {
                     if (typeof prevMROnload === "function") prevMROnload(listview);
                     inicializarSplitSolicitudes(listview);

@@ -35,10 +35,13 @@ def tablero_pendientes():
                 "material_request_type": "Purchase",
                 "status": ["in", ["Pending", "Partially Ordered"]],
             },
-            fields=["name", "title", "custom_lebaref_nombre_solicitud", "transaction_date", "custom_lebaref_solicitante"],
+            fields=["name", "title", "custom_lebaref_nombre_solicitud", "transaction_date", "custom_lebaref_solicitante",
+                    "custom_lebaref_concluida", "custom_lebaref_en_espera_de"],
             order_by="transaction_date desc",
             limit_page_length=80,
         )
+        # Las marcadas Concluida o En espera (depende de otra persona) no cuentan como pendiente propio
+        mrs = [m for m in mrs if not cint(m.get("custom_lebaref_concluida")) and not (m.get("custom_lebaref_en_espera_de") or "").strip()]
         if mrs:
             mr_names = [m.name for m in mrs]
             mri_rows = frappe.db.sql(

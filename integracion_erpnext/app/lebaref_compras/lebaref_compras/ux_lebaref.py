@@ -233,6 +233,42 @@ def configurar_ux_lebaref():
                 "in_list_view": 1,
                 "in_standard_filter": 1,
             },
+            {
+                "fieldname": "custom_lebaref_en_espera_de",
+                "label": "En espera de",
+                "fieldtype": "Data",
+                "insert_after": "custom_lebaref_nombre_solicitud",
+                "read_only": 1,
+                "allow_on_submit": 1,
+                "no_copy": 1,
+            },
+            {
+                "fieldname": "custom_lebaref_en_espera_desde",
+                "label": "En espera desde",
+                "fieldtype": "Datetime",
+                "insert_after": "custom_lebaref_en_espera_de",
+                "read_only": 1,
+                "allow_on_submit": 1,
+                "no_copy": 1,
+            },
+            {
+                "fieldname": "custom_lebaref_concluida",
+                "label": "Concluida",
+                "fieldtype": "Check",
+                "insert_after": "custom_lebaref_en_espera_desde",
+                "read_only": 1,
+                "allow_on_submit": 1,
+                "no_copy": 1,
+            },
+            {
+                "fieldname": "custom_lebaref_concluida_fecha",
+                "label": "Concluida el",
+                "fieldtype": "Datetime",
+                "insert_after": "custom_lebaref_concluida",
+                "read_only": 1,
+                "allow_on_submit": 1,
+                "no_copy": 1,
+            },
         ],
         "Supplier": [
             {
@@ -612,6 +648,49 @@ def confirmar_solicitud_borrador(solicitud: str):
     return {"ok": True, "folio": doc.name}
 
 
+@frappe.whitelist(methods=["POST"])
+def cambiar_estado_manual(solicitud: str, accion: str, detalle: str = ""):
+    """Marca una solicitud como 'En espera' (con quién), 'Concluida' o la reanuda, con bitácora de quién y cuándo."""
+    doc = frappe.get_doc("Material Request", solicitud)
+    doc.check_permission("write")
+    if doc.docstatus == 2:
+        frappe.throw("La solicitud está cancelada y no admite cambios de estado.")
+    accion = (accion or "").strip().lower()
+    detalle = (detalle or "").strip()[:140]
+    ahora = frappe.utils.now_datetime()
+    usuario = frappe.utils.get_fullname(frappe.session.user) or frappe.session.user
+
+    if accion == "espera":
+        if not detalle:
+            frappe.throw("Indica de quién o de qué se está esperando respuesta (ej. Gerente / Proveedor).")
+        doc.db_set({
+            "custom_lebaref_en_espera_de": detalle,
+            "custom_lebaref_en_espera_desde": ahora,
+            "custom_lebaref_concluida": 0,
+            "custom_lebaref_concluida_fecha": None,
+        }, update_modified=True)
+        doc.add_comment("Info", f"⏸ En espera de: {detalle} (marcado por {usuario})")
+    elif accion == "concluir":
+        doc.db_set({
+            "custom_lebaref_concluida": 1,
+            "custom_lebaref_concluida_fecha": ahora,
+            "custom_lebaref_en_espera_de": "",
+            "custom_lebaref_en_espera_desde": None,
+        }, update_modified=True)
+        doc.add_comment("Info", f"✓ Marcada como concluida por {usuario}" + (f": {detalle}" if detalle else ""))
+    elif accion in ("reanudar", "reabrir"):
+        doc.db_set({
+            "custom_lebaref_en_espera_de": "",
+            "custom_lebaref_en_espera_desde": None,
+            "custom_lebaref_concluida": 0,
+            "custom_lebaref_concluida_fecha": None,
+        }, update_modified=True)
+        doc.add_comment("Info", f"↩ Reanudada por {usuario}")
+    else:
+        frappe.throw("Acción de estado no válida.")
+    return {"ok": True, "solicitud": doc.name, "accion": accion}
+
+
 @frappe.whitelist(methods=["GET"])
 def ficha_solicitud(solicitud: str):
     """Devuelve la Ficha y el Expediente trazable de una Solicitud para el panel lateral en Solicitudes (Lista + Ficha)."""
@@ -918,6 +997,28 @@ def ficha_solicitud(solicitud: str):
                 "boton": "",
             }
 
+    en_espera_de = (doc.get("custom_lebaref_en_espera_de") or "").strip()
+    concluida = bool(int(doc.get("custom_lebaref_concluida") or 0))
+    if doc.docstatus != 2:
+        if concluida:
+            est_etq, est_color = "Concluida", "green"
+            sig = {
+                "tono": "green",
+                "titulo": "✓ CONCLUIDA",
+                "mensaje": f"Marcada como concluida el {str(doc.get('custom_lebaref_concluida_fecha') or '')[:16]}. No requiere más pasos.",
+                "accion": "reanudar",
+                "boton": "↩ Reabrir",
+            }
+        elif en_espera_de:
+            est_etq, est_color = f"En espera: {en_espera_de}", "orange"
+            sig = {
+                "tono": "amber",
+                "titulo": "⏸ EN ESPERA",
+                "mensaje": f"Pausada desde {str(doc.get('custom_lebaref_en_espera_desde') or '')[:16]}: depende de {en_espera_de}. No cuenta como pendiente propio.",
+                "accion": "reanudar",
+                "boton": "▶ Reanudar",
+            }
+
     destino_partes = []
     if obras_set:
         destino_partes.append("Obra: " + ", ".join(obras_set[:3]))
@@ -958,6 +1059,8 @@ def ficha_solicitud(solicitud: str):
         "puede_editar": bool(doc.has_permission("write")),
         "puede_confirmar": bool(doc.docstatus == 0 and doc.has_permission("submit")),
         "tiene_conceptos_libres": tiene_conceptos_libres,
+        "en_espera_de": en_espera_de,
+        "concluida": concluida,
         "siguiente_paso": sig,
         "partidas": partidas,
         "expediente": {
