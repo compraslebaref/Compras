@@ -29,15 +29,6 @@
   },
   {
    "doctype": "Sidebar Item",
-   "icon": "file-text",
-   "is_default_module": 1,
-   "label": "Peticiones de cotización",
-   "link_to": "Request for Quotation",
-   "link_type": "DocType",
-   "type": "Link"
-  },
-  {
-   "doctype": "Sidebar Item",
    "icon": "file-check",
    "is_default_module": 1,
    "label": "Cotizaciones de proveedores",
@@ -65,18 +56,26 @@
   },
   {
    "doctype": "Sidebar Item",
-   "icon": "external-link",
-   "is_default_module": 0,
-   "label": "¿A quién cotizar? (Sheets)",
-   "link_type": "URL",
-   "open_in_new_tab": 1,
-   "type": "Link",
-   "url": "https://docs.google.com/spreadsheets/d/1AbYtP9Li1fw_4CjESRV8rhu7a7HrOage0XdnXkIS01I/edit?gid=0#gid=0"
+   "icon": "file-text",
+   "is_default_module": 1,
+   "label": "Facturas y Notas de Compra",
+   "link_to": "Purchase Invoice",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "credit-card",
+   "is_default_module": 1,
+   "label": "Pagos a Proveedores",
+   "link_to": "Payment Entry",
+   "link_type": "DocType",
+   "type": "Link"
   },
   {
    "collapsible": 1,
    "doctype": "Sidebar Item",
-   "label": "Almacén y Catálogos",
+   "label": "Almacén, Obras y Catálogos",
    "type": "Section Break"
   },
   {
@@ -85,6 +84,15 @@
    "is_default_module": 1,
    "label": "Recepciones de compra",
    "link_to": "Purchase Receipt",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "repeat",
+   "is_default_module": 1,
+   "label": "Sustituciones autorizadas",
+   "link_to": "Lebaref Sustitucion",
    "link_type": "DocType",
    "type": "Link"
   },
@@ -99,10 +107,28 @@
   },
   {
    "doctype": "Sidebar Item",
+   "icon": "clipboard-check",
+   "is_default_module": 1,
+   "label": "Conteos y mermas",
+   "link_to": "Stock Reconciliation",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
    "icon": "package",
    "is_default_module": 1,
    "label": "Artículos (Catálogo)",
    "link_to": "Item",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
+   "icon": "layers",
+   "is_default_module": 1,
+   "label": "Existencias por almacén",
+   "link_to": "Bin",
    "link_type": "DocType",
    "type": "Link"
   },
@@ -117,6 +143,15 @@
   },
   {
    "doctype": "Sidebar Item",
+   "icon": "users",
+   "is_default_module": 1,
+   "label": "Clientes",
+   "link_to": "Customer",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "doctype": "Sidebar Item",
    "icon": "folder",
    "is_default_module": 1,
    "label": "Obras / Proyectos",
@@ -126,10 +161,10 @@
   },
   {
    "doctype": "Sidebar Item",
-   "icon": "layers",
+   "icon": "git-branch",
    "is_default_module": 1,
-   "label": "Existencias por almacén",
-   "link_to": "Bin",
+   "label": "Departamentos",
+   "link_to": "Department",
    "link_type": "DocType",
    "type": "Link"
   },
