@@ -70,6 +70,7 @@ def main():
             salida.append({
                 "id": f.name, "archivo": f.file_name, "tipo": TIPOS[f.attached_to_doctype],
                 "documento": f.attached_to_name, "proveedor": proveedor, "solicitud": sol, "ruta": ruta,
+                "departamento": frappe.db.get_value("Material Request", sol, "custom_lebaref_departamento") or "",
             })
         print("EXPEDIENTE_JSON:" + json.dumps(salida, ensure_ascii=False))
     finally:
