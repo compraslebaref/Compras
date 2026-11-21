@@ -1030,10 +1030,134 @@
         }
     });
 
+    async function abrirGestorUsuariosOficina() {
+        const { message: data } = await frappe.call({
+            method: "lebaref_compras.ux_lebaref.listar_usuarios_oficina",
+            type: "GET",
+            freeze: true,
+            freeze_message: "Consultando cuentas de la oficina…",
+        });
+        const esc = frappe.utils.escape_html;
+        const perfiles = (data && data.perfiles) || [];
+        const usuarios = (data && data.usuarios) || [];
+
+        const abrirEditorUsuario = (usr = null) => {
+            const dEd = new frappe.ui.Dialog({
+                title: usr ? `✏️ Personalizar Usuario · ${usr.email}` : "➕ Nueva Cuenta de Auxiliar / Área",
+                fields: [
+                    {
+                        fieldname: "email",
+                        label: "Correo de inicio de sesión",
+                        fieldtype: "Data",
+                        default: usr ? usr.email : "",
+                        read_only: usr ? 1 : 0,
+                        reqd: 1,
+                    },
+                    {
+                        fieldname: "first_name",
+                        label: "Nombre de la persona (o puesto)",
+                        fieldtype: "Data",
+                        default: usr ? usr.first_name : "",
+                        reqd: 1,
+                    },
+                    {
+                        fieldname: "last_name",
+                        label: "Apellidos",
+                        fieldtype: "Data",
+                        default: usr ? usr.last_name || "" : "",
+                    },
+                    {
+                        fieldname: "role_profile_name",
+                        label: "Perfil de Permisos Lebaref",
+                        fieldtype: "Select",
+                        options: perfiles.join("\n"),
+                        default: usr && usr.role_profile_name ? usr.role_profile_name : (perfiles[0] || ""),
+                        reqd: 1,
+                    },
+                    {
+                        fieldname: "new_password",
+                        label: usr ? "Nueva contraseña (dejar vacío para conservar actual)" : "Contraseña inicial (mín. 8 caracteres)",
+                        fieldtype: "Password",
+                        reqd: usr ? 0 : 1,
+                    },
+                    {
+                        fieldname: "enabled",
+                        label: "Cuenta activa (puede iniciar sesión)",
+                        fieldtype: "Check",
+                        default: usr ? Number(usr.enabled) : 1,
+                    },
+                ],
+                primary_action_label: "Guardar Usuario",
+                async primary_action(vals) {
+                    await frappe.call({
+                        method: "lebaref_compras.ux_lebaref.guardar_usuario_oficina",
+                        type: "POST",
+                        args: { datos: JSON.stringify(vals) },
+                        freeze: true,
+                        freeze_message: "Aplicando configuración de usuario…",
+                    });
+                    dEd.hide();
+                    d.hide();
+                    frappe.show_alert({ message: "Usuario de oficina actualizado", indicator: "green" });
+                    abrirGestorUsuariosOficina();
+                },
+            });
+            dEd.show();
+        };
+
+        const trs = usuarios
+            .map(
+                (u, i) => `<tr>
+                    <td><b>${esc(u.full_name || u.first_name || u.name)}</b><br><small class="text-muted">${esc(u.email || u.name)}</small></td>
+                    <td><span class="badge badge-info">${esc(u.role_profile_name || "Personalizado")}</span></td>
+                    <td>${Number(u.enabled) ? '<span class="indicator-pill green">Activo</span>' : '<span class="indicator-pill gray">Inactivo</span>'}</td>
+                    <td class="text-right"><button type="button" class="btn btn-xs btn-default leb-usr-edit" data-idx="${i}">✏️ Renombrar / Clave / Rol</button></td>
+                </tr>`
+            )
+            .join("");
+
+        const d = new frappe.ui.Dialog({
+            title: "👥 Cuentas de Oficina Lebaref (Auxiliares, Finanzas y Dirección)",
+            size: "large",
+            fields: [
+                {
+                    fieldname: "_html",
+                    fieldtype: "HTML",
+                    options: `
+                        <div class="alert alert-info py-2 px-3 mb-2" style="font-size:12px;">
+                            Aquí puedes poner el <b>nombre real de cada auxiliar</b>, cambiar su contraseña o ajustar su perfil:<br>
+                            • <b>Lebaref Auxiliar Operativo Mixto:</b> Compras + Almacén + Herramientas/Flotilla, <b>sin autorizar OCs, ajustes ni pagos</b>.<br>
+                            • <b>Lebaref Finanzas y Contabilidad:</b> Conciliación CFDI, Facturas/Notas y preparación de Pagos, <b>sin autorizar</b>.<br>
+                            • <b>Lebaref Coordinador Operativo:</b> Autorización completa (Oscar / Dirección).
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm mb-0" style="font-size:12px;">
+                                <thead style="background:#031e34;color:#fff;">
+                                    <tr><th>Nombre / Correo</th><th>Perfil Asignado</th><th>Estado</th><th class="text-right">Acción</th></tr>
+                                </thead>
+                                <tbody>${trs || "<tr><td colspan='4' class='text-muted'>Sin cuentas registradas.</td></tr>"}</tbody>
+                            </table>
+                        </div>
+                    `,
+                },
+            ],
+            primary_action_label: "➕ Crear Nueva Cuenta",
+            primary_action() {
+                abrirEditorUsuario(null);
+            },
+        });
+
+        d.fields_dict._html.$wrapper.find(".leb-usr-edit").on("click", function () {
+            const idx = Number($(this).data("idx"));
+            if (usuarios[idx]) abrirEditorUsuario(usuarios[idx]);
+        });
+        d.show();
+    }
+
     // Enlaces rápidos del banner superior en el Workspace Lebaref
     $(document).on(
         "click",
-        'a[href="#leb-pendientes"], a[href="#leb-minimos"], a[href="#leb-analitica"], a[href="#leb-escanear-s30w"], a[href="#leb-codigos-carta"], a[href="#leb-mapa-af"], a[href="#leb-historico"]',
+        'a[href="#leb-pendientes"], a[href="#leb-minimos"], a[href="#leb-analitica"], a[href="#leb-escanear-s30w"], a[href="#leb-codigos-carta"], a[href="#leb-mapa-af"], a[href="#leb-historico"], a[href="#leb-usuarios"]',
         function (ev) {
             ev.preventDefault();
             const href = $(this).attr("href");
@@ -1044,6 +1168,7 @@
             else if (href === "#leb-codigos-carta") abrirImpresorCodigosCarta("articulos");
             else if (href === "#leb-mapa-af") abrirMapaUbicaciones();
             else if (href === "#leb-historico") abrirArchivoHistorico("precios");
+            else if (href === "#leb-usuarios") abrirGestorUsuariosOficina();
         }
     );
 

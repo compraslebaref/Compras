@@ -1094,3 +1094,102 @@ def agregar_item_a_solicitud(
     )
     frappe.db.set_value("Material Request", res_new["folio"], "custom_lebaref_nombre_solicitud", nom[:140], update_modified=False)
     return res_new
+
+
+PERFILES_OFICINA_PERMITIDOS = (
+    "Lebaref Auxiliar Operativo Mixto",
+    "Lebaref Finanzas y Contabilidad",
+    "Lebaref Coordinador Operativo",
+    "Lebaref Auxiliar de Compras",
+    "Lebaref Auxiliar de Almacén",
+    "Lebaref Responsable de Compras",
+)
+
+
+def _exigir_coordinador_usuarios():
+    roles = set(frappe.get_roles())
+    if "System Manager" in roles:
+        return
+    if {"Purchase Manager", "Stock Manager", "Accounts Manager"}.issubset(roles):
+        return
+    frappe.throw("Solo el Coordinador Operativo o Dirección puede administrar cuentas de usuarios.", frappe.PermissionError)
+
+
+@frappe.whitelist(methods=["GET"])
+def listar_usuarios_oficina():
+    """Devuelve las cuentas operativas de la oficina para renombrar auxiliares o actualizar su contraseña (OPS-03 / SEG-01)."""
+    _exigir_coordinador_usuarios()
+    excluidos = ("Guest", "Administrator")
+    usuarios = frappe.get_all(
+        "User",
+        filters={"name": ["not in", excluidos], "user_type": "System User"},
+        fields=["name", "email", "first_name", "last_name", "full_name", "enabled", "role_profile_name", "last_login"],
+        order_by="enabled desc, creation asc",
+    )
+    filtrados = [u for u in usuarios if not str(u.name).endswith("@lebaref.test")]
+    return {
+        "usuarios": filtrados,
+        "perfiles": [p for p in PERFILES_OFICINA_PERMITIDOS if frappe.db.exists("Role Profile", p)],
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def guardar_usuario_oficina(datos: str):
+    """Crea o actualiza el nombre real, perfil operativo, estado activo y contraseña de un usuario de oficina."""
+    from frappe.utils.password import update_password
+
+    _exigir_coordinador_usuarios()
+    d = frappe.parse_json(datos) if isinstance(datos, str) else datos
+    if not isinstance(d, dict):
+        frappe.throw("Datos de usuario inválidos.")
+
+    email = (d.get("email") or "").strip().lower()
+    nombre = (d.get("first_name") or "").strip()
+    apellido = (d.get("last_name") or "").strip()
+    perfil = (d.get("role_profile_name") or "").strip()
+    nueva_pwd = (d.get("new_password") or "").strip()
+    activo = 1 if int(d.get("enabled", 1)) else 0
+
+    if not email or "@" not in email:
+        frappe.throw("Indica un correo válido para iniciar sesión (ej. juan.perez@lebaref.com).")
+    if not nombre:
+        frappe.throw("Indica el nombre de la persona o puesto.")
+    if perfil not in PERFILES_OFICINA_PERMITIDOS or not frappe.db.exists("Role Profile", perfil):
+        frappe.throw("Selecciona un perfil operativo válido de Lebaref.")
+
+    es_nuevo = not frappe.db.exists("User", email)
+    if es_nuevo:
+        if len(nueva_pwd) < 8:
+            frappe.throw("Asigna una contraseña inicial de al menos 8 caracteres para la cuenta nueva.")
+        u = frappe.get_doc({
+            "doctype": "User",
+            "email": email,
+            "first_name": nombre[:80],
+            "last_name": apellido[:80],
+            "language": "es",
+            "enabled": activo,
+            "send_welcome_email": 0,
+            "user_type": "System User",
+            "role_profile_name": perfil,
+            "role_profiles": [{"role_profile": perfil}],
+        })
+        u.insert(ignore_permissions=True)
+    else:
+        u = frappe.get_doc("User", email)
+        u.first_name = nombre[:80]
+        u.last_name = apellido[:80]
+        u.language = "es"
+        u.enabled = activo
+        u.role_profile_name = perfil
+        if u.meta.has_field("role_profiles"):
+            u.set("role_profiles", [{"role_profile": perfil}])
+        u.populate_role_profile_roles()
+        u.save(ignore_permissions=True)
+
+    if nueva_pwd:
+        if len(nueva_pwd) < 8:
+            frappe.throw("La contraseña nueva debe tener al menos 8 caracteres.")
+        update_password(u.name, nueva_pwd)
+
+    frappe.db.set_default("desktop:home_page", "lebaref", parent=u.name)
+    return {"ok": True, "email": u.name, "full_name": u.full_name, "nuevo": es_nuevo}

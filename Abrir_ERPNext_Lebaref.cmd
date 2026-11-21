@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Plataforma ERP Lebaref (ERPNext 16)
+title Plataforma ERP Lebaref (Estacion Servidor)
 set "ERP_URL=http://127.0.0.1:8186/app/lebaref"
 set "PRUEBAS_DIR=%~dp0integracion_erpnext\pruebas"
 
@@ -15,6 +15,7 @@ if %ERRORLEVEL% NEQ 0 (
     schtasks.exe /Run /TN "Lebaref-Pruebas-WSL" >nul 2>&1
     powershell -NoProfile -ExecutionPolicy Bypass -File "%PRUEBAS_DIR%\Entorno-Pruebas.ps1" -Accion Iniciar -DistribucionWSL Ubuntu
 )
+schtasks.exe /Run /TN "Lebaref-Pruebas-WSL" >nul 2>&1
 
 if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" (
     start "" "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" --app="%ERP_URL%"

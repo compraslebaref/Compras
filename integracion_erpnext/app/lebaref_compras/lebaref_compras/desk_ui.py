@@ -116,6 +116,7 @@ def _construir_contenido_workspace():
         f'<a href="#leb-codigos-carta" style="{pill_base}background:#0d5b94;color:#ffffff;border-color:#0d5b94;">🏷️ Hojas de Códigos Carta</a>'
         f'<a href="#leb-mapa-af" style="{pill_base}background:#ffffff;color:#031e34;">🗺️ Mapa Zonas A–F</a>'
         f'<a href="#leb-historico" style="{pill_base}background:#ffffff;color:#031e34;">📜 Archivo Histórico</a>'
+        f'<a href="#leb-usuarios" style="{pill_base}background:#ffffff;color:#031e34;">👥 Usuarios Oficina</a>'
         '</div></div>'
         '<div id="leb-ws-live-strip" style="margin-top:8px;"></div>'
         '</div>'
@@ -158,23 +159,63 @@ def configurar_plantillas_comerciales():
     if frappe.db.exists("DocType", "Buying Settings"):
         frappe.db.set_single_value("Buying Settings", "po_required", "No")
 
-    # Perfil Coordinador Operativo (Compras + Almacén + Contabilidad/Pagos) para ALM-02..08 y XML-02..04
+    # Perfiles operativos de oficina: Coordinador, Auxiliar Mixto (Compras + Almacén sin autorizar) y Finanzas
+    perfiles_oficina = {
+        "Lebaref Coordinador Operativo": ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager", "Accounts User", "Accounts Manager"),
+        "Lebaref Auxiliar Operativo Mixto": ("Purchase User", "Stock User"),
+        "Lebaref Finanzas y Contabilidad": ("Accounts User", "Purchase User"),
+    }
+    for nombre_rp, roles_rp in perfiles_oficina.items():
+        roles_validos = [r for r in roles_rp if frappe.db.exists("Role", r)]
+        if not frappe.db.exists("Role Profile", nombre_rp):
+            frappe.get_doc({
+                "doctype": "Role Profile",
+                "role_profile": nombre_rp,
+                "roles": [{"role": r} for r in roles_validos],
+            }).insert(ignore_permissions=True)
+        else:
+            rp_doc = frappe.get_doc("Role Profile", nombre_rp)
+            actuales = {r.role for r in rp_doc.roles}
+            if actuales != set(roles_validos):
+                rp_doc.set("roles", [{"role": r} for r in roles_validos])
+                rp_doc.save(ignore_permissions=True)
+
     perfil_coord = "Lebaref Coordinador Operativo"
-    roles_coord = ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager", "Accounts User", "Accounts Manager")
-    if not frappe.db.exists("Role Profile", perfil_coord):
-        frappe.get_doc({
-            "doctype": "Role Profile",
-            "role_profile": perfil_coord,
-            "roles": [{"role": r} for r in roles_coord if frappe.db.exists("Role", r)],
-        }).insert(ignore_permissions=True)
-    else:
-        rp_doc = frappe.get_doc("Role Profile", perfil_coord)
-        existentes_rp = {r.role for r in rp_doc.roles}
-        faltantes_rp = [r for r in roles_coord if r not in existentes_rp and frappe.db.exists("Role", r)]
-        if faltantes_rp:
-            for r in faltantes_rp:
-                rp_doc.append("roles", {"role": r})
-            rp_doc.save(ignore_permissions=True)
+    roles_coord = perfiles_oficina[perfil_coord]
+
+    # Separación estricta SEG-01: Auxiliar Mixto captura conteos/mermas en borrador sin autorizar; Finanzas captura facturas/pagos en borrador sin autorizar
+    from frappe.permissions import setup_custom_perms
+    if frappe.db.exists("DocType", "Stock Reconciliation"):
+        setup_custom_perms("Stock Reconciliation")
+        regla_sr = frappe.db.get_value(
+            "Custom DocPerm",
+            {"parent": "Stock Reconciliation", "role": "Stock User", "permlevel": 0, "if_owner": 0},
+            "name",
+        )
+        derechos_sr = {"read": 1, "create": 1, "write": 1, "select": 1, "submit": 0, "cancel": 0, "amend": 0}
+        if regla_sr:
+            update_custom_docperm(regla_sr, derechos_sr)
+        else:
+            frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": "Stock Reconciliation",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": "Stock User",
+                "permlevel": 0,
+                **derechos_sr,
+            }).insert(ignore_permissions=True)
+
+    for dt_fin in ("Purchase Invoice", "Payment Entry"):
+        if frappe.db.exists("DocType", dt_fin):
+            setup_custom_perms(dt_fin)
+            regla_fin = frappe.db.get_value(
+                "Custom DocPerm",
+                {"parent": dt_fin, "role": "Accounts User", "permlevel": 0, "if_owner": 0},
+                "name",
+            )
+            if regla_fin:
+                update_custom_docperm(regla_fin, {"read": 1, "create": 1, "write": 1, "select": 1, "submit": 0, "cancel": 0, "amend": 0})
 
     # Asegurar cuenta operativa real de Oscar en español con perfil Coordinador Operativo
     correo_oscar = "oscar.gomez@lebaref.com"
