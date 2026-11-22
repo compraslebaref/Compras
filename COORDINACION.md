@@ -106,3 +106,7 @@
 - **2026-11-19 — Codex, SOL-02 (`daf8a9f`), CAT-03 (`00f2a90`), CAT-02 (`1371366`), COM-02 (`96f8082`):** Entregados y verificados en backend y documentados en [`CONTRATO-API.md`](integracion_erpnext/CONTRATO-API.md).
 - **2026-11-19 — Antigravity ([OPS-01 / CAT-03] `45eee19`, `7d80cf2`):** Migrados 889 maestros reales a `lebaref-pruebas.local` y creada hoja oficial Google Sheets *¿A quién cotizar?*.
 
+
+## Pendientes solicitados por el usuario
+
+- [ ] **UX-KANBAN-01 — Tablero tipo Trello dentro de ERPNext para Lebaref** (registrado el 20-nov-2026). Aprovechar Kanban nativo de Frappe Desk para seguimiento de compras. Flujo propuesto por definir al implementarlo: Solicitado → Cotizando → Por autorizar → Ordenado → Por recibir → Completado. Mostrar responsable, proyecto/obra, proveedor, fecha límite y acceso a requisición u orden de compra; agregar filtros por obra, prioridades y pendientes vencidos. Las etapas sujetas a autorización, recepción o pago deben reflejar las operaciones y permisos del ERP. Responsable propuesto: carril Desk de Antigravity, con apoyo de Codex si requiere consultas o reglas de backend. **Estado: pendiente, sin implementar; el usuario solicitó únicamente registrarlo.**
