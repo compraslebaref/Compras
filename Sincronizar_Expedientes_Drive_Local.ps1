@@ -3,10 +3,11 @@
 # Estructura:  <Mi unidad>\Solicitudes\<Departamento>\<SOL-AAAA-####>\<Tipo> - <Proveedor> - <Documento> - <archivo>
 # Idempotente: si el archivo ya existe en la carpeta no se vuelve a copiar. Se ejecuta cada 5 min con una tarea de Windows.
 $ErrorActionPreference = 'Stop'
-$base = 'C:\Users\oscar\Proyectos\Lebaref'
-$pruebasDir = "$base\app\integracion_erpnext\pruebas"
-$pyTool = "$base\app\integracion_erpnext\herramientas\listar_adjuntos_expediente.py"
-$log = "$base\expedientes_drive.log"
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$pyTool = Join-Path $PSScriptRoot 'integracion_erpnext\herramientas\listar_adjuntos_expediente.py'
+$log = Join-Path (Split-Path -Parent $PSScriptRoot) 'expedientes_drive.log'
 function Log($m) { Add-Content -LiteralPath $log -Value ("{0}  {1}" -f (Get-Date -Format 's'), $m) -Encoding utf8 }
 
 try {
@@ -29,13 +30,14 @@ try {
     if (-not (Test-Path -LiteralPath $solicitudes)) { New-Item -ItemType Directory -Path $solicitudes | Out-Null }
 
     # 2. Adjuntos del ERP ligados a solicitudes
-    function Compose { & wsl.exe -d Ubuntu --cd $pruebasDir --exec docker compose --env-file .env -f compose.yaml @args }
-    $backendId = ([string](Compose ps -q backend)).Trim()
-    if (-not $backendId) { Log 'ERP apagado (sin contenedor backend); se reintenta en el siguiente ciclo.'; exit 0 }
-    $wslPy = ([string](& wsl.exe -d Ubuntu --exec wslpath -a $pyTool)).Trim()
-    & wsl.exe -d Ubuntu --exec docker cp $wslPy "${backendId}:/tmp/listar_adjuntos_expediente.py" | Out-Null
-    $out = (Compose exec -T backend /home/frappe/frappe-bench/env/bin/python /tmp/listar_adjuntos_expediente.py) -join "`n"
-    Compose exec -T -u root backend rm -f /tmp/listar_adjuntos_expediente.py | Out-Null
+    $backends = @(& wsl.exe -d Ubuntu --exec docker ps -q --filter 'label=com.docker.compose.project=lebaref-pruebas' --filter 'label=com.docker.compose.service=backend')
+    if ($LASTEXITCODE -ne 0) { throw 'No se pudo consultar Docker en Ubuntu.' }
+    if ($backends.Count -eq 0) { Log 'ERP apagado (sin contenedor backend); se reintenta en el siguiente ciclo.'; exit 0 }
+    if ($backends.Count -ne 1 -or $backends[0] -notmatch '^[0-9a-f]{12,64}$') { throw 'No se pudo identificar un unico backend del ERP.' }
+    $backendId = $backends[0]
+    $source = Get-Content -LiteralPath $pyTool -Encoding utf8 -Raw
+    $out = ($source | & wsl.exe -d Ubuntu --exec docker exec -i $backendId /home/frappe/frappe-bench/env/bin/python -) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'El backend no pudo listar los adjuntos.' }
     $linea = ($out -split "`n" | Where-Object { $_ -like 'EXPEDIENTE_JSON:*' } | Select-Object -First 1)
     if (-not $linea) { Log "No se pudo listar adjuntos: $out"; exit 1 }
     $adjuntos = $linea.Substring('EXPEDIENTE_JSON:'.Length) | ConvertFrom-Json
@@ -55,9 +57,10 @@ try {
         $nombre = (($partes -join ' - ') + ' - ' + $a.archivo) -replace '[\\/:*?"<>|]', '_'
         $destino = Join-Path $carpeta $nombre
         if (Test-Path -LiteralPath $destino) { continue }
-        $wslDest = ([string](& wsl.exe -d Ubuntu --exec wslpath -a $destino)).Trim()
+        $wslDest = & wsl.exe -d Ubuntu --exec wslpath -a $destino
+        if ($LASTEXITCODE -ne 0 -or -not $wslDest) { Log 'FALLO resolver ruta de destino en WSL.'; continue }
         & wsl.exe -d Ubuntu --exec docker cp "${backendId}:$($a.ruta)" $wslDest | Out-Null
-        if (-not (Test-Path -LiteralPath $destino)) { Log "FALLO copiar $($a.ruta) -> $destino"; continue }
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $destino)) { Log "FALLO copiar $($a.ruta) -> $destino"; continue }
         $copiados++
         Log "COPIADO $($a.solicitud) <- $nombre"
     }

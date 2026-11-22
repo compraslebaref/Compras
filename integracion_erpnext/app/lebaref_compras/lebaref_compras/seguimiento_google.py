@@ -103,7 +103,7 @@ def _phase(doc, quotes):
         return "Concluida", "Sin pasos pendientes"
     waiting = _text(doc.get("custom_lebaref_en_espera_de"), 200)
     if waiting:
-        return "En espera", f"Esperando respuesta de {waiting}"
+        return "En espera", f"En espera de: {waiting}"
     if doc.status == "Stopped":
         return "Detenida", "Revisar solicitud con Compras"
     if doc.status in ("Received", "Transferred", "Issued"):
@@ -184,11 +184,18 @@ def _stage(doc, area):
     payload = _snapshot(doc, area)
     fingerprint = sha256(_json(payload).encode()).hexdigest()
     name = frappe.db.get_value(QUEUE, {"solicitud": doc.name}, "name")
+    if not name:
+        name = frappe.db.get_value(QUEUE, {"folio": payload["id"]}, "name")
     state = frappe.get_doc(QUEUE, name) if name else frappe.new_doc(QUEUE)
-    if state.huella == fingerprint:
-        return
     if name and (state.folio != payload["id"] or state.gerencia != area):
         raise ValueError("El cambio de folio o gerencia requiere migrar el expediente")
+    renamed = bool(name and state.solicitud != doc.name)
+    if renamed and frappe.db.exists("Material Request", state.solicitud):
+        raise ValueError("El folio pertenece a otra solicitud en la cola")
+    if state.huella == fingerprint:
+        if renamed:
+            frappe.db.set_value(QUEUE, state.name, "solicitud", doc.name)
+        return
     version = (state.version or 0) + 1
     body = _json(dict(payload, version=version))
     if len(body.encode("utf-16-le")) // 2 > 40000 or max(len(payload["items"]), len(payload["quotes"])) > 300:
