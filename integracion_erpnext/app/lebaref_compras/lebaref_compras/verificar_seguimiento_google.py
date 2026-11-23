@@ -56,6 +56,27 @@ def verificar():
                 sync._deliver(state, "https://script.google.com/macros/s/test/exec", secret)
             state.reload()
             assert state.pendiente and state.intentos == 1 and "versión" in state.ultimo_error
+            renamed = SimpleNamespace(name=original["id"])
+            with patch.object(frappe.db, "exists", return_value=True):
+                try:
+                    sync._stage(renamed, "HVAC")
+                except ValueError as exc:
+                    assert "otra solicitud" in str(exc)
+                else:
+                    raise AssertionError("Se reasignó un folio con su solicitud anterior aún presente")
+            sync._stage(renamed, "HVAC")
+            state.reload()
+            assert state.solicitud == renamed.name and state.version == 2 and state.intentos == 1
+            fields = {"custom_lebaref_en_espera_de": "  autorización de Ingeniería  "}
+            waiting = SimpleNamespace(docstatus=1, status="Pending", get=fields.get)
+            status, next_step = sync._phase(waiting, [])
+            assert (status, next_step) == ("En espera", "En espera de: autorización de Ingeniería")
+            snapshot.return_value = dict(original, status=status, next=next_step)
+            sync._stage(renamed, "HVAC")
+            state.reload()
+            assert state.version == 3 and state.pendiente and state.intentos == 0
+            assert json.loads(state.snapshot)["next"] == next_step
+            assert frappe.db.count(sync.QUEUE, {"folio": original["id"]}) == 1
     finally:
         frappe.db.rollback()
 

@@ -34,4 +34,12 @@ El ERP es el origen. Apps Script actualiza [General](https://docs.google.com/spr
 
 El identificador, la versión, el estado, los intentos y el próximo reintento se consultan en **Lebaref Sync Solicitud** con rol de administrador del sistema. No eliminar la cola al reinstalar la app, ya que contiene las versiones aceptadas por Google. Una versión remota diferente se conserva como error pendiente para revisar el estado de `_Datos`.
 
+Al marcar una solicitud **En espera**, General muestra **En espera** y el siguiente paso contiene **En espera de: <detalle>**. La cola conserva el folio y la versión cuando la solicitud de ERPNext pasa del nombre anterior al folio oficial, siempre que el documento con el nombre anterior ya no exista. Los cambios en el estado o el detalle producen una versión nueva.
+
 La prueba automatizada `lebaref_compras.verificar_seguimiento_google.verificar` usa respuestas locales y verifica firma, reintento y confirmación por versión.
+
+## Adjuntos de expedientes en Windows
+
+Desde el repositorio en el equipo que ejecuta ERPNext y tiene Google Drive para escritorio, abre `Activar_Sync_Expedientes_Drive.cmd` con la cuenta de Windows que tiene la unidad de Drive montada. El instalador registra el lanzador silencioso con rutas relativas al repositorio. Una instalación nueva ejecuta la tarea cada cinco minutos durante la sesión de Windows. Si la tarea ya existe, el instalador actualiza su acción y conserva la cuenta y los horarios registrados.
+
+La acción usa `wscript.exe` y espera la salida de PowerShell sin abrir una consola. El resultado queda en el Programador de tareas y el detalle en `expedientes_drive.log`, en la carpeta superior del repositorio. Ejecuta el instalador nuevamente si cambias de ubicación el repositorio.
