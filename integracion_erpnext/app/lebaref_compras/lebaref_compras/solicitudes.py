@@ -76,9 +76,17 @@ def renglon(row, schedule_date):
     )
     if not generic or generic.disabled or generic.is_stock_item or not generic.is_purchase_item:
         frappe.throw("El artículo interno para conceptos libres no está disponible. Revisa la configuración.")
-    validate_uoms_are_enabled([generic.stock_uom])
-    units = dict(uom=generic.stock_uom, stock_uom=generic.stock_uom, conversion_factor=1)
-    unidades.verificar_referencia(row, units)
+    chosen_uom = _texto(row, "uom") or generic.stock_uom
+    validate_uoms_are_enabled([chosen_uom, generic.stock_uom])
+    if chosen_uom != generic.stock_uom and not frappe.db.exists("UOM Conversion Detail", {"parent": ARTICULO_LIBRE, "uom": chosen_uom}):
+        it_gen = frappe.get_doc("Item", ARTICULO_LIBRE)
+        it_gen.append("uoms", {"uom": chosen_uom, "conversion_factor": 1})
+        it_gen.save(ignore_permissions=True)
+    units = dict(uom=chosen_uom, stock_uom=generic.stock_uom, conversion_factor=1)
+    if row.get("stock_uom") not in (None, "", generic.stock_uom):
+        frappe.throw("La unidad o el factor no coincide con el documento de origen. Actualiza la captura.")
+    if row.get("conversion_factor") not in (None, "") and unidades.numero(row.get("conversion_factor")) != 1:
+        frappe.throw("La unidad o el factor no coincide con el documento de origen. Actualiza la captura.")
     # Frappe sanitizes markup in Small Text; entities preserve literal characters.
     description = escape(concept)
     item.update(units, custom_lebaref_concepto=description, description=description)
@@ -181,7 +189,7 @@ def convertir(source, data):
 def configurar():
     # Keep free-form purchases out of inventory and never create an Item per request.
     if not frappe.db.exists("Item", ARTICULO_LIBRE):
-        stock_uom = frappe.db.get_single_value("Stock Settings", "stock_uom") or "Nos"
+        stock_uom = frappe.db.get_single_value("Stock Settings", "stock_uom") or ("Pieza" if frappe.db.exists("UOM", "Pieza") else "Nos")
         stock_uom = (
             frappe.db.get_value("UOM", {"name": stock_uom, "enabled": 1})
             or frappe.db.get_value("UOM", {"enabled": 1}, order_by="name")

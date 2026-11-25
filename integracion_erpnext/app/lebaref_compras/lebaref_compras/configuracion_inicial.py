@@ -127,3 +127,17 @@ def _configurar_catalogos():
         else:
             frappe.get_doc({"doctype": "Custom DocPerm", "parenttype": "DocType", "parentfield": "permissions", **filters, **rights}).insert()
     validate_permissions_for_doctype("Project")
+
+    for doctype_sup in ("Supplier", "Contact", "Address", "Supplier Group"):
+        setup_custom_perms(doctype_sup)
+        rights_sup = {"read": 1, "select": 1} if doctype_sup == "Supplier Group" else {"read": 1, "create": 1, "write": 1, "select": 1}
+        for role in ("Purchase User", "Stock User", "Stock Manager", "Accounts User"):
+            if not frappe.db.exists("Role", role):
+                continue
+            filters_s = {"parent": doctype_sup, "role": role, "permlevel": 0, "if_owner": 0}
+            rule_s = frappe.db.get_value("Custom DocPerm", filters_s)
+            if rule_s:
+                update_custom_docperm(rule_s, rights_sup)
+            else:
+                frappe.get_doc({"doctype": "Custom DocPerm", "parenttype": "DocType", "parentfield": "permissions", **filters_s, **rights_sup}).insert()
+        validate_permissions_for_doctype(doctype_sup)

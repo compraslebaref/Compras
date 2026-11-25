@@ -17,6 +17,8 @@ WORKSPACE_SHORTCUTS = [
     # 2. Almacén, Obras, Clientes y Catálogos Maestros
     {"label": "Recepciones de compra", "type": "DocType", "link_to": "Purchase Receipt", "doc_view": "List", "color": "Green"},
     {"label": "Artículos (Catálogo)", "type": "DocType", "link_to": "Item", "doc_view": "List", "color": "Grey"},
+    {"label": "Equivalencias y alias", "type": "DocType", "link_to": "Lebaref Equivalencia Articulo", "doc_view": "List", "color": "Orange"},
+    {"label": "Cotizaciones históricas", "type": "DocType", "link_to": "Lebaref Cotizacion Historica", "doc_view": "List", "color": "Grey"},
     {"label": "Proveedores", "type": "DocType", "link_to": "Supplier", "doc_view": "List", "color": "Grey"},
     {"label": "Clientes", "type": "DocType", "link_to": "Customer", "doc_view": "List", "color": "Blue"},
     {"label": "Obras / Proyectos", "type": "DocType", "link_to": "Project", "doc_view": "List", "color": "Grey"},
@@ -35,12 +37,12 @@ WORKSPACE_SHORTCUTS = [
 ]
 
 SITE_DOCK_ERPNEXT = [
-    {"link_type": "Sidebar", "link_to": "Lebaref Compras", "icon": "box-soft", "title": "Lebaref", "added": 0, "hidden": 0},
-    {"link_type": "Sidebar", "link_to": "Buying", "icon": "shopping-cart-soft", "title": "Buying", "added": 0, "hidden": 0},
-    {"link_type": "Sidebar", "link_to": "Stock", "icon": "shelf-rack-soft", "title": "Stock", "added": 0, "hidden": 0},
-    {"link_type": "Sidebar", "link_to": "Projects", "icon": "gantt-chart-soft", "title": "Projects", "added": 0, "hidden": 0},
-    {"link_type": "Sidebar", "link_to": "Accounts", "icon": "calculator-soft", "title": "Accounts", "added": 0, "hidden": 0},
-    {"link_type": "Sidebar", "link_to": "Setup", "icon": "sliders-soft", "title": "Setup", "added": 0, "hidden": 0},
+    {"link_type": "Sidebar", "link_to": "Lebaref Compras", "icon": "box-soft", "title": "Lebaref", "added": 0, "hidden": 1},
+    {"link_type": "Sidebar", "link_to": "Buying", "icon": "shopping-cart-soft", "title": "Buying", "added": 0, "hidden": 1},
+    {"link_type": "Sidebar", "link_to": "Stock", "icon": "shelf-rack-soft", "title": "Stock", "added": 0, "hidden": 1},
+    {"link_type": "Sidebar", "link_to": "Projects", "icon": "gantt-chart-soft", "title": "Projects", "added": 0, "hidden": 1},
+    {"link_type": "Sidebar", "link_to": "Accounts", "icon": "calculator-soft", "title": "Accounts", "added": 0, "hidden": 1},
+    {"link_type": "Sidebar", "link_to": "Setup", "icon": "sliders-soft", "title": "Setup", "added": 0, "hidden": 1},
     {"link_type": "Sidebar", "link_to": "Selling", "icon": "storefront-soft", "title": "Selling", "added": 0, "hidden": 1},
     {"link_type": "Sidebar", "link_to": "Manufacturing", "icon": "factory-soft", "title": "Manufacturing", "added": 0, "hidden": 1},
     {"link_type": "Sidebar", "link_to": "Assets", "icon": "asset-hand-soft", "title": "Assets", "added": 0, "hidden": 1},
@@ -99,9 +101,13 @@ def _clasificar_zona_bin(warehouse, item_code, anaquel="", grupo=""):
 
 def _construir_contenido_workspace():
     pill_base = (
-        "display:inline-block;padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:700;"
+        "display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:600;"
         "text-decoration:none;border:1px solid #cbd5e1;margin-left:6px;margin-top:4px;"
     )
+    svg_list = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>'
+    svg_alert = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    svg_chart = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
+    svg_arch = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
     banner_html = (
         '<div style="padding:10px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:4px;">'
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'
@@ -109,14 +115,10 @@ def _construir_contenido_workspace():
         '<div style="text-align:right;font-size:12px;color:#475569;">'
         '<b style="color:#031e34;font-size:13px;">Plataforma Operativa de Compras, Almacén y Activos</b><br>'
         '<span>Ingeniería · Construcción · HVAC · Electricidad · Remodelación</span><br>'
-        f'<a href="#leb-pendientes" style="{pill_base}background:#0f172a;color:#ffffff;border-color:#0f172a;">📋 Pendientes y Agenda</a>'
-        f'<a href="#leb-minimos" style="{pill_base}background:#b45309;color:#ffffff;border-color:#b45309;">⚠️ Stock Mínimo</a>'
-        f'<a href="#leb-analitica" style="{pill_base}background:#059669;color:#ffffff;border-color:#059669;">📈 Analítica / PPV</a>'
-        f'<a href="#leb-escanear-s30w" style="{pill_base}background:#031e34;color:#ffffff;border-color:#031e34;">🔫 Escanear S30W (F2)</a>'
-        f'<a href="#leb-codigos-carta" style="{pill_base}background:#0d5b94;color:#ffffff;border-color:#0d5b94;">🏷️ Hojas de Códigos Carta</a>'
-        f'<a href="#leb-mapa-af" style="{pill_base}background:#ffffff;color:#031e34;">🗺️ Mapa Zonas A–F</a>'
-        f'<a href="#leb-historico" style="{pill_base}background:#ffffff;color:#031e34;">📜 Archivo Histórico</a>'
-        f'<a href="#leb-usuarios" style="{pill_base}background:#ffffff;color:#031e34;">👥 Usuarios Oficina</a>'
+        f'<a href="#leb-pendientes" style="{pill_base}background:#0f172a;color:#ffffff;border-color:#0f172a;">{svg_list} Pendientes</a>'
+        f'<a href="#leb-minimos" style="{pill_base}background:#ffffff;color:#031e34;">{svg_alert} Stock mínimo</a>'
+        f'<a href="#leb-analitica" style="{pill_base}background:#ffffff;color:#031e34;">{svg_chart} Analítica</a>'
+        f'<a href="#leb-historico" style="{pill_base}background:#ffffff;color:#031e34;">{svg_arch} Archivo histórico</a>'
         '</div></div>'
         '<div id="leb-ws-live-strip" style="margin-top:8px;"></div>'
         '</div>'
@@ -131,7 +133,7 @@ def _construir_contenido_workspace():
     ]
     grupos = [
         ("compras", ["Solicitudes de material", "Cotizaciones de proveedores", "Órdenes de compra", "CFDI 4.0 archivados", "Facturas y notas de compra", "Pagos a proveedores"]),
-        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Proveedores", "Clientes", "Obras / Proyectos", "Departamentos", "Existencias por almacén", "Entregas y sobrantes", "Conteos y mermas"]),
+        ("almacen", ["Recepciones de compra", "Artículos (Catálogo)", "Equivalencias y alias", "Cotizaciones históricas", "Proveedores", "Clientes", "Obras / Proyectos", "Departamentos", "Existencias por almacén", "Entregas y sobrantes", "Conteos y mermas"]),
         ("equipos", ["Herramientas (HER)", "Préstamos (PRE)", "Maletines / Kits (KIT)", "Mantenimientos (HER)", "Flotilla vehicular (VEH)", "Gastos y combustible", "Check-list vehicular"]),
     ]
     titulos = {
@@ -159,10 +161,11 @@ def configurar_plantillas_comerciales():
     if frappe.db.exists("DocType", "Buying Settings"):
         frappe.db.set_single_value("Buying Settings", "po_required", "No")
 
-    # Perfiles operativos de oficina: Coordinador, Auxiliar Mixto (Compras + Almacén sin autorizar) y Finanzas
+    # Perfiles operativos de oficina: Coordinador Operativo (Oscar), Coordinador de Almacén (Airan), Auxiliar Mixto (Juan y Salvia) y Finanzas
     perfiles_oficina = {
-        "Lebaref Coordinador Operativo": ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager", "Accounts User", "Accounts Manager"),
-        "Lebaref Auxiliar Operativo Mixto": ("Purchase User", "Stock User"),
+        "Lebaref Coordinador Operativo": ("Purchase User", "Purchase Manager", "Stock User", "Stock Manager", "Item Manager", "Accounts User", "Accounts Manager"),
+        "Lebaref Coordinador de Almacén": ("Stock User", "Stock Manager", "Item Manager", "Purchase User"),
+        "Lebaref Auxiliar Operativo Mixto": ("Purchase User", "Stock User", "Accounts User"),
         "Lebaref Finanzas y Contabilidad": ("Accounts User", "Purchase User"),
     }
     for nombre_rp, roles_rp in perfiles_oficina.items():
@@ -177,8 +180,12 @@ def configurar_plantillas_comerciales():
             rp_doc = frappe.get_doc("Role Profile", nombre_rp)
             actuales = {r.role for r in rp_doc.roles}
             if actuales != set(roles_validos):
+                if getattr(rp_doc, "is_locked", False):
+                    rp_doc.unlock()
                 rp_doc.set("roles", [{"role": r} for r in roles_validos])
                 rp_doc.save(ignore_permissions=True)
+                if getattr(rp_doc, "is_locked", False):
+                    rp_doc.unlock()
 
     perfil_coord = "Lebaref Coordinador Operativo"
     roles_coord = perfiles_oficina[perfil_coord]
@@ -491,11 +498,25 @@ def configurar_sidebar_y_dock_lebaref():
                 "items": SITE_DOCK_ERPNEXT,
             }).insert(ignore_permissions=True)
 
+        frappe.db.sql("DELETE FROM `tabDock` WHERE IFNULL(user, '') != ''")
         try:
             from frappe.desk.doctype.dock.dock import drop_dock_caches
             drop_dock_caches(None)
         except Exception:
             pass
+
+    # Fijar espacio de trabajo inicial "Lebaref" para todos los usuarios del sistema (evita caer en /app/buying)
+    if frappe.db.has_column("User", "default_workspace") and frappe.db.exists("Workspace", "Lebaref"):
+        frappe.db.sql(
+            """
+            UPDATE `tabUser`
+            SET default_workspace = 'Lebaref'
+            WHERE user_type = 'System User'
+              AND name NOT IN ('Guest')
+              AND IFNULL(default_workspace, '') != 'Lebaref'
+            """
+        )
+    frappe.db.set_default("desktop:home_page", "lebaref")
 
 
 def configurar_workspace_lebaref():
@@ -534,6 +555,12 @@ def _asegurar_enlace_assets():
         js_src = os.path.join(public_dir, "js", nombre_js)
         if os.path.isfile(js_src):
             shutil.copyfile(js_src, os.path.join(files_dir, nombre_js))
+    plantillas_dir = os.path.join(public_dir, "files")
+    if os.path.isdir(plantillas_dir):
+        for nombre_arch in os.listdir(plantillas_dir):
+            ruta_src = os.path.join(plantillas_dir, nombre_arch)
+            if os.path.isfile(ruta_src):
+                shutil.copyfile(ruta_src, os.path.join(files_dir, nombre_arch))
     bench_sites = os.path.abspath(frappe.get_site_path(".."))
     assets_dir = os.path.join(bench_sites, "assets")
     destino = os.path.join(assets_dir, "lebaref_compras")

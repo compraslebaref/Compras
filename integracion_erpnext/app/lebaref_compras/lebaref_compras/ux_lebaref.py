@@ -22,6 +22,7 @@ TIPOS_ITEMS_COMPRA = (
     "Supplier Quotation Item",
     "Purchase Order Item",
     "Purchase Receipt Item",
+    "Purchase Invoice Item",
 )
 
 
@@ -91,30 +92,95 @@ def sincronizar_vistas_partidas(doc, method=None):
         if titulo_base and titulo_base not in ("Purchase", "Material Transfer", "Material Issue"):
             doc.custom_lebaref_nombre_solicitud = titulo_base[:140]
 
+    if doc.doctype == "Material Request":
+        doc.custom_lebaref_estado_vista = calcular_estado_vista_solicitud(doc)
+
+
+def calcular_estado_vista_solicitud(doc_or_dict) -> str:
+    """Traduce docstatus + status + en_espera_de + concluida al estado real filtrable en español."""
+    docstatus = int(doc_or_dict.get("docstatus") or 0)
+    status = (doc_or_dict.get("status") or "").strip()
+    concluida = int(doc_or_dict.get("custom_lebaref_concluida") or 0)
+    en_espera = (doc_or_dict.get("custom_lebaref_en_espera_de") or "").strip()
+
+    if docstatus == 2 or status == "Cancelled":
+        return "Cancelada"
+    if docstatus == 0 or status == "Draft":
+        return "Borrador"
+    if concluida == 1 or status == "Stopped":
+        return "Concluida"
+    if en_espera:
+        return "En espera"
+    if status == "Partially Ordered":
+        return "Parcialmente pedida"
+    if status == "Ordered":
+        return "Pedida"
+    if status == "Partially Received":
+        return "Parcialmente recibida"
+    if status in ("Received", "Issued", "Transferred"):
+        return "Recibida"
+    return "Pendiente"
+
+
+def recalcular_estados_vista_solicitudes(folios=None):
+    """Sincroniza en BD la columna custom_lebaref_estado_vista para una lista de solicitudes o para todas."""
+    if not frappe.db.has_column("Material Request", "custom_lebaref_estado_vista"):
+        return
+    filtros = {"name": ["in", list(folios)]} if folios else {}
+    rows = frappe.get_all(
+        "Material Request",
+        filters=filtros,
+        fields=["name", "docstatus", "status", "custom_lebaref_concluida", "custom_lebaref_en_espera_de", "custom_lebaref_estado_vista"],
+        limit_page_length=0,
+    )
+    for r in rows:
+        nuevo = calcular_estado_vista_solicitud(r)
+        if (r.get("custom_lebaref_estado_vista") or "") != nuevo:
+            frappe.db.set_value("Material Request", r.name, "custom_lebaref_estado_vista", nuevo, update_modified=False)
+
+
+def sincronizar_estado_solicitud_hook(doc, method=None):
+    recalcular_estados_vista_solicitudes([doc.name])
+    from lebaref_compras.seguimiento_google import encolar_sincronizacion
+    encolar_sincronizacion()
+
+
+def sincronizar_estado_solicitudes_vinculadas(doc, method=None):
+    mrs = {
+        r.get("material_request")
+        for r in (getattr(doc, "items", None) or [])
+        if r.get("material_request")
+    }
+    if mrs:
+        recalcular_estados_vista_solicitudes(mrs)
+    from lebaref_compras.seguimiento_google import encolar_sincronizacion
+    encolar_sincronizacion()
+
 
 def _asegurar_permiso_rol(doctype, role, perm_dict):
+    from frappe.permissions import setup_custom_perms
+
     if not frappe.db.exists("DocType", doctype) or not frappe.db.exists("Role", role):
         return
+    setup_custom_perms(doctype)
     existente = frappe.db.get_value(
         "Custom DocPerm",
         {"parent": doctype, "role": role, "permlevel": 0, "if_owner": 0},
         "name",
     )
-    if not existente:
-        try:
-            add_permission(doctype, role, ptype="read")
-        except Exception:
-            pass
-        existente = frappe.db.get_value(
-            "Custom DocPerm",
-            {"parent": doctype, "role": role, "permlevel": 0, "if_owner": 0},
-            "name",
-        )
     if existente:
-        try:
-            update_custom_docperm(existente, perm_dict)
-        except Exception:
-            pass
+        update_custom_docperm(existente, perm_dict)
+    else:
+        frappe.get_doc({
+            "doctype": "Custom DocPerm",
+            "parent": doctype,
+            "parenttype": "DocType",
+            "parentfield": "permissions",
+            "role": role,
+            "permlevel": 0,
+            "if_owner": 0,
+            **perm_dict,
+        }).insert(ignore_permissions=True)
 
 
 def _ps(doctype, fieldname, prop, value, prop_type="Check"):
@@ -234,6 +300,18 @@ def configurar_ux_lebaref():
                 "in_standard_filter": 1,
             },
             {
+                "fieldname": "custom_lebaref_estado_vista",
+                "label": "Estado",
+                "fieldtype": "Select",
+                "options": "\nPendiente\nEn espera\nBorrador\nParcialmente pedida\nPedida\nParcialmente recibida\nRecibida\nConcluida\nCancelada",
+                "insert_after": "custom_lebaref_nombre_solicitud",
+                "read_only": 1,
+                "allow_on_submit": 1,
+                "no_copy": 1,
+                "in_standard_filter": 1,
+                "print_hide": 1,
+            },
+            {
                 "fieldname": "custom_lebaref_en_espera_de",
                 "label": "En espera de",
                 "fieldtype": "Data",
@@ -272,24 +350,24 @@ def configurar_ux_lebaref():
         ],
         "Supplier": [
             {
-                "fieldname": "custom_tab_quien_cotizar",
-                "label": "¿A quién cotizar? (Especialidades)",
-                "fieldtype": "Tab Break",
-                "insert_after": ultimo_campo_sup,
-            },
-            {
                 "fieldname": "custom_especialidad_cotizar",
                 "label": "Especialidad / Qué cotizarle",
                 "fieldtype": "Data",
-                "insert_after": "custom_tab_quien_cotizar",
+                "insert_after": "supplier_group",
                 "in_list_view": 1,
                 "in_standard_filter": 1,
+            },
+            {
+                "fieldname": "custom_tab_quien_cotizar",
+                "label": "¿A quién cotizar? (Directorio)",
+                "fieldtype": "Tab Break",
+                "insert_after": ultimo_campo_sup,
             },
             {
                 "fieldname": "custom_quien_cotizar_html",
                 "label": "Directorio ¿A quién cotizar?",
                 "fieldtype": "HTML",
-                "insert_after": "custom_especialidad_cotizar",
+                "insert_after": "custom_tab_quien_cotizar",
             },
         ],
     }
@@ -395,6 +473,8 @@ def configurar_ux_lebaref():
         "Lebaref Kit",
         "Lebaref Prestamo",
         "Lebaref Vehiculo",
+        "Lebaref Equivalencia Articulo",
+        "Lebaref Cotizacion Historica",
     )
     for dt in doctypes_id_primero:
         _ps(dt, None, "title_field", "", "Data")
@@ -405,8 +485,47 @@ def configurar_ux_lebaref():
     _ps("Project", None, "search_fields", "project_name,customer", "Data")
     _ps("Customer", None, "search_fields", "customer_name,tax_id", "Data")
     _ps("Supplier", None, "search_fields", "supplier_name,tax_id,custom_especialidad_cotizar", "Data")
+    _ps("Supplier", "tax_id", "label", "RFC", "Data")
+
+    # Ubicar RFC, CSF, Carátula Bancaria, CLABE y Especialidad en la primera pestaña (Detalles) de Supplier
+    if frappe.db.exists("DocType", "Supplier"):
+        frappe.clear_cache(doctype="Supplier")
+        meta_s = frappe.get_meta("Supplier")
+        reubicar_sup = [
+            "custom_especialidad_cotizar",
+            "custom_sec_expediente_pago",
+            "tax_id",
+            "custom_lebaref_csf_archivo",
+            "custom_lebaref_csf_fecha",
+            "custom_cb_expediente_pago",
+            "custom_lebaref_caratula_archivo",
+            "custom_lebaref_clabe",
+        ]
+        presentes_sup = {f.fieldname for f in meta_s.fields if f.fieldname}
+        base_order = [f.fieldname for f in meta_s.fields if f.fieldname and f.fieldname not in reubicar_sup]
+        nuevo_orden_sup = []
+        for fn_s in base_order:
+            nuevo_orden_sup.append(fn_s)
+            if fn_s == "supplier_group" and "custom_especialidad_cotizar" in presentes_sup:
+                nuevo_orden_sup.append("custom_especialidad_cotizar")
+            elif fn_s == "payment_terms":
+                for fn_exp in reubicar_sup[1:]:
+                    if fn_exp in presentes_sup:
+                        nuevo_orden_sup.append(fn_exp)
+        _ps("Supplier", None, "field_order", json.dumps(nuevo_orden_sup), "Text")
+    _ps("Material Request", "status", "in_standard_filter", 0, "Check")
+    _ps("Material Request", "company", "in_standard_filter", 0, "Check")
+    _ps("Material Request", "material_request_type", "in_standard_filter", 0, "Check")
+    _ps("Material Request", "custom_lebaref_proposito", "in_standard_filter", 0, "Check")
+    _ps("Material Request", "custom_lebaref_estado_vista", "in_standard_filter", 1, "Check")
+    _ps("Material Request", "custom_lebaref_nombre_solicitud", "in_standard_filter", 1, "Check")
     _ps("Material Request", "custom_lebaref_departamento", "in_standard_filter", 1, "Check")
     _ps("Material Request", "custom_lebaref_solicitante", "in_standard_filter", 1, "Check")
+    recalcular_estados_vista_solicitudes()
+    try:
+        frappe.db.sql("DELETE FROM `__UserSettings` WHERE doctype = 'Material Request'")
+    except Exception:
+        pass
 
     # Folio oficial de solicitudes: SOL-AAAA-#### (igual que el ERP original y la hoja/enlace de Google)
     _ps("Material Request", "naming_series", "options", "SOL-.YYYY.-.####", "Text")
@@ -465,22 +584,25 @@ def configurar_ux_lebaref():
         for fn in reglas.get("mostrar", ()):
             _ps(dt, fn, "in_list_view", 1, "Check")
 
-    # 3. Columnas claras en tablas hijas de Solicitudes, Cotizaciones, Órdenes y Recepciones
+    # 3. Columnas claras en tablas hijas (sin usar columna horizontal para Partida; se agrupa en filas de bloque EST-01)
     _ps("Material Request Item", "item_code", "in_list_view", 0, "Check")
     _ps("Material Request Item", "item_name", "in_list_view", 0, "Check")
     _ps("Material Request Item", "description", "in_list_view", 0, "Check")
     _ps("Material Request Item", "schedule_date", "in_list_view", 0, "Check")
     _ps("Material Request Item", "warehouse", "in_list_view", 0, "Check")
+    _ps("Material Request Item", "custom_lebaref_partida", "in_list_view", 0, "Check")
+    _ps("Material Request Item", "custom_lebaref_no_recotizar", "in_list_view", 0, "Check")
     _ps("Material Request Item", "custom_lebaref_clave_vista", "in_list_view", 1, "Check")
     _ps("Material Request Item", "custom_lebaref_clave_vista", "columns", 2, "Int")
     _ps("Material Request Item", "custom_lebaref_descripcion_vista", "in_list_view", 1, "Check")
-    _ps("Material Request Item", "custom_lebaref_descripcion_vista", "columns", 4, "Int")
+    _ps("Material Request Item", "custom_lebaref_descripcion_vista", "columns", 6, "Int")
     _ps("Material Request Item", "qty", "in_list_view", 1, "Check")
     _ps("Material Request Item", "qty", "columns", 1, "Int")
     _ps("Material Request Item", "uom", "in_list_view", 1, "Check")
     _ps("Material Request Item", "uom", "columns", 1, "Int")
-    _ps("Material Request Item", "custom_lebaref_partida", "in_list_view", 1, "Check")
-    _ps("Material Request Item", "custom_lebaref_partida", "columns", 2, "Int")
+
+    for dt_po in ("Purchase Order Item", "Supplier Quotation Item", "Purchase Receipt Item", "Purchase Invoice Item", "Stock Entry Detail"):
+        _ps(dt_po, "custom_lebaref_partida", "in_list_view", 0, "Check")
 
     for dt_po in ("Purchase Order Item", "Supplier Quotation Item"):
         _ps(dt_po, "item_code", "in_list_view", 0, "Check")
@@ -514,6 +636,23 @@ def configurar_ux_lebaref():
     _asegurar_permiso_rol("Contact", "Purchase Manager", {"read": 1, "write": 1, "create": 1, "delete": 1, "select": 1})
     _asegurar_permiso_rol("Address", "Purchase Manager", {"read": 1, "write": 1, "create": 1, "delete": 1, "select": 1})
 
+    # Todos los perfiles operativos pueden dar de alta y modificar Proveedores, sus Contactos y Direcciones
+    roles_proveedores_equipo = (
+        "Purchase User",
+        "Stock Manager",
+        "Stock User",
+        "Item Manager",
+        "Accounts User",
+        "Accounts Manager",
+    )
+    for rol_sup in roles_proveedores_equipo:
+        _asegurar_permiso_rol("Supplier", rol_sup, {"read": 1, "write": 1, "create": 1, "select": 1})
+        _asegurar_permiso_rol("Contact", rol_sup, {"read": 1, "write": 1, "create": 1, "select": 1})
+        _asegurar_permiso_rol("Address", rol_sup, {"read": 1, "write": 1, "create": 1, "select": 1})
+    for rol_ref in ("Purchase Manager", *roles_proveedores_equipo):
+        _asegurar_permiso_rol("Supplier Group", rol_ref, {"read": 1, "select": 1})
+        _asegurar_permiso_rol("Country", rol_ref, {"read": 1, "select": 1})
+
     for dt_cli in ("Customer", "Customer Group", "Territory", "Project"):
         _asegurar_permiso_rol(dt_cli, "Purchase Manager", {"read": 1, "write": 1, "create": 1, "delete": 1, "select": 1})
         _asegurar_permiso_rol(dt_cli, "Purchase User", {"read": 1, "select": 1})
@@ -541,6 +680,143 @@ def configurar_ux_lebaref():
                     "parent_territory": raiz_tr,
                     "is_group": 0,
                 }).insert(ignore_permissions=True)
+
+    _configurar_unidades_espanol()
+    _ocultar_campos_tecnicos_internos()
+
+
+def _ocultar_campos_tecnicos_internos():
+    """Oculta en todos los formularios, reportes e impresiones los campos técnicos de operación y huella (UX-01)."""
+    campos_ocultos = (
+        "custom_lebaref_operacion",
+        "custom_lebaref_huella",
+        "custom_lebaref_regularizacion_operacion",
+        "custom_lebaref_regularizacion_huella",
+        "custom_lebaref_clave_sobrante",
+        "custom_lebaref_clave_ajuste",
+        "custom_lebaref_clave_comprobante",
+        "custom_lebaref_renglon_origen",
+    )
+    frappe.db.sql(
+        """
+        UPDATE `tabCustom Field`
+        SET hidden = 1, print_hide = 1, report_hide = 1
+        WHERE fieldname IN %s
+        """,
+        (campos_ocultos,),
+    )
+    # También en DocTypes propios de Lebaref (Herramientas, Kits, Préstamos, Flotilla, CFDI)
+    frappe.db.sql(
+        """
+        UPDATE `tabDocField`
+        SET hidden = 1, print_hide = 1, report_hide = 1
+        WHERE parent LIKE 'Lebaref%%'
+          AND fieldname IN ('operacion', 'huella', 'clave_referencia', 'custom_lebaref_operacion', 'custom_lebaref_huella')
+        """
+    )
+
+
+UNIDADES_ESPANOL = (
+    "Pieza",
+    "Metro",
+    "Paquete",
+    "Par",
+    "Caja",
+    "Galón",
+    "Litro",
+    "Servicio",
+    "Rollo",
+    "Kilogramo",
+    "Juego",
+    "Cubeta",
+    "Cartucho",
+    "Bolsa",
+    "Barra",
+    "Bulto",
+    "Tramo",
+    "Lote",
+    "m2",
+    "m3",
+    "Gramo",
+    "Mililitro",
+    "Tonelada",
+    "Hora",
+    "Día",
+    "Jornada",
+)
+
+RENOMBRES_UOM_INGLES = (
+    ("Nos", "Pieza"),
+    ("Unit", "Pieza"),
+    ("Meter", "Metro"),
+    ("Pair", "Par"),
+    ("Box", "Caja"),
+    ("Litre", "Litro"),
+    ("Liter", "Litro"),
+    ("Kg", "Kilogramo"),
+    ("Kilogram", "Kilogramo"),
+    ("Set", "Juego"),
+    ("Pack", "Paquete"),
+    ("Roll", "Rollo"),
+    ("Gallon", "Galón"),
+    ("Bag", "Bolsa"),
+    ("Service", "Servicio"),
+    ("Hour", "Hora"),
+    ("Day", "Día"),
+)
+
+
+def _configurar_unidades_espanol():
+    """Traduce en cascada las UdM en inglés a español, habilita el catálogo operativo y oculta las irrelevantes."""
+    from lebaref_compras.solicitudes import ARTICULO_LIBRE
+
+    if not frappe.db.exists("DocType", "UOM"):
+        return
+
+    # 1. Renombrar / fusionar en cascada las UdM en inglés hacia su equivalente en español
+    for eng, esp in RENOMBRES_UOM_INGLES:
+        if frappe.db.exists("UOM", eng) and eng != esp:
+            ya_existe_esp = bool(frappe.db.exists("UOM", esp))
+            frappe.rename_doc("UOM", eng, esp, force=True, merge=ya_existe_esp, show_alert=False)
+
+    # 2. Asegurar que todas las unidades operativas en español existan, estén activas y permitan decimales
+    for u_esp in UNIDADES_ESPANOL:
+        if not frappe.db.exists("UOM", u_esp):
+            frappe.get_doc({
+                "doctype": "UOM",
+                "uom_name": u_esp,
+                "enabled": 1,
+                "must_be_whole_number": 0,
+            }).insert(ignore_permissions=True)
+        else:
+            frappe.db.set_value("UOM", u_esp, {"enabled": 1, "must_be_whole_number": 0}, update_modified=False)
+
+    # 3. Desactivar unidades preinstaladas en inglés que no estén en uso real
+    en_uso = set(frappe.db.sql_list("SELECT DISTINCT stock_uom FROM `tabItem` WHERE stock_uom IS NOT NULL"))
+    en_uso.update(frappe.db.sql_list("SELECT DISTINCT purchase_uom FROM `tabItem` WHERE purchase_uom IS NOT NULL AND purchase_uom != ''"))
+    en_uso.update(frappe.db.sql_list("SELECT DISTINCT uom FROM `tabUOM Conversion Detail` WHERE uom IS NOT NULL"))
+    permitidas = set(UNIDADES_ESPANOL) | en_uso
+    for u_row in frappe.get_all("UOM", filters={"enabled": 1}, pluck="name"):
+        if u_row not in permitidas:
+            frappe.db.set_value("UOM", u_row, "enabled", 0, update_modified=False)
+
+    # 4. Ajustar unidad base de Stock Settings y conversiones 1:1 en LEBAREF-CONCEPTO-LIBRE
+    if frappe.db.exists("DocType", "Stock Settings") and frappe.db.exists("UOM", "Pieza"):
+        frappe.db.set_single_value("Stock Settings", "stock_uom", "Pieza")
+
+    if frappe.db.exists("Item", ARTICULO_LIBRE):
+        it_lib = frappe.get_doc("Item", ARTICULO_LIBRE)
+        existentes_uoms = {u.uom for u in (it_lib.uoms or [])}
+        cambiado = False
+        if it_lib.stock_uom != "Pieza":
+            it_lib.stock_uom = "Pieza"
+            cambiado = True
+        for u_esp in UNIDADES_ESPANOL:
+            if u_esp not in existentes_uoms:
+                it_lib.append("uoms", {"uom": u_esp, "conversion_factor": 1.0})
+                cambiado = True
+        if cambiado:
+            it_lib.save(ignore_permissions=True)
 
 
 @frappe.whitelist(methods=["GET"])
@@ -597,11 +873,35 @@ def ficha_producto(item_code: str):
     if frappe.has_permission("Item Group", "read"):
         grupos_disp = frappe.get_list("Item Group", filters={"is_group": 0}, pluck="name", order_by="name asc", limit_page_length=200)
 
+    from lebaref_compras import catalogo_gobierno, motor_precios
+    fam_actual = (doc.get("custom_lebaref_familia") or "").strip() or catalogo_gobierno.normalizar_nombre_familia("", doc.item_name or "", doc.item_group or "")
+    ger_lista = catalogo_gobierno.parsear_lista_gerencias(doc.get("custom_lebaref_gerencias") or "")
+    if not ger_lista:
+        ger_lista = catalogo_gobierno.parsear_lista_gerencias(
+            catalogo_gobierno.inferir_gerencias_articulo(doc.item_name or "", doc.item_group or "", int(doc.get("custom_lebaref_consumo_directo") or 0))
+        )
+    familias_disp = sorted({
+        f for f in frappe.get_all("Item", filters={"custom_lebaref_familia": ["is", "set"]}, pluck="custom_lebaref_familia", limit_page_length=500)
+        if f
+    }) if frappe.db.has_column("Item", "custom_lebaref_familia") else []
+    est_oscar = motor_precios.obtener_estimacion_privada_articulo(doc.name)
+
     return {
         "codigo_interno": doc.name,
         "codigo_barras": cb_render,
         "nombre": doc.item_name or doc.name,
         "categoria": doc.item_group or "—",
+        "familia": fam_actual,
+        "familias_disponibles": familias_disp,
+        "gerencias": ", ".join(ger_lista),
+        "gerencias_lista": ger_lista,
+        "gerencias_disponibles": list(catalogo_gobierno.GERENCIAS_OFICIALES),
+        "recotizar_siempre": int(doc.get("custom_lebaref_recotizar_siempre") or 0),
+        "consumo_directo": int(doc.get("custom_lebaref_consumo_directo") or 0),
+        "estimacion_oscar": est_oscar,
+        "plantilla_sugerida": catalogo_gobierno.obtener_plantilla_tecnica_sugerida(doc.item_group or ""),
+        "plantillas_por_categoria": catalogo_gobierno.PLANTILLAS_TECNICAS_POR_CATEGORIA,
+        "alias_equivalencias": catalogo_gobierno.obtener_alias_de_articulo(doc.name),
         "grupos_disponibles": grupos_disp,
         "puede_editar": bool(doc.has_permission("write")),
         "marca": doc.brand or "—",
@@ -616,8 +916,8 @@ def ficha_producto(item_code: str):
         "stock_total": stock_total,
         "stock_minimo": flt(doc.get("custom_lebaref_stock_minimo") or 0.0),
         "ultimo_costo": ultimo_costo,
-        "uom_almacen": doc.stock_uom or "Nos",
-        "uom_compra": uom_compra or doc.stock_uom or "Nos",
+        "uom_almacen": doc.stock_uom or "Pieza",
+        "uom_compra": uom_compra or doc.stock_uom or "Pieza",
         "factor_compra": factor_compra,
         "bins": bins,
         "claves_proveedores": claves_prov[:8],
@@ -644,6 +944,8 @@ def confirmar_solicitud_borrador(solicitud: str):
     doc.check_permission("submit")
     if doc.docstatus != 0:
         frappe.throw("Esta solicitud ya está confirmada o cancelada.")
+    if len(doc.items) == 1 and doc.items[0].item_code == "LEBAREF-CONCEPTO-LIBRE" and _CONCEPTO_PLACEHOLDER_SOL in (doc.items[0].get("custom_lebaref_concepto") or ""):
+        frappe.throw("Agrega o importa al menos un artículo en la solicitud antes de confirmarla.")
     doc.submit()
     return {"ok": True, "folio": doc.name}
 
@@ -688,6 +990,13 @@ def cambiar_estado_manual(solicitud: str, accion: str, detalle: str = ""):
         doc.add_comment("Info", f"↩ Reanudada por {usuario}")
     else:
         frappe.throw("Acción de estado no válida.")
+    recalcular_estados_vista_solicitudes([doc.name])
+    try:
+        from lebaref_compras.seguimiento_google import encolar_sincronizacion
+
+        encolar_sincronizacion()
+    except Exception:
+        pass
     return {"ok": True, "solicitud": doc.name, "accion": accion}
 
 
@@ -730,6 +1039,10 @@ def ficha_solicitud(solicitud: str):
 
     for r in doc.items:
         es_libre = r.item_code == "LEBAREF-CONCEPTO-LIBRE" or bool(r.get("custom_lebaref_concepto"))
+        if es_libre and len(doc.items) == 1 and _CONCEPTO_PLACEHOLDER_SOL in (r.get("custom_lebaref_concepto") or ""):
+            if r.project and r.project not in obras_set:
+                obras_set.append(r.project)
+            continue
         if es_libre:
             tiene_conceptos_libres = True
         clave, desc = _calcular_clave_y_descripcion(
@@ -755,14 +1068,17 @@ def ficha_solicitud(solicitud: str):
             "imagen": "" if es_libre else img_map.get(r.item_code, ""),
             "ubicacion": "" if es_libre else ubi_map.get(r.item_code, ""),
             "qty": flt(r.qty),
-            "uom": r.uom or r.stock_uom or "Nos",
+            "uom": r.uom or r.stock_uom or "Pieza",
             "ordered_qty": flt(r.ordered_qty or 0),
             "received_qty": flt(r.received_qty or 0),
             "stock_actual": 0.0 if es_libre else stock_map.get(r.item_code, 0.0),
-            "uom_almacen": r.stock_uom or r.uom or "Nos",
+            "uom_almacen": r.stock_uom or r.uom or "Pieza",
             "obra": r.project or "",
             "partida": r.get("custom_lebaref_partida") or "",
         })
+
+    from lebaref_compras import motor_precios
+    motor_precios.enriquecer_partidas_solicitud_segun_usuario(doc, partidas)
 
     # Trazabilidad / Expediente vinculado
     anexos = []
@@ -914,13 +1230,22 @@ def ficha_solicitud(solicitud: str):
         }
     elif doc.docstatus == 0:
         est_etq, est_color = "En Captura (Borrador)", "orange"
-        sig = {
-            "tono": "amber",
-            "titulo": "➜ SIGUIENTE PASO",
-            "mensaje": "Revisa los materiales solicitados y confirma el borrador para pasar a cotización o surtido.",
-            "accion": "confirmar_borrador" if doc.has_permission("submit") else "abrir_form",
-            "boton": "✅ Confirmar Solicitud" if doc.has_permission("submit") else "Abrir Borrador ↗",
-        }
+        if not partidas:
+            sig = {
+                "tono": "amber",
+                "titulo": "SIGUIENTE PASO",
+                "mensaje": "Solicitud registrada. Ahora agrega los materiales con Importar Excel o + Partidas aquí abajo.",
+                "accion": "",
+                "boton": "",
+            }
+        else:
+            sig = {
+                "tono": "amber",
+                "titulo": "SIGUIENTE PASO",
+                "mensaje": "Revisa los materiales solicitados y confirma el borrador para pasar a cotización o surtido.",
+                "accion": "confirmar_borrador" if doc.has_permission("submit") else "abrir_form",
+                "boton": "Confirmar solicitud" if doc.has_permission("submit") else "Abrir borrador",
+            }
     elif doc.status == "Stopped":
         est_etq, est_color = "Cerrada / Detenida", "gray"
         sig = {
@@ -1010,13 +1335,13 @@ def ficha_solicitud(solicitud: str):
                 "boton": "↩ Reabrir",
             }
         elif en_espera_de:
-            est_etq, est_color = f"En espera: {en_espera_de}", "orange"
+            est_etq, est_color = f"En espera: {en_espera_de}", "purple"
             sig = {
-                "tono": "amber",
-                "titulo": "⏸ EN ESPERA",
+                "tono": "purple",
+                "titulo": "EN ESPERA",
                 "mensaje": f"Pausada desde {str(doc.get('custom_lebaref_en_espera_desde') or '')[:16]}: depende de {en_espera_de}. No cuenta como pendiente propio.",
                 "accion": "reanudar",
-                "boton": "▶ Reanudar",
+                "boton": "Reanudar solicitud",
             }
 
     destino_partes = []
@@ -1038,6 +1363,8 @@ def ficha_solicitud(solicitud: str):
     if not solicitante_txt:
         solicitante_txt = frappe.utils.get_fullname(doc.owner) or doc.owner
 
+    puede_mod_part, motivo_bloq_part = _evaluar_edicion_partidas_solicitud(doc)
+
     return {
         "folio": doc.name,
         "nombre": nombre_mostrar,
@@ -1057,10 +1384,13 @@ def ficha_solicitud(solicitud: str):
         "origen_texto": origen_txt,
         "notas": (doc.get("custom_lebaref_notas") or doc.get("terms") or "").strip(),
         "puede_editar": bool(doc.has_permission("write")),
+        "puede_modificar_partidas": puede_mod_part,
+        "motivo_bloqueo_partidas": motivo_bloq_part,
         "puede_confirmar": bool(doc.docstatus == 0 and doc.has_permission("submit")),
         "tiene_conceptos_libres": tiene_conceptos_libres,
         "en_espera_de": en_espera_de,
         "concluida": concluida,
+        "es_motor_oscar": 1 if motor_precios.es_usuario_motor_precios() else 0,
         "siguiente_paso": sig,
         "partidas": partidas,
         "expediente": {
@@ -1107,9 +1437,10 @@ def esquema_cotizacion_directa(solicitud: str):
             "clave": clave,
             "descripcion": desc,
             "qty": flt(r.qty),
-            "uom": r.uom or r.stock_uom or "Nos",
+            "uom": r.uom or r.stock_uom or "Pieza",
             "obra": r.project or "",
             "partida": r.custom_lebaref_partida or "",
+            "no_recotizar": int(r.get("custom_lebaref_no_recotizar") or 0),
         })
 
     default_iva = next((x for x in impuestos if "16%" in x), "")
@@ -1199,10 +1530,24 @@ def registrar_cotizacion_directa(solicitud: str, datos: str):
         "valid_till": payload.get("valid_till") or add_days(today(), 30),
         "rows": filas_oferta,
     }
-    for campo_opc in ("taxes_and_charges", "shipping_rule", "payment_terms_template", "fecha_programada_pago"):
-        val_opc = (payload.get(campo_opc) or "").strip()
-        if val_opc:
-            oferta_datos[campo_opc] = val_opc
+    for campo_opc in (
+        "taxes_and_charges",
+        "shipping_rule",
+        "payment_terms_template",
+        "fecha_programada_pago",
+        "currency",
+        "tc_dof",
+        "fecha_dof",
+        "modalidad_entrega",
+        "dias_entrega_promesa",
+        "flete_sin_iva",
+    ):
+        val_opc = payload.get(campo_opc)
+        if val_opc is not None and str(val_opc).strip() != "":
+            oferta_datos[campo_opc] = str(val_opc).strip() if isinstance(val_opc, str) else val_opc
+
+    if "incluir_flete_en_total" in payload:
+        oferta_datos["incluir_flete_en_total"] = payload.get("incluir_flete_en_total")
 
     res_sq = operaciones.ejecutar(
         "oferta",
@@ -1210,6 +1555,30 @@ def registrar_cotizacion_directa(solicitud: str, datos: str):
         str(uuid.uuid4()),
         rfq_usar.name,
     )
+
+    adjuntos_in = payload.get("adjuntos") or []
+    adjuntos_guardados = 0
+    if adjuntos_in and res_sq and res_sq.get("folio"):
+        import base64
+        import os
+        from frappe.utils.file_manager import save_file
+
+        for adj in adjuntos_in[:10]:
+            nombre_raw = os.path.basename(str((adj or {}).get("filename") or "").strip())
+            b64_raw = str((adj or {}).get("content_base64") or "").strip()
+            if not nombre_raw or not b64_raw:
+                continue
+            b64_clean = b64_raw.split(",", 1)[1] if "," in b64_raw else b64_raw
+            datos_bin = base64.b64decode(b64_clean)
+            if not datos_bin:
+                continue
+            if len(datos_bin) > 25 * 1024 * 1024:
+                frappe.throw(f"El archivo '{nombre_raw}' supera el límite de 25 MB.")
+            save_file(nombre_raw, datos_bin, "Supplier Quotation", res_sq["folio"], is_private=1)
+            adjuntos_guardados += 1
+
+    if isinstance(res_sq, dict):
+        res_sq["adjuntos_guardados"] = adjuntos_guardados
     return res_sq
 
 
@@ -1307,6 +1676,164 @@ def gestionar_baja_proveedor(proveedor: str, modo: str, proveedor_destino: str =
         return {"ok": True, "modo": "eliminar"}
 
     frappe.throw("Selecciona una acción válida para el proveedor.")
+
+
+@frappe.whitelist(methods=["GET"])
+def obtener_ficha_edicion_proveedor(proveedor: str = ""):
+    """Devuelve datos actuales del proveedor (incluyendo RFC, CSF y Carátula) para alta o edición rápida por cualquier usuario."""
+    grupos = frappe.get_list("Supplier Group", filters={"is_group": 0}, pluck="name", order_by="name asc", limit_page_length=200)
+    if not proveedor:
+        frappe.has_permission("Supplier", "create", throw=True)
+        return {
+            "nuevo": 1,
+            "grupos": grupos,
+            "datos": {
+                "supplier_name": "",
+                "supplier_group": grupos[0] if grupos else "",
+                "especialidad": "",
+                "tax_id": "",
+                "contacto": "",
+                "telefono": "",
+                "correo": "",
+                "clabe": "",
+                "csf_archivo": "",
+                "csf_fecha": "",
+                "caratula_archivo": "",
+            },
+        }
+
+    doc = frappe.get_doc("Supplier", proveedor)
+    doc.check_permission("read")
+    from lebaref_compras import proveedores as mod_prov
+    vals_cto = mod_prov.valores(doc)
+    return {
+        "nuevo": 0,
+        "id": doc.name,
+        "grupos": grupos,
+        "datos": {
+            "supplier_name": doc.supplier_name or doc.name,
+            "supplier_group": doc.supplier_group or (grupos[0] if grupos else ""),
+            "especialidad": (doc.get("custom_especialidad_cotizar") or "").strip(),
+            "tax_id": doc.tax_id or "",
+            "contacto": vals_cto.get("contacto") or "",
+            "telefono": vals_cto.get("telefono") or "",
+            "correo": vals_cto.get("correo") or "",
+            "clabe": (doc.get("custom_lebaref_clabe") or "").strip(),
+            "csf_archivo": (doc.get("custom_lebaref_csf_archivo") or "").strip(),
+            "csf_fecha": str(doc.get("custom_lebaref_csf_fecha") or ""),
+            "caratula_archivo": (doc.get("custom_lebaref_caratula_archivo") or "").strip(),
+        },
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def guardar_proveedor_rapido(datos: str):
+    """Permite a cualquier usuario del equipo crear un proveedor nuevo o modificar sus datos, RFC, CSF y Carátula Bancaria."""
+    import base64
+    from frappe.utils import today, validate_email_address
+    from frappe.utils.file_manager import save_file
+    from lebaref_compras import proveedores as mod_prov
+
+    d = frappe.parse_json(datos) if isinstance(datos, str) else datos
+    if not isinstance(d, dict):
+        frappe.throw("Datos de proveedor inválidos.")
+
+    prov_id = (d.get("id") or "").strip()
+    nombre = (d.get("supplier_name") or "").strip()
+    if not nombre:
+        frappe.throw("Indica el nombre o razón social del proveedor.")
+
+    grupo = (d.get("supplier_group") or "").strip() or (
+        frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
+    )
+    rfc = (d.get("tax_id") or "").strip().upper()
+    especialidad = (d.get("especialidad") or "").strip()[:140]
+    clabe = (d.get("clabe") or "").strip()[:40]
+    csf_fecha = (d.get("csf_fecha") or "").strip()
+    contacto_nom = (d.get("contacto") or "").strip()
+    telefono = (d.get("telefono") or "").strip()
+    correo = (d.get("correo") or "").strip()
+    if correo and validate_email_address(correo, throw=True) != correo:
+        frappe.throw("Captura una sola dirección de correo electrónico válida.")
+
+    if not prov_id:
+        frappe.has_permission("Supplier", "create", throw=True)
+        doc = frappe.get_doc({
+            "doctype": "Supplier",
+            "supplier_name": nombre,
+            "supplier_group": grupo,
+            "supplier_type": "Company",
+            "tax_id": rfc or None,
+        })
+        if frappe.db.has_column("Supplier", "custom_especialidad_cotizar"):
+            doc.custom_especialidad_cotizar = especialidad
+        if frappe.db.has_column("Supplier", "custom_lebaref_clabe"):
+            doc.custom_lebaref_clabe = clabe
+        if csf_fecha and frappe.db.has_column("Supplier", "custom_lebaref_csf_fecha"):
+            doc.custom_lebaref_csf_fecha = csf_fecha
+        mod_prov.configurar(doc, {"contacto": contacto_nom, "telefono": telefono, "correo": correo})
+        doc.insert()
+        mod_prov.completar(doc)
+        es_nuevo = 1
+    else:
+        doc = frappe.get_doc("Supplier", prov_id)
+        doc.check_permission("write")
+        doc.supplier_name = nombre
+        if grupo and frappe.db.exists("Supplier Group", grupo):
+            doc.supplier_group = grupo
+        doc.tax_id = rfc or None
+        doc.mobile_no = telefono
+        doc.email_id = correo
+        if frappe.db.has_column("Supplier", "custom_especialidad_cotizar"):
+            doc.custom_especialidad_cotizar = especialidad
+        if frappe.db.has_column("Supplier", "custom_lebaref_clabe"):
+            doc.custom_lebaref_clabe = clabe
+        if csf_fecha and frappe.db.has_column("Supplier", "custom_lebaref_csf_fecha"):
+            doc.custom_lebaref_csf_fecha = csf_fecha
+        doc.save()
+
+        if contacto_nom or telefono or correo:
+            if doc.supplier_primary_contact and frappe.db.exists("Contact", doc.supplier_primary_contact):
+                ct = frappe.get_doc("Contact", doc.supplier_primary_contact)
+                ct.check_permission("write")
+                if contacto_nom:
+                    ct.first_name = contacto_nom[:80]
+                    ct.last_name = ""
+                ct.set("email_ids", [{"email_id": correo, "is_primary": 1}] if correo else [])
+                ct.set("phone_nos", [{"phone": telefono, "is_primary_mobile_no": 1, "is_primary_phone": 1}] if telefono else [])
+                ct.save()
+            else:
+                frappe.has_permission("Contact", "create", throw=True)
+                ct = frappe.get_doc({
+                    "doctype": "Contact",
+                    "first_name": (contacto_nom or nombre)[:80],
+                    "is_primary_contact": 1,
+                    "links": [{"link_doctype": "Supplier", "link_name": doc.name}],
+                })
+                if correo:
+                    ct.append("email_ids", {"email_id": correo, "is_primary": 1})
+                if telefono:
+                    ct.append("phone_nos", {"phone": telefono, "is_primary_mobile_no": 1, "is_primary_phone": 1})
+                ct.insert()
+                doc.db_set("supplier_primary_contact", ct.name, update_modified=False)
+        es_nuevo = 0
+
+    # Adjuntar CSF y/o Carátula Bancaria si se enviaron archivos en el mismo formulario
+    for clave_nom, clave_b64, prefijo, campo_dest in (
+        ("csf_nombre", "csf_base64", "CSF", "custom_lebaref_csf_archivo"),
+        ("caratula_nombre", "caratula_base64", "Caratula_Bancaria", "custom_lebaref_caratula_archivo"),
+    ):
+        fname = (d.get(clave_nom) or "").strip()
+        fb64 = (d.get(clave_b64) or "").strip()
+        if fname and fb64 and frappe.db.has_column("Supplier", campo_dest):
+            raw = base64.b64decode(fb64.split(",", 1)[1] if "," in fb64 else fb64)
+            fdoc = save_file(f"{prefijo}_{doc.name}_{fname}", raw, "Supplier", doc.name, is_private=1)
+            cambios_f = {campo_dest: fdoc.file_url}
+            if campo_dest == "custom_lebaref_csf_archivo" and not csf_fecha:
+                cambios_f["custom_lebaref_csf_fecha"] = today()
+            frappe.db.set_value("Supplier", doc.name, cambios_f, update_modified=False)
+
+    return {"ok": True, "folio": doc.name, "supplier_name": doc.supplier_name, "nuevo": es_nuevo}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -1428,6 +1955,25 @@ def actualizar_ficha_producto(item_code: str, datos: str):
         if k_in in d:
             val = (d.get(k_in) or "").strip()
             doc.set(fn_doc, "" if val == "—" else val[:140])
+
+    from lebaref_compras import catalogo_gobierno
+    if "familia" in d and frappe.db.has_column("Item", "custom_lebaref_familia"):
+        fam_in = (d.get("familia") or "").strip()
+        doc.custom_lebaref_familia = catalogo_gobierno.normalizar_nombre_familia(fam_in, doc.item_name or "", doc.item_group or "")[:140]
+
+    if "gerencias" in d and frappe.db.has_column("Item", "custom_lebaref_gerencias"):
+        raw_g = d.get("gerencias")
+        if isinstance(raw_g, list):
+            lista_g = [str(x).strip() for x in raw_g if str(x).strip()]
+        else:
+            lista_g = catalogo_gobierno.parsear_lista_gerencias(str(raw_g or ""))
+        doc.custom_lebaref_gerencias = ", ".join(lista_g)[:140]
+
+    if "recotizar_siempre" in d and frappe.db.has_column("Item", "custom_lebaref_recotizar_siempre"):
+        doc.custom_lebaref_recotizar_siempre = 1 if int(flt(d.get("recotizar_siempre") or 0)) else 0
+
+    if "consumo_directo" in d and frappe.db.has_column("Item", "custom_lebaref_consumo_directo"):
+        doc.custom_lebaref_consumo_directo = 1 if int(flt(d.get("consumo_directo") or 0)) else 0
 
     if "stock_minimo" in d:
         doc.custom_lebaref_stock_minimo = max(0.0, flt(d.get("stock_minimo") or 0.0))
@@ -1670,3 +2216,482 @@ def guardar_usuario_oficina(datos: str):
 
     frappe.db.set_default("desktop:home_page", "lebaref", parent=u.name)
     return {"ok": True, "email": u.name, "full_name": u.full_name, "nuevo": es_nuevo}
+
+
+_CONCEPTO_PLACEHOLDER_SOL = "Pendiente de cargar partidas"
+
+
+def _evaluar_edicion_partidas_solicitud(doc):
+    """Determina si las partidas/artículos de una Solicitud pueden editarse o cargarse desde Excel."""
+    if not doc.has_permission("write"):
+        return False, "Tu cuenta no tiene permiso de edición en Solicitudes."
+    if int(doc.docstatus or 0) == 2 or doc.status == "Cancelled":
+        return False, "La solicitud está cancelada."
+    if doc.status == "Stopped" or int(doc.get("custom_lebaref_concluida") or 0) == 1:
+        return False, "La solicitud está concluida / cerrada."
+    if int(doc.docstatus or 0) == 0:
+        return True, ""
+    for dt_child, etq in (
+        ("Purchase Order Item", "Orden de Compra"),
+        ("Purchase Receipt Item", "Recepción de Almacén"),
+        ("Supplier Quotation Item", "Cotización de Proveedor"),
+        ("Request for Quotation Item", "Petición de Cotización"),
+        ("Stock Entry Detail", "Movimiento de Almacén"),
+    ):
+        if frappe.db.exists("DocType", dt_child) and frappe.db.exists(dt_child, {"material_request": doc.name, "docstatus": ["<", 2]}):
+            return False, f"Ya tiene {etq} vinculada; usa '+ Anexo (SOL-03)' para pedir material adicional."
+    return True, ""
+
+
+@frappe.whitelist(methods=["GET"])
+def estado_edicion_solicitud(solicitud: str):
+    """Devuelve para el formulario o modal las partidas actuales y si son editables."""
+    from lebaref_compras import solicitudes as mod_sol
+
+    doc = frappe.get_doc("Material Request", solicitud)
+    doc.check_permission("read")
+    puede, motivo = _evaluar_edicion_partidas_solicitud(doc)
+    partidas = []
+    for r in doc.items:
+        es_libre = r.item_code == mod_sol.ARTICULO_LIBRE or bool(r.get("custom_lebaref_concepto"))
+        conc = mod_sol.concepto_visible(r) if es_libre else ""
+        if es_libre and conc == _CONCEPTO_PLACEHOLDER_SOL and len(doc.items) == 1:
+            continue
+        partidas.append({
+            "name": r.name,
+            "es_libre": es_libre,
+            "item_code": "" if es_libre else r.item_code,
+            "concepto_libre": conc if es_libre else (r.item_name or r.description or ""),
+            "qty": flt(r.qty),
+            "uom": r.uom or r.stock_uom or "Pieza",
+            "project": r.project or "",
+            "partida": r.get("custom_lebaref_partida") or "",
+        })
+    uoms = frappe.get_list("UOM", filters={"enabled": 1}, pluck="name", order_by="name asc", limit_page_length=500)
+    obras = frappe.get_list("Project", pluck="name", order_by="name asc", limit_page_length=500) if frappe.has_permission("Project", "read") else []
+    skus = frappe.get_list(
+        "Item",
+        filters={"disabled": 0, "name": ["!=", mod_sol.ARTICULO_LIBRE]},
+        fields=["name", "item_name", "purchase_uom", "stock_uom"],
+        order_by="name asc",
+        limit_page_length=1000,
+    ) if frappe.has_permission("Item", "read") else []
+    return {
+        "folio": doc.name,
+        "docstatus": int(doc.docstatus or 0),
+        "puede_modificar": puede,
+        "motivo_bloqueo": motivo,
+        "partidas": partidas,
+        "uoms": uoms,
+        "obras": obras,
+        "skus": skus,
+        "departamentos": mod_sol.departamentos(),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def crear_solicitud_solo_cabecera(datos: str):
+    """Crea una Solicitud en Borrador únicamente con sus datos principales para luego cargar partidas por Excel o manual."""
+    from lebaref_compras import solicitudes as mod_sol
+    from frappe.utils import add_days, today
+
+    if not frappe.has_permission("Material Request", "create"):
+        frappe.throw("Tu cuenta no tiene permiso para crear Solicitudes de Material.", frappe.PermissionError)
+    d = frappe.parse_json(datos) if isinstance(datos, str) else datos
+    if not isinstance(d, dict):
+        frappe.throw("Datos inválidos.")
+
+    company = (d.get("company") or "").strip() or frappe.get_all("Company", pluck="name")[0]
+    titulo = (d.get("titulo") or d.get("title") or "").strip()[:140]
+    if not titulo:
+        frappe.throw("Escribe el nombre o referencia principal de la solicitud.")
+    sched = (d.get("schedule_date") or "").strip() or add_days(today(), 7)
+    headers = mod_sol.cabecera({
+        "company": company,
+        "departamento": (d.get("departamento") or "").strip(),
+        "solicitante": (d.get("solicitante") or "").strip(),
+        "notas": (d.get("notas") or "").strip(),
+    })
+    obra_def = (d.get("obra_default") or "").strip() or None
+    fila_inicial = mod_sol.renglon({
+        "concepto_libre": _CONCEPTO_PLACEHOLDER_SOL,
+        "qty": 1,
+        "uom": "Pieza",
+        "project": obra_def,
+        "custom_lebaref_partida": "",
+    }, sched)
+
+    proposito = (d.get("proposito") or "Compra operativa").strip()
+    if proposito not in ("Compra operativa", "Solo presupuesto para ingeniero"):
+        proposito = "Compra operativa"
+
+    doc = frappe.get_doc({
+        "doctype": "Material Request",
+        "material_request_type": "Purchase",
+        "company": company,
+        "title": titulo,
+        "custom_lebaref_nombre_solicitud": titulo,
+        "custom_lebaref_proposito": proposito,
+        "transaction_date": today(),
+        "schedule_date": sched,
+        "items": [fila_inicial],
+        **headers,
+    })
+    doc.insert()
+    return {"ok": True, "folio": doc.name, "docstatus": doc.docstatus}
+
+
+@frappe.whitelist(methods=["POST"])
+def guardar_partidas_solicitud(solicitud: str, datos: str):
+    """Agrega o reemplaza artículos y partidas en una Solicitud disponible (desde Excel/CSV o tabla manual)."""
+    from lebaref_compras import analitica_operativa, solicitudes as mod_sol
+    from frappe.utils import today
+
+    doc = frappe.get_doc("Material Request", solicitud, for_update=True)
+    puede, motivo = _evaluar_edicion_partidas_solicitud(doc)
+    if not puede:
+        frappe.throw(motivo or "Esta solicitud ya no permite modificar sus partidas.")
+
+    d = frappe.parse_json(datos) if isinstance(datos, str) else datos
+    if not isinstance(d, dict):
+        frappe.throw("Datos inválidos.")
+
+    modo = (d.get("modo") or "agregar").strip().lower()
+    obra_def = (d.get("obra_default") or "").strip()
+    almacen_def = frappe.db.get_value("Warehouse", {"company": doc.company, "is_group": 0, "disabled": 0}, "name") or ""
+    sched = str(doc.schedule_date or today())
+
+    nuevos_renglones = []
+    if d.get("texto_csv") or d.get("content_base64"):
+        prev = analitica_operativa.previsualizar_carga_masiva_solicitud(
+            texto_csv=d.get("texto_csv") or "",
+            filename=d.get("filename") or "",
+            content_base64=d.get("content_base64") or "",
+            obra_default=obra_def,
+        )
+        if prev["errores"] and not d.get("ignorar_errores"):
+            frappe.throw("Corrige primero las filas con error:\n• " + "\n• ".join(prev["errores"][:8]))
+        if not prev["filas_validas"]:
+            frappe.throw("No se encontraron partidas válidas en el archivo o texto.")
+        for f in prev["filas_validas"]:
+            obra_f = f["obra"] or obra_def
+            if f["es_sku"]:
+                reng_sku = mod_sol.renglon({
+                    "item_code": f["item_code"],
+                    "qty": f["qty"],
+                    "uom": f["uom"],
+                    "warehouse": almacen_def,
+                    "project": obra_f,
+                    "custom_lebaref_partida": f["partida"],
+                }, sched)
+                if f.get("descripcion"):
+                    reng_sku["description"] = f["descripcion"]
+                nuevos_renglones.append(reng_sku)
+            else:
+                nuevos_renglones.append(mod_sol.renglon({
+                    "concepto_libre": f["descripcion"],
+                    "qty": f["qty"],
+                    "uom": f["uom"],
+                    "project": obra_f,
+                    "custom_lebaref_partida": f["partida"],
+                }, sched))
+    else:
+        filas_raw = d.get("rows") or []
+        if not isinstance(filas_raw, list) or not filas_raw:
+            frappe.throw("Agrega al menos una partida válida.")
+        for idx_r, r in enumerate(filas_raw, start=1):
+            sku = (r.get("item_code") or "").strip()
+            conc = (r.get("concepto_libre") or "").strip()
+            if not sku and not conc:
+                continue
+            if sku and not frappe.db.exists("Item", sku):
+                # Si escribieron texto en código y no es SKU, tratar como concepto libre
+                conc = f"{sku} {conc}".strip()
+                sku = ""
+            if sku:
+                conc = ""
+            it_uom = ""
+            if sku:
+                it_uom = frappe.db.get_value("Item", sku, "purchase_uom") or frappe.db.get_value("Item", sku, "stock_uom") or "Pieza"
+            uom_r = (r.get("uom") or "").strip()
+            if not uom_r or not frappe.db.exists("UOM", uom_r):
+                uom_r = it_uom or "Pieza"
+            nuevos_renglones.append(mod_sol.renglon({
+                "item_code": sku,
+                "concepto_libre": conc,
+                "qty": r.get("qty") or 1,
+                "uom": uom_r,
+                "warehouse": almacen_def if sku else None,
+                "project": (r.get("project") or obra_def or "").strip() or None,
+                "custom_lebaref_partida": (r.get("partida") or r.get("custom_lebaref_partida") or "").strip(),
+            }, sched))
+
+    if not nuevos_renglones:
+        frappe.throw("Captura al menos una partida con artículo o concepto libre.")
+
+    # Conservar partidas existentes si el modo es 'agregar', salvo el placeholder inicial vacío
+    existentes_limpios = []
+    if modo == "agregar":
+        for r in doc.items:
+            es_ph = (
+                r.item_code == mod_sol.ARTICULO_LIBRE
+                and mod_sol.concepto_visible(r) == _CONCEPTO_PLACEHOLDER_SOL
+                and len(doc.items) == 1
+            )
+            if not es_ph:
+                d_row = {
+                    "item_code": r.item_code,
+                    "item_name": r.item_name,
+                    "description": r.description,
+                    "qty": r.qty,
+                    "uom": r.uom,
+                    "stock_uom": r.stock_uom,
+                    "conversion_factor": r.conversion_factor,
+                    "warehouse": r.warehouse,
+                    "from_warehouse": r.from_warehouse,
+                    "project": r.project,
+                    "schedule_date": r.schedule_date or sched,
+                    "custom_lebaref_concepto": r.get("custom_lebaref_concepto"),
+                    "custom_lebaref_partida": r.get("custom_lebaref_partida"),
+                }
+                existentes_limpios.append(d_row)
+
+    todos = existentes_limpios + nuevos_renglones
+    doc.set("items", todos)
+    sincronizar_vistas_partidas(doc)
+
+    if int(doc.docstatus or 0) == 0:
+        doc.flags.ignore_permissions = False
+        doc.save()
+        if d.get("confirmar") and doc.has_permission("submit"):
+            doc.submit()
+    else:
+        # Solicitud docstatus=1 sin documentos aguas abajo: actualizar tabla hija preservando el folio SOL-AAAA-####
+        for r in doc.items:
+            r.docstatus = 1
+            if not r.item_name:
+                r.item_name = frappe.db.get_value("Item", r.item_code, "item_name") or r.item_code
+            if not r.description:
+                r.description = r.get("custom_lebaref_concepto") or r.item_name
+            r.stock_qty = flt(r.qty) * flt(r.conversion_factor or 1.0)
+        doc.update_children()
+        doc.db_set("modified", frappe.utils.now(), update_modified=False)
+        try:
+            from lebaref_compras import seguimiento_google
+            if hasattr(seguimiento_google, "encolar_solicitud"):
+                seguimiento_google.encolar_solicitud(doc.name)
+            elif hasattr(seguimiento_google, "marcar_pendiente"):
+                seguimiento_google.marcar_pendiente(doc.name)
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "folio": doc.name,
+        "total_partidas": len(doc.items),
+        "agregadas": len(nuevos_renglones),
+        "docstatus": int(doc.docstatus or 0),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def parsear_excel_cotizacion(solicitud: str = "", texto_csv: str = "", filename: str = "", content_base64: str = ""):
+    """Lee un archivo .xlsx/.csv o texto pegado desde Excel para llenar precios/partidas de una Cotización."""
+    import csv
+    import io
+    from lebaref_compras import analitica_operativa, solicitudes as mod_sol
+
+    if content_base64 and not (texto_csv or "").strip():
+        texto_csv = analitica_operativa.extraer_texto_desde_archivo_base64(filename, content_base64)
+    raw = (texto_csv or "").strip()
+    if not raw:
+        frappe.throw("Selecciona un archivo Excel (.xlsx) / CSV o pega las filas desde Excel.")
+
+    delim = "\t" if "\t" in raw.splitlines()[0] else (";" if ";" in raw.splitlines()[0] and "," not in raw.splitlines()[0] else ",")
+    filas_csv = list(csv.reader(io.StringIO(raw), delimiter=delim))
+    if not filas_csv:
+        frappe.throw("No se encontraron filas legibles.")
+
+    inicio = 0
+    hdr0 = " ".join((c or "").lower() for c in filas_csv[0])
+    if any(k in hdr0 for k in ("precio", "rate", "codigo", "código", "clave", "concepto", "cantidad", "renglon", "renglón", "mr_item")):
+        inicio = 1
+
+    def _num(val, default=0.0):
+        s = str(val or "").replace("$", "").replace(",", "").strip()
+        if not s:
+            return default
+        try:
+            return float(s)
+        except ValueError:
+            return default
+
+    # Caso A: Cotización Directa vinculada a una Solicitud (mapear precios a mr_item)
+    if solicitud and frappe.db.exists("Material Request", solicitud):
+        mr = frappe.get_doc("Material Request", solicitud)
+        mr.check_permission("read")
+        por_id = {r.name: r for r in mr.items}
+        por_idx = {int(r.idx): r for r in mr.items}
+        por_clave = {}
+        for r in mr.items:
+            clave, desc = _calcular_clave_y_descripcion(r.item_code, r.item_name, r.description, r.get("custom_lebaref_concepto"))
+            por_clave[clave.strip().upper()] = r
+            por_clave[desc.strip().upper()[:80]] = r
+
+        precios = {}
+        for cols in filas_csv[inicio:]:
+            if not cols or not any((c or "").strip() for c in cols):
+                continue
+            # Soportar plantilla: Renglón/# | MR_Item_ID | Clave/Concepto | Cantidad | Unidad | Precio_Sin_IVA | Días_Entrega
+            # O formato corto: Clave_o_# | Precio_Sin_IVA | Días_Entrega
+            target = None
+            rate_val = 0.0
+            dias_val = 1
+            c0 = (cols[0] or "").strip()
+            c1 = (cols[1] or "").strip() if len(cols) > 1 else ""
+            if c1 in por_id and len(cols) >= 6:
+                target = por_id[c1]
+                rate_val = _num(cols[5], 0.0)
+                dias_val = max(0, int(_num(cols[6] if len(cols) > 6 else "1", 1)))
+            elif c0 in por_id:
+                target = por_id[c0]
+                rate_val = _num(cols[1] if len(cols) > 1 else 0)
+                dias_val = max(0, int(_num(cols[2] if len(cols) > 2 else 1, 1)))
+            else:
+                if c0.isdigit() and int(c0) in por_idx:
+                    target = por_idx[int(c0)]
+                elif c0.upper() in por_clave:
+                    target = por_clave[c0.upper()]
+                elif c1.upper() in por_clave:
+                    target = por_clave[c1.upper()]
+                if target:
+                    if len(cols) >= 5:
+                        rate_val = _num(cols[4] if len(cols) == 5 else cols[5], 0.0)
+                        dias_val = max(0, int(_num(cols[5] if len(cols) == 6 else (cols[6] if len(cols) > 6 else "1"), 1)))
+                    elif len(cols) >= 4:
+                        rate_val = _num(cols[3], 0.0)
+                        dias_val = max(0, int(_num(cols[4] if len(cols) > 4 else "1", 1)))
+                    else:
+                        rate_val = _num(cols[1] if len(cols) > 1 else 0.0)
+                        dias_val = max(0, int(_num(cols[2] if len(cols) > 2 else "1", 1)))
+            if target and rate_val > 0:
+                precios[target.name] = {"rate": rate_val, "lead_time_days": dias_val}
+        return {"modo": "solicitud", "precios": precios, "coincidencias": len(precios)}
+
+    # Caso B: Formulario libre de Supplier Quotation (Clave_o_Concepto | Cantidad | Unidad | Precio_Sin_IVA | Días_Entrega | Partida)
+    almacen_def = frappe.db.get_value("Warehouse", {"is_group": 0, "disabled": 0}, "name") or ""
+    filas_sq = []
+    for cols in filas_csv[inicio:]:
+        if not cols or not any((c or "").strip() for c in cols):
+            continue
+        c_cod = (cols[0] or "").strip()
+        if not c_cod:
+            continue
+        qty = _num(cols[1] if len(cols) > 1 else 1, 1.0)
+        if qty <= 0:
+            qty = 1.0
+        uom_in = (cols[2] if len(cols) > 2 else "").strip()
+        rate = _num(cols[3] if len(cols) > 3 else 0.0, 0.0)
+        dias = max(0, int(_num(cols[4] if len(cols) > 4 else 1, 1)))
+        partida = (cols[5] if len(cols) > 5 else "").strip()
+
+        it_match, _ = analitica_operativa._resolver_sku_o_concepto(c_cod)
+        if it_match:
+            uom_ok = uom_in if (uom_in and frappe.db.exists("UOM", uom_in)) else (it_match.purchase_uom or it_match.stock_uom or "Pieza")
+            filas_sq.append({
+                "item_code": it_match.name,
+                "item_name": it_match.item_name,
+                "description": it_match.item_name,
+                "custom_lebaref_concepto": "",
+                "qty": qty,
+                "uom": uom_ok,
+                "stock_uom": it_match.stock_uom or uom_ok,
+                "conversion_factor": 1.0,
+                "rate": rate,
+                "lead_time_days": dias,
+                "warehouse": almacen_def,
+                "custom_lebaref_partida": partida,
+            })
+        else:
+            uom_ok = uom_in if (uom_in and frappe.db.exists("UOM", uom_in)) else "Pieza"
+            filas_sq.append({
+                "item_code": mod_sol.ARTICULO_LIBRE,
+                "item_name": c_cod[:140],
+                "description": c_cod,
+                "custom_lebaref_concepto": c_cod,
+                "qty": qty,
+                "uom": uom_ok,
+                "stock_uom": "Pieza",
+                "conversion_factor": 1.0,
+                "rate": rate,
+                "lead_time_days": dias,
+                "warehouse": "",
+                "custom_lebaref_partida": partida,
+            })
+    return {"modo": "libre", "items": filas_sq, "coincidencias": len(filas_sq)}
+
+
+@frappe.whitelist(methods=["GET"])
+def valores_por_defecto_lebaref():
+    """Devuelve valores inteligentes por defecto (CAL-01) para prellenar formularios nuevos sin fricción."""
+    from lebaref_compras import comercial
+
+    company = (
+        frappe.defaults.get_user_default("Company")
+        or frappe.db.get_single_value("Global Defaults", "default_company")
+        or frappe.db.get_value("Company", {}, "name")
+        or ""
+    )
+    filtros_alm = {"is_group": 0, "disabled": 0}
+    if company:
+        filtros_alm["company"] = company
+    warehouse = (
+        frappe.db.get_value("Warehouse", dict(filtros_alm, warehouse_name=["like", "%Almacén%"]), "name")
+        or frappe.db.get_value("Warehouse", filtros_alm, "name")
+        or ""
+    )
+    filtros_imp = {"disabled": 0}
+    if company:
+        filtros_imp["company"] = company
+    impuestos = comercial.opciones(comercial.IMPUESTOS, filtros_imp)
+    taxes_iva16 = next((x for x in impuestos if "16%" in x), impuestos[0] if impuestos else "")
+    user_id = frappe.session.user
+    fullname = frappe.utils.get_fullname(user_id) if user_id and user_id != "Guest" else ""
+    uom_def = "Pieza" if frappe.db.exists("UOM", "Pieza") else (frappe.db.get_value("UOM", {}, "name") or "Nos")
+
+    return {
+        "company": company,
+        "warehouse": warehouse,
+        "taxes_and_charges_iva16": taxes_iva16,
+        "currency": "MXN",
+        "user_fullname": fullname,
+        "default_uom": uom_def,
+        "schedule_date_7d": add_days(today(), 7),
+        "valid_till_30d": add_days(today(), 30),
+    }
+
+
+@frappe.whitelist(methods=["GET"])
+def info_rapida_item_default(item_code: str):
+    """Consulta ligera de unidad, control de stock y consumo directo al elegir un artículo en renglón."""
+    codigo = (item_code or "").strip()
+    if not codigo or not frappe.db.exists("Item", codigo):
+        return {}
+    campos = ["name", "item_name", "stock_uom", "purchase_uom", "is_stock_item"]
+    for extra in ("custom_lebaref_consumo_directo", "custom_lebaref_ultimo_costo"):
+        if frappe.db.has_column("Item", extra):
+            campos.append(extra)
+    datos = frappe.db.get_value("Item", codigo, campos, as_dict=True) or {}
+    uom_sugerida = datos.get("purchase_uom") or datos.get("stock_uom") or "Pieza"
+    es_consumo_dir = int(datos.get("custom_lebaref_consumo_directo") or 0)
+    es_stock = int(datos.get("is_stock_item") or 0)
+    return {
+        "item_code": datos.get("name"),
+        "item_name": datos.get("item_name") or "",
+        "uom": uom_sugerida,
+        "stock_uom": datos.get("stock_uom") or uom_sugerida,
+        "is_stock_item": es_stock,
+        "consumo_directo": es_consumo_dir,
+        "requiere_almacen": 1 if (es_stock and not es_consumo_dir and codigo != "LEBAREF-CONCEPTO-LIBRE") else 0,
+        "ultimo_costo": flt(datos.get("custom_lebaref_ultimo_costo") or 0.0),
+    }

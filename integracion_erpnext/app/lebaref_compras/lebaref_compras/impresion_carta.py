@@ -73,6 +73,37 @@ def svg_logo_lebaref(ancho=195):
     return '<div class="leb-brand">LEBAREF</div>'
 
 
+def agrupar_por_partida(items):
+    """Agrupa renglones de un documento en bloques ordenados por Partida (EST-01).
+    Devuelve una lista de diccionarios: [{"partida": str, "subtotal": float, "items": list}, ...].
+    Si ningún renglón del documento tiene Partida capturada, devuelve un único bloque con partida="".
+    """
+    filas = list(items or [])
+    if not filas:
+        return []
+    hay_alguna_partida = any(bool((getattr(r, "custom_lebaref_partida", None) or "").strip()) for r in filas)
+    if not hay_alguna_partida:
+        sub = sum(float(getattr(r, "amount", 0) or getattr(r, "net_amount", 0) or 0) for r in filas)
+        return [{"partida": "", "subtotal": sub, "items": filas}]
+
+    orden_claves = []
+    grupos = {}
+    for r in filas:
+        raw_p = html.unescape(str(getattr(r, "custom_lebaref_partida", None) or "")).strip()
+        etiqueta = raw_p if raw_p else "Partida general / Sin clasificar"
+        if etiqueta not in grupos:
+            orden_claves.append(etiqueta)
+            grupos[etiqueta] = []
+        grupos[etiqueta].append(r)
+
+    resultado = []
+    for k in orden_claves:
+        lista_k = grupos[k]
+        sub_k = sum(float(getattr(x, "amount", 0) or getattr(x, "net_amount", 0) or 0) for x in lista_k)
+        resultado.append({"partida": k, "subtotal": sub_k, "items": lista_k})
+    return resultado
+
+
 _CSS_CARTA = """
 <style>
   @page { size: letter portrait; margin: 12mm 14mm; }
@@ -86,10 +117,11 @@ _CSS_CARTA = """
   .leb-meta { width: 100%; border-collapse: collapse; margin-bottom: 12px; background: #f8fafc; border: 1px solid #cbd5e1; }
   .leb-meta td { padding: 5px 8px; border: 1px solid #e2e8f0; font-size: 11px; }
   .leb-meta b { color: #334155; }
-  .leb-tbl { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-  .leb-tbl th { background: #0f172a; color: #ffffff; font-weight: 700; font-size: 10.5px; padding: 6px 7px; text-align: left; border: 1px solid #0f172a; }
-  .leb-tbl td { padding: 6px 7px; border: 1px solid #cbd5e1; vertical-align: top; font-size: 11px; }
-  .leb-tbl tr:nth-child(even) td { background: #f8fafc; }
+  .leb-tbl { width: 100%; border-collapse: collapse; margin-bottom: 14px; table-layout: fixed; }
+  .leb-tbl th { background: #0f172a; color: #ffffff; font-weight: 700; font-size: 10.5px; padding: 6px 7px; text-align: left; border: 1px solid #0f172a; word-wrap: break-word; overflow-wrap: break-word; }
+  .leb-tbl td { padding: 6px 7px; border: 1px solid #cbd5e1; vertical-align: top; font-size: 11px; word-wrap: break-word; overflow-wrap: break-word; }
+  .leb-tbl tr.leb-row-item:nth-child(even) td { background: #f8fafc; }
+  .leb-tbl tr.leb-partida-sep td { background: #e2e8f0 !important; color: #031e34; font-weight: 800; font-size: 10.8px; padding: 5px 8px; border-top: 1.5px solid #64748b; border-bottom: 1.5px solid #94a3b8; letter-spacing: 0.2px; }
   .leb-num { text-align: right; white-space: nowrap; }
   .leb-totales { width: 290px; margin-left: auto; border-collapse: collapse; margin-bottom: 18px; }
   .leb-totales td { padding: 5px 8px; border: 1px solid #cbd5e1; font-size: 11.5px; }
@@ -143,21 +175,28 @@ FORMATO_SOLICITUD = _CSS_CARTA + """
         <th style="width:34px;">#</th>
         <th style="width:105px;">Código</th>
         <th>Artículo / Concepto Solicitado</th>
-        <th style="width:115px;">Obra / Partida</th>
+        <th style="width:95px;">Obra</th>
         <th class="leb-num" style="width:78px;">Cantidad</th>
         <th style="width:72px;">Unidad</th>
       </tr>
     </thead>
     <tbody>
-      {% for row in doc.items %}
-      <tr>
-        <td>{{ row.idx }}</td>
-        <td><b>{{ row.custom_lebaref_clave_vista or ("SIN SKU" if row.custom_lebaref_concepto else row.item_code) }}</b></td>
-        <td>{{ row.custom_lebaref_descripcion_vista or row.custom_lebaref_concepto or row.item_name or row.description }}</td>
-        <td>{{ row.project or "—" }}{% if row.custom_lebaref_partida %}<br><small>{{ row.custom_lebaref_partida }}</small>{% endif %}</td>
-        <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }}</b></td>
-        <td>{{ row.uom }}</td>
-      </tr>
+      {% for grupo in agrupar_por_partida(doc.items) %}
+        {% if grupo.partida %}
+        <tr class="leb-partida-sep">
+          <td colspan="6">{{ grupo.partida }} ({{ grupo["items"] | length }} concepto{{ "" if (grupo["items"] | length) == 1 else "s" }})</td>
+        </tr>
+        {% endif %}
+        {% for row in grupo["items"] %}
+        <tr class="leb-row-item">
+          <td>{{ row.idx }}</td>
+          <td><b>{{ row.custom_lebaref_clave_vista or ("SIN SKU" if row.custom_lebaref_concepto else row.item_code) }}</b></td>
+          <td>{{ row.custom_lebaref_descripcion_vista or row.custom_lebaref_concepto or row.item_name or row.description }}</td>
+          <td>{{ row.project or "—" }}</td>
+          <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }}</b></td>
+          <td>{{ row.uom }}</td>
+        </tr>
+        {% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -167,6 +206,72 @@ FORMATO_SOLICITUD = _CSS_CARTA + """
       <td><div class="leb-linea-firma">Recibe en Compras</div></td>
       <td><div class="leb-linea-firma">Vo.Bo. Gerencia / Proyecto</div></td>
     </tr>
+  </table>
+</div>
+"""
+
+FORMATO_COTIZACION = _CSS_CARTA + """
+<div class="leb-carta">
+  <div class="leb-hdr">
+    <div class="leb-hdr-brand">
+      {{ svg_logo_lebaref(195) }}
+      <div class="leb-hdr-info">
+        <div class="leb-sub-area">Abastecimiento y Compras</div>
+        <div class="leb-doc-title">Cotización de Proveedor</div>
+        <div style="font-size:11px;color:#475569;">Empresa: {{ doc.company }} · Moneda: <b>{{ doc.currency }}</b>{% if doc.currency == "USD" and doc.custom_lebaref_tc_dof %} (TC DOF: {{ "{:,.4f}".format(doc.custom_lebaref_tc_dof) }}){% endif %}</div>
+      </div>
+    </div>
+    <div>{{ svg_code128(doc.name) }}</div>
+  </div>
+  <table class="leb-meta">
+    <tr>
+      <td><b>Folio Cotización:</b> {{ doc.name }}</td>
+      <td><b>Fecha:</b> {{ frappe.utils.formatdate(doc.transaction_date) }}</td>
+      <td><b>Vigencia hasta:</b> {{ frappe.utils.formatdate(doc.valid_till) if doc.valid_till else "—" }}</td>
+    </tr>
+    <tr>
+      <td colspan="2"><b>Proveedor:</b> {{ doc.supplier_name or doc.supplier }}</td>
+      <td><b>Modalidad entrega:</b> {{ doc.custom_lebaref_modalidad_entrega or "—" }}</td>
+    </tr>
+  </table>
+  <table class="leb-tbl">
+    <thead>
+      <tr>
+        <th style="width:30px;">#</th>
+        <th style="width:95px;">Código</th>
+        <th>Descripción</th>
+        <th class="leb-num" style="width:65px;">Cant.</th>
+        <th style="width:62px;">Unidad</th>
+        <th class="leb-num" style="width:88px;">P. Unit.</th>
+        <th class="leb-num" style="width:92px;">Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for grupo in agrupar_por_partida(doc.items) %}
+        {% if grupo.partida %}
+        <tr class="leb-partida-sep">
+          <td colspan="5">{{ grupo.partida }}</td>
+          <td colspan="2" class="leb-num">Subtotal partida: {{ frappe.utils.fmt_money(grupo.subtotal, currency=doc.currency) }}</td>
+        </tr>
+        {% endif %}
+        {% for row in grupo["items"] %}
+        <tr class="leb-row-item">
+          <td>{{ row.idx }}</td>
+          <td><b>{{ row.custom_lebaref_clave_vista or ("SIN SKU" if row.custom_lebaref_concepto else row.item_code) }}</b></td>
+          <td>{{ row.custom_lebaref_descripcion_vista or row.custom_lebaref_concepto or row.item_name or row.description }}</td>
+          <td class="leb-num">{{ "{:,.2f}".format(row.qty) }}</td>
+          <td>{{ row.uom }}</td>
+          <td class="leb-num">{{ frappe.utils.fmt_money(row.rate, currency=doc.currency) }}</td>
+          <td class="leb-num"><b>{{ frappe.utils.fmt_money(row.amount, currency=doc.currency) }}</b></td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+  <table class="leb-totales">
+    <tr><td><b>Subtotal Neto</b></td><td class="leb-num">{{ frappe.utils.fmt_money(doc.net_total, currency=doc.currency) }}</td></tr>
+    <tr><td><b>Impuestos / Flete</b></td><td class="leb-num">{{ frappe.utils.fmt_money(doc.total_taxes_and_charges or 0, currency=doc.currency) }}</td></tr>
+    <tr class="gran-total"><td>Total Cotizado ({{ doc.currency }})</td><td class="leb-num">{{ frappe.utils.fmt_money(doc.grand_total, currency=doc.currency) }}</td></tr>
   </table>
 </div>
 """
@@ -192,12 +297,12 @@ FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
     </tr>
     <tr>
       <td colspan="2"><b>Proveedor:</b> {{ doc.supplier_name or doc.supplier }} {% if doc.tax_id %}(RFC: {{ doc.tax_id }}){% endif %}</td>
-      <td><b>Moneda:</b> {{ doc.currency }}</td>
+      <td><b>Moneda:</b> {{ doc.currency }}{% if doc.currency == "USD" and doc.custom_lebaref_tc_dof %} (DOF: {{ "{:,.4f}".format(doc.custom_lebaref_tc_dof) }}){% endif %}</td>
     </tr>
     <tr>
       <td><b>Condición de pago:</b> {{ doc.payment_terms_template or "Contado / Según acuerdo" }}</td>
       <td><b>Fecha prog. pago:</b> {{ frappe.utils.formatdate(doc.custom_lebaref_fecha_programada_pago) if doc.custom_lebaref_fecha_programada_pago else "—" }}</td>
-      <td><b>Regla de flete:</b> {{ doc.shipping_rule or "Incluido / No aplica" }}</td>
+      <td><b>Entrega / Flete:</b> {{ doc.custom_lebaref_modalidad_entrega or doc.shipping_rule or "Incluido / Según acuerdo" }}</td>
     </tr>
   </table>
   <table class="leb-tbl">
@@ -206,7 +311,7 @@ FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
         <th style="width:30px;">#</th>
         <th style="width:95px;">Código</th>
         <th>Descripción</th>
-        <th style="width:110px;">Obra / Partida</th>
+        <th style="width:88px;">Obra</th>
         <th class="leb-num" style="width:65px;">Cant.</th>
         <th style="width:60px;">Unidad</th>
         <th class="leb-num" style="width:85px;">P. Unit.</th>
@@ -214,17 +319,25 @@ FORMATO_ORDEN_COMPRA = _CSS_CARTA + """
       </tr>
     </thead>
     <tbody>
-      {% for row in doc.items %}
-      <tr>
-        <td>{{ row.idx }}</td>
-        <td><b>{{ row.custom_lebaref_clave_vista or ("SIN SKU" if row.custom_lebaref_concepto else row.item_code) }}</b></td>
-        <td>{{ row.custom_lebaref_descripcion_vista or row.custom_lebaref_concepto or row.item_name or row.description }}</td>
-        <td>{{ row.project or "—" }}{% if row.custom_lebaref_partida %}<br><small>{{ row.custom_lebaref_partida }}</small>{% endif %}</td>
-        <td class="leb-num">{{ "{:,.2f}".format(row.qty) }}</td>
-        <td>{{ row.uom }}</td>
-        <td class="leb-num">{{ frappe.utils.fmt_money(row.rate, currency=doc.currency) }}</td>
-        <td class="leb-num"><b>{{ frappe.utils.fmt_money(row.amount, currency=doc.currency) }}</b></td>
-      </tr>
+      {% for grupo in agrupar_por_partida(doc.items) %}
+        {% if grupo.partida %}
+        <tr class="leb-partida-sep">
+          <td colspan="6">{{ grupo.partida }}</td>
+          <td colspan="2" class="leb-num">Subtotal: {{ frappe.utils.fmt_money(grupo.subtotal, currency=doc.currency) }}</td>
+        </tr>
+        {% endif %}
+        {% for row in grupo["items"] %}
+        <tr class="leb-row-item">
+          <td>{{ row.idx }}</td>
+          <td><b>{{ row.custom_lebaref_clave_vista or ("SIN SKU" if row.custom_lebaref_concepto else row.item_code) }}</b></td>
+          <td>{{ row.custom_lebaref_descripcion_vista or row.custom_lebaref_concepto or row.item_name or row.description }}</td>
+          <td>{{ row.project or "—" }}</td>
+          <td class="leb-num">{{ "{:,.2f}".format(row.qty) }}</td>
+          <td>{{ row.uom }}</td>
+          <td class="leb-num">{{ frappe.utils.fmt_money(row.rate, currency=doc.currency) }}</td>
+          <td class="leb-num"><b>{{ frappe.utils.fmt_money(row.amount, currency=doc.currency) }}</b></td>
+        </tr>
+        {% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -292,12 +405,12 @@ FORMATO_RECEPCION = _CSS_CARTA + """
     </tr>
     <tr>
       <td colspan="2"><b>Recibió físicamente:</b> {{ doc.custom_lebaref_recibido_por or "Almacén" }}</td>
-      <td><b>Modalidad:</b> {{ "⚠️ Entrada anticipada sin OC (Por regularizar)" if doc.custom_lebaref_por_regularizar else "Con Orden de Compra" }}</td>
+      <td><b>Modalidad:</b> {{ "Entrada anticipada sin OC (Por regularizar)" if doc.custom_lebaref_por_regularizar else "Con Orden de Compra" }}</td>
     </tr>
   </table>
   {% if doc.custom_lebaref_por_regularizar %}
   <div class="leb-notas" style="background:#fffbeb;border-color:#f59e0b;color:#92400e;">
-    <b>⚠️ ENTRADA ANTICIPADA PENDIENTE DE REGULARIZAR:</b> Esta mercancía ingresó físicamente antes de emitirse o autorizarse su Orden de Compra. Debe vincularse posteriormente mediante <i>Regularizar entrada (ALM-02)</i>.
+    <b>ENTRADA ANTICIPADA PENDIENTE DE REGULARIZAR:</b> Esta mercancía ingresó físicamente antes de emitirse o autorizarse su Orden de Compra. Debe vincularse posteriormente mediante <i>Regularizar entrada</i>.
   </div>
   {% endif %}
   {% if doc.remarks %}
@@ -316,27 +429,34 @@ FORMATO_RECEPCION = _CSS_CARTA + """
       </tr>
     </thead>
     <tbody>
-      {% for row in doc.items %}
-      <tr>
-        <td>{{ row.idx }}</td>
-        <td>
-          <b>{{ "LIBRE" if row.custom_lebaref_concepto else row.item_code }}</b>
-          {% if row.custom_lebaref_articulo_original %}
-          <br><small style="color:#b45309;font-weight:700;">Sustituye a: {{ row.custom_lebaref_articulo_original }}</small>
-          {% endif %}
-        </td>
-        <td>
-          {{ row.custom_lebaref_concepto or row.item_name }}
-          {% if row.custom_lebaref_sustitucion %}
-          {% set sust_motivo = frappe.db.get_value("Lebaref Sustitucion", row.custom_lebaref_sustitucion, "motivo") %}
-          <br><small style="color:#475569;">Autorización sustitución: <b>{{ row.custom_lebaref_sustitucion }}</b>{% if sust_motivo %} · Motivo: <i>{{ sust_motivo }}</i>{% endif %}</small>
-          {% endif %}
-        </td>
-        <td>{{ row.purchase_order or "—" }}{% if row.project %}<br><small>{{ row.project }}</small>{% endif %}</td>
-        <td>{{ row.warehouse or "—" }}</td>
-        <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
-        <td>{{ "{:,.2f}".format(row.stock_qty) }} {{ row.stock_uom }}</td>
-      </tr>
+      {% for grupo in agrupar_por_partida(doc.items) %}
+        {% if grupo.partida %}
+        <tr class="leb-partida-sep">
+          <td colspan="7">{{ grupo.partida }}</td>
+        </tr>
+        {% endif %}
+        {% for row in grupo["items"] %}
+        <tr class="leb-row-item">
+          <td>{{ row.idx }}</td>
+          <td>
+            <b>{{ "LIBRE" if row.custom_lebaref_concepto else row.item_code }}</b>
+            {% if row.custom_lebaref_articulo_original %}
+            <br><small style="color:#b45309;font-weight:700;">Sustituye a: {{ row.custom_lebaref_articulo_original }}</small>
+            {% endif %}
+          </td>
+          <td>
+            {{ row.custom_lebaref_concepto or row.item_name }}
+            {% if row.custom_lebaref_sustitucion %}
+            {% set sust_motivo = frappe.db.get_value("Lebaref Sustitucion", row.custom_lebaref_sustitucion, "motivo") %}
+            <br><small style="color:#475569;">Autorización sustitución: <b>{{ row.custom_lebaref_sustitucion }}</b>{% if sust_motivo %} · Motivo: <i>{{ sust_motivo }}</i>{% endif %}</small>
+            {% endif %}
+          </td>
+          <td>{{ row.purchase_order or "—" }}{% if row.project %}<br><small>{{ row.project }}</small>{% endif %}</td>
+          <td>{{ row.warehouse or "—" }}</td>
+          <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
+          <td>{{ "{:,.2f}".format(row.stock_qty) }} {{ row.stock_uom }}</td>
+        </tr>
+        {% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -390,7 +510,7 @@ FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
     </tr>
     {% if es_sobrante_hist %}
     <tr>
-      <td><b>Tratamiento (ALM-07):</b> {{ doc.custom_lebaref_tipo_sobrante }}</td>
+      <td><b>Tratamiento:</b> {{ doc.custom_lebaref_tipo_sobrante }}</td>
       <td><b>Persona que entrega:</b> {{ doc.custom_lebaref_persona_sobrante or "—" }}</td>
       <td><b>Verificación Stock:</b> {{ doc.custom_lebaref_confirmacion_sobrante or "Existencia ya contabilizada" }}</td>
     </tr>
@@ -411,21 +531,27 @@ FORMATO_SALIDA_SOBRANTE = _CSS_CARTA + """
       </tr>
     </thead>
     <tbody>
-      {% for row in doc.items %}
-      <tr>
-        <td>{{ row.idx }}</td>
-        <td><b>{{ row.item_code }}</b></td>
-        <td>
-          {{ row.item_name }}
-          {% if row.custom_lebaref_partida %}<br><small>Partida: {{ row.custom_lebaref_partida }}</small>{% endif %}
-          {% if es_sobrante_hist == "Entrada no contabilizada" and row.basic_rate %}
-          <br><small style="color:#475569;">Valor unitario asignado: {{ frappe.utils.fmt_money(row.basic_rate, currency="MXN") }}</small>
-          {% endif %}
-        </td>
-        <td>{{ row.s_warehouse or "—" }}</td>
-        <td>{{ row.t_warehouse or ("Consumo definitivo en obra" if es_consumo_obra else "—") }}</td>
-        <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
-      </tr>
+      {% for grupo in agrupar_por_partida(doc.items) %}
+        {% if grupo.partida %}
+        <tr class="leb-partida-sep">
+          <td colspan="6">{{ grupo.partida }}</td>
+        </tr>
+        {% endif %}
+        {% for row in grupo["items"] %}
+        <tr class="leb-row-item">
+          <td>{{ row.idx }}</td>
+          <td><b>{{ row.item_code }}</b></td>
+          <td>
+            {{ row.item_name }}
+            {% if es_sobrante_hist == "Entrada no contabilizada" and row.basic_rate %}
+            <br><small style="color:#475569;">Valor unitario asignado: {{ frappe.utils.fmt_money(row.basic_rate, currency="MXN") }}</small>
+            {% endif %}
+          </td>
+          <td>{{ row.s_warehouse or "—" }}</td>
+          <td>{{ row.t_warehouse or ("Consumo definitivo en obra" if es_consumo_obra else "—") }}</td>
+          <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
+        </tr>
+        {% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -580,15 +706,22 @@ FORMATO_RESPONSIVA_EPP = _CSS_CARTA + """
       </tr>
     </thead>
     <tbody>
-      {% for row in doc.items %}
-      <tr>
-        <td>{{ row.idx }}</td>
-        <td><b>{{ row.item_code }}</b></td>
-        <td>{{ row.item_name }}{% if row.custom_lebaref_partida %}<br><small>Área / Partida: {{ row.custom_lebaref_partida }}</small>{% endif %}</td>
-        <td>{{ row.s_warehouse or "—" }}</td>
-        <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
-        <td>Nuevo / Óptimo</td>
-      </tr>
+      {% for grupo in agrupar_por_partida(doc.items) %}
+        {% if grupo.partida %}
+        <tr class="leb-partida-sep">
+          <td colspan="6">{{ grupo.partida }}</td>
+        </tr>
+        {% endif %}
+        {% for row in grupo["items"] %}
+        <tr class="leb-row-item">
+          <td>{{ row.idx }}</td>
+          <td><b>{{ row.item_code }}</b></td>
+          <td>{{ row.item_name }}</td>
+          <td>{{ row.s_warehouse or "—" }}</td>
+          <td class="leb-num"><b>{{ "{:,.2f}".format(row.qty) }} {{ row.uom }}</b></td>
+          <td>Nuevo / Óptimo</td>
+        </tr>
+        {% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -730,7 +863,7 @@ FORMATO_CONTEO_MERMA = _CSS_CARTA + """
     <div class="leb-hdr-brand">
       {{ svg_logo_lebaref(195) }}
       <div class="leb-hdr-info">
-        <div class="leb-sub-area">Control Físico de Almacén e Inventario (ALM-08)</div>
+        <div class="leb-sub-area">Control Físico de Almacén e Inventario</div>
         <div class="leb-doc-title">{{ "Acta de Merma de Inventario" if es_merma else "Acta de Conteo y Ajuste Físico" }}</div>
         <div style="font-size:11px;color:#475569;">Folio: <b>{{ doc.name }}</b> · Acta: <b>{{ doc.custom_lebaref_referencia_ajuste or "—" }}</b></div>
       </div>
@@ -748,30 +881,30 @@ FORMATO_CONTEO_MERMA = _CSS_CARTA + """
   {% if doc.custom_lebaref_motivo_ajuste %}
   <div class="leb-notas"><b>Motivo / Justificación del Acta:</b> {{ doc.custom_lebaref_motivo_ajuste }}</div>
   {% endif %}
-  <table class="leb-items" style="margin-top:8px;">
+  <table class="leb-tbl" style="margin-top:8px;">
     <thead>
       <tr>
         <th style="width:32px;">#</th>
         <th>Artículo</th>
-        <th>Almacén</th>
-        <th class="num">Existencia Observada</th>
-        <th class="num">Conteo Físico</th>
-        <th class="num">Diferencia</th>
-        <th class="num">Valor Unitario</th>
+        <th style="width:125px;">Almacén</th>
+        <th class="leb-num" style="width:88px;">Observado</th>
+        <th class="leb-num" style="width:88px;">Conteo</th>
+        <th class="leb-num" style="width:82px;">Diferencia</th>
+        <th class="leb-num" style="width:92px;">Valor Unit.</th>
       </tr>
     </thead>
     <tbody>
       {% for r in doc.items %}
       {% set obs = r.custom_lebaref_observado if r.custom_lebaref_observado is not none else (r.current_qty or 0) %}
       {% set dif = (r.qty or 0) - obs %}
-      <tr>
+      <tr class="leb-row-item">
         <td>{{ r.idx }}</td>
         <td><b>{{ r.item_code }}</b>{% if r.item_name and r.item_name != r.item_code %}<br><small>{{ r.item_name }}</small>{% endif %}</td>
         <td>{{ r.warehouse }}</td>
-        <td class="num">{{ frappe.utils.flt(obs, 3) }}</td>
-        <td class="num"><b>{{ frappe.utils.flt(r.qty, 3) }}</b></td>
-        <td class="num" style="font-weight:700;">{{ "+" if dif > 0 else "" }}{{ frappe.utils.flt(dif, 3) }}</td>
-        <td class="num">{{ frappe.utils.fmt_money(r.valuation_rate or 0) }}</td>
+        <td class="leb-num">{{ frappe.utils.flt(obs, 3) }}</td>
+        <td class="leb-num"><b>{{ frappe.utils.flt(r.qty, 3) }}</b></td>
+        <td class="leb-num" style="font-weight:700;">{{ "+" if dif > 0 else "" }}{{ frappe.utils.flt(dif, 3) }}</td>
+        <td class="leb-num">{{ frappe.utils.fmt_money(r.valuation_rate or 0) }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -793,7 +926,7 @@ FORMATO_FACTURA_NOTA = _CSS_CARTA + """
     <div class="leb-hdr-brand">
       {{ svg_logo_lebaref(195) }}
       <div class="leb-hdr-info">
-        <div class="leb-sub-area">Registro Contable y Cuentas por Pagar (XML-03 / XML-04)</div>
+        <div class="leb-sub-area">Registro Contable y Cuentas por Pagar</div>
         <div class="leb-doc-title">{{ "Comprobante Interno de Compra con Nota / Ticket" if es_nota else "Factura de Compra Conciliada (CFDI 4.0)" }}</div>
         <div style="font-size:11px;color:#475569;">Folio ERP: <b>{{ doc.name }}</b> · Comprobante: <b>{{ doc.bill_no or "—" }}</b></div>
       </div>
@@ -803,8 +936,8 @@ FORMATO_FACTURA_NOTA = _CSS_CARTA + """
   <table class="leb-meta">
     <tr>
       <td><b>Proveedor:</b> {{ doc.supplier_name or doc.supplier }}</td>
-      <td><b>Tipo:</b> {{ doc.custom_lebaref_tipo_comprobante or "Factura Estándar" }}</td>
-      <td><b>Recepción Origen:</b> {{ doc.custom_lebaref_recepcion_comprobante or "—" }}</td>
+      <td><b>Tipo:</b> {{ doc.custom_lebaref_tipo_comprobante or ("Compra Directa en Campo" if doc.custom_lebaref_es_compra_campo else "Factura Estándar") }}</td>
+      <td><b>Recepción / Obra:</b> {{ doc.custom_lebaref_recepcion_comprobante or doc.custom_lebaref_obra_campo or "—" }}</td>
     </tr>
     <tr>
       <td><b>Fecha Comprobante:</b> {{ frappe.utils.formatdate(doc.bill_date or doc.posting_date) }}</td>
@@ -817,25 +950,33 @@ FORMATO_FACTURA_NOTA = _CSS_CARTA + """
   {% elif doc.custom_lebaref_cfdi %}
   <div class="leb-notas"><b>UUID Fiscal CFDI 4.0 Conciliado:</b> {{ doc.custom_lebaref_cfdi }}</div>
   {% endif %}
-  <table class="leb-items" style="margin-top:8px;">
+  <table class="leb-tbl" style="margin-top:8px;">
     <thead>
       <tr>
         <th style="width:32px;">#</th>
         <th>Artículo / Concepto</th>
-        <th class="num">Cantidad</th>
-        <th class="num">Precio Neto</th>
-        <th class="num">Importe Neto</th>
+        <th class="leb-num" style="width:85px;">Cantidad</th>
+        <th class="leb-num" style="width:92px;">Precio Neto</th>
+        <th class="leb-num" style="width:96px;">Importe Neto</th>
       </tr>
     </thead>
     <tbody>
-      {% for r in doc.items %}
-      <tr>
-        <td>{{ r.idx }}</td>
-        <td><b>{{ r.item_code }}</b> — {{ r.item_name or r.description }}</td>
-        <td class="num">{{ frappe.utils.flt(r.qty, 3) }} {{ r.uom or "" }}</td>
-        <td class="num">{{ frappe.utils.fmt_money(r.rate, currency=doc.currency) }}</td>
-        <td class="num"><b>{{ frappe.utils.fmt_money(r.net_amount, currency=doc.currency) }}</b></td>
-      </tr>
+      {% for grupo in agrupar_por_partida(doc.items) %}
+        {% if grupo.partida %}
+        <tr class="leb-partida-sep">
+          <td colspan="3">{{ grupo.partida }}</td>
+          <td colspan="2" class="leb-num">Subtotal: {{ frappe.utils.fmt_money(grupo.subtotal, currency=doc.currency) }}</td>
+        </tr>
+        {% endif %}
+        {% for r in grupo["items"] %}
+        <tr class="leb-row-item">
+          <td>{{ r.idx }}</td>
+          <td><b>{{ "SIN SKU" if r.item_code == "LEBAREF-CONCEPTO-LIBRE" else r.item_code }}</b> — {{ r.custom_lebaref_concepto or r.item_name or r.description }}</td>
+          <td class="leb-num">{{ frappe.utils.flt(r.qty, 3) }} {{ r.uom or "" }}</td>
+          <td class="leb-num">{{ frappe.utils.fmt_money(r.rate, currency=doc.currency) }}</td>
+          <td class="leb-num"><b>{{ frappe.utils.fmt_money(r.net_amount, currency=doc.currency) }}</b></td>
+        </tr>
+        {% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -851,6 +992,7 @@ FORMATO_FACTURA_NOTA = _CSS_CARTA + """
 
 PRINT_FORMATS = (
     ("Lebaref Carta - Solicitud", "Material Request", FORMATO_SOLICITUD),
+    ("Lebaref Carta - Cotización Proveedor", "Supplier Quotation", FORMATO_COTIZACION),
     ("Lebaref Carta - Orden de Compra", "Purchase Order", FORMATO_ORDEN_COMPRA),
     ("Lebaref Carta - Recepción Almacén", "Purchase Receipt", FORMATO_RECEPCION),
     ("Lebaref Carta - Salida o Sobrante", "Stock Entry", FORMATO_SALIDA_SOBRANTE),
@@ -1222,6 +1364,16 @@ def resolver_escaneo(codigo: str):
 
 
 def configurar_formatos_impresion():
+    if frappe.db.exists("Print Format", "Lebaref Solicitud Compacta"):
+        frappe.delete_doc("Print Format", "Lebaref Solicitud Compacta", force=1, ignore_permissions=True)
+
+    predeterminados = {
+        "Material Request": "Lebaref Carta - Solicitud",
+        "Supplier Quotation": "Lebaref Carta - Cotización Proveedor",
+        "Purchase Order": "Lebaref Carta - Orden de Compra",
+        "Purchase Receipt": "Lebaref Carta - Recepción Almacén",
+        "Purchase Invoice": "Lebaref Carta - Factura o Nota de Compra",
+    }
     for nombre, doctype, plantilla in PRINT_FORMATS:
         if not frappe.db.exists("DocType", doctype):
             continue
@@ -1241,3 +1393,13 @@ def configurar_formatos_impresion():
             pf.save(ignore_permissions=True)
         else:
             frappe.get_doc({"doctype": "Print Format", "name": nombre, **valores}).insert(ignore_permissions=True)
+
+    for dt, pf_def in predeterminados.items():
+        if frappe.db.exists("DocType", dt) and frappe.db.exists("Print Format", pf_def):
+            frappe.make_property_setter({
+                "doctype": dt,
+                "doctype_or_field": "DocType",
+                "property": "default_print_format",
+                "value": pf_def,
+                "property_type": "Data",
+            }, validate_fields_for_doctype=False)

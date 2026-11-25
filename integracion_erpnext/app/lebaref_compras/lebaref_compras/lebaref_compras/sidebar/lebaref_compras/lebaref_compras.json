@@ -4,8 +4,10 @@
  "header_icon": "box-duotone",
  "items": [
   {
+   "child": 0,
    "doctype": "Sidebar Item",
    "icon": "house",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Inicio Lebaref",
    "link_to": "Lebaref",
@@ -13,14 +15,19 @@
    "type": "Link"
   },
   {
+   "child": 0,
    "collapsible": 1,
    "doctype": "Sidebar Item",
-   "label": "Abastecimiento y Compras",
+   "indent": 1,
+   "keep_closed": 1,
+   "label": "Compras",
    "type": "Section Break"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "clipboard-list",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Solicitudes de material",
    "link_to": "Material Request",
@@ -28,8 +35,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "file-check",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Cotizaciones de proveedores",
    "link_to": "Supplier Quotation",
@@ -37,8 +46,21 @@
    "type": "Link"
   },
   {
+   "child": 1,
+   "doctype": "Sidebar Item",
+   "icon": "archive",
+   "indent": 0,
+   "is_default_module": 1,
+   "label": "Cotizaciones históricas",
+   "link_to": "Lebaref Cotizacion Historica",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "shopping-cart",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Órdenes de compra",
    "link_to": "Purchase Order",
@@ -46,17 +68,10 @@
    "type": "Link"
   },
   {
-   "doctype": "Sidebar Item",
-   "icon": "file-code",
-   "is_default_module": 1,
-   "label": "CFDI 4.0 archivados",
-   "link_to": "Lebaref CFDI",
-   "link_type": "DocType",
-   "type": "Link"
-  },
-  {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "file-text",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Facturas y Notas de Compra",
    "link_to": "Purchase Invoice",
@@ -64,8 +79,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "credit-card",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Pagos a Proveedores",
    "link_to": "Payment Entry",
@@ -73,50 +90,19 @@
    "type": "Link"
   },
   {
+   "child": 0,
    "collapsible": 1,
    "doctype": "Sidebar Item",
-   "label": "Almacén, Obras y Catálogos",
+   "indent": 1,
+   "keep_closed": 1,
+   "label": "Almacén y Catálogos",
    "type": "Section Break"
   },
   {
-   "doctype": "Sidebar Item",
-   "icon": "package-check",
-   "is_default_module": 1,
-   "label": "Recepciones de compra",
-   "link_to": "Purchase Receipt",
-   "link_type": "DocType",
-   "type": "Link"
-  },
-  {
-   "doctype": "Sidebar Item",
-   "icon": "repeat",
-   "is_default_module": 1,
-   "label": "Sustituciones autorizadas",
-   "link_to": "Lebaref Sustitucion",
-   "link_type": "DocType",
-   "type": "Link"
-  },
-  {
-   "doctype": "Sidebar Item",
-   "icon": "arrow-left-right",
-   "is_default_module": 1,
-   "label": "Entregas y sobrantes",
-   "link_to": "Stock Entry",
-   "link_type": "DocType",
-   "type": "Link"
-  },
-  {
-   "doctype": "Sidebar Item",
-   "icon": "clipboard-check",
-   "is_default_module": 1,
-   "label": "Conteos y mermas",
-   "link_to": "Stock Reconciliation",
-   "link_type": "DocType",
-   "type": "Link"
-  },
-  {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "package",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Artículos (Catálogo)",
    "link_to": "Item",
@@ -124,8 +110,21 @@
    "type": "Link"
   },
   {
+   "child": 1,
+   "doctype": "Sidebar Item",
+   "icon": "git-merge",
+   "indent": 0,
+   "is_default_module": 1,
+   "label": "Equivalencias y alias",
+   "link_to": "Lebaref Equivalencia Articulo",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "layers",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Existencias por almacén",
    "link_to": "Bin",
@@ -133,8 +132,54 @@
    "type": "Link"
   },
   {
+   "child": 1,
+   "doctype": "Sidebar Item",
+   "icon": "package-check",
+   "indent": 0,
+   "is_default_module": 1,
+   "label": "Recepciones de compra",
+   "link_to": "Purchase Receipt",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "doctype": "Sidebar Item",
+   "icon": "repeat",
+   "indent": 0,
+   "is_default_module": 1,
+   "label": "Sustituciones autorizadas",
+   "link_to": "Lebaref Sustitucion",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "doctype": "Sidebar Item",
+   "icon": "arrow-left-right",
+   "indent": 0,
+   "is_default_module": 1,
+   "label": "Entregas y sobrantes",
+   "link_to": "Stock Entry",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "doctype": "Sidebar Item",
+   "icon": "clipboard-check",
+   "indent": 0,
+   "is_default_module": 1,
+   "label": "Conteos y mermas",
+   "link_to": "Stock Reconciliation",
+   "link_type": "DocType",
+   "type": "Link"
+  },
+  {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "truck",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Proveedores",
    "link_to": "Supplier",
@@ -142,8 +187,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "users",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Clientes",
    "link_to": "Customer",
@@ -151,8 +198,19 @@
    "type": "Link"
   },
   {
+   "child": 0,
+   "collapsible": 1,
+   "doctype": "Sidebar Item",
+   "indent": 1,
+   "keep_closed": 1,
+   "label": "Obras y Organización",
+   "type": "Section Break"
+  },
+  {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "folder",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Obras / Proyectos",
    "link_to": "Project",
@@ -160,8 +218,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "git-branch",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Departamentos",
    "link_to": "Department",
@@ -169,14 +229,19 @@
    "type": "Link"
   },
   {
+   "child": 0,
    "collapsible": 1,
    "doctype": "Sidebar Item",
-   "label": "Herramientas, Kits y Flotilla",
+   "indent": 1,
+   "keep_closed": 1,
+   "label": "Herramientas",
    "type": "Section Break"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "wrench",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Herramientas (HER)",
    "link_to": "Lebaref Herramienta",
@@ -184,8 +249,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "clipboard",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Préstamos (PRE)",
    "link_to": "Lebaref Prestamo",
@@ -193,8 +260,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "briefcase",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Maletines / Kits (KIT)",
    "link_to": "Lebaref Kit",
@@ -202,8 +271,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "settings",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Mantenimientos (HER)",
    "link_to": "Lebaref Mantenimiento Herramienta",
@@ -211,8 +282,19 @@
    "type": "Link"
   },
   {
+   "child": 0,
+   "collapsible": 1,
+   "doctype": "Sidebar Item",
+   "indent": 1,
+   "keep_closed": 1,
+   "label": "Flotilla",
+   "type": "Section Break"
+  },
+  {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "car",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Flotilla vehicular (VEH)",
    "link_to": "Lebaref Vehiculo",
@@ -220,8 +302,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "credit-card",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Gastos y combustible",
    "link_to": "Lebaref Gasto Vehiculo",
@@ -229,8 +313,10 @@
    "type": "Link"
   },
   {
+   "child": 1,
    "doctype": "Sidebar Item",
    "icon": "check-square",
+   "indent": 0,
    "is_default_module": 1,
    "label": "Check-list vehicular",
    "link_to": "Lebaref Revision Vehiculo",

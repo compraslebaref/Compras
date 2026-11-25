@@ -36,7 +36,7 @@ try {
     if ($backends.Count -ne 1 -or $backends[0] -notmatch '^[0-9a-f]{12,64}$') { throw 'No se pudo identificar un unico backend del ERP.' }
     $backendId = $backends[0]
     $source = Get-Content -LiteralPath $pyTool -Encoding utf8 -Raw
-    $out = ($source | & wsl.exe -d Ubuntu --exec docker exec -i $backendId /home/frappe/frappe-bench/env/bin/python -) -join "`n"
+    $out = ($source | & wsl.exe -d Ubuntu --exec docker exec -i -e PYTHONIOENCODING=utf-8 $backendId /home/frappe/frappe-bench/env/bin/python -) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw 'El backend no pudo listar los adjuntos.' }
     $linea = ($out -split "`n" | Where-Object { $_ -like 'EXPEDIENTE_JSON:*' } | Select-Object -First 1)
     if (-not $linea) { Log "No se pudo listar adjuntos: $out"; exit 1 }
@@ -57,10 +57,12 @@ try {
         $nombre = (($partes -join ' - ') + ' - ' + $a.archivo) -replace '[\\/:*?"<>|]', '_'
         $destino = Join-Path $carpeta $nombre
         if (Test-Path -LiteralPath $destino) { continue }
-        $wslDest = & wsl.exe -d Ubuntu --exec wslpath -a $destino
-        if ($LASTEXITCODE -ne 0 -or -not $wslDest) { Log 'FALLO resolver ruta de destino en WSL.'; continue }
-        & wsl.exe -d Ubuntu --exec docker cp "${backendId}:$($a.ruta)" $wslDest | Out-Null
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $destino)) { Log "FALLO copiar $($a.ruta) -> $destino"; continue }
+        $rutaB64 = [Convert]::ToBase64String($utf8.GetBytes([string]$a.ruta))
+        $pyRead = 'import base64,sys; p=base64.b64decode(sys.argv[1]).decode("utf-8"); sys.stdout.write(base64.b64encode(open(p,"rb").read()).decode("ascii"))'
+        $b64Out = ($pyRead | & wsl.exe -d Ubuntu --exec docker exec -i $backendId /home/frappe/frappe-bench/env/bin/python - $rutaB64) -join ''
+        if ($LASTEXITCODE -ne 0 -or -not $b64Out) { Log "FALLO extraer adjunto del contenedor: $($a.ruta)"; continue }
+        [System.IO.File]::WriteAllBytes($destino, [Convert]::FromBase64String($b64Out.Trim()))
+        if (-not (Test-Path -LiteralPath $destino)) { Log "FALLO copiar $($a.ruta) -> $destino"; continue }
         $copiados++
         Log "COPIADO $($a.solicitud) <- $nombre"
     }

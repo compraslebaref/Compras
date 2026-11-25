@@ -656,13 +656,27 @@ def referencias_historicas_solicitud(solicitud: str):
             fuente = "Banco de precios"
             prov_ref = precios_lista[ic].supplier or ""
 
+        if costo_base <= 0 and frappe.db.exists("DocType", "Lebaref Cotizacion Historica"):
+            cot_hist = frappe.get_all(
+                "Lebaref Cotizacion Historica",
+                filters={"item_code": ic},
+                fields=["precio_unitario_mxn", "proveedor_texto", "fecha_cotizacion"],
+                order_by="fecha_cotizacion desc, creation desc",
+                limit_page_length=1,
+            )
+            if cot_hist and flt(cot_hist[0].precio_unitario_mxn) > 0:
+                costo_base = flt(cot_hist[0].precio_unitario_mxn)
+                fuente = "Cotización histórica (no compra)"
+                prov_ref = cot_hist[0].proveedor_texto or ""
+                fecha_ref = str(cot_hist[0].fecha_cotizacion or "")
+
         if costo_base > 0:
             resultado[r.name] = {
                 "ref_precio": round(costo_base * factor_mr, 2),
                 "ref_fuente": fuente,
                 "ref_proveedor": prov_ref,
                 "ref_fecha": fecha_ref,
-                "uom": r.uom or r.stock_uom or "Nos",
+                "uom": r.uom or r.stock_uom or "Pieza",
             }
     return resultado
 
@@ -705,7 +719,7 @@ def gestionar_cierre_orden(orden: str, accion: str, motivo: str):
     frappe.throw("Acción inválida. Usa 'cerrar' o 'reabrir'.")
 
 
-def _resolver_sku_o_concepto(token: str):
+def _resolver_sku_o_concepto(token: str, proyecto: str = "", cliente: str = "", proveedor: str = ""):
     limpio = (token or "").strip()
     if not limpio:
         return None, ""
@@ -724,15 +738,108 @@ def _resolver_sku_o_concepto(token: str):
     if parent_bc and frappe.db.exists("Item", parent_bc):
         it = frappe.db.get_value("Item", parent_bc, ["name", "item_name", "purchase_uom", "stock_uom"], as_dict=True)
         return it, "Código de barras"
+    por_nombre = frappe.db.get_value(
+        "Item",
+        {"item_name": limpio, "disabled": 0, "name": ["!=", "LEBAREF-CONCEPTO-LIBRE"]},
+        ["name", "item_name", "purchase_uom", "stock_uom"],
+        as_dict=True,
+    )
+    if por_nombre:
+        return por_nombre, "Nombre exacto"
+
+    from lebaref_compras import catalogo_gobierno
+    it_alias, origen_alias = catalogo_gobierno.buscar_alias_aprobado(
+        limpio,
+        proyecto=proyecto,
+        cliente=cliente,
+        proveedor=proveedor,
+    )
+    if it_alias:
+        return it_alias, origen_alias
+
     return None, "Concepto Libre (sin SKU)"
 
 
+def extraer_texto_desde_archivo_base64(filename: str, content_base64: str) -> str:
+    """Convierte un archivo .xlsx o .csv en base64 a texto tabular (TSV/CSV) usando solo stdlib."""
+    import base64
+    import re
+    import zipfile
+    from xml.etree import ElementTree as ET
+
+    if not content_base64:
+        return ""
+    b64 = content_base64.split(",", 1)[1] if "," in content_base64 else content_base64
+    raw_bytes = base64.b64decode(b64)
+    if len(raw_bytes) > 5_000_000:
+        frappe.throw("El archivo excede el tamaño máximo permitido (5 MB).")
+
+    ext = (filename or "").lower().rsplit(".", 1)[-1]
+    if ext == "xlsx" or raw_bytes[:4] == b"PK\x03\x04":
+        ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+            shared = []
+            if "xl/sharedStrings.xml" in zf.namelist():
+                ss_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+                for si in ss_root.findall("s:si", ns):
+                    shared.append("".join(t.text or "" for t in si.findall(".//s:t", ns)))
+            hojas = sorted(n for n in zf.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml"))
+            if not hojas:
+                frappe.throw("El archivo Excel (.xlsx) no contiene hojas legibles.")
+            sh_root = ET.fromstring(zf.read(hojas[0]))
+
+            def _col_idx(cell_ref: str) -> int:
+                letras = re.match(r"([A-Z]+)", (cell_ref or "").upper())
+                if not letras:
+                    return 0
+                val = 0
+                for ch in letras.group(1):
+                    val = val * 26 + (ord(ch) - 64)
+                return max(0, val - 1)
+
+            filas_out = []
+            for row_el in sh_root.findall(".//s:sheetData/s:row", ns):
+                celdas = {}
+                max_c = -1
+                for c_el in row_el.findall("s:c", ns):
+                    c_i = _col_idx(c_el.attrib.get("r", ""))
+                    if c_i < 0:
+                        c_i = max_c + 1
+                    max_c = max(max_c, c_i)
+                    t_attr = c_el.attrib.get("t", "")
+                    v_el = c_el.find("s:v", ns)
+                    is_el = c_el.find("s:is", ns)
+                    txt_val = ""
+                    if t_attr == "s" and v_el is not None and v_el.text is not None:
+                        idx_ss = int(v_el.text)
+                        txt_val = shared[idx_ss] if 0 <= idx_ss < len(shared) else ""
+                    elif t_attr == "inlineStr" and is_el is not None:
+                        txt_val = "".join(t.text or "" for t in is_el.findall(".//s:t", ns))
+                    elif v_el is not None and v_el.text is not None:
+                        txt_val = v_el.text
+                    celdas[c_i] = txt_val.replace("\t", " ").replace("\r", " ").replace("\n", " ").strip()
+                if max_c >= 0:
+                    fila_vals = [celdas.get(i, "") for i in range(max_c + 1)]
+                    if any(fila_vals):
+                        filas_out.append("\t".join(fila_vals))
+            return "\n".join(filas_out)
+
+    for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            return raw_bytes.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw_bytes.decode("utf-8", errors="replace")
+
+
 @frappe.whitelist(methods=["POST"])
-def previsualizar_carga_masiva_solicitud(texto_csv: str):
-    """Analiza texto CSV o pegado desde Excel y devuelve filas validadas y advertencias controladas (SOL-04)."""
+def previsualizar_carga_masiva_solicitud(texto_csv: str = "", filename: str = "", content_base64: str = "", obra_default: str = ""):
+    """Analiza texto CSV, pegado desde Excel o archivo .xlsx/.csv y devuelve filas validadas (SOL-04)."""
+    if content_base64 and not (texto_csv or "").strip():
+        texto_csv = extraer_texto_desde_archivo_base64(filename, content_base64)
     raw = (texto_csv or "").strip()
     if not raw:
-        frappe.throw("Pega filas desde Excel o selecciona un archivo CSV con al menos una partida.")
+        frappe.throw("Pega filas desde Excel o selecciona un archivo Excel (.xlsx) / CSV con al menos una partida.")
 
     delimitador = "\t" if "\t" in raw.splitlines()[0] else (";" if ";" in raw.splitlines()[0] and "," not in raw.splitlines()[0] else ",")
     lector = list(csv.reader(io.StringIO(raw), delimiter=delimitador))
@@ -774,14 +881,19 @@ def previsualizar_carga_masiva_solicitud(texto_csv: str):
             errores.append(f"Fila {idx_f} ({col_cod}): La obra '{col_obra}' no existe en Obras / Proyectos.")
             continue
 
-        item_match, origen_match = _resolver_sku_o_concepto(col_cod)
+        obra_efectiva = col_obra or (obra_default or "").strip()
+        item_match, origen_match = _resolver_sku_o_concepto(col_cod, proyecto=obra_efectiva)
         if item_match:
-            uom_usar = col_uom if (col_uom and frappe.db.exists("UOM", col_uom)) else (item_match.purchase_uom or item_match.stock_uom or "Nos")
+            uom_usar = col_uom if (col_uom and frappe.db.exists("UOM", col_uom)) else (item_match.purchase_uom or item_match.stock_uom or "Pieza")
+            desc_mostrar = item_match.item_name
+            if col_cod != item_match.name and col_cod.lower() != (item_match.item_name or "").lower():
+                desc_mostrar = f"{item_match.item_name} (Orig: {col_cod[:70]})"
             filas_ok.append({
                 "fila": idx_f,
                 "es_sku": True,
                 "item_code": item_match.name,
-                "descripcion": item_match.item_name,
+                "descripcion": desc_mostrar,
+                "texto_original": col_cod[:140],
                 "coincidencia": origen_match,
                 "qty": qty,
                 "uom": uom_usar,
@@ -789,7 +901,7 @@ def previsualizar_carga_masiva_solicitud(texto_csv: str):
                 "partida": col_part,
             })
         else:
-            uom_libre = col_uom if (col_uom and frappe.db.exists("UOM", col_uom)) else "Nos"
+            uom_libre = col_uom if (col_uom and frappe.db.exists("UOM", col_uom)) else "Pieza"
             filas_ok.append({
                 "fila": idx_f,
                 "es_sku": False,
@@ -819,7 +931,11 @@ def ejecutar_carga_masiva_solicitud(datos: str):
     if not isinstance(d, dict):
         frappe.throw("Datos de importación inválidos.")
 
-    prev = previsualizar_carga_masiva_solicitud(d.get("texto_csv") or "")
+    prev = previsualizar_carga_masiva_solicitud(
+        texto_csv=d.get("texto_csv") or "",
+        filename=d.get("filename") or "",
+        content_base64=d.get("content_base64") or "",
+    )
     if prev["errores"] and not d.get("ignorar_errores"):
         frappe.throw("Corrige primero las filas con error antes de importar:\n• " + "\n• ".join(prev["errores"][:8]))
     if not prev["filas_validas"]:
@@ -839,15 +955,15 @@ def ejecutar_carga_masiva_solicitud(datos: str):
                 "uom": f["uom"],
                 "warehouse": almacen,
                 "project": obra_fila,
-                "partida": f["partida"],
+                "custom_lebaref_partida": f["partida"],
             })
         else:
             rows_op.append({
-                "concepto": f["descripcion"],
+                "concepto_libre": f["descripcion"],
                 "qty": f["qty"],
                 "uom": f["uom"],
                 "project": obra_fila,
-                "partida": f["partida"],
+                "custom_lebaref_partida": f["partida"],
             })
 
     titulo = (d.get("titulo") or "").strip() or f"Carga Rápida CSV · {today()}"

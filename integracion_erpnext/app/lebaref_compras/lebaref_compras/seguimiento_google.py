@@ -115,13 +115,142 @@ def _phase(doc, quotes):
     return "Pendiente de cotizar", "Solicitar o recabar precios de proveedores"
 
 
+def _comparison(doc):
+    if not doc.items:
+        return []
+    item_index = {row.name: idx for idx, row in enumerate(doc.items)}
+    links = frappe.get_all(
+        "Supplier Quotation Item",
+        filters={
+            "parenttype": "Supplier Quotation",
+            "material_request_item": ["in", list(item_index)],
+        },
+        pluck="parent",
+        distinct=True,
+        order_by="parent asc",
+    )
+    if not links:
+        return []
+    quotes = frappe.get_all(
+        "Supplier Quotation",
+        filters={"name": ["in", links], "company": doc.company, "docstatus": 1},
+        pluck="name",
+        order_by="creation asc, name asc",
+    )
+    by_supplier = {}
+    supplier_order = []
+    for qname in quotes:
+        q = frappe.get_doc("Supplier Quotation", qname)
+        matched = [
+            row for row in q.items
+            if row.material_request_item in item_index and float(row.rate or 0) > 0 and float(row.conversion_factor or 0) > 0
+        ]
+        if not matched:
+            continue
+        skey = q.supplier or q.supplier_name or q.name
+        if skey not in by_supplier:
+            by_supplier[skey] = []
+            supplier_order.append(skey)
+        by_supplier[skey].append((q, matched))
+
+    columns = []
+    for skey in supplier_order:
+        entries = by_supplier[skey]
+        chosen = {}
+        for q, matched in entries:
+            for sq_row in matched:
+                chosen[item_index[sq_row.material_request_item]] = (q, sq_row)
+        if not chosen:
+            continue
+        last_q = entries[-1][0]
+        lines = [None] * len(doc.items)
+        by_quote = {}
+        for idx, (q, sq_row) in chosen.items():
+            mr_row = doc.items[idx]
+            mr_cf = float(mr_row.conversion_factor or 1.0) or 1.0
+            sq_cf = float(sq_row.conversion_factor or 1.0) or 1.0
+            unit_orig = float(sq_row.rate or 0.0) * mr_cf / sq_cf
+            is_usd = q.currency == "USD"
+            tc = float(q.get("custom_lebaref_tc_dof") or q.conversion_rate or 1.0) if is_usd else 1.0
+            if not math.isfinite(tc) or tc <= 0:
+                tc = 1.0
+            unit_mxn = round(unit_orig * tc, 2)
+            line_mxn = round(unit_orig * float(mr_row.qty or 0.0) * tc, 2)
+            if not (math.isfinite(unit_mxn) and math.isfinite(line_mxn) and unit_mxn >= 0 and line_mxn >= 0):
+                continue
+            orig_val = round(unit_orig, 2) if is_usd and math.isfinite(unit_orig) and unit_orig >= 0 else None
+            lines[idx] = [unit_mxn, line_mxn, orig_val]
+            by_quote.setdefault(q.name, (q, []))[1].append(sq_row)
+
+        if all(x is None for x in lines):
+            continue
+
+        subtotal_mxn = 0.0
+        flete_mxn = 0.0
+        iva_mxn = 0.0
+        total_mxn = 0.0
+        for q, q_rows in by_quote.values():
+            is_usd = q.currency == "USD"
+            tc = float(q.get("custom_lebaref_tc_dof") or q.conversion_rate or 1.0) if is_usd else 1.0
+            if not math.isfinite(tc) or tc <= 0:
+                tc = 1.0
+            q_net = float(q.net_total or 0.0)
+            matched_net = sum(float(r.net_amount or (float(r.qty or 0.0) * float(r.rate or 0.0))) for r in q_rows)
+            full_quote = len(q_rows) == len(q.items)
+            ratio = 1.0 if full_quote else ((matched_net / q_net) if q_net > 0 else 0.0)
+
+            flete_tax = 0.0
+            iva_tax = 0.0
+            for t in (q.taxes or []):
+                if t.category not in ("Total", "Valuation and Total"):
+                    continue
+                sign = -1.0 if getattr(t, "add_deduct_tax", "Add") == "Deduct" else 1.0
+                amt = sign * float(t.tax_amount or 0.0)
+                desc_up = (t.description or "").upper()
+                if "FLETE" in desc_up or "ENVÍO" in desc_up or "ENVIO" in desc_up or (q.shipping_rule and t.charge_type == "Actual"):
+                    flete_tax += amt
+                else:
+                    iva_tax += amt
+            flete_field = max(0.0, float(q.get("custom_lebaref_flete_sin_iva") or 0.0))
+            flete_cur = flete_tax if abs(flete_tax) > 0.004 else flete_field
+            extra_flete = flete_field if (flete_field > 0 and abs(flete_tax) <= 0.004) else 0.0
+
+            sub_c = (q_net if full_quote else matched_net) * tc
+            fle_c = (flete_cur * ratio) * tc
+            iva_c = (iva_tax * ratio) * tc
+            tot_c = ((float(q.grand_total or 0.0) + extra_flete) * tc) if full_quote else (sub_c + fle_c + iva_c)
+
+            subtotal_mxn += max(0.0, sub_c)
+            flete_mxn += max(0.0, fle_c)
+            iva_mxn += max(0.0, iva_c)
+            total_mxn += max(0.0, tot_c)
+
+        last_usd = last_q.currency == "USD"
+        last_tc = round(float(last_q.get("custom_lebaref_tc_dof") or last_q.conversion_rate or 1.0), 4) if last_usd else 1
+        if not math.isfinite(last_tc) or last_tc <= 0:
+            last_tc = 1
+        columns.append({
+            "supplier": _text(last_q.supplier_name or last_q.supplier, 160),
+            "quote": last_q.name,
+            "currency": "USD" if last_usd else "MXN",
+            "tc": last_tc,
+            "subtotal": round(subtotal_mxn, 2),
+            "flete": round(flete_mxn, 2),
+            "iva": round(iva_mxn, 2),
+            "total": round(total_mxn, 2),
+            "lines": lines,
+        })
+    return columns
+
+
 def _snapshot(doc, area):
     folio, date = _identity(doc)
     quotes = _quotes(doc)
+    comparison = _comparison(doc)
     status, next_step = _phase(doc, quotes)
     projects = sorted({row.project for row in doc.items if row.project})
     project_names = [frappe.db.get_value("Project", name, "project_name") or name for name in projects]
-    return {
+    snap = {
         "id": folio, "area": area, "date": date,
         "project": _text(" / ".join(project_names)),
         "owner": _text(doc.get("custom_lebaref_solicitante")),
@@ -138,6 +267,9 @@ def _snapshot(doc, area):
         "quotes": quotes,
         "history": [[str(doc.creation.date()), "Alta del registro en ERPNext"]],
     }
+    if comparison:
+        snap["comparison"] = comparison
+    return snap
 
 
 def _documents(company):
@@ -255,6 +387,22 @@ def _deliver(state, url, secret):
         "siguiente_intento": now_datetime() + timedelta(minutes=minutes),
     })
     frappe.db.commit()
+
+
+def encolar_sincronizacion():
+    """Encola la sincronización en segundo plano tras confirmar la transacción (sin llamadas externas durante el guardado)."""
+    if not (frappe.conf.get("lebaref_seguimiento") or {}).get("habilitado"):
+        return
+    try:
+        frappe.enqueue(
+            "lebaref_compras.seguimiento_google.sincronizar",
+            queue="short",
+            job_id="lebaref_seguimiento_google_push",
+            deduplicate=True,
+            enqueue_after_commit=True,
+        )
+    except Exception:
+        pass
 
 
 def sincronizar():

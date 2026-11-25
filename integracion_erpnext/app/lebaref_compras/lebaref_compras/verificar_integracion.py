@@ -145,6 +145,33 @@ def _verificar_proveedor():
     fields = {f["name"]: f["value"] for f in esquema("proveedor", supplier)["fields"]}
     assert all(fields[key] == data[key] for key in ("telefono", "contacto", "correo"))
 
+    # Verificar que todos los usuarios operativos (Compras, Almacén y cuentas nominales) pueden crear y modificar proveedores
+    from lebaref_compras.ux_lebaref import guardar_proveedor_rapido
+    for usr_eq in ("compras@lebaref.test", "almacen@lebaref.test", "juan.cetina@lebaref.com", "salvia.sosa@lebaref.com", "airan.echeverria@lebaref.com"):
+        if not frappe.db.exists("User", usr_eq):
+            continue
+        frappe.set_user(usr_eq)
+        creado_eq = guardar_proveedor_rapido({
+            "supplier_name": f"Prov Equipo {usr_eq.split('@')[0]} {uuid.uuid4().hex[:5]}",
+            "tax_id": "EQP010101AAA",
+            "especialidad": "HVAC y Eléctrico",
+            "contacto": "Contacto Operativo",
+            "telefono": "9991112233",
+            "correo": "ventas@proveedorequipo.test",
+        })
+        assert creado_eq["ok"] and creado_eq["nuevo"] == 1
+        editado_eq = guardar_proveedor_rapido({
+            "id": creado_eq["folio"],
+            "supplier_name": frappe.db.get_value("Supplier", creado_eq["folio"], "supplier_name"),
+            "tax_id": "EQP020202BBB",
+            "especialidad": "HVAC, Cobre y Controles",
+            "contacto": "Contacto Actualizado",
+            "telefono": "9994445566",
+            "correo": "actualizado@proveedorequipo.test",
+        })
+        assert editado_eq["ok"] and editado_eq["nuevo"] == 0
+        assert frappe.db.get_value("Supplier", creado_eq["folio"], "tax_id") == "EQP020202BBB"
+
 
 def _verificar_conceptos_libres(seed, supplier):
     from html import escape
@@ -245,7 +272,7 @@ def verificar():
         item = ejecutar("articulo", dict(item_code="TEST-"+str(uuid.uuid4())[:8], item_name="Artículo de verificación", item_group=item_schema["fields"][2]["choices"][0], stock_uom=item_schema["fields"][3]["choices"][0]), str(uuid.uuid4()))
         project = ejecutar("obra", dict(project_name="Obra verificación "+str(uuid.uuid4())[:8], company=company), str(uuid.uuid4()))
         assert frappe.db.exists("Item", item["folio"]) and frappe.db.exists("Project", project["folio"])
-        for user, action in (("compras@lebaref.test", "proveedor"), ("almacen@lebaref.test", "cfdi")):
+        for user, action in (("compras@lebaref.test", "articulo"), ("almacen@lebaref.test", "cfdi")):
             frappe.set_user(user)
             try:
                 esquema(action)

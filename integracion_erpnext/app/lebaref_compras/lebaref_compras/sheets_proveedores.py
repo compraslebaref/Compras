@@ -98,8 +98,41 @@ def archivo_historico():
         frappe.throw("No tienes permiso para consultar el archivo histórico de compras.", frappe.PermissionError)
 
     ruta = frappe.get_site_path("private", "files", "historico_sqlite_lebaref.json")
-    if not os.path.exists(ruta):
-        return {"precios": [], "cfdis": [], "ordenes": []}
+    base = {"precios": [], "cfdis": [], "ordenes": []}
+    if os.path.exists(ruta):
+        with open(ruta, encoding="utf-8") as f:
+            base = json.load(f)
 
-    with open(ruta, encoding="utf-8") as f:
-        return json.load(f)
+    if frappe.db.exists("DocType", "Lebaref Cotizacion Historica"):
+        cot_rows = frappe.get_all(
+            "Lebaref Cotizacion Historica",
+            fields=[
+                "name", "fecha_cotizacion", "item_code", "descripcion_original",
+                "proveedor_texto", "precio_unitario_mxn", "moneda", "precio_unitario_sin_iva",
+                "tc_dof", "dias_entrega_promesa", "gerencia", "se_compro_realmente",
+            ],
+            order_by="fecha_cotizacion desc, creation desc",
+            limit_page_length=2000,
+        )
+        nuevos_precios = []
+        for r in cot_rows:
+            etq_mon = (
+                f"Cotización histórica ({r.moneda} {r.precio_unitario_sin_iva:,.2f} · DOF {r.tc_dof:,.4f})"
+                if r.moneda == "USD"
+                else "Cotización histórica (no compra)"
+            )
+            nuevos_precios.append({
+                "fecha": str(r.fecha_cotizacion or ""),
+                "codigo": r.item_code or "SIN SKU",
+                "concepto": r.descripcion_original or "",
+                "familia": r.gerencia or "",
+                "proveedor": r.proveedor_texto or "",
+                "precio": float(r.precio_unitario_mxn or 0.0),
+                "dias": int(r.dias_entrega_promesa or 0),
+                "ganador": 0,
+                "origen": etq_mon,
+                "es_cotizacion_historica": 1,
+            })
+        base["precios"] = nuevos_precios + (base.get("precios") or [])
+
+    return base

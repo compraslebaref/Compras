@@ -65,7 +65,11 @@ $suites = @(
     'lebaref_compras.verificar_integracion.verificar',
     'lebaref_compras.verificar_equipos.verificar',
     'lebaref_compras.verificar_kits.verificar',
-    'lebaref_compras.verificar_seguimiento_google.verificar'
+    'lebaref_compras.verificar_seguimiento_google.verificar',
+    'lebaref_compras.verificar_fase2.verificar',
+    'lebaref_compras.verificar_fase3.verificar',
+    'lebaref_compras.verificar_fase4.verificar',
+    'lebaref_compras.verificar_fase5.verificar'
 )
 
 foreach ($suite in $suites) {

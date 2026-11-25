@@ -6,10 +6,103 @@
     const numFmt = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
     const moneyFmt = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    function decorarBtnIcono($btn, iconName, label) {
+        if (!$btn || !$btn.length) return $btn;
+        const ic = (frappe.utils && typeof frappe.utils.icon === "function") ? frappe.utils.icon(iconName, "xs") : "";
+        $btn.html(`<span class="d-inline-flex align-items-center" style="gap:5px;">${ic}<span>${frappe.utils.escape_html(label)}</span></span>`);
+        return $btn;
+    }
+
+    function decodificarHtmlLocal(str) {
+        if (!str) return "";
+        const txt = document.createElement("textarea");
+        txt.innerHTML = String(str);
+        return txt.value;
+    }
+
+    function agruparFilasPorPartidaLocal(lista, obtenerPartida) {
+        const arr = Array.isArray(lista) ? lista : [];
+        const hayPartida = arr.some((it) => decodificarHtmlLocal(obtenerPartida(it) || "").trim() !== "");
+        if (!hayPartida) {
+            return [{ partida: "", items: arr }];
+        }
+        const orden = [];
+        const mapa = new Map();
+        for (const it of arr) {
+            const p = decodificarHtmlLocal(obtenerPartida(it) || "").trim() || "Partida general";
+            if (!mapa.has(p)) {
+                mapa.set(p, []);
+                orden.push(p);
+            }
+            mapa.get(p).push(it);
+        }
+        return orden.map((p) => ({ partida: p, items: mapa.get(p) }));
+    }
+
     frappe.ui.form.on("Material Request", {
-        refresh(frm) {
+        async refresh(frm) {
+            if (window.lebaref && typeof window.lebaref.renderizarBloquesPartidaEnFormulario === "function") {
+                window.lebaref.renderizarBloquesPartidaEnFormulario(frm);
+            }
+            if (!frm.is_new() && frm.doc.docstatus !== 2) {
+                if (Number(frm.doc.custom_lebaref_concluida || 0) === 1) {
+                    frm.page.set_indicator("Concluida", "green");
+                } else if ((frm.doc.custom_lebaref_en_espera_de || "").trim()) {
+                    frm.page.set_indicator("En espera", "purple");
+                    frm.dashboard.set_headline_alert(
+                        `En espera de: <b>${frappe.utils.escape_html(frm.doc.custom_lebaref_en_espera_de)}</b>`,
+                        "purple"
+                    );
+                }
+            }
+            if (!frm.is_new() && frm.doc.docstatus < 2) {
+                decorarBtnIcono(
+                    frm.add_custom_button("Copiar para WhatsApp", () => {
+                        if (window.lebaref && window.lebaref.copiarSolicitudParaWhatsapp) {
+                            const filas = (frm.doc.items || []).map((r) => ({
+                                qty: r.qty,
+                                uom: r.uom || r.stock_uom || "Pieza",
+                                partida: r.custom_lebaref_partida || "",
+                                descripcion: r.custom_lebaref_descripcion_vista || r.custom_lebaref_concepto || r.item_name || r.description || r.item_code || "",
+                            }));
+                            window.lebaref.copiarSolicitudParaWhatsapp(frm.doc.name, filas);
+                        }
+                    }),
+                    "share",
+                    "Copiar para WhatsApp"
+                );
+            }
             if (!frm.is_new() && frappe.model.can_write("Material Request")) {
-                frm.add_custom_button("✏️ Asignar Nombre a Solicitud", () => abrirDialogoNombreSolicitud(frm), "Lebaref");
+                frm.add_custom_button("Renombrar solicitud", () => abrirDialogoNombreSolicitud(frm), "Más acciones");
+            }
+
+            if (!frm.is_new() && frm.doc.docstatus < 2 && frm.doc.status !== "Stopped" && frm.doc.status !== "Cancelled") {
+                try {
+                    const { message: estEd } = await frappe.call({
+                        method: "lebaref_compras.ux_lebaref.estado_edicion_solicitud",
+                        type: "GET",
+                        args: { solicitud: frm.doc.name },
+                    });
+                    if (estEd && estEd.puede_modificar && window.lebaref) {
+                        const grupoEd = frm.doc.docstatus === 0 ? undefined : "Más acciones";
+                        const btnXlsx = frm.add_custom_button("Importar Excel", () => {
+                            if (window.lebaref.abrirCargaExcelSolicitudExistente) {
+                                window.lebaref.abrirCargaExcelSolicitudExistente(frm.doc.name, () => frm.reload_doc());
+                            }
+                        }, grupoEd);
+                        const btnPart = frm.add_custom_button("Editar partidas", () => {
+                            if (window.lebaref.abrirEditorPartidasSolicitud) {
+                                window.lebaref.abrirEditorPartidasSolicitud(frm.doc.name, () => frm.reload_doc());
+                            }
+                        }, grupoEd);
+                        if (!grupoEd) {
+                            decorarBtnIcono(btnXlsx, "upload", "Importar Excel");
+                            decorarBtnIcono(btnPart, "edit", "Editar partidas");
+                        }
+                    }
+                } catch (e) {
+                    // Continuar sin botones de edición extendida si no hay permiso
+                }
             }
 
             if (frm.doc.docstatus !== 1 || frm.doc.status === "Stopped" || frm.doc.status === "Cancelled") {
@@ -23,23 +116,87 @@
             };
 
             if (frm.doc.material_request_type === "Purchase") {
-                frm.add_custom_button("Comparativa Lebaref", () => showComparison(frm)).addClass("btn-primary");
-                frm.add_custom_button("💰 Capturar Cotización de Proveedor", () =>
-                    abrirDialogoCotizacionDirecta(frm, () => frm.reload_doc())
+                decorarBtnIcono(
+                    frm.add_custom_button("Cuadro comparativo", () => showComparison(frm)).addClass("btn-primary"),
+                    "table",
+                    "Cuadro comparativo"
                 );
-                frm.add_custom_button("Crear anexo vinculado (SOL-03)", () => abrirOp("anexo", "Crear anexo vinculado a " + frm.doc.name), "Lebaref");
+                decorarBtnIcono(
+                    frm.add_custom_button("Capturar cotización", () =>
+                        abrirDialogoCotizacionDirecta(frm, () => frm.reload_doc())
+                    ),
+                    "file-add",
+                    "Capturar cotización"
+                );
+                frm.add_custom_button("Crear anexo", () => abrirOp("anexo", "Crear anexo vinculado a " + frm.doc.name), "Más acciones");
+                frm.add_custom_button("En espera de cliente (Presupuesto)", async () => {
+                    await frappe.call({
+                        method: "lebaref_compras.flujo_operativo.actualizar_estado_pago_logistica",
+                        type: "POST",
+                        args: {
+                            doctype: "Material Request",
+                            folio: frm.doc.name,
+                            nuevo_estado: "En espera de aprobación de cliente",
+                        },
+                        freeze: true,
+                    });
+                    frappe.show_alert({ message: "Marcada en espera de aprobación de cliente", indicator: "purple" });
+                    frm.reload_doc();
+                }, "Más acciones");
+                if (window.lebaref && window.lebaref.abrirHiloConductor) {
+                    frm.add_custom_button("Hilo conductor conciliado", () => window.lebaref.abrirHiloConductor("Material Request", frm.doc.name), "Más acciones");
+                }
+                if (window.lebaref && window.lebaref.esUsuarioMotorOscar && window.lebaref.esUsuarioMotorOscar() && window.lebaref.abrirMotorPreciosConfianza) {
+                    frm.add_custom_button("Motor de precios y confianza", () => window.lebaref.abrirMotorPreciosConfianza("catalogo"), "Más acciones");
+                }
 
                 const tieneConceptosLibres = (frm.doc.items || []).some(
                     (r) => r.item_code === "LEBAREF-CONCEPTO-LIBRE" || Boolean(r.custom_lebaref_concepto)
                 );
                 if (tieneConceptosLibres) {
-                    frm.add_custom_button("Convertir concepto libre a SKU (CAT-04)", () => abrirDialogoConvertirConcepto(frm), "Lebaref");
+                    frm.add_custom_button("Vincular al catálogo", () => abrirDialogoConvertirConcepto(frm), "Más acciones");
+                    frm.add_custom_button("Enviar a equivalencias", () => {
+                        const rLibre = (frm.doc.items || []).find(
+                            (r) => r.item_code === "LEBAREF-CONCEPTO-LIBRE" || Boolean(r.custom_lebaref_concepto)
+                        );
+                        if (window.lebaref && window.lebaref.abrirModalProponerEquivalencia) {
+                            window.lebaref.abrirModalProponerEquivalencia({
+                                texto_original: decodificarHtmlLocal((rLibre && (rLibre.custom_lebaref_concepto || rLibre.description)) || ""),
+                                origen: "Solicitud de Ingeniero",
+                                proyecto: (rLibre && rLibre.project) || "",
+                            });
+                        }
+                    }, "Más acciones");
                 } else {
-                    frm.add_custom_button("Canalizar a surtido de almacén (SOL-05)", () => abrirOp("canalizar_stock", "Canalizar a stock · " + frm.doc.name), "Lebaref");
+                    frm.add_custom_button("Surtir de existencias", () => abrirOp("canalizar_stock", "Surtir de existencias · " + frm.doc.name), "Más acciones");
                 }
             } else if (frm.doc.material_request_type === "Material Issue" || frm.doc.material_request_type === "Material Transfer") {
-                frm.add_custom_button("Surtir desde almacén (SOL-05)", () => abrirOp("surtir", "Surtir desde almacén · " + frm.doc.name)).addClass("btn-primary");
-                frm.add_custom_button("Crear anexo vinculado (SOL-03)", () => abrirOp("anexo", "Crear anexo vinculado a " + frm.doc.name), "Lebaref");
+                decorarBtnIcono(
+                    frm.add_custom_button("Entregar desde almacén", () => abrirOp("surtir", "Entregar desde almacén · " + frm.doc.name)).addClass("btn-primary"),
+                    "check",
+                    "Entregar desde almacén"
+                );
+                frm.add_custom_button("Crear anexo", () => abrirOp("anexo", "Crear anexo vinculado a " + frm.doc.name), "Más acciones");
+                frm.add_custom_button("En espera de cliente (Presupuesto)", async () => {
+                    await frappe.call({
+                        method: "lebaref_compras.flujo_operativo.actualizar_estado_pago_logistica",
+                        type: "POST",
+                        args: {
+                            doctype: "Material Request",
+                            folio: frm.doc.name,
+                            nuevo_estado: "En espera de aprobación de cliente",
+                        },
+                        freeze: true,
+                    });
+                    frappe.show_alert({ message: "Marcada en espera de aprobación de cliente", indicator: "purple" });
+                    frm.reload_doc();
+                }, "Más acciones");
+                if (window.lebaref && window.lebaref.abrirHiloConductor) {
+                    frm.add_custom_button("Hilo conductor conciliado", () => window.lebaref.abrirHiloConductor("Material Request", frm.doc.name), "Más acciones");
+                }
+                if (window.lebaref && window.lebaref.esUsuarioMotorOscar && window.lebaref.esUsuarioMotorOscar() && window.lebaref.abrirMotorPreciosConfianza) {
+                    frm.add_custom_button("Motor de precios y confianza", () => window.lebaref.abrirMotorPreciosConfianza("catalogo"), "Más acciones");
+                }
             }
         },
     });
@@ -105,20 +262,36 @@
             descripcion: p.descripcion,
             qty: p.qty,
             uom: p.uom,
+            obra: p.obra || "",
+            partida: p.partida || "",
+            no_recotizar: Boolean(p.no_recotizar),
             ref: mapaRefs[p.mr_item] || null,
             rate: "",
             lead_time_days: "1",
         }));
 
+        const adjuntosCotizacion = [];
+
         const d = new frappe.ui.Dialog({
-            title: `💰 Capturar Cotización Directa · ${folio}`,
+            title: `Capturar Cotización Directa · ${folio}`,
             size: "extra-large",
             fields: [
                 {
                     fieldname: "_ayuda",
                     fieldtype: "HTML",
                     options: `<div class="alert alert-info py-2 px-3 mb-2" style="font-size:12px;">
-                        Captura directamente los precios unitarios <b>sin IVA</b> del proveedor para esta solicitud (admite ofertas parciales dejando en blanco lo que no cotice). Se integrará de inmediato al <b>Cuadro Comparativo</b>.
+                        <div class="d-flex justify-content-between align-items-center" style="gap:10px;flex-wrap:wrap;">
+                            <span>Captura precios unitarios <b>sin IVA</b> en <b>MXN o USD (con TC DOF del día)</b> y separa el flete si aplica.</span>
+                            <div class="d-flex align-items-center flex-wrap" style="gap:6px;">
+                                ${frappe.model.can_create("Supplier") ? `<button type="button" class="btn btn-xs btn-default leb-cot-new-sup">+ Nuevo proveedor</button>` : ""}
+                                <button type="button" class="btn btn-xs btn-default leb-cot-adjuntar" style="font-weight:600;border-color:#0284c7;color:#0369a1;">Adjuntar cotización (PDF / Imagen)</button>
+                                <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.doc,.docx,application/pdf,image/*" class="d-none leb-cot-adjunto-file">
+                                <button type="button" class="btn btn-xs btn-default leb-cot-tpl">Plantilla CSV</button>
+                                <button type="button" class="btn btn-xs btn-primary leb-cot-xlsx">Cargar Excel / CSV</button>
+                                <input type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="d-none leb-cot-file">
+                            </div>
+                        </div>
+                        <div class="leb-cot-adjuntos-lista d-none mt-2 pt-2" style="border-top:1px dashed #93c5fd;"></div>
                     </div>`,
                 },
                 {
@@ -127,6 +300,56 @@
                     fieldtype: "Select",
                     options: ["", ...(info.proveedores || [])].join("\n"),
                     reqd: 1,
+                },
+                {
+                    fieldname: "currency",
+                    label: "Moneda de la cotización",
+                    fieldtype: "Select",
+                    options: "MXN\nUSD",
+                    default: "MXN",
+                    reqd: 1,
+                },
+                {
+                    fieldname: "tc_dof",
+                    label: "Tipo de Cambio oficial DOF del día (obligatorio en USD)",
+                    fieldtype: "Float",
+                    precision: 4,
+                    depends_on: "eval:doc.currency === 'USD'",
+                    mandatory_depends_on: "eval:doc.currency === 'USD'",
+                },
+                {
+                    fieldname: "fecha_dof",
+                    label: "Fecha publicación DOF",
+                    fieldtype: "Date",
+                    default: frappe.datetime.get_today(),
+                    depends_on: "eval:doc.currency === 'USD'",
+                },
+                { fieldtype: "Column Break" },
+                {
+                    fieldname: "payment_terms_template",
+                    label: "Condición de pago",
+                    fieldtype: "Select",
+                    options: ["", ...(info.pagos || [])].join("\n"),
+                    default: "",
+                },
+                {
+                    fieldname: "modalidad_entrega",
+                    label: "Modalidad de entrega",
+                    fieldtype: "Select",
+                    options: "\nIr a recolectar\nEn flete (proveedor entrega)\nEntrega directa en obra",
+                    default: "Ir a recolectar",
+                },
+                {
+                    fieldname: "dias_entrega_promesa",
+                    label: "Días promesa de entrega / flete",
+                    fieldtype: "Int",
+                    default: 1,
+                },
+                {
+                    fieldname: "flete_sin_iva",
+                    label: "Flete separado sin IVA (0 si no cobra flete)",
+                    fieldtype: "Float",
+                    default: 0,
                 },
                 {
                     fieldname: "taxes_and_charges",
@@ -141,26 +364,6 @@
                     fieldtype: "Date",
                     default: info.valid_till,
                 },
-                { fieldtype: "Column Break" },
-                {
-                    fieldname: "payment_terms_template",
-                    label: "Condición de pago",
-                    fieldtype: "Select",
-                    options: ["", ...(info.pagos || [])].join("\n"),
-                    default: "",
-                },
-                {
-                    fieldname: "shipping_rule",
-                    label: "Regla de flete (opcional)",
-                    fieldtype: "Select",
-                    options: ["", ...(info.fletes || [])].join("\n"),
-                    default: "",
-                },
-                {
-                    fieldname: "fecha_programada_pago",
-                    label: "Fecha programada de pago (opcional)",
-                    fieldtype: "Date",
-                },
                 { fieldtype: "Section Break", label: "Precios Cotizados por Partida" },
                 { fieldname: "_tabla_partidas", fieldtype: "HTML" },
             ],
@@ -169,6 +372,10 @@
                 const filasConPrecio = preciosEstado.filter((r) => Number(r.rate || 0) > 0);
                 if (!filasConPrecio.length) {
                     frappe.msgprint("Captura al menos un precio unitario mayor que cero.");
+                    return;
+                }
+                if (vals.currency === "USD" && !(Number(vals.tc_dof || 0) > 0)) {
+                    frappe.msgprint("Para cotizaciones en USD debes ingresar manualmente el Tipo de Cambio oficial del DOF de ese día.");
                     return;
                 }
                 const btn = d.get_primary_btn().prop("disabled", true);
@@ -180,20 +387,32 @@
                             solicitud: folio,
                             datos: JSON.stringify({
                                 supplier: vals.supplier,
+                                currency: vals.currency || "MXN",
+                                tc_dof: vals.currency === "USD" ? Number(vals.tc_dof) : 1,
+                                fecha_dof: vals.fecha_dof || frappe.datetime.get_today(),
+                                modalidad_entrega: vals.modalidad_entrega || "",
+                                dias_entrega_promesa: Number(vals.dias_entrega_promesa || 0),
+                                flete_sin_iva: Number(vals.flete_sin_iva || 0),
                                 valid_till: vals.valid_till,
                                 taxes_and_charges: vals.taxes_and_charges || "",
-                                shipping_rule: vals.shipping_rule || "",
                                 payment_terms_template: vals.payment_terms_template || "",
-                                fecha_programada_pago: vals.fecha_programada_pago || "",
                                 rows: filasConPrecio,
+                                adjuntos: adjuntosCotizacion.map((a) => ({
+                                    filename: a.filename,
+                                    content_base64: a.content_base64,
+                                })),
                             }),
                         },
                         freeze: true,
-                        freeze_message: "Guardando cotización de proveedor…",
+                        freeze_message: adjuntosCotizacion.length
+                            ? "Guardando cotización y adjuntando archivo(s) para Drive…"
+                            : "Guardando cotización de proveedor…",
                     });
                     d.hide();
+                    const nAdj = Number((res && res.adjuntos_guardados) || 0);
+                    const txtAdj = nAdj > 0 ? ` · ${nAdj} adjunto(s) listo(s) para Drive` : "";
                     frappe.show_alert({
-                        message: `Cotización registrada: ${res.folio} (${vals.supplier})`,
+                        message: `Cotización registrada: ${res.folio} (${vals.supplier} · ${vals.currency}${txtAdj})`,
                         indicator: "green",
                     });
                     if (typeof alGuardar === "function") alGuardar(res);
@@ -207,38 +426,239 @@
         const tbl = $('<table class="table table-bordered table-sm" style="font-size:12px;">').appendTo(
             $('<div class="table-responsive">').appendTo(host)
         );
-        $('<thead style="background:#031e34;color:#fff;"><tr><th style="width:34px;">#</th><th style="width:130px;">Código / Clave</th><th>Descripción del Artículo / Concepto</th><th class="text-right" style="width:90px;">Cantidad</th><th class="text-right" style="width:128px;">Ref. Histórica</th><th style="width:140px;">Precio Unit. s/IVA ($)</th><th style="width:96px;">Entrega (días)</th></tr></thead>').appendTo(tbl);
+        $('<thead style="background:#031e34;color:#fff;"><tr><th style="width:34px;">#</th><th style="width:130px;">Código / Clave</th><th>Descripción del Artículo / Concepto</th><th class="text-right" style="width:90px;">Cantidad</th><th class="text-right" style="width:128px;">Ref. Histórica</th><th style="width:165px;">Precio Unit. s/IVA ($)</th><th style="width:96px;">Entrega (días)</th></tr></thead>').appendTo(tbl);
         const tbody = $("<tbody>").appendTo(tbl);
 
-        for (const p of preciosEstado) {
-            const tr = $("<tr>").appendTo(tbody);
-            $("<td>").text(p.idx).appendTo(tr);
-            $("<td>").html(`<b>${frappe.utils.escape_html(p.clave)}</b>`).appendTo(tr);
-            $("<td>").text(p.descripcion).appendTo(tr);
-            $("<td class='text-right'>").html(`<b>${numFmt.format(p.qty)} ${frappe.utils.escape_html(p.uom)}</b>`).appendTo(tr);
-
-            const tdRef = $("<td class='text-right small'>").appendTo(tr);
-            if (p.ref && p.ref.ref_precio > 0) {
-                tdRef.html(`<b>$${moneyFmt.format(p.ref.ref_precio)}</b><br><span class="text-muted">${frappe.utils.escape_html(p.ref.ref_proveedor || p.ref.ref_fuente || "")}</span>`);
-            } else {
-                tdRef.html(`<span class="text-muted">Sin ref.</span>`);
+        function evaluarPokaYokePrecio(p) {
+            if (!p.$rateInput || !p.$rateWarn) return;
+            const raw = String(p.rate == null ? "" : p.rate).trim();
+            if (!raw) {
+                p.$rateInput.css("border-color", "");
+                p.$rateWarn.empty().addClass("d-none");
+                return;
             }
-
-            const tdRate = $("<td>").appendTo(tr);
-            $('<input type="number" step="0.01" min="0" class="form-control form-control-sm" placeholder="0.00 (Sin cotizar)">')
-                .on("input", function () {
-                    p.rate = $(this).val();
-                })
-                .appendTo(tdRate);
-
-            const tdDays = $("<td>").appendTo(tr);
-            $('<input type="number" step="1" min="0" class="form-control form-control-sm">')
-                .val(p.lead_time_days)
-                .on("input", function () {
-                    p.lead_time_days = $(this).val();
-                })
-                .appendTo(tdDays);
+            const val = Number(raw);
+            if (!Number.isFinite(val) || val < 0) {
+                p.$rateInput.css("border-color", "#dc2626");
+                p.$rateWarn
+                    .removeClass("d-none")
+                    .css("color", "#dc2626")
+                    .text("No se permiten precios negativos");
+                return;
+            }
+            if (val === 0) {
+                p.$rateInput.css("border-color", "");
+                p.$rateWarn.empty().addClass("d-none");
+                return;
+            }
+            const monedaActual = d.get_value("currency") || "MXN";
+            const tcActual = monedaActual === "USD" ? Number(d.get_value("tc_dof") || 0) : 1;
+            if (monedaActual === "USD" && !(tcActual > 0)) {
+                p.$rateInput.css("border-color", "#d97706");
+                p.$rateWarn
+                    .removeClass("d-none")
+                    .css("color", "#b45309")
+                    .text("Ingresa arriba el TC DOF del día para validar en MXN");
+                return;
+            }
+            const eqMxn = val * (monedaActual === "USD" ? tcActual : 1);
+            if (p.ref && p.ref.ref_precio > 0) {
+                const pct = ((eqMxn - p.ref.ref_precio) / p.ref.ref_precio) * 100;
+                if (pct >= 25) {
+                    p.$rateInput.css("border-color", "#d97706");
+                    p.$rateWarn
+                        .removeClass("d-none")
+                        .css("color", "#b45309")
+                        .text(`Variación +${pct.toFixed(0)}% vs histórico — verifica unidad o moneda`);
+                    return;
+                }
+                if (pct <= -40) {
+                    p.$rateInput.css("border-color", "#0284c7");
+                    p.$rateWarn
+                        .removeClass("d-none")
+                        .css("color", "#0369a1")
+                        .text(`Variación ${pct.toFixed(0)}% vs histórico — confirma que la unidad coincida`);
+                    return;
+                }
+            }
+            p.$rateInput.css("border-color", "#10b981");
+            p.$rateWarn.empty().addClass("d-none");
         }
+
+        const bloquesCot = agruparFilasPorPartidaLocal(preciosEstado, (p) => p.partida);
+        for (const grupo of bloquesCot) {
+            if (grupo.partida) {
+                $(`<tr class="leb-partida-block-row" style="background:#e2e8f0;color:#031e34;font-weight:800;font-size:11.5px;">
+                    <td colspan="7" style="padding:6px 10px;border-top:2px solid #cbd5e1;">
+                        ${frappe.utils.escape_html(grupo.partida)} <span style="font-weight:600;color:#475569;">(${grupo.items.length})</span>
+                    </td>
+                </tr>`).appendTo(tbody);
+            }
+            for (const p of grupo.items) {
+                const tr = $("<tr>").appendTo(tbody);
+                $("<td>").text(p.idx).appendTo(tr);
+                $("<td>").html(`<b>${frappe.utils.escape_html(p.clave)}</b>`).appendTo(tr);
+                const tdDescCot = $("<td>").appendTo(tr);
+                $("<div>").text(decodificarHtmlLocal(p.descripcion)).appendTo(tdDescCot);
+                if (p.no_recotizar) {
+                    $('<div class="mt-1"><span class="badge badge-success" style="font-size:10.5px;">Validado por Gerencia — No recotizar</span></div>').appendTo(tdDescCot);
+                }
+                $("<td class='text-right'>").html(`<b>${numFmt.format(p.qty)} ${frappe.utils.escape_html(p.uom)}</b>`).appendTo(tr);
+
+                const tdRef = $("<td class='text-right small'>").appendTo(tr);
+                if (p.ref && p.ref.ref_precio > 0) {
+                    tdRef.html(`<b>$${moneyFmt.format(p.ref.ref_precio)}</b><br><span class="text-muted">${frappe.utils.escape_html(p.ref.ref_proveedor || p.ref.ref_fuente || "")}</span>`);
+                } else {
+                    tdRef.html(`<span class="text-muted">Sin ref.</span>`);
+                }
+
+                const tdRate = $("<td>").appendTo(tr);
+                p.$rateInput = $('<input type="number" step="0.01" min="0" class="form-control form-control-sm" placeholder="0.00 (Sin cotizar)">')
+                    .on("input", function () {
+                        p.rate = $(this).val();
+                        evaluarPokaYokePrecio(p);
+                    })
+                    .appendTo(tdRate);
+                p.$rateWarn = $('<div class="d-none" style="font-size:10.5px;font-weight:600;line-height:1.25;margin-top:3px;">').appendTo(tdRate);
+
+                const tdDays = $("<td>").appendTo(tr);
+                p.$daysInput = $('<input type="number" step="1" min="0" class="form-control form-control-sm">')
+                    .val(p.lead_time_days)
+                    .on("input", function () {
+                        const rawD = Number($(this).val());
+                        p.lead_time_days = Number.isFinite(rawD) && rawD >= 0 ? String(Math.round(rawD)) : "0";
+                    })
+                    .appendTo(tdDays);
+            }
+        }
+
+        if (d.fields_dict.currency && d.fields_dict.currency.$input) {
+            d.fields_dict.currency.$input.on("change", () => preciosEstado.forEach(evaluarPokaYokePrecio));
+        }
+        if (d.fields_dict.tc_dof && d.fields_dict.tc_dof.$input) {
+            d.fields_dict.tc_dof.$input.on("input change", () => preciosEstado.forEach(evaluarPokaYokePrecio));
+        }
+        d.fields_dict._ayuda.$wrapper.find(".leb-cot-new-sup").on("click", () => {
+            if (window.lebaref && window.lebaref.abrirModalProveedorRapido) {
+                window.lebaref.abrirModalProveedorRapido("", (res) => {
+                    if (res && res.folio && d.fields_dict.supplier) {
+                        const listaSup = info.proveedores || [];
+                        if (!listaSup.includes(res.folio)) {
+                            listaSup.push(res.folio);
+                            listaSup.sort();
+                        }
+                        d.fields_dict.supplier.df.options = ["", ...listaSup].join("\n");
+                        d.fields_dict.supplier.refresh();
+                        d.set_value("supplier", res.folio);
+                    }
+                });
+            }
+        });
+
+        const ayudaCotWrap = d.fields_dict._ayuda.$wrapper;
+        const pintarAdjuntosCotizacion = () => {
+            const $box = ayudaCotWrap.find(".leb-cot-adjuntos-lista");
+            const $btnAdj = ayudaCotWrap.find(".leb-cot-adjuntar");
+            if (!adjuntosCotizacion.length) {
+                $box.empty().addClass("d-none");
+                $btnAdj.text("Adjuntar cotización (PDF / Imagen)");
+                return;
+            }
+            $btnAdj.text(`Adjuntar cotización (${adjuntosCotizacion.length})`);
+            const chips = adjuntosCotizacion.map((a, idx) => {
+                const kb = Math.max(1, Math.round((a.size || 0) / 1024));
+                return `<span class="badge badge-light d-inline-flex align-items-center mr-1 mb-1" style="border:1px solid #93c5fd;color:#0f172a;font-size:11px;padding:4px 8px;gap:6px;">
+                    <span>${frappe.utils.escape_html(a.filename)} <span class="text-muted">(${kb} KB)</span></span>
+                    <a href="#" class="leb-cot-del-adj text-danger" data-idx="${idx}" title="Quitar archivo" style="font-weight:800;text-decoration:none;">×</a>
+                </span>`;
+            }).join("");
+            $box.removeClass("d-none").html(
+                `<div class="small mb-1" style="color:#0369a1;font-weight:600;">Archivo(s) que se guardarán en esta cotización y se subirán al expediente de Drive:</div>${chips}`
+            );
+        };
+        ayudaCotWrap.on("click", ".leb-cot-del-adj", function (ev) {
+            ev.preventDefault();
+            const i = Number($(this).attr("data-idx"));
+            if (Number.isInteger(i) && i >= 0 && i < adjuntosCotizacion.length) {
+                adjuntosCotizacion.splice(i, 1);
+                pintarAdjuntosCotizacion();
+            }
+        });
+        ayudaCotWrap.find(".leb-cot-adjuntar").on("click", () => ayudaCotWrap.find(".leb-cot-adjunto-file").trigger("click"));
+        ayudaCotWrap.find(".leb-cot-adjunto-file").on("change", function () {
+            const files = Array.from(this.files || []);
+            if (!files.length) return;
+            for (const f of files) {
+                if (f.size > 25 * 1024 * 1024) {
+                    frappe.msgprint(`El archivo <b>${frappe.utils.escape_html(f.name)}</b> supera el límite de 25 MB.`);
+                    continue;
+                }
+                if (adjuntosCotizacion.length >= 10) break;
+                const rd = new FileReader();
+                rd.onload = (ev) => {
+                    adjuntosCotizacion.push({
+                        filename: f.name,
+                        size: f.size,
+                        content_base64: String(ev.target.result || ""),
+                    });
+                    pintarAdjuntosCotizacion();
+                };
+                rd.readAsDataURL(f);
+            }
+            this.value = "";
+        });
+        ayudaCotWrap.find(".leb-cot-tpl").on("click", () => {
+            const escCsv = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+            const lineas = ["Renglon,MR_Item_ID,Clave,Descripcion,Cantidad,Precio_Sin_IVA,Dias_Entrega"];
+            for (const p of preciosEstado) {
+                lineas.push([p.idx, p.mr_item, escCsv(p.clave), escCsv(p.descripcion), `${p.qty} ${p.uom}`, "", "1"].join(","));
+            }
+            const blob = new Blob(["\uFEFF" + lineas.join("\n") + "\n"], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Plantilla_Cotizacion_${folio}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+        ayudaCotWrap.find(".leb-cot-xlsx").on("click", () => ayudaCotWrap.find(".leb-cot-file").trigger("click"));
+        ayudaCotWrap.find(".leb-cot-file").on("change", function () {
+            const file = this.files && this.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                const { message: res } = await frappe.call({
+                    method: "lebaref_compras.ux_lebaref.parsear_excel_cotizacion",
+                    type: "POST",
+                    args: {
+                        solicitud: folio,
+                        filename: file.name,
+                        content_base64: String(ev.target.result || ""),
+                    },
+                    freeze: true,
+                    freeze_message: "Leyendo precios desde Excel / CSV…",
+                });
+                const mapaPrecios = (res && res.precios) || {};
+                let aplicados = 0;
+                for (const p of preciosEstado) {
+                    const hit = mapaPrecios[p.mr_item];
+                    if (hit && Number(hit.rate) > 0) {
+                        p.rate = String(hit.rate);
+                        p.lead_time_days = String(hit.lead_time_days != null ? hit.lead_time_days : 1);
+                        if (p.$rateInput) p.$rateInput.val(p.rate);
+                        if (p.$daysInput) p.$daysInput.val(p.lead_time_days);
+                        evaluarPokaYokePrecio(p);
+                        aplicados++;
+                    }
+                }
+                frappe.show_alert({
+                    message: aplicados ? `Precios aplicados en ${aplicados} partida(s).` : "No se encontraron precios mayores a cero que coincidan.",
+                    indicator: aplicados ? "green" : "orange",
+                });
+                this.value = "";
+            };
+            reader.readAsDataURL(file);
+        });
 
         d.show();
     }
@@ -336,7 +756,7 @@
                     label: "Unidad de inventario",
                     fieldtype: "Link",
                     options: "UOM",
-                    default: "Nos",
+                    default: "Pieza",
                     depends_on: "eval:doc.modo_sku === 'Crear nuevo SKU inventariable ahora'",
                 },
                 {
@@ -451,13 +871,20 @@
                     <b>Proveedores con oferta:</b> ${suppliers.length}
                 </div>
                 <div class="d-flex flex-wrap" style="gap:6px;">
-                    <button type="button" class="btn btn-xs btn-primary leb-btn-add-quote">➕ Capturar Cotización de Proveedor</button>
-                    <button type="button" class="btn btn-xs btn-default leb-btn-dir">📊 Proveedores por Especialidad</button>
-                    <button type="button" class="btn btn-xs btn-default leb-btn-print">🖨️ Imprimir Comparativa Carta</button>
-                    <button type="button" class="btn btn-xs btn-secondary leb-btn-best">★ Elegir Mejor Precio en Todo</button>
+                    <button type="button" class="btn btn-xs btn-default leb-btn-wa">Copiar para WhatsApp</button>
+                    <button type="button" class="btn btn-xs btn-primary leb-btn-add-quote">+ Capturar cotización</button>
+                    <button type="button" class="btn btn-xs btn-default leb-btn-dir">Directorio proveedores</button>
+                    <button type="button" class="btn btn-xs btn-default leb-btn-print">Imprimir comparativa</button>
+                    <button type="button" class="btn btn-xs btn-secondary leb-btn-best">★ Mejor precio en todo</button>
                 </div>
             </div>
         `).appendTo(wrapper);
+
+        toolbar.find(".leb-btn-wa").on("click", () => {
+            if (window.lebaref && window.lebaref.copiarSolicitudParaWhatsapp) {
+                window.lebaref.copiarSolicitudParaWhatsapp(folio, comparison.renglones || []);
+            }
+        });
 
         toolbar.find(".leb-btn-add-quote").on("click", () => {
             dialog.hide();
@@ -476,13 +903,55 @@
         const bestRadios = [];
 
         if (!suppliers.length) {
-            const emptyBox = $(`
+            $(`
                 <div class="alert alert-warning mb-2">
                     Aún no hay ofertas registradas para <b>${frappe.utils.escape_html(folio)}</b>.<br>
-                    Haz clic en <b>➕ Capturar Cotización de Proveedor</b> aquí arriba para ingresar precios unitarios, IVA, flete y condiciones de pago directamente sobre esta solicitud.
+                    Haz clic en <b>+ Capturar cotización</b> aquí arriba para ingresar precios unitarios, IVA, flete y condiciones de pago directamente sobre esta solicitud.
                 </div>
             `).appendTo(wrapper);
-            void emptyBox;
+            if (comparison.es_motor_oscar && (comparison.renglones || []).length) {
+                const triajeWrap = $('<div class="table-responsive mt-2">').appendTo(wrapper);
+                const triajeTbl = $('<table class="table table-bordered table-sm" style="font-size:12px;">').appendTo(triajeWrap);
+                $('<thead style="background:#031e34;color:#fff;"><tr><th>Artículo / Concepto</th><th class="text-right">Cant.</th><th class="text-right">Estimado Gerencia (MXN)</th><th class="text-center">Confianza</th><th class="text-right">Triaje Gerencial</th></tr></thead>').appendTo(triajeTbl);
+                const tBodyTriaje = $("<tbody>").appendTo(triajeTbl);
+                for (const line of comparison.renglones) {
+                    const trT = $("<tr>").appendTo(tBodyTriaje);
+                    const tdA = $("<td>").appendTo(trT);
+                    $("<div>").css("font-weight", "600").text(decodificarHtmlLocal(line.articulo)).appendTo(tdA);
+                    if (line.no_recotizar) {
+                        $('<span class="badge badge-success mt-1">Validado por Gerencia — No recotizar</span>').appendTo(tdA);
+                    }
+                    $("<td class='text-right'>").text(`${numFmt.format(line.cantidad)} ${line.unidad || ""}`).appendTo(trT);
+                    const eo = line.estimacion_oscar || null;
+                    if (eo && eo.tiene_historial) {
+                        $("<td class='text-right'>").html(`<b>$${moneyFmt.format(eo.precio_estimado_uom_mxn)}</b>`).appendTo(trT);
+                        $("<td class='text-center'>").html(`<span class="indicator-pill ${frappe.utils.escape_html(eo.semaforo_color)}">${eo.indice_confianza}% · ${frappe.utils.escape_html(eo.semaforo)}</span>`).appendTo(trT);
+                    } else {
+                        $("<td class='text-right text-muted'>").text("—").appendTo(trT);
+                        $("<td class='text-center text-muted'>").text("Sin historial").appendTo(trT);
+                    }
+                    const tdAccT = $("<td class='text-right' style='white-space:nowrap;'>").appendTo(trT);
+                    if (eo && eo.item_code && window.lebaref && window.lebaref.abrirGraficaTiempoPrecioArticulo) {
+                        $('<button type="button" class="btn btn-xs btn-default mr-1">Gráfica</button>')
+                            .on("click", () => window.lebaref.abrirGraficaTiempoPrecioArticulo(eo.item_code))
+                            .appendTo(tdAccT);
+                    }
+                    if (!line.ordenado) {
+                        $(`<button type="button" class="btn btn-xs ${line.no_recotizar ? "btn-default" : "btn-primary"}">${line.no_recotizar ? "Reactivar cotización" : "Validado — No recotizar"}</button>`)
+                            .on("click", async () => {
+                                await frappe.call({
+                                    method: "lebaref_compras.motor_precios.marcar_validado_no_recotizar",
+                                    type: "POST",
+                                    args: { solicitud: folio, mr_item: line.id, validar: line.no_recotizar ? 0 : 1 },
+                                    freeze: true,
+                                });
+                                dialog.hide();
+                                showComparison(frmOrFolio, alGenerar);
+                            })
+                            .appendTo(tdAccT);
+                    }
+                }
+            }
         } else {
             const tblWrap = $('<div class="table-responsive">').appendTo(wrapper);
             const table = $('<table class="table table-bordered table-sm" style="font-size:12px;">').appendTo(tblWrap);
@@ -506,121 +975,160 @@
                             .appendTo(th);
                     }
                     $("<div style='font-size:10.5px;font-weight:600;color:#93c5fd;margin-top:1px;'>")
-                        .text(`Cotización completa: Neto $${moneyFmt.format(com.neto || 0)} | Total $${moneyFmt.format(com.total || 0)} ${meta.moneda}`)
+                        .text(`Cotización completa: Subtotal $${moneyFmt.format(com.neto || 0)} | Total $${moneyFmt.format(com.total || 0)} ${meta.moneda}`)
                         .appendTo(th);
                 }
             }
             hRow.append("<th>Estado</th>");
 
             const tbody = $("<tbody>").appendTo(table);
+            const totalColsComp = 4 + suppliers.length;
+            const bloquesComp = agruparFilasPorPartidaLocal(comparison.renglones || [], (l) => l.partida);
 
-            for (const line of comparison.renglones) {
-                const tr = $("<tr>").appendTo(tbody);
-                const subInfo = [line.codigo || "CONCEPTO LIBRE", line.obra, line.partida].filter(Boolean).join(" · ");
-                const tdArt = $("<td>").appendTo(tr);
-                $("<div>").css("font-weight", "600").text(line.articulo).appendTo(tdArt);
-                if (subInfo) $("<div class='text-muted small'>").text(subInfo).appendTo(tdArt);
-
-                $("<td class='text-right' style='white-space:nowrap;font-weight:600;'>")
-                    .text(`${numFmt.format(line.cantidad)} ${line.unidad || ""}`)
-                    .appendTo(tr);
-
-                const refRow = mapaRefsComp[line.id] || null;
-                const tdRefComp = $("<td class='text-right small' style='background:#f8fafc;white-space:nowrap;'>").appendTo(tr);
-                if (refRow && refRow.ref_precio > 0) {
-                    tdRefComp.html(
-                        `<b>$${moneyFmt.format(refRow.ref_precio)}</b><br><span class="text-muted" style="font-size:10.5px;">${frappe.utils.escape_html(refRow.ref_proveedor || refRow.ref_fuente || "")}</span>`
-                    );
-                } else {
-                    tdRefComp.html(`<span class="text-muted">—</span>`);
+            for (const grupo of bloquesComp) {
+                if (grupo.partida) {
+                    $(`<tr class="leb-partida-block-row" style="background:#e2e8f0;color:#031e34;font-weight:800;font-size:11.5px;">
+                        <td colspan="${totalColsComp}" style="padding:6px 10px;border-top:2px solid #cbd5e1;">
+                            ${frappe.utils.escape_html(grupo.partida)} <span style="font-weight:600;color:#475569;">(${grupo.items.length})</span>
+                        </td>
+                    </tr>`).appendTo(tbody);
                 }
 
-                let minPrice = Infinity;
-                for (const opt of line.opciones || []) {
-                    if (opt.precio > 0 && opt.precio < minPrice) minPrice = opt.precio;
-                }
-
-                let bestInputForRow = null;
-
-                for (const sup of suppliers) {
-                    const td = $("<td>").appendTo(tr);
-                    const opt = (line.opciones || []).find((o) => o.proveedor === sup);
-                    if (!opt) {
-                        td.css({ color: "#94a3b8", background: "#f8fafc" }).text("Sin cotizar");
-                        continue;
+                for (const line of grupo.items) {
+                    const tr = $("<tr>").appendTo(tbody);
+                    const subInfo = [line.codigo || "CONCEPTO LIBRE", line.obra].filter(Boolean).join(" · ");
+                    const tdArt = $("<td>").appendTo(tr);
+                    $("<div>").css("font-weight", "600").text(decodificarHtmlLocal(line.articulo)).appendTo(tdArt);
+                    if (subInfo) $("<div class='text-muted small'>").text(subInfo).appendTo(tdArt);
+                    if (line.no_recotizar) {
+                        $('<div class="mt-1"><span class="badge badge-success" style="font-size:10px;">Validado por Gerencia — No recotizar</span></div>').appendTo(tdArt);
+                    }
+                    if (comparison.es_motor_oscar && line.estimacion_oscar) {
+                        const eo = line.estimacion_oscar;
+                        const rowOsc = $('<div class="d-flex align-items-center flex-wrap mt-1" style="gap:5px;font-size:10.5px;">').appendTo(tdArt);
+                        const txtEo = eo.tiene_historial
+                            ? `Est. $${moneyFmt.format(eo.precio_estimado_uom_mxn)} · ${eo.indice_confianza}% (${eo.semaforo})`
+                            : `Sin historial (${eo.indice_confianza}%)`;
+                        $('<a href="#" style="font-weight:700;color:#0369a1;text-decoration:underline;">')
+                            .text(txtEo)
+                            .on("click", (ev) => {
+                                ev.preventDefault();
+                                if (window.lebaref && window.lebaref.abrirGraficaTiempoPrecioArticulo) {
+                                    window.lebaref.abrirGraficaTiempoPrecioArticulo(eo.item_code);
+                                }
+                            })
+                            .appendTo(rowOsc);
+                        if (!line.ordenado) {
+                            $(`<button type="button" class="btn btn-xs btn-default" style="padding:1px 6px;font-size:10px;">${line.no_recotizar ? "Reactivar" : "No recotizar"}</button>`)
+                                .on("click", async () => {
+                                    await frappe.call({
+                                        method: "lebaref_compras.motor_precios.marcar_validado_no_recotizar",
+                                        type: "POST",
+                                        args: { solicitud: folio, mr_item: line.id, validar: line.no_recotizar ? 0 : 1 },
+                                        freeze: true,
+                                    });
+                                    dialog.hide();
+                                    showComparison(frmOrFolio, alGenerar);
+                                })
+                                .appendTo(rowOsc);
+                        }
                     }
 
-                    const isBest = opt.precio === minPrice;
-                    if (isBest) td.css("background", "#ecfdf5");
+                    $("<td class='text-right' style='white-space:nowrap;font-weight:600;'>")
+                        .text(`${numFmt.format(line.cantidad)} ${line.unidad || ""}`)
+                        .appendTo(tr);
 
-                    const subtotal = opt.precio * line.cantidad;
-                    const com = opt.comercial || null;
-                    const label = $("<label class='d-flex align-items-start mb-0' style='gap:6px;cursor:pointer;font-weight:normal;'>").appendTo(td);
-                    const input = $("<input>").attr({
-                        type: "radio",
-                        name: "lebaref-" + line.id,
-                    }).prop("disabled", line.ordenado || !comparison.puede_generar).appendTo(label);
-
-                    const box = $("<div>").appendTo(label);
-                    const priceLine = $("<div>").css("font-weight", "700")
-                        .text(`$${moneyFmt.format(opt.precio)} ${opt.moneda} / u. (s/IVA)`)
-                        .appendTo(box);
-                    if (isBest) {
-                        $("<span class='badge badge-success ml-1'>").text("★ Mejor").appendTo(priceLine);
-                    }
+                    const refRow = mapaRefsComp[line.id] || null;
+                    const tdRefComp = $("<td class='text-right small' style='background:#f8fafc;white-space:nowrap;'>").appendTo(tr);
                     if (refRow && refRow.ref_precio > 0) {
-                        const pctVar = ((opt.precio - refRow.ref_precio) / refRow.ref_precio) * 100;
-                        const colorVar = pctVar <= -0.5 ? "#059669" : (pctVar >= 0.5 ? "#b45309" : "#64748b");
-                        const txtVar = pctVar <= -0.5
-                            ? `▼ ${pctVar.toFixed(1)}% vs hist.`
-                            : (pctVar >= 0.5 ? `▲ +${pctVar.toFixed(1)}% vs hist.` : `= Igual a hist.`);
-                        $(`<span class="ml-1" style="font-size:10.5px;font-weight:700;color:${colorVar};">`).text(txtVar).appendTo(priceLine);
+                        tdRefComp.html(
+                            `<b>$${moneyFmt.format(refRow.ref_precio)}</b><br><span class="text-muted" style="font-size:10.5px;">${frappe.utils.escape_html(refRow.ref_proveedor || refRow.ref_fuente || "")}</span>`
+                        );
+                    } else {
+                        tdRefComp.html(`<span class="text-muted">—</span>`);
                     }
-                    $("<div class='small text-muted'>")
-                        .text(`Subtotal partida: $${moneyFmt.format(subtotal)} · ${opt.entrega ? opt.entrega + " d" : "S/plazo"}`)
-                        .appendTo(box);
 
-                    if (com && (com.impuestos_y_cargos || com.payment_terms_template || com.fecha_programada_pago)) {
-                        const extraParts = [];
-                        if (com.impuestos_y_cargos) {
-                            extraParts.push(`+Imp/Flete cot.: $${moneyFmt.format(com.impuestos_y_cargos)}`);
+                    let minPriceMxn = Infinity;
+                    for (const opt of line.opciones || []) {
+                        const eqMxn = Number(opt.precio_mxn || opt.precio || 0);
+                        if (eqMxn > 0 && eqMxn < minPriceMxn) minPriceMxn = eqMxn;
+                    }
+
+                    let bestInputForRow = null;
+
+                    for (const sup of suppliers) {
+                        const td = $("<td>").appendTo(tr);
+                        const opt = (line.opciones || []).find((o) => o.proveedor === sup);
+                        if (!opt) {
+                            td.css({ color: "#94a3b8", background: "#f8fafc" }).text("Sin cotizar");
+                            continue;
                         }
-                        if (com.payment_terms_template) {
-                            extraParts.push(com.payment_terms_template);
-                        }
-                        if (com.fecha_programada_pago) {
-                            extraParts.push(`Prog: ${com.fecha_programada_pago}`);
-                        }
-                        $("<div class='small' style='color:#0d5b94;font-size:10.5px;'>")
-                            .text(extraParts.join(" · "))
+
+                        const eqMxn = Number(opt.precio_mxn || opt.precio || 0);
+                        const isBest = Math.abs(eqMxn - minPriceMxn) < 0.005;
+                        if (isBest) td.css("background", "#ecfdf5");
+
+                        const subtotal = opt.precio * line.cantidad;
+                        const com = opt.comercial || null;
+                        const tasaPct = com && typeof com.tasa_impuesto_pct === "number"
+                            ? com.tasa_impuesto_pct
+                            : (com && Number(com.neto) > 0 && Number(com.total) >= Number(com.neto)
+                                ? ((Number(com.total) - Number(com.neto)) / Number(com.neto)) * 100
+                                : 0);
+                        const totalPartida = subtotal * (1 + tasaPct / 100);
+
+                        const label = $("<label class='d-flex align-items-start mb-0' style='gap:6px;cursor:pointer;font-weight:normal;'>").appendTo(td);
+                        const input = $("<input>").attr({
+                            type: "radio",
+                            name: "lebaref-" + line.id,
+                        }).prop("disabled", line.ordenado || !comparison.puede_generar).appendTo(label);
+
+                        const box = $("<div>").appendTo(label);
+                        const priceLine = $("<div>").css("font-weight", "700")
+                            .text(`$${moneyFmt.format(opt.precio)} ${opt.moneda}`)
                             .appendTo(box);
+                        if (isBest) {
+                            $("<span class='badge badge-success ml-1'>").text("★ Mejor MXN").appendTo(priceLine);
+                        }
+                        if (opt.moneda === "USD" && opt.tc_dof > 0) {
+                            $("<div class='small' style='color:#0369a1;font-size:10.5px;'>")
+                                .text(`TC DOF ${opt.tc_dof.toFixed(4)} → $${moneyFmt.format(eqMxn)} MXN`)
+                                .appendTo(box);
+                        }
+                        $("<div class='small text-muted' style='line-height:1.35;margin-top:2px;'>")
+                            .html(
+                                `Subtotal: $${moneyFmt.format(subtotal)}<br>` +
+                                `<b style="color:#0f172a;">Total: $${moneyFmt.format(totalPartida)}</b>`
+                            )
+                            .appendTo(box);
+
+                        if (!line.ordenado) {
+                            const ahorroPpv = refRow && refRow.ref_precio > 0 ? (refRow.ref_precio - eqMxn) * line.cantidad : 0;
+                            radios.push({
+                                input,
+                                line: line.id,
+                                option: opt.id,
+                                proveedor: sup,
+                                subtotal,
+                                totalPartida,
+                                ahorroPpv,
+                                moneda: opt.moneda,
+                                comercial: com,
+                            });
+                            if (isBest && !bestInputForRow) bestInputForRow = input;
+                        }
                     }
 
-                    if (!line.ordenado) {
-                        const ahorroPpv = refRow && refRow.ref_precio > 0 ? (refRow.ref_precio - opt.precio) * line.cantidad : 0;
-                        radios.push({
-                            input,
-                            line: line.id,
-                            option: opt.id,
-                            proveedor: sup,
-                            subtotal,
-                            ahorroPpv,
-                            moneda: opt.moneda,
-                            comercial: com,
-                        });
-                        if (isBest && !bestInputForRow) bestInputForRow = input;
+                    if (bestInputForRow) bestRadios.push(bestInputForRow);
+
+                    const tdEst = $("<td>").appendTo(tr);
+                    if (line.ordenado) {
+                        $("<span class='badge badge-info'>").text("OC generada").appendTo(tdEst);
+                    } else if (!(line.opciones || []).length) {
+                        $("<span class='badge badge-warning'>").text("Sin oferta").appendTo(tdEst);
+                    } else {
+                        $("<span class='badge badge-light'>").text("Por adjudicar").appendTo(tdEst);
                     }
-                }
-
-                if (bestInputForRow) bestRadios.push(bestInputForRow);
-
-                const tdEst = $("<td>").appendTo(tr);
-                if (line.ordenado) {
-                    $("<span class='badge badge-info'>").text("OC generada").appendTo(tdEst);
-                } else if (!(line.opciones || []).length) {
-                    $("<span class='badge badge-warning'>").text("Sin oferta").appendTo(tdEst);
-                } else {
-                    $("<span class='badge badge-light'>").text("Por adjudicar").appendTo(tdEst);
                 }
             }
         }
@@ -639,25 +1147,24 @@
                 return;
             }
             const totals = {};
-            const conds = {};
+            const grandTotals = {};
+            const monedasProv = {};
             let ppvNeto = 0;
             for (const c of chosen) {
                 totals[c.proveedor] = (totals[c.proveedor] || 0) + c.subtotal;
+                grandTotals[c.proveedor] = (grandTotals[c.proveedor] || 0) + c.totalPartida;
+                monedasProv[c.proveedor] = c.moneda || "MXN";
                 ppvNeto += Number(c.ahorroPpv || 0);
-                if (!conds[c.proveedor] && c.comercial) {
-                    const tags = [c.comercial.taxes_and_charges, c.comercial.shipping_rule, c.comercial.payment_terms_template].filter(Boolean);
-                    conds[c.proveedor] = tags.length ? ` (${tags.join(", ")})` : "";
-                }
             }
             const parts = Object.entries(totals).map(
-                ([prov, sum]) => `${prov}: Neto $${moneyFmt.format(sum)}${conds[prov] || ""}`
+                ([prov, sum]) => `${prov}: Subtotal $${moneyFmt.format(sum)} | Total $${moneyFmt.format(grandTotals[prov] || sum)} ${monedasProv[prov]}`
             );
             const ppvHtml = Math.abs(ppvNeto) >= 0.01
-                ? `<br><span style="font-weight:700;color:${ppvNeto >= 0 ? "#059669" : "#b45309"};">${ppvNeto >= 0 ? `✅ Ahorro frente a referencia histórica (PPV): $${moneyFmt.format(ppvNeto)} MXN` : `⚠️ Variación sobre referencia histórica (PPV): +$${moneyFmt.format(Math.abs(ppvNeto))} MXN`}</span>`
+                ? `<br><span style="font-weight:700;color:${ppvNeto >= 0 ? "#059669" : "#b45309"};">${ppvNeto >= 0 ? `Ahorro frente a referencia histórica: $${moneyFmt.format(ppvNeto)} MXN` : `Variación sobre referencia histórica: +$${moneyFmt.format(Math.abs(ppvNeto))} MXN`}</span>`
                 : "";
             summaryBox.html(
-                `<b>Adjudicación seleccionada (${chosen.length} renglón/es — ERPNext aplicará automáticamente IVA, flete y vencimientos en cada OC):</b><br>` +
-                parts.map((p) => frappe.utils.escape_html(p)).join(" &nbsp;|&nbsp; ") +
+                `<b>Adjudicación seleccionada (${chosen.length} renglón/es):</b><br>` +
+                parts.map((p) => frappe.utils.escape_html(p)).join(" &nbsp;&nbsp;·&nbsp;&nbsp; ") +
                 ppvHtml
             );
             if (comparison.puede_generar && dialog.get_primary_btn()) {
@@ -712,18 +1219,29 @@
     function printComparisonCarta(folio, comparison, suppliers, supplierMeta) {
         const esc = frappe.utils.escape_html;
         const headCols = suppliers.map((s) => `<th>${esc(s)}</th>`).join("");
-        const bodyRows = comparison.renglones.map((line) => {
-            const cells = suppliers.map((sup) => {
-                const opt = (line.opciones || []).find((o) => o.proveedor === sup);
-                if (!opt) return `<td style="color:#64748b;">Sin cotizar</td>`;
-                const sub = opt.precio * line.cantidad;
-                return `<td><b>$${moneyFmt.format(opt.precio)} ${esc(opt.moneda)}</b><br><small>Sub: $${moneyFmt.format(sub)} · ${opt.entrega || 0} días</small></td>`;
+        const totalPrintCols = 2 + suppliers.length;
+        const bloquesPrint = agruparFilasPorPartidaLocal(comparison.renglones || [], (l) => l.partida);
+        const bodyRows = bloquesPrint.map((grupo) => {
+            const sepHtml = grupo.partida
+                ? `<tr style="background:#e2e8f0;color:#031e34;font-weight:800;"><td colspan="${totalPrintCols}" style="padding:5px 8px;">${esc(grupo.partida)}</td></tr>`
+                : "";
+            const rowsHtml = grupo.items.map((line) => {
+                const cells = suppliers.map((sup) => {
+                    const opt = (line.opciones || []).find((o) => o.proveedor === sup);
+                    if (!opt) return `<td style="color:#64748b;">Sin cotizar</td>`;
+                    const sub = opt.precio * line.cantidad;
+                    const comP = opt.comercial || null;
+                    const tasaP = comP && typeof comP.tasa_impuesto_pct === "number" ? comP.tasa_impuesto_pct : 0;
+                    const tot = sub * (1 + tasaP / 100);
+                    return `<td><b>$${moneyFmt.format(opt.precio)} ${esc(opt.moneda)}</b><br><small>Subtotal: $${moneyFmt.format(sub)}<br><b>Total: $${moneyFmt.format(tot)}</b></small></td>`;
+                }).join("");
+                return `<tr>
+                    <td><b>${esc(decodificarHtmlLocal(line.articulo))}</b><br><small>${esc([line.codigo || "LIBRE", line.obra].filter(Boolean).join(" · "))}</small></td>
+                    <td style="text-align:right;">${numFmt.format(line.cantidad)} ${esc(line.unidad || "")}</td>
+                    ${cells}
+                </tr>`;
             }).join("");
-            return `<tr>
-                <td><b>${esc(line.articulo)}</b><br><small>${esc([line.codigo || "LIBRE", line.obra, line.partida].filter(Boolean).join(" · "))}</small></td>
-                <td style="text-align:right;">${numFmt.format(line.cantidad)} ${esc(line.unidad || "")}</td>
-                ${cells}
-            </tr>`;
+            return sepHtml + rowsHtml;
         }).join("");
 
         const comRows = suppliers.map((sup) => {

@@ -5,7 +5,7 @@
   {
    "added": 0,
    "doctype": "Dock Item",
-   "hidden": 0,
+   "hidden": 1,
    "icon": "box-soft",
    "link_to": "Lebaref Compras",
    "link_type": "Sidebar",

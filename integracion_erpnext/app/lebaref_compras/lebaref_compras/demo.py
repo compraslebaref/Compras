@@ -20,8 +20,9 @@ def crear_solicitud():
     company = companies[0]
     warehouse = frappe.db.get_value("Warehouse", {"company": company, "is_group": 0})
     item_group = frappe.db.get_value("Item Group", {"is_group": 0})
-    if not warehouse or not item_group or not frappe.db.exists("UOM", "Nos"):
-        frappe.throw("El sitio necesita un almacén, un grupo de artículos y la unidad Nos.")
+    uom_base = "Pieza" if frappe.db.exists("UOM", "Pieza") else ("Nos" if frappe.db.exists("UOM", "Nos") else None)
+    if not warehouse or not item_group or not uom_base:
+        frappe.throw("El sitio necesita un almacén, un grupo de artículos y la unidad Pieza/Nos.")
 
     request_name = frappe.db.get_value(
         "Material Request", {"company": company, "title": TITLE, "docstatus": 0}
@@ -51,7 +52,7 @@ def crear_solicitud():
                         "item_code": code,
                         "item_name": name,
                         "item_group": item_group,
-                        "stock_uom": "Nos",
+                        "stock_uom": uom_base,
                         "is_stock_item": 1,
                     }
                 ).insert()
@@ -60,7 +61,7 @@ def crear_solicitud():
                 {
                     "item_code": code,
                     "qty": quantity,
-                    "uom": "Nos",
+                    "uom": uom_base,
                     "conversion_factor": 1,
                     "schedule_date": required_date,
                     "warehouse": warehouse,

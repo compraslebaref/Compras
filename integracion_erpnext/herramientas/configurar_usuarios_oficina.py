@@ -1,15 +1,13 @@
-"""Aprovisionamiento idempotente de cuentas operativas de oficina de Lebaref (OPS-03 / SEG-01):
-Crea o actualiza las 5 cuentas nominales por puesto en español con separación estricta en servidor:
-1. oscar.gomez@lebaref.com  -> Lebaref Coordinador Operativo (Autorización total)
-2. direccion@lebaref.com    -> Lebaref Coordinador Operativo (Vo.Bo. OCs, Ajustes y Pagos)
-3. compras@lebaref.com      -> Lebaref Auxiliar Operativo Mixto (Compras + Almacén, SIN autorizar OCs/Ajustes/Pagos)
-4. almacen@lebaref.com      -> Lebaref Auxiliar Operativo Mixto (Almacén + Compras, SIN autorizar OCs/Ajustes/Pagos)
-5. finanzas@lebaref.com     -> Lebaref Finanzas y Contabilidad (CFDI, Facturas/Notas y Pagos en borrador, SIN autorizar)
+"""Aprovisionamiento idempotente de las cuentas nominales reales del equipo Lebaref (ONB-01 / SEG-01):
+1. oscar.gomez@lebaref.com      -> Oscar Gómez (Gerente de Compras · Lebaref Coordinador Operativo: autorización total y motor experimental)
+2. airan.echeverria@lebaref.com -> Airan Echeverría (Coordinador de Almacén · Lebaref Coordinador de Almacén: almacén, inventario, herramientas y catálogo)
+3. juan.cetina@lebaref.com      -> Juan Cetina (Auxiliar de Compras · Lebaref Auxiliar Operativo Mixto: solicitudes, cotizaciones, OCs/XML/pagos en borrador, logística)
+4. salvia.sosa@lebaref.com      -> Salvia Sosa (Auxiliar de Compras · Lebaref Auxiliar Operativo Mixto: solicitudes, cotizaciones, OCs/XML/pagos en borrador, logística)
+5. direccion@lebaref.com        -> Dirección General (Lebaref Coordinador Operativo: respaldo de Vo.Bo.)
 """
 import json
 import os
 import secrets
-import string
 
 os.chdir("/home/frappe/frappe-bench/sites")
 import frappe
@@ -20,11 +18,17 @@ SITE = "lebaref-pruebas.local"
 SALIDA_TMP = "/tmp/credenciales_oficina_lebaref.json"
 
 CUENTAS_OFICINA = (
-    ("oscar.gomez@lebaref.com", "Oscar", "Gómez (Coordinador)", "Lebaref Coordinador Operativo"),
-    ("direccion@lebaref.com", "Dirección", "General", "Lebaref Coordinador Operativo"),
-    ("compras@lebaref.com", "Auxiliar 1", "Compras y Almacén", "Lebaref Auxiliar Operativo Mixto"),
-    ("almacen@lebaref.com", "Auxiliar 2", "Almacén y Compras", "Lebaref Auxiliar Operativo Mixto"),
-    ("finanzas@lebaref.com", "Auxiliar", "Finanzas y Facturación", "Lebaref Finanzas y Contabilidad"),
+    ("oscar.gomez@lebaref.com", "Oscar", "Gómez", "Gerente de Compras", "Lebaref Coordinador Operativo"),
+    ("airan.echeverria@lebaref.com", "Airan", "Echeverría", "Coordinador de Almacén", "Lebaref Coordinador de Almacén"),
+    ("juan.cetina@lebaref.com", "Juan", "Cetina", "Auxiliar de Compras", "Lebaref Auxiliar Operativo Mixto"),
+    ("salvia.sosa@lebaref.com", "Salvia", "Sosa", "Auxiliar de Compras", "Lebaref Auxiliar Operativo Mixto"),
+    ("direccion@lebaref.com", "Dirección", "General", "Dirección General", "Lebaref Coordinador Operativo"),
+)
+
+CUENTAS_GENERICAS_OBSOLETAS = (
+    "compras@lebaref.com",
+    "almacen@lebaref.com",
+    "finanzas@lebaref.com",
 )
 
 
@@ -53,8 +57,13 @@ def main():
             except Exception:
                 pass
 
+        # Deshabilitar cuentas genéricas anteriores (sin tocar @lebaref.test de pruebas automatizadas)
+        for obsoleto in CUENTAS_GENERICAS_OBSOLETAS:
+            if frappe.db.exists("User", obsoleto):
+                frappe.db.set_value("User", obsoleto, "enabled", 0, update_modified=False)
+
         resultado_cuentas = []
-        for email, nombre, apellido, perfil in CUENTAS_OFICINA:
+        for email, nombre, apellido, puesto, perfil in CUENTAS_OFICINA:
             pwd = credenciales_existentes.get(email) or _generar_clave_legible()
             if not frappe.db.exists("User", email):
                 u = frappe.get_doc({
@@ -62,6 +71,7 @@ def main():
                     "email": email,
                     "first_name": nombre,
                     "last_name": apellido,
+                    "bio": puesto,
                     "language": "es",
                     "enabled": 1,
                     "send_welcome_email": 0,
@@ -72,6 +82,9 @@ def main():
                 u.insert(ignore_permissions=True)
             else:
                 u = frappe.get_doc("User", email)
+                u.first_name = nombre
+                u.last_name = apellido
+                u.bio = puesto
                 u.language = "es"
                 u.enabled = 1
                 u.role_profile_name = perfil
@@ -81,37 +94,42 @@ def main():
                 u.save(ignore_permissions=True)
 
             update_password(email, pwd)
+            if frappe.db.has_column("User", "default_workspace"):
+                frappe.db.set_value("User", email, "default_workspace", "Lebaref", update_modified=False)
             frappe.db.set_default("desktop:home_page", "lebaref", parent=email)
             resultado_cuentas.append({
                 "email": email,
-                "nombre": f"{u.first_name} {u.last_name or ''}".strip(),
+                "nombre": f"{nombre} {apellido}".strip(),
+                "puesto": puesto,
                 "perfil": perfil,
                 "password": pwd,
             })
 
         frappe.db.commit()
 
-        # Verificación estricta en servidor de permisos por cuenta (SEG-01)
-        for email_aux in ("compras@lebaref.com", "almacen@lebaref.com"):
+        # Verificación estricta en servidor de permisos por cuenta (SEG-01 / ONB-01)
+        for email_aux in ("juan.cetina@lebaref.com", "salvia.sosa@lebaref.com"):
             frappe.set_user(email_aux)
             assert frappe.has_permission("Material Request", "create"), f"{email_aux} debe crear Solicitudes"
             assert frappe.has_permission("Supplier Quotation", "create"), f"{email_aux} debe capturar Cotizaciones"
             assert frappe.has_permission("Purchase Order", "create"), f"{email_aux} debe preparar OC en borrador"
-            assert frappe.has_permission("Purchase Receipt", "create"), f"{email_aux} debe recibir en Almacén"
-            assert frappe.has_permission("Stock Entry", "create"), f"{email_aux} debe entregar/consumir en Almacén"
-            assert frappe.has_permission("Stock Reconciliation", "create"), f"{email_aux} debe levantar Conteo/Merma en borrador"
-            # Restricciones duras: NO autoriza OC, Conteo/Merma, Factura ni Pago
+            assert frappe.has_permission("Purchase Receipt", "create"), f"{email_aux} debe registrar Recepciones"
+            assert frappe.has_permission("Stock Entry", "create"), f"{email_aux} debe registrar movimientos de Almacén"
+            assert frappe.has_permission("Purchase Invoice", "create"), f"{email_aux} debe cargar XML / Facturas en borrador"
+            assert frappe.has_permission("Payment Entry", "create"), f"{email_aux} debe preparar Pagos en borrador"
             assert not frappe.has_permission("Purchase Order", "submit"), f"{email_aux} NO debe autorizar OCs"
             assert not frappe.has_permission("Stock Reconciliation", "submit"), f"{email_aux} NO debe autorizar Conteos/Mermas"
             assert not frappe.has_permission("Purchase Invoice", "submit"), f"{email_aux} NO debe autorizar Facturas"
             assert not frappe.has_permission("Payment Entry", "submit"), f"{email_aux} NO debe autorizar Pagos"
 
-        frappe.set_user("finanzas@lebaref.com")
-        assert frappe.has_permission("Purchase Invoice", "create"), "finanzas debe crear Facturas/Notas en borrador"
-        assert frappe.has_permission("Payment Entry", "create"), "finanzas debe preparar Pagos en borrador"
-        assert not frappe.has_permission("Purchase Order", "submit"), "finanzas NO debe autorizar OCs"
-        assert not frappe.has_permission("Purchase Invoice", "submit"), "finanzas NO debe autorizar Facturas"
-        assert not frappe.has_permission("Payment Entry", "submit"), "finanzas NO debe autorizar Pagos"
+        frappe.set_user("airan.echeverria@lebaref.com")
+        assert frappe.has_permission("Purchase Receipt", "create"), "Airan debe registrar entradas de almacén"
+        assert frappe.has_permission("Stock Entry", "create"), "Airan debe registrar salidas y resguardos"
+        assert frappe.has_permission("Stock Reconciliation", "submit"), "Airan (Coordinador de Almacén) debe gestionar conteos de inventario"
+        assert frappe.has_permission("Item", "create"), "Airan debe apoyar en catálogo de artículos"
+        assert not frappe.has_permission("Purchase Order", "submit"), "Airan NO debe autorizar Órdenes de Compra"
+        assert not frappe.has_permission("Purchase Invoice", "submit"), "Airan NO debe autorizar Facturas"
+        assert not frappe.has_permission("Payment Entry", "submit"), "Airan NO debe autorizar Pagos"
 
         for email_dir in ("oscar.gomez@lebaref.com", "direccion@lebaref.com"):
             frappe.set_user(email_dir)
@@ -124,10 +142,7 @@ def main():
         with open(SALIDA_TMP, "w", encoding="utf-8") as out:
             json.dump(resultado_cuentas, out, ensure_ascii=False, indent=2)
 
-        print("USUARIOS_OFICINA_OK:" + json.dumps([
-            {"email": c["email"], "nombre": c["nombre"], "perfil": c["perfil"]}
-            for c in resultado_cuentas
-        ], ensure_ascii=False))
+        print("USUARIOS_OFICINA_OK:" + json.dumps(resultado_cuentas, ensure_ascii=False))
     finally:
         frappe.destroy()
 

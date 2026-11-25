@@ -28,12 +28,19 @@ def _enlace(doctype, name):
 
 
 def configurar_oferta(doc, data):
+    claves_fase2 = ("currency", "tc_dof", "modalidad_entrega", "dias_entrega_promesa", "flete_sin_iva")
+    if any(k in data and data.get(k) not in (None, "") for k in claves_fase2):
+        from lebaref_compras.flujo_operativo import aplicar_multimoneda_y_flete_en_cotizacion
+        aplicar_multimoneda_y_flete_en_cotizacion(doc, data)
     if name := data.get("taxes_and_charges"):
         template = _enlace(IMPUESTOS, name)
         if template.disabled or template.company != doc.company:
             frappe.throw("Selecciona una plantilla fiscal activa de la empresa.")
         doc.taxes_and_charges = template.name
+        flete_previo = [t for t in (doc.taxes or []) if "FLETE" in (t.description or "").upper()]
         doc.set("taxes", get_taxes_and_charges(IMPUESTOS, template.name))
+        for fp in flete_previo:
+            doc.append("taxes", fp)
     if name := data.get("shipping_rule"):
         shipping = _enlace(ENVIO, name)
         if shipping.disabled or shipping.shipping_rule_type != "Buying" or shipping.company != doc.company:
@@ -58,6 +65,8 @@ def condiciones_en_orden(order, quote, desde_comparativa=False):
         order.set("payment_schedule", [])
     if not order.get(FECHA):
         order.set(FECHA, quote.get(FECHA))
+    from lebaref_compras.flujo_operativo import trasladar_logistica_a_orden
+    trasladar_logistica_a_orden(order, quote)
 
 
 def desde_cotizacion(order, method=None):
@@ -74,8 +83,14 @@ def desde_cotizacion(order, method=None):
 
 
 def resumen(quote):
+    tasa_impuesto_pct = 0.0
+    for row in (quote.taxes or []):
+        if row.category in ("Total", "Valuation and Total") and row.charge_type == "On Net Total":
+            signo = -1.0 if getattr(row, "add_deduct_tax", "Add") == "Deduct" else 1.0
+            tasa_impuesto_pct += signo * float(row.rate or 0.0)
     return {
         "neto": quote.net_total, "impuestos_y_cargos": quote.total_taxes_and_charges,
+        "tasa_impuesto_pct": tasa_impuesto_pct,
         "total": quote.grand_total, "taxes_and_charges": quote.taxes_and_charges or "",
         "shipping_rule": quote.shipping_rule or "", "payment_terms_template": quote.get(CONDICION) or "",
         "fecha_programada_pago": quote.get(FECHA),

@@ -70,33 +70,46 @@ def consultar(solicitud):
     origins = {item.name: item for item in request.items}
     for quote, item in _cotizaciones(request).values():
         origin = origins[item.material_request_item]
+        precio_unit = flt(item.rate) * flt(origin.conversion_factor) / flt(item.conversion_factor)
+        tc_dof = flt(quote.get("custom_lebaref_tc_dof") or quote.conversion_rate or 1.0, 4) if quote.currency == "USD" else 1.0
+        precio_mxn = flt(item.get("custom_lebaref_precio_limpio_mxn") or (precio_unit * tc_dof))
+        precio_sitio = flt(item.get("custom_lebaref_precio_sitio_mxn") or precio_mxn)
         options[origin.name].append(
             {
                 "id": item.name,
                 "cotizacion": quote.name,
                 "proveedor": quote.supplier_name or quote.supplier,
-                "precio": flt(item.rate) * flt(origin.conversion_factor) / flt(item.conversion_factor),
+                "precio": precio_unit,
                 "moneda": quote.currency,
+                "tc_dof": tc_dof,
+                "precio_mxn": precio_mxn,
+                "precio_sitio_mxn": precio_sitio,
+                "modalidad_entrega": quote.get("custom_lebaref_modalidad_entrega") or "",
+                "flete_sin_iva": flt(quote.get("custom_lebaref_flete_sin_iva") or 0),
                 "entrega": item.lead_time_days,
                 "comercial": comercial.resumen(quote),
             }
         )
+    from lebaref_compras import motor_precios
+    renglones_out = [
+        {
+            "id": item.name,
+            "articulo": concepto_visible(item) or item.item_name,
+            "codigo": "" if item.custom_lebaref_concepto else item.item_code,
+            "partida": item.custom_lebaref_partida,
+            "obra": item.project,
+            "cantidad": item.qty,
+            "unidad": item.uom,
+            "ordenado": item.name in ordered,
+            "opciones": options[item.name],
+        }
+        for item in request.items
+    ]
+    motor_precios.enriquecer_partidas_solicitud_segun_usuario(request, renglones_out)
     return {
         "puede_generar": frappe.has_permission("Purchase Order", "create"),
-        "renglones": [
-            {
-                "id": item.name,
-                "articulo": concepto_visible(item) or item.item_name,
-                "codigo": "" if item.custom_lebaref_concepto else item.item_code,
-                "partida": item.custom_lebaref_partida,
-                "obra": item.project,
-                "cantidad": item.qty,
-                "unidad": item.uom,
-                "ordenado": item.name in ordered,
-                "opciones": options[item.name],
-            }
-            for item in request.items
-        ],
+        "es_motor_oscar": 1 if motor_precios.es_usuario_motor_precios() else 0,
+        "renglones": renglones_out,
     }
 
 

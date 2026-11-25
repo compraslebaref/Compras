@@ -77,6 +77,15 @@ def verificar():
             assert state.version == 3 and state.pendiente and state.intentos == 0
             assert json.loads(state.snapshot)["next"] == next_step
             assert frappe.db.count(sync.QUEUE, {"folio": original["id"]}) == 1
+            comp_sample = [{
+                "supplier": "AMESA", "quote": "PUR-SQTN-2099-00001", "currency": "MXN", "tc": 1,
+                "subtotal": 500.0, "flete": 50.0, "iva": 88.0, "total": 638.0,
+                "lines": [[500.0, 500.0, None]],
+            }]
+            snapshot.return_value = dict(original, items=[["Artículo prueba", "1", "Pieza", "Pendiente"]], comparison=comp_sample)
+            sync._stage(renamed, "HVAC")
+            state.reload()
+            assert state.version == 4 and json.loads(state.snapshot)["comparison"][0]["total"] == 638.0
     finally:
         frappe.db.rollback()
 

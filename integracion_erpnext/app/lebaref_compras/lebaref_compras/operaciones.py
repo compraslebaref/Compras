@@ -576,3 +576,418 @@ def registrar_cfdi(receipt, xml):
 def validar_archivo(doc, method=None):
     if not doc.flags.get("lebaref_xml_validado"):
         frappe.throw("Registra el CFDI mediante Archivar CFDI para validar su XML.")
+
+
+def _parsear_cfdi_compra(xml: str, purchase_order: str = "", crear_proveedor_si_falta: bool = True):
+    limpio = (xml or "").lstrip("\ufeff").strip()
+    if not limpio or len(limpio.encode("utf-8")) > 2_000_000 or "<!DOCTYPE" in limpio.upper() or "<!ENTITY" in limpio.upper():
+        frappe.throw("XML no admitido o mayor de 2 MB.")
+    try:
+        root = ET.fromstring(limpio)
+        ns = {"c": "http://www.sat.gob.mx/cfd/4", "t": "http://www.sat.gob.mx/TimbreFiscalDigital"}
+        if root.tag != "{http://www.sat.gob.mx/cfd/4}Comprobante" or root.get("Version") != "4.0":
+            raise ValueError("No es CFDI 4.0")
+        stamp = root.find("c:Complemento/t:TimbreFiscalDigital", ns)
+        uuid_val = str(uuid.UUID(stamp.attrib["UUID"])).upper()
+        emisor = root.find("c:Emisor", ns)
+        receptor = root.find("c:Receptor", ns)
+        issuer_rfc = (emisor.attrib.get("Rfc") or "").strip().upper()
+        issuer_name = (emisor.attrib.get("Nombre") or issuer_rfc or "Proveedor CFDI").strip()
+        receiver_rfc = (receptor.attrib.get("Rfc") or "").strip().upper() if receptor is not None else ""
+        serie = (root.get("Serie") or "").strip()
+        folio_xml = (root.get("Folio") or "").strip()
+        fecha = (root.get("Fecha") or today())[:10]
+        moneda = (root.get("Moneda") or "MXN").strip().upper()
+        subtotal = float(root.get("SubTotal") or 0)
+        descuento_global = float(root.get("Descuento") or 0)
+        total = float(root.get("Total") or 0)
+        imp_el = root.find("c:Impuestos", ns)
+        iva_trasladado = float(imp_el.attrib.get("TotalImpuestosTrasladados") or 0) if imp_el is not None else 0.0
+    except (ET.ParseError, KeyError, ValueError, AttributeError):
+        frappe.throw("Selecciona un archivo XML CFDI 4.0 válido timbrado con UUID y Emisor.")
+
+    company = frappe.defaults.get_global_default("company") or frappe.get_all("Company", pluck="name")[0]
+    if receiver_rfc and not frappe.db.get_value("Company", company, "tax_id"):
+        frappe.db.set_value("Company", company, "tax_id", receiver_rfc, update_modified=False)
+
+    # Resolver o crear proveedor automáticamente para no bloquear la operación
+    supplier = None
+    if issuer_rfc:
+        supplier = frappe.db.get_value("Supplier", {"tax_id": issuer_rfc, "disabled": 0}, "name")
+    if not supplier and issuer_name:
+        por_nom = frappe.db.sql(
+            "SELECT name FROM `tabSupplier` WHERE disabled = 0 AND UPPER(TRIM(supplier_name)) = %s LIMIT 1",
+            (issuer_name.upper(),),
+        )
+        if por_nom:
+            supplier = por_nom[0][0]
+            if issuer_rfc and not frappe.db.get_value("Supplier", supplier, "tax_id"):
+                frappe.db.set_value("Supplier", supplier, "tax_id", issuer_rfc, update_modified=False)
+    if not supplier and purchase_order and frappe.db.exists("Purchase Order", purchase_order):
+        supplier = frappe.db.get_value("Purchase Order", purchase_order, "supplier")
+        if supplier and issuer_rfc and not frappe.db.get_value("Supplier", supplier, "tax_id"):
+            frappe.db.set_value("Supplier", supplier, "tax_id", issuer_rfc, update_modified=False)
+    if not supplier and crear_proveedor_si_falta and frappe.has_permission("Supplier", "create"):
+        grp = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or "All Supplier Groups"
+        sup_doc = frappe.get_doc({
+            "doctype": "Supplier",
+            "supplier_name": issuer_name[:140],
+            "supplier_group": grp,
+            "supplier_type": "Company",
+            "tax_id": issuer_rfc,
+        })
+        sup_doc.insert(ignore_permissions=True)
+        supplier = sup_doc.name
+
+    warehouse_def = frappe.db.get_value("Warehouse", {"company": company, "is_group": 0, "disabled": 0}, "name") or ""
+    expense_def = frappe.db.get_value("Company", company, "default_expense_account") or frappe.db.get_value(
+        "Account", {"company": company, "root_type": "Expense", "is_group": 0, "disabled": 0}, "name"
+    )
+    tpl_iva = frappe.db.get_value(
+        "Purchase Taxes and Charges Template",
+        {"company": company, "title": "IVA Compras 16%" if iva_trasladado > 0.009 else "Compra Exenta 0%"},
+        "name",
+    ) or ""
+
+    # Cargar partidas abiertas de Orden(es) de Compra del proveedor para vincular solicitudes/OCs automáticamente
+    po_filter_sql = "AND po.name = %s" if purchase_order else ""
+    po_params = [company, supplier] + ([purchase_order] if purchase_order else [])
+    po_rows = []
+    if supplier:
+        po_rows = frappe.db.sql(
+            f"""
+            SELECT poi.name AS po_detail, poi.parent AS purchase_order, poi.item_code, poi.item_name,
+                   poi.description, poi.custom_lebaref_concepto, poi.qty, poi.billed_amt, poi.rate,
+                   poi.uom, poi.stock_uom, poi.conversion_factor, poi.warehouse, poi.project,
+                   poi.custom_lebaref_partida, poi.material_request, poi.material_request_item,
+                   po.per_received
+            FROM `tabPurchase Order Item` poi
+            INNER JOIN `tabPurchase Order` po ON po.name = poi.parent
+            WHERE po.docstatus = 1
+              AND po.status NOT IN ('Closed', 'Cancelled', 'Completed')
+              AND po.company = %s
+              AND po.supplier = %s
+              {po_filter_sql}
+            ORDER BY po.transaction_date DESC, poi.idx ASC
+            """,
+            tuple(po_params),
+            as_dict=True,
+        )
+
+    usados_po = set()
+    items = []
+    alguno_ya_recibido = False
+
+    for idx_c, c in enumerate(root.findall("c:Conceptos/c:Concepto", ns), start=1):
+        desc = (c.get("Descripcion") or f"Concepto {idx_c}").strip()
+        no_id = (c.get("NoIdentificacion") or "").strip()
+        clave_sat = (c.get("ClaveProdServ") or "").strip()
+        qty = float(c.get("Cantidad") or 1)
+        if qty <= 0:
+            qty = 1.0
+        importe = float(c.get("Importe") or 0)
+        desc_linea = float(c.get("Descuento") or 0)
+        rate = (importe - desc_linea) / qty if importe > 0 else float(c.get("ValorUnitario") or 0)
+
+        clave_prov = (no_id or desc[:100]).strip()
+        item_code = None
+        origen_mapeo = "Concepto libre"
+        if supplier:
+            for cand_part in ([no_id, desc[:140]] if no_id else [desc[:140]]):
+                if cand_part:
+                    found_p = frappe.db.get_value(
+                        "Item Supplier",
+                        {"supplier": supplier, "supplier_part_no": cand_part},
+                        "parent",
+                    )
+                    if found_p and frappe.db.exists("Item", {"name": found_p, "disabled": 0}):
+                        item_code = found_p
+                        origen_mapeo = "Sinónimo proveedor (Item Supplier)"
+                        break
+        if not item_code and no_id and frappe.db.exists("Item", {"name": no_id, "disabled": 0}):
+            item_code = no_id
+            origen_mapeo = "Código exacto"
+        if not item_code:
+            found_nom = frappe.db.sql(
+                "SELECT name FROM `tabItem` WHERE disabled = 0 AND UPPER(TRIM(item_name)) = %s LIMIT 1",
+                (desc.upper(),),
+            )
+            if found_nom:
+                item_code = found_nom[0][0]
+                origen_mapeo = "Nombre de catálogo"
+
+        # Intentar empatar con renglón pendiente de OC (por item_code, concepto o monto unitario cercano)
+        po_match = None
+        for pr in po_rows:
+            if pr.po_detail in usados_po:
+                continue
+            if item_code and pr.item_code == item_code:
+                po_match = pr
+                break
+            texto_po = (pr.custom_lebaref_concepto or pr.item_name or pr.description or "").strip().upper()
+            if texto_po and (texto_po in desc.upper() or desc.upper()[:35] in texto_po):
+                po_match = pr
+                break
+        if not po_match and purchase_order and len(po_rows) == len(root.findall("c:Conceptos/c:Concepto", ns)):
+            cand_idx = po_rows[idx_c - 1]
+            if cand_idx.po_detail not in usados_po:
+                po_match = cand_idx
+
+        if po_match:
+            usados_po.add(po_match.po_detail)
+            if not item_code and po_match.item_code:
+                item_code = po_match.item_code
+                origen_mapeo = f"Orden {po_match.purchase_order}"
+            if float(po_match.per_received or 0) > 0:
+                alguno_ya_recibido = True
+
+        sku_final = item_code or solicitudes.ARTICULO_LIBRE
+        it_meta = frappe.db.get_value(
+            "Item", sku_final, ["item_name", "stock_uom", "purchase_uom", "is_stock_item"], as_dict=True
+        ) or frappe._dict(item_name=desc[:140], stock_uom="Pieza", purchase_uom="Pieza", is_stock_item=0)
+
+        uom_usar = (po_match.uom if po_match else None) or it_meta.purchase_uom or it_meta.stock_uom or "Pieza"
+        stock_uom_usar = (po_match.stock_uom if po_match else None) or it_meta.stock_uom or "Pieza"
+        conv_usar = float((po_match.conversion_factor if po_match else 0) or 1.0)
+        wh_usar = ((po_match.warehouse if po_match else "") or warehouse_def) if int(it_meta.is_stock_item or 0) else ""
+
+        items.append({
+            "idx_xml": idx_c,
+            "item_code": sku_final,
+            "es_libre": sku_final == solicitudes.ARTICULO_LIBRE,
+            "origen_mapeo": origen_mapeo,
+            "item_name": (it_meta.item_name if sku_final != solicitudes.ARTICULO_LIBRE else desc)[:140],
+            "description": desc,
+            "custom_lebaref_concepto": desc if sku_final == solicitudes.ARTICULO_LIBRE else "",
+            "qty": qty,
+            "uom": uom_usar,
+            "stock_uom": stock_uom_usar,
+            "conversion_factor": conv_usar,
+            "rate": round(rate, 6),
+            "warehouse": wh_usar,
+            "expense_account": expense_def,
+            "supplier_part_no": clave_prov[:140],
+            "clave_sat": clave_sat,
+            "purchase_order": po_match.purchase_order if po_match else "",
+            "po_detail": po_match.po_detail if po_match else "",
+            "material_request": (po_match.material_request or "") if po_match else "",
+            "material_request_item": (po_match.material_request_item or "") if po_match else "",
+            "project": (po_match.project or "") if po_match else "",
+            "custom_lebaref_partida": (po_match.custom_lebaref_partida or "") if po_match else "",
+        })
+
+    tiene_inventariables = any(
+        int(frappe.db.get_value("Item", r["item_code"], "is_stock_item") or 0) == 1
+        for r in items
+    )
+    update_stock_sugerido = 1 if (tiene_inventariables and not alguno_ya_recibido) else 0
+
+    factura_existente = frappe.db.get_value(
+        "Purchase Invoice",
+        {"bill_no": uuid_val, "docstatus": ["!=", 2]},
+        "name",
+    )
+
+    return {
+        "uuid": uuid_val,
+        "serie_folio": f"{serie}{folio_xml}".strip(),
+        "fecha": fecha,
+        "moneda": moneda,
+        "subtotal": subtotal,
+        "descuento": descuento_global,
+        "iva": iva_trasladado,
+        "total": total,
+        "company": company,
+        "supplier": supplier,
+        "issuer_rfc": issuer_rfc,
+        "issuer_name": issuer_name,
+        "warehouse": warehouse_def,
+        "taxes_and_charges": tpl_iva,
+        "update_stock": update_stock_sugerido,
+        "factura_existente": factura_existente or "",
+        "items": items,
+        "xml_limpio": limpio,
+    }
+
+
+def _aprender_sinonimo_proveedor(supplier: str, item_code: str, supplier_part_no: str, rate: float = 0.0):
+    """Guarda en Item Supplier la clave/nombre comercial del proveedor y actualiza último costo histórico."""
+    if not supplier or not item_code or item_code == solicitudes.ARTICULO_LIBRE:
+        return
+    if not frappe.db.exists("Item", item_code):
+        return
+    part_clean = (supplier_part_no or "").strip()[:140]
+    if part_clean and not frappe.db.exists("Item Supplier", {"parent": item_code, "supplier": supplier, "supplier_part_no": part_clean}):
+        it_doc = frappe.get_doc("Item", item_code)
+        it_doc.append("supplier_items", {"supplier": supplier, "supplier_part_no": part_clean})
+        it_doc.save(ignore_permissions=True)
+    if rate > 0 and frappe.db.has_column("Item", "custom_lebaref_ultimo_costo"):
+        frappe.db.set_value("Item", item_code, "custom_lebaref_ultimo_costo", float(rate), update_modified=False)
+
+
+@frappe.whitelist()
+def cargar_xml_factura(xml, purchase_invoice=None, purchase_order=None):
+    """Parsea un CFDI 4.0 XML para previsualizar o prellenar una Factura de Compra (Purchase Invoice)."""
+    if not (frappe.has_permission("Purchase Invoice", "write") or frappe.has_permission("Purchase Invoice", "create")):
+        frappe.throw("Sin permiso para registrar Facturas de Compra.", frappe.PermissionError)
+    parsed = _parsear_cfdi_compra(xml, purchase_order=purchase_order or "", crear_proveedor_si_falta=True)
+    xml_limpio = parsed.pop("xml_limpio")
+
+    file_url = None
+    if purchase_invoice and frappe.db.exists("Purchase Invoice", purchase_invoice):
+        from frappe.utils.file_manager import save_file
+        att = save_file(f"{parsed['uuid']}.xml", xml_limpio.encode("utf-8"), "Purchase Invoice", purchase_invoice, is_private=1)
+        file_url = att.file_url
+    parsed["file_url"] = file_url
+
+    # Catálogo compacto de SKUs para que el usuario pueda ligar sinónimos comerciales desde la vista previa
+    parsed["catalogo_skus"] = frappe.get_list(
+        "Item",
+        filters={"disabled": 0, "is_purchase_item": 1, "name": ["!=", solicitudes.ARTICULO_LIBRE]},
+        fields=["name", "item_name", "stock_uom"],
+        order_by="item_name asc",
+        limit_page_length=1000,
+    ) if frappe.has_permission("Item", "read") else []
+    return parsed
+
+
+@frappe.whitelist(methods=["POST"])
+def crear_factura_desde_xml(xml: str, purchase_order: str = "", opciones: str = ""):
+    """Crea la Factura de Compra (Purchase Invoice) desde un XML CFDI 4.0, aprende sinónimos y adjunta el XML."""
+    if not frappe.has_permission("Purchase Invoice", "create"):
+        frappe.throw("Tu cuenta no tiene permiso para crear Facturas de Compra.", frappe.PermissionError)
+
+    opts = frappe.parse_json(opciones) if opciones else {}
+    if not isinstance(opts, dict):
+        opts = {}
+
+    parsed = _parsear_cfdi_compra(xml, purchase_order=purchase_order or "", crear_proveedor_si_falta=True)
+    xml_limpio = parsed.pop("xml_limpio")
+
+    if parsed["factura_existente"]:
+        frappe.throw(f"Este CFDI ({parsed['uuid']}) ya está registrado en la factura {parsed['factura_existente']}.")
+    if not parsed["supplier"]:
+        frappe.throw("No se pudo identificar ni dar de alta al proveedor emisor del XML.")
+
+    mapeo = opts.get("mapeo") or {}
+    po_overrides = opts.get("po_overrides") or {}
+    pi_items = []
+    alguno_stock = False
+    alguno_recibido = False
+
+    for it in parsed["items"]:
+        key_idx = str(it["idx_xml"])
+        elegido_sku = (mapeo.get(key_idx) or it["item_code"] or solicitudes.ARTICULO_LIBRE).strip()
+        if not frappe.db.exists("Item", elegido_sku):
+            elegido_sku = solicitudes.ARTICULO_LIBRE
+
+        meta = frappe.db.get_value(
+            "Item", elegido_sku, ["item_name", "stock_uom", "purchase_uom", "is_stock_item"], as_dict=True
+        )
+        es_stock = int((meta.is_stock_item if meta else 0) or 0) == 1
+        if es_stock:
+            alguno_stock = True
+
+        # Aprender sinónimo comercial del proveedor en el catálogo para análisis de precios históricos
+        if elegido_sku != solicitudes.ARTICULO_LIBRE:
+            _aprender_sinonimo_proveedor(
+                parsed["supplier"],
+                elegido_sku,
+                it.get("supplier_part_no") or it.get("description") or "",
+                it.get("rate") or 0.0,
+            )
+
+        po_det = (po_overrides.get(key_idx) or it.get("po_detail") or "").strip()
+        po_name = it.get("purchase_order") or ""
+        mr_name = it.get("material_request") or ""
+        mri_name = it.get("material_request_item") or ""
+        proj_name = it.get("project") or ""
+        part_name = it.get("custom_lebaref_partida") or ""
+        if po_det and frappe.db.exists("Purchase Order Item", po_det):
+            pod = frappe.db.get_value(
+                "Purchase Order Item",
+                po_det,
+                ["parent", "material_request", "material_request_item", "project", "custom_lebaref_partida", "warehouse"],
+                as_dict=True,
+            )
+            if pod:
+                po_name = pod.parent
+                mr_name = pod.material_request or mr_name
+                mri_name = pod.material_request_item or mri_name
+                proj_name = pod.project or proj_name
+                part_name = pod.custom_lebaref_partida or part_name
+                if float(frappe.db.get_value("Purchase Order", po_name, "per_received") or 0) > 0:
+                    alguno_recibido = True
+
+        uom_row = (meta.purchase_uom or meta.stock_uom or "Pieza") if meta else "Pieza"
+        stock_uom_row = (meta.stock_uom or uom_row) if meta else "Pieza"
+        wh_row = (it.get("warehouse") or parsed["warehouse"]) if es_stock else ""
+
+        row_dict = {
+            "item_code": elegido_sku,
+            "item_name": ((meta.item_name if (meta and elegido_sku != solicitudes.ARTICULO_LIBRE) else it["description"]) or it["description"])[:140],
+            "description": it["description"],
+            "custom_lebaref_concepto": it["description"] if elegido_sku == solicitudes.ARTICULO_LIBRE else "",
+            "qty": it["qty"],
+            "uom": uom_row,
+            "stock_uom": stock_uom_row,
+            "conversion_factor": 1.0,
+            "rate": it["rate"],
+            "expense_account": it["expense_account"],
+        }
+        if wh_row:
+            row_dict["warehouse"] = wh_row
+        if po_name and po_det:
+            row_dict["purchase_order"] = po_name
+            row_dict["po_detail"] = po_det
+        if proj_name:
+            row_dict["project"] = proj_name
+        if part_name:
+            row_dict["custom_lebaref_partida"] = part_name
+        pi_items.append(row_dict)
+
+    upd_stock = int(opts["update_stock"]) if "update_stock" in opts and opts["update_stock"] is not None else (1 if (alguno_stock and not alguno_recibido) else 0)
+    if not alguno_stock:
+        upd_stock = 0
+
+    pi_doc = frappe.get_doc({
+        "doctype": "Purchase Invoice",
+        "company": parsed["company"],
+        "supplier": parsed["supplier"],
+        "posting_date": parsed["fecha"] or today(),
+        "bill_no": parsed["uuid"],
+        "bill_date": parsed["fecha"] or today(),
+        "currency": parsed["moneda"] if frappe.db.exists("Currency", parsed["moneda"]) else "MXN",
+        "update_stock": upd_stock,
+        "set_warehouse": parsed["warehouse"] if upd_stock else None,
+        "taxes_and_charges": parsed["taxes_and_charges"] or None,
+        "remarks": f"CFDI 4.0 UUID: {parsed['uuid']} | Emisor: {parsed['issuer_name']} ({parsed['issuer_rfc']})",
+        "items": pi_items,
+    })
+    if pi_doc.taxes_and_charges:
+        tpl_doc = frappe.get_doc("Purchase Taxes and Charges Template", pi_doc.taxes_and_charges)
+        for tx in tpl_doc.taxes:
+            pi_doc.append("taxes", {
+                "charge_type": tx.charge_type,
+                "account_head": tx.account_head,
+                "description": tx.description,
+                "rate": tx.rate,
+                "category": tx.category,
+                "add_deduct_tax": tx.add_deduct_tax,
+            })
+
+    pi_doc.insert()
+    from frappe.utils.file_manager import save_file
+    save_file(f"{parsed['uuid']}.xml", xml_limpio.encode("utf-8"), "Purchase Invoice", pi_doc.name, is_private=1)
+
+    if opts.get("confirmar") and pi_doc.has_permission("submit"):
+        pi_doc.submit()
+
+    return {
+        "ok": True,
+        "folio": pi_doc.name,
+        "uuid": parsed["uuid"],
+        "supplier": parsed["supplier"],
+        "update_stock": upd_stock,
+        "docstatus": pi_doc.docstatus,
+    }

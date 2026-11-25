@@ -23,12 +23,30 @@ after_migrate = [
     "lebaref_compras.desk_ui.configurar_todo_desk",
 ]
 
+import hashlib
+import os
+
+
+def _calcular_version_assets() -> str:
+    h = hashlib.sha256()
+    base_js = os.path.join(os.path.dirname(__file__), "public", "js")
+    for nombre in ("lebaref_desk.js", "material_request.js"):
+        ruta = os.path.join(base_js, nombre)
+        if os.path.isfile(ruta):
+            with open(ruta, "rb") as fh:
+                h.update(fh.read())
+    return h.hexdigest()[:10]
+
+
+_ASSET_VER = _calcular_version_assets()
+
 app_include_js = [
-    "/files/lebaref_desk.js",
+    f"/files/lebaref_desk.js?v={_ASSET_VER}",
+    f"/files/material_request.js?v={_ASSET_VER}",
 ]
 
 doctype_js = {
-    "Material Request": ["public/js/lebaref_desk.js", "public/js/material_request.js"],
+    "Material Request": "public/js/lebaref_desk.js",
     "Request for Quotation": "public/js/lebaref_desk.js",
     "Supplier Quotation": "public/js/lebaref_desk.js",
     "Purchase Order": "public/js/lebaref_desk.js",
@@ -80,6 +98,7 @@ jinja = {
     "methods": [
         "lebaref_compras.impresion_carta.svg_code128",
         "lebaref_compras.impresion_carta.svg_logo_lebaref",
+        "lebaref_compras.impresion_carta.agrupar_por_partida",
     ]
 }
 
@@ -87,6 +106,8 @@ doc_events = {
     doctype: {
         "before_validate": "lebaref_compras.trazabilidad.copiar_obra_y_partida",
         "before_save": "lebaref_compras.ux_lebaref.sincronizar_vistas_partidas",
+        "on_submit": "lebaref_compras.ux_lebaref.sincronizar_estado_solicitudes_vinculadas",
+        "on_cancel": "lebaref_compras.ux_lebaref.sincronizar_estado_solicitudes_vinculadas",
     }
     for doctype in (
         "Request for Quotation",
@@ -98,6 +119,9 @@ doc_events = {
 
 doc_events["Material Request"] = {
     "before_save": "lebaref_compras.ux_lebaref.sincronizar_vistas_partidas",
+    "on_submit": "lebaref_compras.ux_lebaref.sincronizar_estado_solicitud_hook",
+    "on_cancel": "lebaref_compras.ux_lebaref.sincronizar_estado_solicitud_hook",
+    "on_update_after_submit": "lebaref_compras.ux_lebaref.sincronizar_estado_solicitud_hook",
 }
 doc_events["Item"] = {
     "before_save": "lebaref_compras.ux_lebaref.sincronizar_item",
@@ -106,6 +130,14 @@ doc_events["Item"] = {
 doc_events["Purchase Order"]["before_validate"] = [
     "lebaref_compras.trazabilidad.copiar_obra_y_partida",
     "lebaref_compras.comercial.desde_cotizacion",
+]
+doc_events["Supplier Quotation"]["on_submit"] = [
+    "lebaref_compras.ux_lebaref.sincronizar_estado_solicitudes_vinculadas",
+    "lebaref_compras.motor_precios.registrar_modo_sombra_cotizacion",
+]
+doc_events["Supplier Quotation"]["on_cancel"] = [
+    "lebaref_compras.ux_lebaref.sincronizar_estado_solicitudes_vinculadas",
+    "lebaref_compras.motor_precios.limpiar_modo_sombra_cotizacion",
 ]
 
 doc_events["Lebaref CFDI"] = {"validate": "lebaref_compras.operaciones.validar_archivo"}
@@ -129,7 +161,8 @@ doc_events["Stock Entry"] = {
     "validate": ["lebaref_compras.consumos.validar_movimiento", "lebaref_compras.sobrantes.validar"],
     "before_cancel": ["lebaref_compras.consumos.antes_de_cancelar", "lebaref_compras.sobrantes.autorizar"],
     "before_submit": "lebaref_compras.sobrantes.autorizar",
-    "on_cancel": "lebaref_compras.sobrantes.liberar_referencia",
+    "on_submit": "lebaref_compras.ux_lebaref.sincronizar_estado_solicitudes_vinculadas",
+    "on_cancel": ["lebaref_compras.sobrantes.liberar_referencia", "lebaref_compras.ux_lebaref.sincronizar_estado_solicitudes_vinculadas"],
 }
 
 

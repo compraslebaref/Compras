@@ -7,6 +7,7 @@ PURCHASE_ITEM_TYPES = (
     "Supplier Quotation Item",
     "Purchase Order Item",
     "Purchase Receipt Item",
+    "Purchase Invoice Item",
 )
 
 
@@ -40,12 +41,12 @@ def configure_purchase_fields():
     )
     for doctype in ("Material Request", "Request for Quotation", "Supplier Quotation", "Purchase Receipt", "Stock Entry", "Item", "Supplier", "Project", "Warehouse"):
         fields[doctype] = [
-            {"fieldname": "custom_lebaref_operacion", "label": "Operación Windows", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
-            {"fieldname": "custom_lebaref_huella", "label": "Huella de operación", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
+            {"fieldname": "custom_lebaref_operacion", "label": "Operación Windows", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1, "hidden": 1, "print_hide": 1, "report_hide": 1},
+            {"fieldname": "custom_lebaref_huella", "label": "Huella de operación", "fieldtype": "Data", "read_only": 1, "no_copy": 1, "hidden": 1, "print_hide": 1, "report_hide": 1},
         ]
     fields["Material Request Item"].append({
         "fieldname": "custom_lebaref_renglon_origen", "label": "Referencia del renglón enmendado",
-        "fieldtype": "Data", "read_only": 1, "no_copy": 1, "insert_after": "custom_lebaref_concepto",
+        "fieldtype": "Data", "read_only": 1, "no_copy": 1, "hidden": 1, "print_hide": 1, "insert_after": "custom_lebaref_concepto",
     })
     fields["Material Request"].extend([
         {"fieldname": "custom_lebaref_solicitud_origen", "label": "Solicitud de origen del anexo",
@@ -66,8 +67,8 @@ def configure_purchase_fields():
     fields["Purchase Receipt"].extend([
         {"fieldname": "custom_lebaref_recibido_por", "label": "Persona que recibe", "fieldtype": "Data", "read_only": 1},
         {"fieldname": "custom_lebaref_por_regularizar", "label": "Entrada pendiente de orden", "fieldtype": "Check", "read_only": 1, "no_copy": 1},
-        {"fieldname": "custom_lebaref_regularizacion_operacion", "label": "Operación de regularización", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1},
-        {"fieldname": "custom_lebaref_regularizacion_huella", "label": "Huella de regularización", "fieldtype": "Data", "read_only": 1, "no_copy": 1},
+        {"fieldname": "custom_lebaref_regularizacion_operacion", "label": "Operación de regularización", "fieldtype": "Data", "unique": 1, "read_only": 1, "no_copy": 1, "hidden": 1, "print_hide": 1, "report_hide": 1},
+        {"fieldname": "custom_lebaref_regularizacion_huella", "label": "Huella de regularización", "fieldtype": "Data", "read_only": 1, "no_copy": 1, "hidden": 1, "print_hide": 1, "report_hide": 1},
     ])
     fields["Stock Entry"].append({"fieldname": "custom_lebaref_origen", "label": "Entrega de origen", "fieldtype": "Link", "options": "Stock Entry", "read_only": 1, "no_copy": 1})
     fields["Stock Entry"].extend([
@@ -89,12 +90,12 @@ def configure_purchase_fields():
     from lebaref_compras.sustituciones import configurar as configurar_sustituciones
     configurar_sustituciones()
     fields["Stock Reconciliation"] = [
-        {"fieldname": "custom_lebaref_operacion", "label": "Operación", "fieldtype": "Data", "unique": 1, "no_copy": 1, "read_only": 1},
-        {"fieldname": "custom_lebaref_huella", "label": "Huella", "fieldtype": "Data", "no_copy": 1, "read_only": 1},
+        {"fieldname": "custom_lebaref_operacion", "label": "Operación", "fieldtype": "Data", "unique": 1, "no_copy": 1, "read_only": 1, "hidden": 1, "print_hide": 1, "report_hide": 1},
+        {"fieldname": "custom_lebaref_huella", "label": "Huella", "fieldtype": "Data", "no_copy": 1, "read_only": 1, "hidden": 1, "print_hide": 1, "report_hide": 1},
         {"fieldname": "custom_lebaref_tipo_ajuste", "label": "Tipo de ajuste", "fieldtype": "Select", "options": "\nConteo\nMerma", "read_only": 1},
         {"fieldname": "custom_lebaref_motivo_ajuste", "label": "Motivo", "fieldtype": "Small Text", "read_only": 1},
         {"fieldname": "custom_lebaref_referencia_ajuste", "label": "Acta de conteo", "fieldtype": "Data", "read_only": 1},
-        {"fieldname": "custom_lebaref_clave_ajuste", "label": "Clave de conteo", "fieldtype": "Data", "unique": 1, "no_copy": 1, "read_only": 1},
+        {"fieldname": "custom_lebaref_clave_ajuste", "label": "Clave de conteo", "fieldtype": "Data", "unique": 1, "no_copy": 1, "read_only": 1, "hidden": 1, "print_hide": 1, "report_hide": 1},
     ]
     fields["Stock Reconciliation Item"] = [
         {"fieldname": "custom_lebaref_observado", "label": "Existencia observada", "fieldtype": "Float", "read_only": 1},
@@ -102,8 +103,8 @@ def configure_purchase_fields():
     ]
     for doctype in ("Purchase Invoice", "Payment Entry"):
         fields.setdefault(doctype, []).extend([
-            {"fieldname":"custom_lebaref_operacion","label":"Operación","fieldtype":"Data","unique":1,"read_only":1,"no_copy":1},
-            {"fieldname":"custom_lebaref_huella","label":"Huella","fieldtype":"Data","read_only":1,"no_copy":1},
+            {"fieldname":"custom_lebaref_operacion","label":"Operación","fieldtype":"Data","unique":1,"read_only":1,"no_copy":1,"hidden":1,"print_hide":1,"report_hide":1},
+            {"fieldname":"custom_lebaref_huella","label":"Huella","fieldtype":"Data","read_only":1,"no_copy":1,"hidden":1,"print_hide":1,"report_hide":1},
         ])
     fields["Purchase Invoice"].extend([
         {"fieldname":"custom_lebaref_tipo_comprobante","label":"Tipo de comprobante","fieldtype":"Select","options":"\nCFDI\nNota/ticket","read_only":1},
@@ -121,6 +122,12 @@ def configure_purchase_fields():
     configurar_comprobantes()
     from lebaref_compras.equipos_setup import configurar
     configurar()
+    from lebaref_compras.flujo_operativo import configurar_campos_fase2
+    configurar_campos_fase2()
+    from lebaref_compras.catalogo_gobierno import configurar_campos_fase4
+    configurar_campos_fase4()
+    from lebaref_compras.motor_precios import configurar_campos_fase5
+    configurar_campos_fase5()
 
 
 def configure_cfdi():
